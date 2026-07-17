@@ -29,3 +29,6 @@ app.use('/api/payment', require('./routes/paymentRoutes'));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server executing seamlessly on port ${PORT}`));
+app.get('/', (req, res) => {
+    res.send('Ecommerce Backend is running perfectly! 🚀');
+});
