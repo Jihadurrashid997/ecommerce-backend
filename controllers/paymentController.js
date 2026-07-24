@@ -1,8 +1,8 @@
 const Order = require('../models/Order');
-// আপনার কার্ট মডেলের পাথ যদি আলাদা হয়, তবে সেই অনুযায়ী require করুন
+// আপনার কার্ট মডেলের পাথ যদি আলাদা হয়, তবে সেই অনুযায়ী require করুন
 // যেমন: const Cart = require('../models/Cart'); 
 
-// ১. পেমেন্ট ইনিশিয়েট করার ফাংশন (লোকাল ডামি মোড)
+// ১. পেমেন্ট ইনিশিয়েট করার ফাংশন (লাইভ ও স্যান্ডবক্স মোড)
 exports.initiatePayment = async (req, res) => {
     try {
         const { orderId } = req.body;
@@ -20,8 +20,8 @@ exports.initiatePayment = async (req, res) => {
         order.transactionId = tran_id;
         await order.save();
 
-        // ডামি গেটওয়ে ইউআরএল
-        const dummyGatewayURL = `${process.env.BASE_URL || 'http://localhost:5000'}/api/payment/dummy-checkout/${tran_id}`;
+        // ডামি গেটওয়ে ইউআরএল (রেন্ডার লাইভ সার্ভার সহ)
+        const dummyGatewayURL = `${process.env.BASE_URL || 'https://ecommerce-api-9wc9.onrender.com'}/api/payment/dummy-checkout/${tran_id}`;
 
         res.status(200).json({ url: dummyGatewayURL });
 
@@ -35,9 +35,9 @@ exports.dummyCheckoutPage = async (req, res) => {
     const { tranId } = req.params;
     res.send(`
         <div style="text-align: center; margin-top: 50px; font-family: sans-serif; background: #f4f6f9; padding: 30px; border-radius: 8px; max-width: 500px; margin-left: auto; margin-right: auto; border: 1px solid #ddd;">
-            <h2>💻 Local Sandbox Payment Gateway</h2>
+            <h2>💻 Sandbox Payment Gateway</h2>
             <p>Transaction ID: <strong>${tranId}</strong></p>
-            <p>SSLCommerz স্যান্ডবক্স ডাউন থাকায় এই ডামী পেজটি দিয়ে টেস্ট করুন।</p>
+            <p>স্যান্ডবক্স মোডে এই ডামি পেজটি দিয়ে পেমেন্ট টেস্ট করুন।</p>
             <br>
             <form action="/api/payment/success/${tranId}" method="POST" style="display:inline;">
                 <button type="submit" style="padding: 12px 25px; background: #28a745; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-right: 10px;">Success (পেমেন্ট করুন)</button>
@@ -57,15 +57,14 @@ exports.paymentSuccess = async (req, res) => {
     try {
         const { tranId } = req.params;
 
-        // ট্রানজেকশন আইডি দিয়ে অর্ডার খুঁজে স্ট্যাটাস আপডেট করা
+        // ট্রানজেকশন আইডি দিয়ে অর্ডার খুঁজে স্ট্যাটাস আপডেট করা
         const order = await Order.findOne({ transactionId: tranId });
         if (order) {
             order.status = 'Processing'; 
-            order.paymentStatus = 'Paid'; // পেমেন্ট স্ট্যাটাস পেইড করে দেওয়া হলো
+            order.paymentStatus = 'Paid'; // পেমেন্ট স্ট্যাটাস পেইড করে দেওয়া হলো
             await order.save();
 
-            // 💡 বোনাস লজিক: পেমেন্ট সফল হলে ইউজারের কার্ট ক্লিয়ার করার ট্রাই করবে
-            // আপনার প্রজেক্টের Cart মডেলের লজিক অনুযায়ী এটি কাজ করবে (যদি Cart মডেল থাকে)
+            // 💡 বোনাস লজিক: পেমেন্ট সফল হলে ইউজারের কার্ট ক্লিয়ার করার ট্রাই করবে
             try {
                 // উদাহরণ: await Cart.findOneAndDelete({ user: order.user });
             } catch (cartErr) {

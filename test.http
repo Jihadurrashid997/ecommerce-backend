@@ -1,7 +1,7 @@
 ### ==========================================
 ### ১. ইউজার রেজিস্টার (নতুন আইডি ও অ্যাকাউন্ট তৈরি)
 ### ==========================================
-POST http://localhost:5000/api/auth/register
+POST https://ecommerce-api-9wc9.onrender.com/api/auth/register
 Content-Type: application/json
 
 {
@@ -13,11 +13,11 @@ Content-Type: application/json
 
 
 ### ==========================================
-### ২. ইউজার লগইন (সঠিক ২৪ অক্ষরের টোকেন পাওয়ার জন্য)
+### ২. ইউজার লগইন (সঠিক ২৪ অক্ষরের টোকেন পাওয়ার জন্য)
 ### ==========================================
-# ওপরে রেজিস্টার করার পর এই লগইন রিকোয়েস্টে হিট করবেন।
-# নিচে রেসপন্সে যে নতুন token পাবেন, সেটি কপি করে ৩ ও ৪ নম্বর রিকোয়েস্টে বসাবেন।
-POST http://localhost:5000/api/auth/login
+# ওপরে রেজিস্টার করার পর এই লগইন রিকোয়েস্টে হিট করবেন।
+# নিচে রেসপন্সে যে নতুন token পাবেন, সেটি কপি করে ৩ ও ৪ নম্বর রিকোয়েস্টে বসাবেন।
+POST https://ecommerce-api-9wc9.onrender.com/api/auth/login
 Content-Type: application/json
 
 {
@@ -29,9 +29,10 @@ Content-Type: application/json
 ### ==========================================
 ### ৩. কার্টে প্রোডাক্ট যোগ করা
 ### ==========================================
-# ২ নম্বর থেকে পাওয়া নতুন টোকেনটি "Bearer " এর পর বসিয়ে দিন
-POST http://localhost:5000/api/orders/cart/add
+# ২ নম্বর থেকে পাওয়া নতুন টোকেনটি "Bearer " এর পর বসিয়ে দিন
+POST https://ecommerce-api-9wc9.onrender.com/api/orders/cart/add
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNTkzNTkyZjAxZmRkMTE3YzE3YmZhZCIsInJvbGUiOiJzZWxsZXIiLCJpYXQiOjE3ODQyMzEzMjUsImV4cCI6MTc4NDMxNzcyNX0.iCV3sBgt_-ndersqowH1rwCfe0CUuk795lvGKEi7R20
+Content-Type: application/json
 
 {
     "productId": "6a5926dbae2b42b19368f9d6",
@@ -42,55 +43,33 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNTkzNTkyZ
 ### ==========================================
 ### ৪. ইউজারের কার্ট দেখা
 ### ==========================================
-# ২ নম্বর থেকে পাওয়া নতুন টোকেনটি "Bearer " এর পর বসিয়ে দিন
-GET http://localhost:5000/api/orders/cart
+# ২ নম্বর থেকে পাওয়া নতুন টোকেনটি "Bearer " এর পর বসিয়ে দিন
+GET https://ecommerce-api-9wc9.onrender.com/api/orders/cart
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjE3ODQyMjYzODY0NDgiLCJyb2xlIjoic2VsbGVyIiwiaWF0IjoxNzg0MjI2NDk3LCJleHAiOjE3ODQzMTI4OTd9.KX2tj8xZBIpDvby_IgmFc4vEJ9iBtgw9eQj_WW0q9y8
 
 
 ### ==========================================
 ### ৫. সব প্রোডাক্ট দেখা (সবাই দেখতে পারবে)
 ### ==========================================
-GET http://localhost:5000/api/seller/all-products
-### ১. ইউজার লগইন (সঠিক ও নতুন টোকেন পাওয়ার জন্য)
-# প্রথমে এই রিকোয়েস্টের "Send Request"-এ ক্লিক করুন। 
-# নিচে রেসপন্সে যে নতুন token পাবেন, সেটি কপি করে ২ নম্বর রিকোয়েস্টে বসাবেন।
-POST http://localhost:5000/api/auth/login
-Content-Type: application/json
-
-{
-    "email": "jihad@gmail.com",
-    "password": "123456"
-}
+GET https://ecommerce-api-9wc9.onrender.com/api/seller/all-products
 
 
-### ২. কার্টে প্রোডাক্ট যোগ করা
-# (লগইন থেকে নতুন টোকেন পাওয়ার পর নিচের এই Bearer টোকেনটি বদলে সেখানে পেস্ট করে দিবেন)
-POST http://localhost:5000/api/orders/cart/add
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNTkzNTkyZjAxZmRkMTE3YzE3YmZhZCIsInJvbGUiOiJzZWxsZXIiLCJpYXQiOjE3ODQyMzE5MDAsImV4cCI6MTc4NDMxODMwMH0.gjd52TmgTDbxycovri6n9OODsf5NSmOb1kRBqhltwh8
-Content-Type: application/json
-
-{
-    "productId": "6a5923d981a3dbb9702b7e29",
-    "quantity": 1
-}
-
-
-### ৩. ইউজারের কার্ট দেখা
-# (এখানেও নতুন টোকেনটি পেস্ট করবেন)
-GET http://localhost:5000/api/orders/cart
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNTkzNTkyZjAxZmRkMTE3YzE3YmZhZCIsInJvbGUiOiJzZWxsZXIiLCJpYXQiOjE3ODQyMzE5MDAsImV4cCI6MTc4NDMxODMwMH0.gjd52TmgTDbxycovri6n9OODsf5NSmOb1kRBqhltwh8
+### ==========================================
 ### ৬. কার্ট থেকে অর্ডার প্লেস করা (Checkout)
-# আপনার সাকসেসফুল লগইন করা টোকেনটি Bearer-এর পরে বসিয়ে দিন
-POST http://localhost:5000/api/orders/checkout
+### ==========================================
+POST https://ecommerce-api-9wc9.onrender.com/api/orders/checkout
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNTkzNTkyZjAxZmRkMTE3YzE3YmZhZCIsInJvbGUiOiJzZWxsZXIiLCJpYXQiOjE3ODQyMzE5MDAsImV4cCI6MTc4NDMxODMwMH0.gjd52TmgTDbxycovri6n9OODsf5NSmOb1kRBqhltwh8
 Content-Type: application/json
 
 {
     "shippingAddress": "House 12, Road 5, Dhanmondi, Dhaka"
 }
-### ৭. পেমেন্ট ইনিশিয়েট করা (SSLCommerz Gateway URL জেনারেট করা)
-# আপনার লগইন থেকে পাওয়া টোকেনটি Bearer-এর পরে বসাবেন
-POST http://localhost:5000/api/payment/initiate
+
+
+### ==========================================
+### ৭. পেমেন্ট ইনিশিয়েট করা (SSLCommerz Gateway URL জেনারেট করা)
+### ==========================================
+POST https://ecommerce-api-9wc9.onrender.com/api/payment/initiate
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhNTkzNTkyZjAxZmRkMTE3YzE3YmZhZCIsInJvbGUiOiJzZWxsZXIiLCJpYXQiOjE3ODQyMzE5MDAsImV4cCI6MTc4NDMxODMwMH0.gjd52TmgTDbxycovri6n9OODsf5NSmOb1kRBqhltwh8
 Content-Type: application/json
 
