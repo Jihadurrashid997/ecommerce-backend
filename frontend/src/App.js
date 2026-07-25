@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import 'bootstrap/dist/css/bootstrap.min.css';
+import 'bootstrap/dist/js/bootstrap.bundle.min.js'; // মোবাইল মেনু টগল করার জন্য এটি জরুরি
 
 function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false); 
-  const [isRegisterMode, setIsRegisterMode] = useState(false); // লগইন নাকি রেজিস্টার মোড তা ট্র্যাক করার জন্য
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
 
   useEffect(() => {
     // ৪ সেকেন্ডের প্রিমিয়াম ট্রানজিশন
@@ -93,13 +94,13 @@ function App() {
             <span className="navbar-toggler-icon"></span>
           </button>
           <div className="collapse navbar-collapse" id="navbarNav">
-            <ul className="navbar-nav ms-auto align-items-center">
+            <ul className="navbar-nav ms-auto align-items-center py-2 py-lg-0">
               <li className="nav-item"><a className="nav-link active" href="#">New Arrivals</a></li>
               <li className="nav-item"><a className="nav-link" href="#">Collections</a></li>
               <li className="nav-item"><a className="nav-link" href="#">Accessories</a></li>
-              <li className="nav-item">
+              <li className="nav-item mt-2 mt-lg-0">
                 <button 
-                  className="btn btn-outline-light ms-3 px-4 rounded-pill" 
+                  className="btn btn-outline-light ms-lg-3 px-4 rounded-pill w-100 w-lg-auto" 
                   onClick={() => { setIsRegisterMode(false); setShowLoginModal(true); }}
                 >
                   Sign In
@@ -134,7 +135,6 @@ function App() {
               setShowLoginModal(false); 
             }}>
               
-              {/* যদি রেজিস্ট্রেশন মোড হয় তবে নাম (Name) ফিল্ড দেখাবে */}
               {isRegisterMode && (
                 <div className="mb-3 text-start">
                   <label className="form-label text-muted">Full Name</label>
@@ -156,7 +156,6 @@ function App() {
                 {isRegisterMode ? 'Sign Up' : 'Login'}
               </button>
 
-              {/* মোড পরিবর্তনের টগল লিংক */}
               <div className="text-center">
                 <p className="text-muted small mb-0">
                   {isRegisterMode ? "Already have an account?" : "Don't have an account?"}{" "}
@@ -235,14 +234,14 @@ const modalStyles = {
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'center',
+    align-items: 'center',
     zIndex: 2000,
   },
   box: {
     backgroundColor: '#161616',
     padding: '30px',
     borderRadius: '12px',
-    width: '100%',
+    width: '90%',
     maxWidth: '400px',
     border: '1px solid #333',
     boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
@@ -256,7 +255,7 @@ const splashStyles = {
     width: '100vw',
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'center',
+    align-items: 'center',
     background: '#000',
     overflow: 'hidden',
     position: 'fixed',
@@ -280,7 +279,7 @@ const splashStyles = {
     height: '120px',
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'center',
+    align-items: 'center',
     marginBottom: '40px',
   },
   logoGlow: {
