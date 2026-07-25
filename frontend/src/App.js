@@ -234,7 +234,7 @@ const modalStyles = {
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     display: 'flex',
     justifyContent: 'center',
-    align-items: 'center',
+    alignItems: 'center', // এখানেিক ঠিক করা হয়েছে (align-items থেকে alignItems)
     zIndex: 2000,
   },
   box: {
@@ -255,7 +255,7 @@ const splashStyles = {
     width: '100vw',
     display: 'flex',
     justifyContent: 'center',
-    align-items: 'center',
+    alignItems: 'center',
     background: '#000',
     overflow: 'hidden',
     position: 'fixed',
@@ -279,7 +279,7 @@ const splashStyles = {
     height: '120px',
     display: 'flex',
     justifyContent: 'center',
-    align-items: 'center',
+    alignItems: 'center',
     marginBottom: '40px',
   },
   logoGlow: {
@@ -309,7 +309,8 @@ const splashStyles = {
   },
   subtitle: {
     fontSize: '18px',
-    color: '#fff',    fontWeight: '200',
+    color: '#fff',
+    fontWeight: '200',
     letterSpacing: '4px',
     opacity: 0.6,
     marginBottom: '60px',
