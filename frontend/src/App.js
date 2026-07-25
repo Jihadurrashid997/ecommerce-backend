@@ -4,14 +4,15 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 
 function App() {
   const [showWelcome, setShowWelcome] = useState(true);
+  const [showLoginModal, setShowLoginModal] = useState(false); // লগইন মডালের স্টেট
 
   useEffect(() => {
-    // ৪ সেকেন্ডের প্রিমিয়াম ট্রানজিশন
+    // ৪ সেকেন্ডের প্রিমিয়াম ট্রানজিশন
     const timer = setTimeout(() => setShowWelcome(false), 4000);
     return () => clearTimeout(timer);
   }, []);
 
-  // --- প্রিমিয়াম ওয়েলকাম স্ক্রিন (নিউ ডিজাইন) ---
+  // --- প্রিমিয়াম ওয়েলকাম স্ক্রিন (নিউ ডিজাইন) ---
   if (showWelcome) {
     return (
       <div style={splashStyles.container}>
@@ -74,13 +75,13 @@ function App() {
     );
   }
 
-  // --- মেইন ওয়েবসাইট ( আগের মতোই আছে, জাস্ট একটু পরিপাটি ) ---
+  // --- মেইন ওয়েবসাইট ---
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 1 }}
-      style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff' }}
+      style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}
     >
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
@@ -96,12 +97,49 @@ function App() {
               <li className="nav-item"><a className="nav-link" href="#">Collections</a></li>
               <li className="nav-item"><a className="nav-link" href="#">Accessories</a></li>
               <li className="nav-item">
-                <a className="btn btn-outline-light ms-3 px-4 rounded-pill" href="#">Sign In</a>
+                <button 
+                  className="btn btn-outline-light ms-3 px-4 rounded-pill" 
+                  onClick={() => setShowLoginModal(true)}
+                >
+                  Sign In
+                </button>
               </li>
             </ul>
           </div>
         </div>
       </nav>
+
+      {/* সাইন ইন মডাল (পপআপ) */}
+      {showLoginModal && (
+        <div style={modalStyles.overlay}>
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={modalStyles.box}
+          >
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <h3 className="fw-bold m-0" style={{ letterSpacing: '1px' }}>SIGN IN</h3>
+              <button 
+                className="btn-close btn-close-white" 
+                onClick={() => setShowLoginModal(false)}
+              ></button>
+            </div>
+            <form onSubmit={(e) => { e.preventDefault(); alert("Login submitted!"); setShowLoginModal(false); }}>
+              <div className="mb-3 text-start">
+                <label className="form-label text-muted">Email address</label>
+                <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" required />
+              </div>
+              <div className="mb-4 text-start">
+                <label className="form-label text-muted">Password</label>
+                <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Password" required />
+              </div>
+              <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase" style={{ letterSpacing: '1px' }}>
+                Login
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
 
       <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
         <motion.h1 
@@ -153,7 +191,32 @@ function App() {
   );
 }
 
-// স্টাইল অবজেক্ট (CSS এর বিকল্প)
+// মডাল বা পপআপ এর স্টাইল
+const modalStyles = {
+  overlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100vw',
+    height: '100vh',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+  },
+  box: {
+    backgroundColor: '#161616',
+    padding: '30px',
+    borderRadius: '12px',
+    width: '100%',
+    maxWidth: '400px',
+    border: '1px solid #333',
+    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+  }
+};
+
+// স্প্ল্যাশ স্ক্রিন স্টাইল অবজেক্ট
 const splashStyles = {
   container: {
     height: '100vh',
@@ -161,7 +224,7 @@ const splashStyles = {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    background: '#000', // একদম কালো
+    background: '#000',
     overflow: 'hidden',
     position: 'fixed',
     top: 0,
@@ -193,11 +256,10 @@ const splashStyles = {
     height: '100%',
     background: 'radial-gradient(circle, rgba(255,255,255,0.3) 0%, rgba(0,0,0,0) 70%)',
     filter: 'blur(15px)',
-    animation: 'pulse 2s infinite alternate', // CSS keyframe animation লাগবে এর জন্য, তবে ফ্রেমার মোশন দিয়েও করা যায়। আপাতত সিম্পল রাখলাম।
   },
   logoText: {
     fontSize: '60px',
-    fontWeight: '100', // চিকন ফন্ট
+    fontWeight: '100',
     color: '#fff',
     fontFamily: 'Helvetica Neue, Arial, sans-serif',
     letterSpacing: '2px',
@@ -209,7 +271,7 @@ const splashStyles = {
     fontWeight: '300',
     color: '#fff',
     textTransform: 'uppercase',
-    letterSpacing: '8px', // অক্ষরের মাঝে অনেক ফাঁকা
+    letterSpacing: '8px',
     margin: '0 0 15px 0',
     fontFamily: 'Helvetica Neue, sans-serif',
   },
@@ -225,7 +287,7 @@ const splashStyles = {
     height: '1px',
     background: 'linear-gradient(90deg, transparent, #fff, transparent)',
     position: 'absolute',
-    bottom: '10%', // স্ক্রিনের নিচের দিকে
+    bottom: '10%',
     width: '0%',
     left: 0,
   }
