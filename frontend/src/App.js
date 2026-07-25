@@ -4,7 +4,8 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 
 function App() {
   const [showWelcome, setShowWelcome] = useState(true);
-  const [showLoginModal, setShowLoginModal] = useState(false); // লগইন মডালের স্টেট
+  const [showLoginModal, setShowLoginModal] = useState(false); 
+  const [isRegisterMode, setIsRegisterMode] = useState(false); // লগইন নাকি রেজিস্টার মোড তা ট্র্যাক করার জন্য
 
   useEffect(() => {
     // ৪ সেকেন্ডের প্রিমিয়াম ট্রানজিশন
@@ -99,7 +100,7 @@ function App() {
               <li className="nav-item">
                 <button 
                   className="btn btn-outline-light ms-3 px-4 rounded-pill" 
-                  onClick={() => setShowLoginModal(true)}
+                  onClick={() => { setIsRegisterMode(false); setShowLoginModal(true); }}
                 >
                   Sign In
                 </button>
@@ -109,7 +110,7 @@ function App() {
         </div>
       </nav>
 
-      {/* সাইন ইন মডাল (পপআপ) */}
+      {/* সাইন ইন / রেজিস্ট্রেশন মডাল (পপআপ) */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div 
@@ -118,24 +119,56 @@ function App() {
             style={modalStyles.box}
           >
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <h3 className="fw-bold m-0" style={{ letterSpacing: '1px' }}>SIGN IN</h3>
+              <h3 className="fw-bold m-0" style={{ letterSpacing: '1px' }}>
+                {isRegisterMode ? 'REGISTER' : 'SIGN IN'}
+              </h3>
               <button 
                 className="btn-close btn-close-white" 
                 onClick={() => setShowLoginModal(false)}
               ></button>
             </div>
-            <form onSubmit={(e) => { e.preventDefault(); alert("Login submitted!"); setShowLoginModal(false); }}>
+            
+            <form onSubmit={(e) => { 
+              e.preventDefault(); 
+              alert(isRegisterMode ? "Registration successful!" : "Login successful!"); 
+              setShowLoginModal(false); 
+            }}>
+              
+              {/* যদি রেজিস্ট্রেশন মোড হয় তবে নাম (Name) ফিল্ড দেখাবে */}
+              {isRegisterMode && (
+                <div className="mb-3 text-start">
+                  <label className="form-label text-muted">Full Name</label>
+                  <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your name" required />
+                </div>
+              )}
+
               <div className="mb-3 text-start">
                 <label className="form-label text-muted">Email address</label>
                 <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" required />
               </div>
+
               <div className="mb-4 text-start">
                 <label className="form-label text-muted">Password</label>
                 <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Password" required />
               </div>
-              <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase" style={{ letterSpacing: '1px' }}>
-                Login
+
+              <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase mb-3" style={{ letterSpacing: '1px' }}>
+                {isRegisterMode ? 'Sign Up' : 'Login'}
               </button>
+
+              {/* মোড পরিবর্তনের টগল লিংক */}
+              <div className="text-center">
+                <p className="text-muted small mb-0">
+                  {isRegisterMode ? "Already have an account?" : "Don't have an account?"}{" "}
+                  <span 
+                    style={{ color: '#fff', cursor: 'pointer', textDecoration: 'underline' }} 
+                    onClick={() => setIsRegisterMode(!isRegisterMode)}
+                  >
+                    {isRegisterMode ? "Sign In" : "Register here"}
+                  </span>
+                </p>
+              </div>
+
             </form>
           </motion.div>
         </div>
@@ -277,8 +310,7 @@ const splashStyles = {
   },
   subtitle: {
     fontSize: '18px',
-    color: '#fff',
-    fontWeight: '200',
+    color: '#fff',    fontWeight: '200',
     letterSpacing: '4px',
     opacity: 0.6,
     marginBottom: '60px',
