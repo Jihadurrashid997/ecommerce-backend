@@ -1,4 +1,4 @@
-const User = require('../models/User'); // আপনার প্রজেক্টের ইউজার মডেল (যদি models ফোল্ডারে User.js থাকে)
+const User = require('../models/User'); // আপনার প্রজেক্টের ইউজার মডেল
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -6,6 +6,11 @@ const jwt = require('jsonwebtoken');
 exports.register = async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
+
+        // পাসওয়ার্ড কমপক্ষে ৮ ডিজিটের হতে হবে কি না চেক করা
+        if (!password || password.length < 8) {
+            return res.status(400).json({ message: 'Password must be at least 8 characters long!' });
+        }
 
         // ইমেইল অলরেডি ডাটাবেজে আছে কি না চেক করা
         const existingUser = await User.findOne({ email });
@@ -21,13 +26,13 @@ exports.register = async (req, res) => {
             name,
             email,
             password: hashedPassword,
-            role: role || 'user'
+            role: role || 'customer'
         });
 
         await newUser.save();
 
         res.status(201).json({ 
-            message: 'User registered successfully!',
+            message: 'Registration successful!',
             user: { name: newUser.name, email: newUser.email, role: newUser.role }
         });
     } catch (err) {
@@ -40,13 +45,13 @@ exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // ডাটাবেজ থেকে ইউজার খুঁজে বের করা
+        // ডাটাবেজ থেকে ইউজার খুঁজে বের করা (রেজিস্ট্রেশন করা না থাকলে এখানে ধরা পড়বে)
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).json({ message: 'Invalid email or password!' });
+            return res.status(400).json({ message: 'Account not found! Please register first.' });
         }
 
-        // পাসওয়ার্ড মিলিয়ে দেখা (bcrypt দিয়ে ডিক্রিপ্ট করে চেক করা)
+        // পাসওয়ার্ড মিলিয়ে দেখা (bcrypt দিয়ে চেক করা)
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(400).json({ message: 'Invalid email or password!' });
