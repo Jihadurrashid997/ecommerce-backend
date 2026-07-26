@@ -23,15 +23,18 @@ function App() {
   const handleAuthSubmit = async (e) => {
     e.preventDefault(); 
 
-    // ফ্রন্টএন্ডে পাসওয়ার্ড ৮ ডিজিটের কম কি না চেক করা
+    // ফ্রন্টএন্ডে পাসওয়ার্ড ৮ ডিজিটের কম কি না চেক করা
     if (password.length < 8) {
       alert("Password must be at least 8 characters long!");
       return;
     }
 
+    // লাইভ ব্যাকএন্ডের রেন্ডার লিংক
+    const baseUrl = 'https://ecommerce-backend-1-a9y7.onrender.com';
+
     const endpoint = isRegisterMode 
-      ? 'http://localhost:5000/api/auth/register' 
-      : 'http://localhost:5000/api/auth/login';
+      ? `${baseUrl}/api/auth/register` 
+      : `${baseUrl}/api/auth/login`;
 
     const payload = isRegisterMode 
       ? { name, email, password } 
@@ -49,12 +52,12 @@ function App() {
       if (response.ok) {
         alert(data.message); // সফল মেসেজ দেখাবে
         setShowLoginModal(false);
-        // ফিল্ডগুলো খালি করে দেওয়া
+        // ফিল্ডগুলো খালি করে দেওয়া
         setName('');
         setEmail('');
         setPassword('');
       } else {
-        alert(data.message); // ব্যাকএন্ড থেকে আসা এরর মেসেজ দেখাবে (যেমন: অ্যাকাউন্ট না থাকা বা পাসওয়ার্ড ভুল হওয়া)
+        alert(data.message); // ব্যাকএন্ড থেকে আসা এরর মেসেজ দেখাবে (যেমন: অ্যাকাউন্ট না থাকা বা পাসওয়ার্ড ভুল হওয়া)
       }
     } catch (err) {
       console.error("Connection Error:", err);
