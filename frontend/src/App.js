@@ -8,11 +8,59 @@ function App() {
   const [showLoginModal, setShowLoginModal] = useState(false); 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
 
+  // ইনপুট ফিল্ডের স্টেটগুলো
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
   useEffect(() => {
     // ৪ সেকেন্ডের প্রিমিয়াম ট্রানজিশন
     const timer = setTimeout(() => setShowWelcome(false), 4000);
     return () => clearTimeout(timer);
   }, []);
+
+  // --- ব্যাকএন্ড API কানেকশন ও ভ্যালিডেশন হ্যান্ডলার ---
+  const handleAuthSubmit = async (e) => {
+    e.preventDefault(); 
+
+    // ফ্রন্টএন্ডে পাসওয়ার্ড ৮ ডিজিটের কম কি না চেক করা
+    if (password.length < 8) {
+      alert("Password must be at least 8 characters long!");
+      return;
+    }
+
+    const endpoint = isRegisterMode 
+      ? 'http://localhost:5000/api/auth/register' 
+      : 'http://localhost:5000/api/auth/login';
+
+    const payload = isRegisterMode 
+      ? { name, email, password } 
+      : { email, password };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert(data.message); // সফল মেসেজ দেখাবে
+        setShowLoginModal(false);
+        // ফিল্ডগুলো খালি করে দেওয়া
+        setName('');
+        setEmail('');
+        setPassword('');
+      } else {
+        alert(data.message); // ব্যাকএন্ড থেকে আসা এরর মেসেজ দেখাবে (যেমন: অ্যাকাউন্ট না থাকা বা পাসওয়ার্ড ভুল হওয়া)
+      }
+    } catch (err) {
+      console.error("Connection Error:", err);
+      alert("Server error or backend is not running!");
+    }
+  };
 
   // --- প্রিমিয়াম ওয়েলকাম স্ক্রিন (নিউ ডিজাইন) ---
   if (showWelcome) {
@@ -129,27 +177,44 @@ function App() {
               ></button>
             </div>
             
-            <form onSubmit={(e) => { 
-              e.preventDefault(); 
-              alert(isRegisterMode ? "Registration successful!" : "Login successful!"); 
-              setShowLoginModal(false); 
-            }}>
+            <form onSubmit={handleAuthSubmit}>
               
               {isRegisterMode && (
                 <div className="mb-3 text-start">
                   <label className="form-label text-muted">Full Name</label>
-                  <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your name" required />
+                  <input 
+                    type="text" 
+                    className="form-control bg-dark text-white border-secondary" 
+                    placeholder="Enter your name" 
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required 
+                  />
                 </div>
               )}
 
               <div className="mb-3 text-start">
                 <label className="form-label text-muted">Email address</label>
-                <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" required />
+                <input 
+                  type="email" 
+                  className="form-control bg-dark text-white border-secondary" 
+                  placeholder="Enter your email" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required 
+                />
               </div>
 
               <div className="mb-4 text-start">
-                <label className="form-label text-muted">Password</label>
-                <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Password" required />
+                <label className="form-label text-muted">Password (Min 8 characters)</label>
+                <input 
+                  type="password" 
+                  className="form-control bg-dark text-white border-secondary" 
+                  placeholder="Password" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required 
+                />
               </div>
 
               <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase mb-3" style={{ letterSpacing: '1px' }}>
@@ -234,7 +299,7 @@ const modalStyles = {
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'center', // এখানেিক ঠিক করা হয়েছে (align-items থেকে alignItems)
+    alignItems: 'center',
     zIndex: 2000,
   },
   box: {
