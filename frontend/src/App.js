@@ -29,8 +29,8 @@ function App() {
       return;
     }
 
-    // লাইভ ব্যাকএন্ডের রেন্ডার লিংক
-    const baseUrl = 'https://ecommerce-backend-1-a9y7.onrender.com';
+    // লাইভ ব্যাকএন্ডের সঠিক রেন্ডার লিংক
+    const baseUrl = 'https://ecommerce-api-9wc9.onrender.com';
 
     const endpoint = isRegisterMode 
       ? `${baseUrl}/api/auth/register` 
@@ -57,7 +57,7 @@ function App() {
         setEmail('');
         setPassword('');
       } else {
-        alert(data.message); // ব্যাকএন্ড থেকে আসা এরর মেসেজ দেখাবে (যেমন: অ্যাকাউন্ট না থাকা বা পাসওয়ার্ড ভুল হওয়া)
+        alert(data.message); // ব্যাকএন্ড থেকে আসা এরর মেসেজ দেখাবে
       }
     } catch (err) {
       console.error("Connection Error:", err);
