@@ -51,11 +51,23 @@ function App() {
 
       if (response.ok) {
         alert(data.message); // সফল মেসেজ দেখাবে
+
+        // সফল লগইন বা রেজিস্ট্রেশনের পর লোকাল স্টোরেজে টোকেন ও ডেটা সেভ করা
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('userInfo', JSON.stringify(data.user));
+          localStorage.setItem('userRole', data.role || data.user?.role || 'customer');
+        }
+
         setShowLoginModal(false);
+        
         // ফিল্ডগুলো খালি করে দেওয়া
         setName('');
         setEmail('');
         setPassword('');
+
+        // পেজ রিফ্রেশ করে আপডেট অবস্থা দেখানো
+        window.location.reload();
       } else {
         alert(data.message); // ব্যাকএন্ড থেকে আসা এরর মেসেজ দেখাবে
       }
