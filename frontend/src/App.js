@@ -423,7 +423,7 @@ function App() {
         </div>
       )}
 
-      {/* ================= 4. মেইন হোমপেজ ================= -->
+      {/* ================= 4. মেইন হোমপেজ ================= */}
       {activePage === 'home' && (
         <>
           <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
@@ -460,7 +460,6 @@ function App() {
   );
 }
 
-// স্টাইল অবজেক্টগুলো আগের মতোই রাখা হয়েছে
 const modalStyles = {
   overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
   box: { backgroundColor: '#161616', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '400px', border: '1px solid #333', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }
