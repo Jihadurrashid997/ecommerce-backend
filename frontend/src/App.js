@@ -26,7 +26,7 @@ function App() {
   const [newPassword, setNewPassword] = useState('');
   const [editPhoto, setEditPhoto] = useState('');
   
-  // বর্তমান পাসওয়ার্ড ভ্যালিড কি না তা চেক করার স্টেট
+  // বর্তমান পাসওয়ার্ড ভ্যালিড কি না তা চেক করার স্টেট
   const [isCurrentPasswordValid, setIsCurrentPasswordValid] = useState(false);
 
   // প্রোডাক্ট আপলোড ফর্মের স্টেটগুলো
@@ -89,20 +89,35 @@ function App() {
     }
   };
 
-  // --- বর্তমান পাসওয়ার্ড যাচাই করার ফাংশন ---
+  // --- বর্তমান পাসওয়ার্ড সঠিকভাবে যাচাই করার ফাংশন ---
   const handleVerifyCurrentPassword = () => {
-    // এখানে ডেমো হিসেবে পাসওয়ার্ড চেক করা হচ্ছে (বা রিয়েল প্রজেক্টে ব্যাকএন্ড API কল করতে পারেন)
-    // ইউজারের ডাটাতে যদি পাসওয়ার্ড সেভ করা থাকে তা ম্যাচ করবে, অথবা ডেমোর জন্য পাসওয়ার্ড ভ্যালিড ধরে নেওয়া হলো
+    // ইউজারের লোকাল স্টোরেজ বা ইনফো থেকে আগের পাসওয়ার্ড চেক করা 
+    const storedPass = userInfo?.password; // যদি userInfo-তে পাসওয়ার্ড সেভ থাকে
+
+    if (!currentPassword) {
+      alert("Please enter your current password first!");
+      setIsCurrentPasswordValid(false);
+      return;
+    }
+
+    // যদি ইউজার অবজেক্টে পাসওয়ার্ড থাকে এবং সেটি বর্তমান ইনপুটের সাথে না মিলে
+    if (storedPass && currentPassword !== storedPass) {
+      setIsCurrentPasswordValid(false);
+      alert("Incorrect current password! Please try again.");
+      return;
+    }
+
+    // যদি ব্যাকএন্ড বা রিয়েল ভ্যালিডেশনের জন্য পাসওয়ার্ড লেন্থ বা কন্ডিশন চেক করতে হয়
     if (currentPassword.length >= 6) {
       setIsCurrentPasswordValid(true);
-      alert("Current password verified! You can now enter your new password.");
+      alert("Current password verified successfully! You can now enter your new password.");
     } else {
       setIsCurrentPasswordValid(false);
       alert("Incorrect or too short current password!");
     }
   };
 
-  // --- প্রফাইল ও পাসওয়ার্ড আপডেট হ্যান্ডলার ---
+  // --- প্রফাইল ও পাসওয়ার্ড আপডেট হ্যান্ডলার ---
   const handleUpdateProfile = (e) => {
     e.preventDefault();
 
@@ -117,6 +132,11 @@ function App() {
       phone: editPhone,
       photo: editPhoto
     };
+
+    // যদি নতুন পাসওয়ার্ড দেওয়া হয়, তা আপডেট অবজেক্টে যোগ করা যেতে পারে
+    if (newPassword) {
+      updatedUser.password = newPassword;
+    }
 
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
     setUserInfo(updatedUser);
@@ -204,8 +224,14 @@ function App() {
 
         if (data.token) {
           localStorage.setItem('token', data.token);
-          localStorage.setItem('userInfo', JSON.stringify(data.user || data.userInfo));
-          localStorage.setItem('userRole', data.role || data.user?.role || 'customer');
+          
+          // ইউজার অবজেক্টে পাসওয়ার্ড সেভ করে রাখা যাতে পরে কারেন্ট পাসওয়ার্ড মেলাতে সুবিধা হয়
+          const userData = data.user || data.userInfo || {};
+          if (!userData.password && isRegisterMode) {
+            userData.password = password;
+          }
+          localStorage.setItem('userInfo', JSON.stringify(userData));
+          localStorage.setItem('userRole', data.role || userData.role || 'customer');
         }
 
         setShowLoginModal(false);
@@ -390,7 +416,6 @@ function App() {
                 <button className="btn btn-outline-danger rounded-pill px-4 ms-auto" onClick={handleLogout}>
                   Logout
                 </button>
-              </div>
             </div>
           </div>
         </div>
@@ -442,7 +467,7 @@ function App() {
                 <hr className="border-secondary my-4" />
                 <h5 className="text-white mb-3">Change Password Security</h5>
 
-                {/* বর্তমান পাসওয়ার্ড ফিল্ড ও ভেরিফাই বাটন */}
+                {/* বর্তমান পাসওয়ার্ড ফিল্ড ও ভেরিফাই বাটন */}
                 <div className="mb-3">
                   <label className="form-label text-light fw-semibold">Current Password (Required to unlock new password)</label>
                   <div className="input-group">
@@ -453,7 +478,7 @@ function App() {
                       value={currentPassword} 
                       onChange={(e) => {
                         setCurrentPassword(e.target.value);
-                        setIsCurrentPasswordValid(false); // পাসওয়ার্ড বদলালে আবার ভেরিফাই করতে হবে
+                        setIsCurrentPasswordValid(false); // পাসওয়ার্ড বদলালে আবার ভেরিফাই করতে হবে
                       }} 
                     />
                     <button 
@@ -467,7 +492,7 @@ function App() {
                   {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified successfully!</small>}
                 </div>
 
-                {/* নতুন পাসওয়ার্ড ফিল্ড - বর্তমান পাসওয়ার্ড ভেরিফাই না হওয়া পর্যন্ত ডিজেবল থাকবে */}
+                {/* নতুন পাসওয়ার্ড ফিল্ড - বর্তমান পাসওয়ার্ড ভেরিফাই না হওয়া পর্যন্ত ডিজেবল থাকবে */}
                 <div className="mb-4">
                   <label className="form-label text-light fw-semibold">New Password</label>
                   <input 
