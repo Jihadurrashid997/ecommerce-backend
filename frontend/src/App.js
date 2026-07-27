@@ -187,7 +187,7 @@ function App() {
     }
   };
 
-  // --- ব্যাকএন্ড API কানেকশন ও অথ হ্যান্ডলার (ফিক্স করা হয়েছে) ---
+  // --- ব্যাকএন্ড API কানেকশন ও অথ হ্যান্ডলার (সঠিকভাবে ফিক্স করা হয়েছে) ---
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     const baseUrl = 'https://ecommerce-api-9wc9.onrender.com';
@@ -206,44 +206,37 @@ function App() {
 
       const data = await response.json();
 
-      if (response.ok) {
-        alert(isRegisterMode ? "Registration Successful!" : "Login Successful!");
-        
-        // টোকেন এবং ইউজার ডাটা লোকালস্টোরেজে সেভ করা
-        localStorage.setItem('token', data.token || 'dummy-token');
-        
-        const userData = data.user || { name: name || 'User', email, password };
-        if (!userData.password) userData.password = password; // পাসওয়ার্ড ভ্যালিডেশনের জন্য সংরক্ষণ
-        
-        localStorage.setItem('userInfo', JSON.stringify(userData));
-        const role = data.role || data.user?.role || 'customer';
-        localStorage.setItem('userRole', role);
-
-        setIsLoggedIn(true);
-        setUserInfo(userData);
-        setUserRole(role);
-        setShowLoginModal(false);
-        
-        // ফিল্ড রিসেট
-        setName('');
-        setEmail('');
-        setPassword('');
-      } else {
-        alert(data.message || "Authentication failed!");
+      // রেসপন্স সাকসেসফুল না হলে (যেমন: ভুল পাসওয়ার্ড বা ইমেইল) এখানে আটকে দিবে
+      if (!response.ok) {
+        alert(data.message || data.error || "Authentication failed! Please check your credentials.");
+        return;
       }
-    } catch (err) {
-      console.error("Auth Error:", err);
-      // যদি রেন্ডার সার্ভার ডাউন থাকে বা এপিআই কানেক্ট না হয়, তবে ফলব্যাক হিসেবে লোকাল মোডে লগইন করিয়ে দিবে
-      const fallbackUser = { name: isRegisterMode ? name : 'Local User', email, password };
-      localStorage.setItem('token', 'local-token');
-      localStorage.setItem('userInfo', JSON.stringify(fallbackUser));
-      localStorage.setItem('userRole', 'customer');
+
+      alert(isRegisterMode ? "Registration Successful!" : "Login Successful!");
+      
+      // টোকেন এবং ইউজার ডাটা লোকালস্টোরেজে সেভ করা
+      localStorage.setItem('token', data.token || 'dummy-token');
+      
+      const userData = data.user || { name: name || 'User', email, password };
+      if (!userData.password) userData.password = password; // পাসওয়ার্ড ভ্যালিডেশনের জন্য সংরক্ষণ
+      
+      localStorage.setItem('userInfo', JSON.stringify(userData));
+      const role = data.role || data.user?.role || 'customer';
+      localStorage.setItem('userRole', role);
 
       setIsLoggedIn(true);
-      setUserInfo(fallbackUser);
-      setUserRole('customer');
+      setUserInfo(userData);
+      setUserRole(role);
       setShowLoginModal(false);
-      alert("Logged in using local fallback mode.");
+      
+      // ফিল্ড রিসেট
+      setName('');
+      setEmail('');
+      setPassword('');
+
+    } catch (err) {
+      console.error("Auth Error:", err);
+      alert("Network or Server error! Please check your connection.");
     }
   };
 
@@ -390,200 +383,200 @@ function App() {
                 </div>
               </div>
 
-              <hr className="border-secondary mb-4" />
-              
-              <div className="row g-3 mb-4">
-                <div className="col-md-6">
-                  <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Phone Number</p>
-                  <h5 className="text-white">{userInfo?.phone || 'Not Added Yet'}</h5>
-                </div>
-                <div className="col-md-6">
-                  <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Account Type</p>
-                  <h5 className="text-white text-uppercase">{userRole}</h5>
-                </div>
+            <hr className="border-secondary mb-4" />
+             
+            <div className="row g-3 mb-4">
+              <div className="col-md-6">
+                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Phone Number</p>
+                <h5 className="text-white">{userInfo?.phone || 'Not Added Yet'}</h5>
               </div>
-              
-              <div className="d-flex flex-wrap gap-3">
-                <button className="btn btn-light rounded-pill px-4 fw-bold" onClick={() => setActivePage('edit-profile')}>
-                  Edit Profile & Security
+              <div className="col-md-6">
+                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Account Type</p>
+                <h5 className="text-white text-uppercase">{userRole}</h5>
+              </div>
+            </div>
+             
+            <div className="d-flex flex-wrap gap-3">
+              <button className="btn btn-light rounded-pill px-4 fw-bold" onClick={() => setActivePage('edit-profile')}>
+                Edit Profile & Security
+              </button>
+              {(userRole === 'seller' || userRole === 'admin') && (
+                <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setActivePage('upload')}>
+                  Upload New Product
                 </button>
-                {(userRole === 'seller' || userRole === 'admin') && (
-                  <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setActivePage('upload')}>
-                    Upload New Product
-                  </button>
-                )}
-                <button className="btn btn-outline-danger rounded-pill px-4 ms-auto" onClick={handleLogout}>
-                  Logout
-                </button>
-              </div>
+              )}
+              <button className="btn btn-outline-danger rounded-pill px-4 ms-auto" onClick={handleLogout}>
+                Logout
+              </button>
             </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
-      {/* ================= 2. প্রফাইল এডিট পেজ (Edit Profile & Strict Password Security) ================= */}
-      {isLoggedIn && activePage === 'edit-profile' && (
-        <div className="container py-5 text-start">
-          <div className="row justify-content-center">
-            <div className="col-md-8 bg-black p-5 border border-secondary rounded-4 shadow-lg">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>EDIT PROFILE & PASSWORD</h3>
-                <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Cancel</button>
-              </div>
-              <hr className="border-secondary mb-4" />
-
-              <form onSubmit={handleUpdateProfile}>
-                <div className="mb-3">
-                  <label className="form-label text-light fw-semibold">Full Name</label>
-                  <input type="text" className="form-control bg-dark text-white border-secondary" value={editName} onChange={(e) => setEditName(e.target.value)} required />
-                </div>
-                
-                <div className="mb-3">
-                  <label className="form-label text-light fw-semibold">Phone Number</label>
-                  <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
-                </div>
-
-                {/* প্রোফাইল ছবি আপলোড */}
-                <div className="mb-3">
-                  <label className="form-label text-light fw-semibold">Profile Photo (Upload from Device, Choose Avatar)</label>
-                  
-                  <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleImageUploadFromFile} />
-
-                  <div className="d-flex gap-3 my-2 flex-wrap align-items-center">
-                    <span className="text-muted small">Or select preset:</span>
-                    {presetAvatars.map((url, idx) => (
-                      <img 
-                        key={idx} 
-                        src={url} 
-                        alt="Avatar Preset" 
-                        onClick={() => setEditPhoto(url)} 
-                        style={{ width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', border: editPhoto === url ? '3px solid #fff' : '2px solid #555', objectFit: 'cover' }} 
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                <hr className="border-secondary my-4" />
-                <h5 className="text-white mb-3">Change Password Security</h5>
-
-                {/* বর্তমান পাসওয়ার্ড ফিল্ড ও ভেরিফাই বাটন */}
-                <div className="mb-3">
-                  <label className="form-label text-light fw-semibold">Current Password (Required to unlock new password)</label>
-                  <div className="input-group">
-                    <input 
-                      type="password" 
-                      className="form-control bg-dark text-white border-secondary" 
-                      placeholder="Enter current password" 
-                      value={currentPassword} 
-                      onChange={(e) => {
-                        setCurrentPassword(e.target.value);
-                        setIsCurrentPasswordValid(false); 
-                      }} 
-                    />
-                    <button 
-                      type="button" 
-                      className="btn btn-outline-light" 
-                      onClick={handleVerifyCurrentPassword}
-                    >
-                      Verify
-                    </button>
-                  </div>
-                  {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified successfully!</small>}
-                </div>
-
-                {/* নতুন পাসওয়ার্ড ফিল্ড */}
-                <div className="mb-4">
-                  <label className="form-label text-light fw-semibold">New Password</label>
-                  <input 
-                    type="password" 
-                    className="form-control bg-dark text-white border-secondary" 
-                    placeholder={isCurrentPasswordValid ? "Enter new password (min 8 chars)" : "Verify current password first..."} 
-                    value={newPassword} 
-                    onChange={(e) => setNewPassword(e.target.value)} 
-                    disabled={!isCurrentPasswordValid} 
-                  />
-                </div>
-
-                <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Save All Changes</button>
-              </form>
-            </div>
+    {/* ================= 2. প্রফাইল এডিট পেজ (Edit Profile & Strict Password Security) ================= */}
+    {isLoggedIn && activePage === 'edit-profile' && (
+      <div className="container py-5 text-start">
+        <div className="row justify-content-center">
+          <div className="col-md-8 bg-black p-5 border border-secondary rounded-4 shadow-lg">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>EDIT PROFILE & PASSWORD</h3>
+              <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Cancel</button>
           </div>
-        </div>
-      )}
+          <hr className="border-secondary mb-4" />
 
-      {/* ================= 3. প্রোডাক্ট আপলোড পেজ ================= */}
-      {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
-        <div className="container py-5 text-start">
-          <div className="row justify-content-center">
-            <div className="col-md-8 bg-black p-5 border border-secondary rounded-4">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>UPLOAD PRODUCT</h3>
-                <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
-              </div>
-              <hr className="border-secondary mb-4" />
-
-              <form onSubmit={handleProductUpload}>
-                <div className="mb-3">
-                  <label className="form-label text-light fw-semibold">Product Title</label>
-                  <input type="text" className="form-control bg-dark text-white border-secondary" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label text-light fw-semibold">Price ($)</label>
-                  <input type="number" className="form-control bg-dark text-white border-secondary" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label text-light fw-semibold">Category</label>
-                  <input type="text" className="form-control bg-dark text-white border-secondary" value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
-                </div>
-                <div className="mb-3">
-                  <label className="form-label text-light fw-semibold">Description</label>
-                  <textarea className="form-control bg-dark text-white border-secondary" rows="3" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
-                </div>
-                <div className="mb-4">
-                  <label className="form-label text-light fw-semibold">Image URL</label>
-                  <input type="text" className="form-control bg-dark text-white border-secondary" value={productImage} onChange={(e) => setProductImage(e.target.value)} required />
-                </div>
-                <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Publish Product</button>
-              </form>
+          <form onSubmit={handleUpdateProfile}>
+            <div className="mb-3">
+              <label className="form-label text-light fw-semibold">Full Name</label>
+              <input type="text" className="form-control bg-dark text-white border-secondary" value={editName} onChange={(e) => setEditName(e.target.value)} required />
             </div>
-          </div>
-        </div>
-      )}
+             
+            <div className="mb-3">
+              <label className="form-label text-light fw-semibold">Phone Number</label>
+              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+            </div>
 
-      {/* ================= 4. মেইন হোমপেজ ================= */}
-      {activePage === 'home' && (
-        <>
-          <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
-            <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.8}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '5px'}}>
-              Pure Elegance
-            </motion.h1>
-            <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.6, duration: 0.8}} className="lead fs-3 text-light" style={{opacity: 0.8}}>Discover our exclusive premium collection.</motion.p>
-            <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 1, duration: 0.5}}>
-                <button className="btn btn-light btn-lg mt-4 px-5 py-3 rounded-pill fw-bold text-uppercase" style={{letterSpacing: '1px'}}>Shop Now</button>
-            </motion.div>
-          </header>
+          {/* প্রোফাইল ছবি আপলোড */}
+          <div className="mb-3">
+            <label className="form-label text-light fw-semibold">Profile Photo (Upload from Device, Choose Avatar)</label>
+             
+            <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleImageUploadFromFile} />
 
-          <div className="container py-5">
-            <div className="row g-4">
-              {[1, 2, 3].map((i) => (
-                <div className="col-md-4" key={i}>
-                  <motion.div initial={{y: 50, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.5, delay: i * 0.2}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
-                    <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '300px', color:'#aaa' }}>
-                      Image {i}
-                    </div>
-                    <div className="card-body text-center">
-                      <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>Signature Item</h5>
-                      <p className="text-light mb-4" style={{opacity: 0.8}}>$999.00</p>
-                      <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}}>View</button>
-                    </div>
-                  </motion.div>
-                </div>
+            <div className="d-flex gap-3 my-2 flex-wrap align-items-center">
+              <span className="text-muted small">Or select preset:</span>
+              {presetAvatars.map((url, idx) => (
+                <img 
+                  key={idx} 
+                  src={url} 
+                  alt="Avatar Preset" 
+                  onClick={() => setEditPhoto(url)} 
+                  style={{ width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', border: editPhoto === url ? '3px solid #fff' : '2px solid #555', objectFit: 'cover' }} 
+                />
               ))}
             </div>
           </div>
-        </>
-      )}
-    </motion.div>
+
+          <hr className="border-secondary my-4" />
+          <h5 className="text-white mb-3">Change Password Security</h5>
+
+          {/* বর্তমান পাসওয়ার্ড ফিল্ড ও ভেরিফাই বাটন */}
+          <div className="mb-3">
+            <label className="form-label text-light fw-semibold">Current Password (Required to unlock new password)</label>
+            <div className="input-group">
+              <input 
+                type="password" 
+                className="form-control bg-dark text-white border-secondary" 
+                placeholder="Enter current password" 
+                value={currentPassword} 
+                onChange={(e) => {
+                  setCurrentPassword(e.target.value);
+                  setIsCurrentPasswordValid(false); 
+                }} 
+              />
+              <button 
+                type="button" 
+                className="btn btn-outline-light" 
+                onClick={handleVerifyCurrentPassword}
+              >
+                Verify
+              </button>
+            </div>
+            {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified successfully!</small>}
+          </div>
+
+          {/* নতুন পাসওয়ার্ড ফিল্ড */}
+          <div className="mb-4">
+            <label className="form-label text-light fw-semibold">New Password</label>
+            <input 
+              type="password" 
+              className="form-control bg-dark text-white border-secondary" 
+              placeholder={isCurrentPasswordValid ? "Enter new password (min 8 chars)" : "Verify current password first..."} 
+              value={newPassword} 
+              onChange={(e) => setNewPassword(e.target.value)} 
+              disabled={!isCurrentPasswordValid} 
+            />
+          </div>
+
+          <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Save All Changes</button>
+        </form>
+      </div>
+      </div>
+    </div>
+   )}
+
+    {/* ================= 3. প্রোডাক্ট আপলোড পেজ ================= */}
+    {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
+      <div className="container py-5 text-start">
+        <div className="row justify-content-center">
+          <div className="col-md-8 bg-black p-5 border border-secondary rounded-4">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>UPLOAD PRODUCT</h3>
+              <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
+          </div>
+          <hr className="border-secondary mb-4" />
+
+          <form onSubmit={handleProductUpload}>
+            <div className="mb-3">
+              <label className="form-label text-light fw-semibold">Product Title</label>
+              <input type="text" className="form-control bg-dark text-white border-secondary" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
+            </div>
+            <div className="mb-3">
+              <label className="form-label text-light fw-semibold">Price ($)</label>
+              <input type="number" className="form-control bg-dark text-white border-secondary" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
+            </div>
+            <div className="mb-3">
+              <label className="form-label text-light fw-semibold">Category</label>
+              <input type="text" className="form-control bg-dark text-white border-secondary" value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
+            </div>
+            <div className="mb-3">
+              <label className="form-label text-light fw-semibold">Description</label>
+              <textarea className="form-control bg-dark text-white border-secondary" rows="3" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
+            </div>
+            <div className="mb-4">
+              <label className="form-label text-light fw-semibold">Image URL</label>
+              <input type="text" className="form-control bg-dark text-white border-secondary" value={productImage} onChange={(e) => setProductImage(e.target.value)} required />
+            </div>
+            <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Publish Product</button>
+          </form>
+        </div>
+        </div>
+      </div>
+   )}
+
+    {/* ================= 4. মেইন হোমপেজ ================= */}
+    {activePage === 'home' && (
+      <>
+        <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
+          <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.8}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '5px'}}>
+            Pure Elegance
+          </motion.h1>
+          <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.6, duration: 0.8}} className="lead fs-3 text-light" style={{opacity: 0.8}}>Discover our exclusive premium collection.</motion.p>
+          <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 1, duration: 0.5}}>
+            <button className="btn btn-light btn-lg mt-4 px-5 py-3 rounded-pill fw-bold text-uppercase" style={{letterSpacing: '1px'}}>Shop Now</button>
+          </motion.div>
+        </header>
+
+        <div className="container py-5">
+          <div className="row g-4">
+            {[1, 2, 3].map((i) => (
+              <div className="col-md-4" key={i}>
+                <motion.div initial={{y: 50, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.5, delay: i * 0.2}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
+                  <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '300px', color:'#aaa' }}>
+                    Image {i}
+                  </div>
+                  <div className="card-body text-center">
+                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>Signature Item</h5>
+                    <p className="text-light mb-4" style={{opacity: 0.8}}>$999.00</p>
+                    <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}}>View</button>
+                </div>
+              </motion.div>
+            </div>
+          ))}
+        </div>
+        </div>
+      </>
+   )}
+  </motion.div>
   );
 }
 
