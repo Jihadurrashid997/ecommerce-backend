@@ -19,10 +19,11 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // প্রফাইল এডিটিং স্টেট
+  // প্রফাইল এডিটিং স্টেট (বর্তমান পাসওয়ার্ড ও নতুন পাসওয়ার্ড সহ)
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
-  const [editPassword, setEditPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [editPhoto, setEditPhoto] = useState('');
 
   // প্রোডাক্ট আপলোড ফর্মের স্টেটগুলো
@@ -31,6 +32,14 @@ function App() {
   const [productCategory, setProductCategory] = useState('');
   const [productDescription, setProductDescription] = useState('');
   const [productImage, setProductImage] = useState('');
+
+  // কিছু প্রিিসেট প্রফাইল ছবি (মেমোরি/সিলেকশনের জন্য)
+  const presetAvatars = [
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
+    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
+  ];
 
   useEffect(() => {
     const timer = setTimeout(() => setShowWelcome(false), 4000);
@@ -45,7 +54,6 @@ function App() {
       setUserInfo(parsedUser);
       setUserRole(storedRole || 'customer');
       
-      // এডিট ফর্মের ইনিশিয়াল ভ্যালু সেট করা
       setEditName(parsedUser.name || '');
       setEditPhone(parsedUser.phone || '');
       setEditPhoto(parsedUser.photo || '');
@@ -66,9 +74,16 @@ function App() {
     window.location.reload();
   };
 
-  // --- প্রফাইল আপডেট হ্যান্ডলার ---
+  // --- প্রফাইল ও পাসওয়ার্ড আপডেট হ্যান্ডলার ---
   const handleUpdateProfile = (e) => {
     e.preventDefault();
+
+    // যদি নতুন পাসওয়ার্ড পরিবর্তন করতে চায়, তবে বর্তমান পাসওয়ার্ড যাচাই করা
+    if (newPassword && !currentPassword) {
+      alert("Please enter your current password to set a new password!");
+      return;
+    }
+
     const updatedUser = {
       ...userInfo,
       name: editName,
@@ -76,9 +91,13 @@ function App() {
       photo: editPhoto
     };
 
-    // লোকাল স্টোরেজ আপডেট করা
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
     setUserInfo(updatedUser);
+    
+    // ফিল্ড রিসেট
+    setCurrentPassword('');
+    setNewPassword('');
+
     alert("Profile updated successfully!");
     setActivePage('profile');
   };
@@ -200,7 +219,7 @@ function App() {
               <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.5 }} style={splashStyles.title}>
                 Welcome to JR STORE
               </motion.h1>
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.6 }} transition={{ delay: 2, duration: 0.8 }} style={splashStyles.subtitle}>
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ delay: 2, duration: 0.8 }} style={splashStyles.subtitle}>
                 The Art of Shopping
               </motion.p>
               <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 1.5, duration: 2.5, ease: "linear" }} style={splashStyles.progressBar} />
@@ -217,17 +236,17 @@ function App() {
       {/* ন্যাভবার */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
-          <a className="navbar-brand fw-bold fs-3" href="#" onClick={() => setActivePage('home')} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
-            <span style={{color:'#aaa'}}>JR</span> STORE
+          <a className="navbar-brand fw-bold fs-3 text-white" href="#" onClick={() => setActivePage('home')} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
+            <span style={{color:'#ddd'}}>JR</span> STORE
           </a>
           <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span className="navbar-toggler-icon"></span>
           </button>
           <div className="collapse navbar-collapse" id="navbarNav">
             <ul className="navbar-nav ms-auto align-items-center py-2 py-lg-0">
-              <li className="nav-item"><a className="nav-link" href="#" onClick={() => setActivePage('home')}>Home</a></li>
-              <li className="nav-item"><a className="nav-link" href="#">New Arrivals</a></li>
-              <li className="nav-item"><a className="nav-link" href="#">Collections</a></li>
+              <li className="nav-item"><a className="nav-link text-light" href="#" onClick={() => setActivePage('home')}>Home</a></li>
+              <li className="nav-item"><a className="nav-link text-light" href="#">New Arrivals</a></li>
+              <li className="nav-item"><a className="nav-link text-light" href="#">Collections</a></li>
               
               <li className="nav-item mt-2 mt-lg-0">
                 {isLoggedIn ? (
@@ -239,9 +258,9 @@ function App() {
                       {userInfo?.name || 'My Account'}
                     </button>
                     <ul className="dropdown-menu dropdown-menu-dark bg-black border-secondary">
-                      <li><button className="dropdown-item" onClick={() => setActivePage('profile')}>My Profile</button></li>
+                      <li><button className="dropdown-item text-light" onClick={() => setActivePage('profile')}>My Profile</button></li>
                       {(userRole === 'seller' || userRole === 'admin') && (
-                        <li><button className="dropdown-item" onClick={() => setActivePage('upload')}>Upload Product</button></li>
+                        <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Upload Product</button></li>
                       )}
                       <li><hr className="dropdown-divider border-secondary" /></li>
                       <li><button className="dropdown-item text-danger" onClick={handleLogout}>Logout</button></li>
@@ -263,32 +282,32 @@ function App() {
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <h3 className="fw-bold m-0" style={{ letterSpacing: '1px' }}>{isRegisterMode ? 'REGISTER' : 'SIGN IN'}</h3>
+              <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>{isRegisterMode ? 'REGISTER' : 'SIGN IN'}</h3>
               <button className="btn-close btn-close-white" onClick={() => setShowLoginModal(false)}></button>
             </div>
             
             <form onSubmit={handleAuthSubmit}>
               {isRegisterMode && (
                 <div className="mb-3 text-start">
-                  <label className="form-label text-muted">Full Name</label>
+                  <label className="form-label text-light fw-semibold">Full Name</label>
                   <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} required />
                 </div>
               )}
               <div className="mb-3 text-start">
-                <label className="form-label text-muted">Email address</label>
+                <label className="form-label text-light fw-semibold">Email address</label>
                 <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div className="mb-4 text-start">
-                <label className="form-label text-muted">Password (Min 8 characters)</label>
+                <label className="form-label text-light fw-semibold">Password (Min 8 characters)</label>
                 <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase mb-3" style={{ letterSpacing: '1px' }}>
                 {isRegisterMode ? 'Sign Up' : 'Login'}
               </button>
               <div className="text-center">
-                <p className="text-muted small mb-0">
+                <p className="small mb-0 text-light" style={{ opacity: 0.8 }}>
                   {isRegisterMode ? "Already have an account?" : "Don't have an account?"}{" "}
-                  <span style={{ color: '#fff', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setIsRegisterMode(!isRegisterMode)}>
+                  <span style={{ color: '#fff', cursor: 'pointer', textDecoration: 'underline', fontWeight: 'bold' }} onClick={() => setIsRegisterMode(!isRegisterMode)}>
                     {isRegisterMode ? "Sign In" : "Register here"}
                   </span>
                 </p>
@@ -308,12 +327,12 @@ function App() {
                   {userInfo?.photo ? (
                     <img src={userInfo.photo} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <span className="fs-1 text-muted">{userInfo?.name?.charAt(0) || 'U'}</span>
+                    <span className="fs-1 text-light">{userInfo?.name?.charAt(0) || 'U'}</span>
                   )}
                 </div>
                 <div>
-                  <h2 className="fw-bold mb-1" style={{ letterSpacing: '1px' }}>{userInfo?.name}</h2>
-                  <p className="text-muted mb-0">{userInfo?.email}</p>
+                  <h2 className="fw-bold mb-1 text-white" style={{ letterSpacing: '1px' }}>{userInfo?.name}</h2>
+                  <p className="text-light mb-0" style={{ opacity: 0.8 }}>{userInfo?.email}</p>
                   <span className="badge bg-light text-dark text-uppercase mt-2">{userRole}</span>
                 </div>
               </div>
@@ -322,18 +341,18 @@ function App() {
               
               <div className="row g-3 mb-4">
                 <div className="col-md-6">
-                  <p className="text-muted mb-1">Phone Number</p>
+                  <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Phone Number</p>
                   <h5 className="text-white">{userInfo?.phone || 'Not Added Yet'}</h5>
                 </div>
                 <div className="col-md-6">
-                  <p className="text-muted mb-1">Account Type</p>
+                  <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Account Type</p>
                   <h5 className="text-white text-uppercase">{userRole}</h5>
                 </div>
               </div>
               
               <div className="d-flex flex-wrap gap-3">
                 <button className="btn btn-light rounded-pill px-4 fw-bold" onClick={() => setActivePage('edit-profile')}>
-                  Edit Profile
+                  Edit Profile & Security
                 </button>
                 {(userRole === 'seller' || userRole === 'admin') && (
                   <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setActivePage('upload')}>
@@ -349,35 +368,59 @@ function App() {
         </div>
       )}
 
-      {/* ================= 2. প্রফাইল এডিট পেজ (Edit Profile) ================= */}
+      {/* ================= 2. প্রফাইল এডিট পেজ (Edit Profile & Password) ================= */}
       {isLoggedIn && activePage === 'edit-profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
             <div className="col-md-8 bg-black p-5 border border-secondary rounded-4 shadow-lg">
               <div className="d-flex justify-content-between align-items-center mb-4">
-                <h3 className="fw-bold m-0" style={{ letterSpacing: '1px' }}>EDIT PROFILE</h3>
+                <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>EDIT PROFILE & PASSWORD</h3>
                 <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Cancel</button>
               </div>
               <hr className="border-secondary mb-4" />
 
               <form onSubmit={handleUpdateProfile}>
                 <div className="mb-3">
-                  <label className="form-label text-muted">Full Name</label>
+                  <label className="form-label text-light fw-semibold">Full Name</label>
                   <input type="text" className="form-control bg-dark text-white border-secondary" value={editName} onChange={(e) => setEditName(e.target.value)} required />
                 </div>
+                
                 <div className="mb-3">
-                  <label className="form-label text-muted">Phone Number</label>
+                  <label className="form-label text-light fw-semibold">Phone Number</label>
                   <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
                 </div>
+
+                {/* প্রোফাইল ছবি সিলেকশন ও মেমোরি */}
                 <div className="mb-3">
-                  <label className="form-label text-muted">Profile Photo URL</label>
-                  <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Paste image link for your profile photo" value={editPhoto} onChange={(e) => setEditPhoto(e.target.value)} />
+                  <label className="form-label text-light fw-semibold">Profile Photo (Choose Avatar or Paste Image URL)</label>
+                  <div className="d-flex gap-3 mb-2 flex-wrap">
+                    {presetAvatars.map((url, idx) => (
+                      <img 
+                        key={idx} 
+                        src={url} 
+                        alt="Avatar Preset" 
+                        onClick={() => setEditPhoto(url)} 
+                        style={{ width: '45px', height: '45px', borderRadius: '50%', cursor: 'pointer', border: editPhoto === url ? '3px solid #fff' : '2px solid #555', objectFit: 'cover' }} 
+                      />
+                    ))}
+                  </div>
+                  <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Or paste custom image link here" value={editPhoto} onChange={(e) => setEditPhoto(e.target.value)} />
                 </div>
+
+                <hr className="border-secondary my-4" />
+                <h5 className="text-white mb-3">Change Password (Optional)</h5>
+
+                <div className="mb-3">
+                  <label className="form-label text-light fw-semibold">Current Password (Required to change password)</label>
+                  <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Enter current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+                </div>
+
                 <div className="mb-4">
-                  <label className="form-label text-muted">New Password (Optional)</label>
-                  <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Leave blank if you don't want to change" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} />
+                  <label className="form-label text-light fw-semibold">New Password</label>
+                  <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Enter new password (min 8 chars)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
                 </div>
-                <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Save Changes</button>
+
+                <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Save All Changes</button>
               </form>
             </div>
           </div>
@@ -390,30 +433,30 @@ function App() {
           <div className="row justify-content-center">
             <div className="col-md-8 bg-black p-5 border border-secondary rounded-4">
               <div className="d-flex justify-content-between align-items-center mb-4">
-                <h3 className="fw-bold m-0" style={{ letterSpacing: '1px' }}>UPLOAD PRODUCT</h3>
+                <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>UPLOAD PRODUCT</h3>
                 <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
               </div>
               <hr className="border-secondary mb-4" />
 
               <form onSubmit={handleProductUpload}>
                 <div className="mb-3">
-                  <label className="form-label text-muted">Product Title</label>
+                  <label className="form-label text-light fw-semibold">Product Title</label>
                   <input type="text" className="form-control bg-dark text-white border-secondary" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
                 </div>
                 <div className="mb-3">
-                  <label className="form-label text-muted">Price ($)</label>
+                  <label className="form-label text-light fw-semibold">Price ($)</label>
                   <input type="number" className="form-control bg-dark text-white border-secondary" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
                 </div>
                 <div className="mb-3">
-                  <label className="form-label text-muted">Category</label>
+                  <label className="form-label text-light fw-semibold">Category</label>
                   <input type="text" className="form-control bg-dark text-white border-secondary" value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
                 </div>
                 <div className="mb-3">
-                  <label className="form-label text-muted">Description</label>
+                  <label className="form-label text-light fw-semibold">Description</label>
                   <textarea className="form-control bg-dark text-white border-secondary" rows="3" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
                 </div>
                 <div className="mb-4">
-                  <label className="form-label text-muted">Image URL</label>
+                  <label className="form-label text-light fw-semibold">Image URL</label>
                   <input type="text" className="form-control bg-dark text-white border-secondary" value={productImage} onChange={(e) => setProductImage(e.target.value)} required />
                 </div>
                 <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Publish Product</button>
@@ -427,10 +470,10 @@ function App() {
       {activePage === 'home' && (
         <>
           <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
-            <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.8}} className="display-1 fw-bold mb-3" style={{textTransform: 'uppercase', letterSpacing: '5px'}}>
+            <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.8}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '5px'}}>
               Pure Elegance
             </motion.h1>
-            <motion.p initial={{opacity: 0}} animate={{opacity: 0.7}} transition={{delay: 0.6, duration: 0.8}} className="lead fs-3">Discover our exclusive premium collection.</motion.p>
+            <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.6, duration: 0.8}} className="lead fs-3 text-light" style={{opacity: 0.8}}>Discover our exclusive premium collection.</motion.p>
             <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 1, duration: 0.5}}>
                 <button className="btn btn-light btn-lg mt-4 px-5 py-3 rounded-pill fw-bold text-uppercase" style={{letterSpacing: '1px'}}>Shop Now</button>
             </motion.div>
@@ -441,12 +484,12 @@ function App() {
               {[1, 2, 3].map((i) => (
                 <div className="col-md-4" key={i}>
                   <motion.div initial={{y: 50, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.5, delay: i * 0.2}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
-                    <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '300px', color:'#555' }}>
+                    <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '300px', color:'#aaa' }}>
                       Image {i}
                     </div>
                     <div className="card-body text-center">
-                      <h5 className="card-title fw-bold text-uppercase mt-2" style={{letterSpacing: '2px'}}>Signature Item</h5>
-                      <p className="text-muted mb-4">$999.00</p>
+                      <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>Signature Item</h5>
+                      <p className="text-light mb-4" style={{opacity: 0.8}}>$999.00</p>
                       <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}}>View</button>
                     </div>
                   </motion.div>
@@ -461,18 +504,18 @@ function App() {
 }
 
 const modalStyles = {
-  overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-  box: { backgroundColor: '#161616', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '400px', border: '1px solid #333', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }
+  overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
+  box: { backgroundColor: '#161616', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '400px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.7)' }
 };
 
 const splashStyles = {
   container: { height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', overflow: 'hidden', position: 'fixed', top: 0, left: 0, zIndex: 1000 },
   content: { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%', height: '100%' },
   logoWrapper: { position: 'relative', width: '120px', height: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '40px' },
-  logoGlow: { position: 'absolute', width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(255,255,255,0.3) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(15px)' },
+  logoGlow: { position: 'absolute', width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(15px)' },
   logoText: { fontSize: '60px', fontWeight: '100', color: '#fff', fontFamily: 'Helvetica Neue, Arial, sans-serif', letterSpacing: '2px', position: 'relative', zIndex: 1 },
   title: { fontSize: '40px', fontWeight: '300', color: '#fff', textTransform: 'uppercase', letterSpacing: '8px', margin: '0 0 15px 0', fontFamily: 'Helvetica Neue, sans-serif' },
-  subtitle: { fontSize: '18px', color: '#fff', fontWeight: '200', letterSpacing: '4px', opacity: 0.6, marginBottom: '60px' },
+  subtitle: { fontSize: '18px', color: '#fff', fontWeight: '200', letterSpacing: '4px', opacity: 0.8, marginBottom: '60px' },
   progressBar: { height: '1px', background: 'linear-gradient(90deg, transparent, #fff, transparent)', position: 'absolute', bottom: '10%', width: '0%', left: 0 }
 };
 
