@@ -22,11 +22,12 @@ connectDB();
 
 // API Endpoints Mapping
 app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/users', require('./routes/authRoutes')); // 👈 ফ্রন্টএন্ডের সুবিধার জন্য এটিও যুক্ত করা হলো
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/seller', require('./routes/sellerRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes')); 
 app.use('/api/payment', require('./routes/paymentRoutes')); 
-app.use('/api/products', require('./routes/productRoutes')); // 👈 নতুন রুটটি এখানে যোগ করা হলো!
+app.use('/api/products', require('./routes/productRoutes'));
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server executing seamlessly on port ${PORT}`));
