@@ -14,14 +14,18 @@ function App() {
   const [userRole, setUserRole] = useState('customer');
   const [activePage, setActivePage] = useState('home'); 
 
-  // ইনপুট ফিল্ডের স্টেটগুলো
+  // ইনপুট ফিল্ড ও রেজিস্ট্রেশন রোল স্টেট
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // ৩. লোডিং স্পিনার স্টেট
+  const [selectedRole, setSelectedRole] = useState('customer'); // নতুন: রেজিস্ট্রেশনে রোল সিলেক্ট
+  const [isLoading, setIsLoading] = useState(false);
 
-  // কাস্টম টোস্ট নোটিফিকেশন স্টেট (৪)
+  // কাস্টম টোস্ট নোটিফিকেশন স্টেট
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  // কাস্টম কনফার্মেশন মডাল স্টেট (브라우জার অ্যালার্ট বাদ দেওয়ার জন্য)
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -68,7 +72,7 @@ function App() {
       
       setEditName(parsedUser.name || '');
       setEditPhone(parsedUser.phone || '');
-      setEditPhoto(parsedUser.photo || ''); // ১. পিকচার রিমুভ ফিক্স (ডাটা প্রপারলি সিঙ্ক করা)
+      setEditPhoto(parsedUser.photo || '');
     }
 
     return () => clearTimeout(timer);
@@ -85,22 +89,36 @@ function App() {
     showToast("Logged out successfully!", "success");
   };
 
-  // ২. অ্যাকাউন্ট ডিঅ্যাক্টিভেট ও ডিলিট হ্যান্ডলার
+  // ফেসবুক স্টাইল ডিঅ্যাক্টিভ ও ডিলিট কনফার্মেশন (কাস্টম মডালের মাধ্যমে)
   const handleDeactivateAccount = () => {
-    if (window.confirm("Are you sure you want to deactivate your account?")) {
-      showToast("Account deactivated temporarily.", "info");
-      handleLogout();
-    }
+    setConfirmModal({
+      show: true,
+      title: 'Deactivate Account',
+      message: 'Are you sure you want to temporarily deactivate your account? You can log back in anytime to reactivate it.',
+      type: 'warning',
+      onConfirm: () => {
+        setConfirmModal({ show: false });
+        showToast("Account deactivated temporarily.", "info");
+        handleLogout();
+      }
+    });
   };
 
   const handleDeleteAccount = () => {
-    if (window.confirm("WARNING: This will permanently delete your account. Proceed?")) {
-      localStorage.clear();
-      setIsLoggedIn(false);
-      setUserInfo(null);
-      setActivePage('home');
-      showToast("Account deleted permanently.", "danger");
-    }
+    setConfirmModal({
+      show: true,
+      title: 'Delete Account Permanently',
+      message: 'WARNING: This will permanently delete your account and all data. This action cannot be undone!',
+      type: 'danger',
+      onConfirm: () => {
+        setConfirmModal({ show: false });
+        localStorage.clear();
+        setIsLoggedIn(false);
+        setUserInfo(null);
+        setActivePage('home');
+        showToast("Account deleted permanently.", "danger");
+      }
+    });
   };
 
   const handleImageUploadFromFile = (e) => {
@@ -116,31 +134,22 @@ function App() {
 
   const handleVerifyCurrentPassword = () => {
     const storedPass = userInfo?.password; 
-
     if (!currentPassword) {
       showToast("Please enter your current password first!", "danger");
       setIsCurrentPasswordValid(false);
       return;
     }
-
     if (storedPass && currentPassword !== storedPass) {
       setIsCurrentPasswordValid(false);
       showToast("Incorrect current password!", "danger");
       return;
     }
-
-    if (currentPassword.length >= 6 || (storedPass && currentPassword === storedPass)) {
-      setIsCurrentPasswordValid(true);
-      showToast("Current password verified!", "success");
-    } else {
-      setIsCurrentPasswordValid(false);
-      showToast("Incorrect or too short password!", "danger");
-    }
+    setIsCurrentPasswordValid(true);
+    showToast("Current password verified!", "success");
   };
 
   const handleUpdateProfile = (e) => {
     e.preventDefault();
-
     if (newPassword && !isCurrentPasswordValid) {
       showToast("Verify current password before changing password!", "danger");
       return;
@@ -150,7 +159,7 @@ function App() {
       ...userInfo,
       name: editName,
       phone: editPhone,
-      photo: editPhoto // ১. ছবি পার্মানেন্টলি লোকালস্টোরেজে সেভ নিশ্চিত করা
+      photo: editPhoto
     };
 
     if (newPassword) {
@@ -159,7 +168,6 @@ function App() {
 
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
     setUserInfo(updatedUser);
-    
     setCurrentPassword('');
     setNewPassword('');
     setIsCurrentPasswordValid(false);
@@ -171,7 +179,6 @@ function App() {
   const handleProductUpload = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
-
     const productData = {
       title: productTitle,
       price: productPrice,
@@ -190,26 +197,18 @@ function App() {
         },
         body: JSON.stringify(productData)
       });
-
       const data = await response.json();
-
       if (response.ok) {
         showToast("Product uploaded successfully!", "success");
-        setProductTitle('');
-        setProductPrice('');
-        setProductCategory('');
-        setProductDescription('');
-        setProductImage('');
+        setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setImage('');
       } else {
         showToast(data.message || "Failed to upload product", "danger");
       }
     } catch (err) {
-      console.error("Product Upload Error:", err);
       showToast("Server error during product upload!", "danger");
     }
   };
 
-  // ৩ ও ৪. লোডিং স্পিনার ও টোস্ট সহ অথ সাবমিট হ্যান্ডলার
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -217,7 +216,7 @@ function App() {
     const endpoint = isRegisterMode ? '/api/users/register' : '/api/users/login';
 
     const payload = isRegisterMode 
-      ? { name, email, password } 
+      ? { name, email, password, role: selectedRole } 
       : { email, password };
 
     try {
@@ -236,28 +235,23 @@ function App() {
       }
 
       showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
-      
       localStorage.setItem('token', data.token || 'dummy-token');
       
       const userData = data.user || { name: name || 'User', email, password };
       if (!userData.password) userData.password = password; 
       
       localStorage.setItem('userInfo', JSON.stringify(userData));
-      const role = data.role || data.user?.role || 'customer';
+      const role = isRegisterMode ? selectedRole : (data.role || data.user?.role || 'customer');
       localStorage.setItem('userRole', role);
 
       setIsLoggedIn(true);
       setUserInfo(userData);
       setUserRole(role);
       setShowLoginModal(false);
-      
-      setName('');
-      setEmail('');
-      setPassword('');
+      setName(''); setEmail(''); setPassword('');
 
     } catch (err) {
       setIsLoading(false);
-      console.error("Auth Error:", err);
       showToast("Network or Server error!", "danger");
     }
   };
@@ -274,21 +268,12 @@ function App() {
               exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)", transition: { duration: 1.2, ease: "easeInOut" }}}
               style={splashStyles.content}
             >
-              <motion.div
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.3, duration: 0.8, type: "spring", bounce: 0.4 }}
-                style={splashStyles.logoWrapper}
-              >
+              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.3, duration: 0.8, type: "spring", bounce: 0.4 }} style={splashStyles.logoWrapper}>
                 <div style={splashStyles.logoGlow}></div>
                 <span style={splashStyles.logoText}>JR</span>
               </motion.div>
-              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.5 }} style={splashStyles.title}>
-                Welcome to JR STORE
-              </motion.h1>
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ delay: 2, duration: 0.8 }} style={splashStyles.subtitle}>
-                The Art of Shopping
-              </motion.p>
+              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.5 }} style={splashStyles.title}>Welcome to JR STORE</motion.h1>
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ delay: 2, duration: 0.8 }} style={splashStyles.subtitle}>The Art of Shopping</motion.p>
               <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 1.5, duration: 2.5, ease: "linear" }} style={splashStyles.progressBar} />
             </motion.div>
           )}
@@ -300,7 +285,7 @@ function App() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }} style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}>
       
-      {/* ৪. কাস্টম টোস্ট নোটিফিকেশন UI */}
+      {/* কাস্টম টোস্ট নোটিফিকেশন */}
       {toast.show && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }}>
           <motion.div 
@@ -311,6 +296,20 @@ function App() {
             style={{ minWidth: '250px', border: '1px solid #444' }}
           >
             <span>{toast.message}</span>
+          </motion.div>
+        </div>
+      )}
+
+      {/* কাস্টম কনফার্মেশন মডাল (ব্রাউজার অ্যালার্ট বাদ দিয়ে সুন্দর পপআপ) */}
+      {confirmModal.show && (
+        <div style={modalStyles.overlay}>
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center' }}>
+            <h4 className="fw-bold text-white mb-3">{confirmModal.title}</h4>
+            <p className="text-light mb-4" style={{ fontSize: '15px', opacity: 0.9 }}>{confirmModal.message}</p>
+            <div className="d-flex justify-content-center gap-3">
+              <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setConfirmModal({ show: false })}>Cancel</button>
+              <button className={`btn ${confirmModal.type === 'danger' ? 'btn-danger' : 'btn-warning'} rounded-pill px-4 fw-bold`} onClick={confirmModal.onConfirm}>Confirm</button>
+            </div>
           </motion.div>
         </div>
       )}
@@ -333,11 +332,17 @@ function App() {
               <li className="nav-item mt-2 mt-lg-0">
                 {isLoggedIn ? (
                   <div className="dropdown ms-lg-3">
-                    <button className="btn btn-outline-light rounded-pill px-4 dropdown-toggle d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown">
+                    <button className="btn btn-outline-light rounded-pill px-4 dropdown-toggle d-flex align-items-center gap-2 position-relative" type="button" data-bs-toggle="dropdown">
+                      {/* অনলাইন স্ট্যাটাস ডট (নীল = অনলাইন, লাল = অফলাইন) */}
+                      <span style={{
+                        position: 'absolute', top: '6px', left: '10px', width: '10px', height: '10px',
+                        backgroundColor: isLoggedIn ? '#0d6efd' : '#dc3545', borderRadius: '50%', border: '2px solid #000'
+                      }}></span>
+                      
                       {userInfo?.photo ? (
-                        <img src={userInfo.photo} alt="Profile" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={userInfo.photo} alt="Profile" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', marginLeft: '8px' }} />
                       ) : null}
-                      {userInfo?.name || 'My Account'}
+                      <span style={{ marginLeft: userInfo?.photo ? '0' : '10px' }}>{userInfo?.name || 'My Account'}</span>
                     </button>
                     <ul className="dropdown-menu dropdown-menu-dark bg-black border-secondary">
                       <li><button className="dropdown-item text-light" onClick={() => setActivePage('profile')}>My Profile</button></li>
@@ -359,7 +364,7 @@ function App() {
         </div>
       </nav>
 
-      {/* সাইন ইন / রেজিস্ট্রেশন মডাল (৩. লোডিং স্পিনার যুক্ত বাটন) */}
+      {/* সাইন ইন / রেজিস্ট্রেশন মডাল (রোল সিলেকশন সহ) */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
@@ -370,17 +375,27 @@ function App() {
             
             <form onSubmit={handleAuthSubmit}>
               {isRegisterMode && (
-                <div className="mb-3 text-start">
-                  <label className="form-label text-light fw-semibold">Full Name</label>
-                  <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} required />
-                </div>
+                <>
+                  <div className="mb-3 text-start">
+                    <label className="form-label text-light fw-semibold">Full Name</label>
+                    <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} required />
+                  </div>
+                  {/* নতুন: রেজিস্ট্রেশনের সময় অ্যাকাউন্ট টাইপ সিলেক্ট */}
+                  <div className="mb-3 text-start">
+                    <label className="form-label text-light fw-semibold">Select Account Type</label>
+                    <select className="form-select bg-dark text-white border-secondary" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
+                      <option value="customer">Customer Account</option>
+                      <option value="seller">Seller Account</option>
+                    </select>
+                  </div>
+                </>
               )}
               <div className="mb-3 text-start">
                 <label className="form-label text-light fw-semibold">Email address</label>
                 <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div className="mb-4 text-start">
-                <label className="form-label text-light fw-semibold">Password (Min 8 characters)</label>
+                <label className="form-label text-light fw-semibold">Password</label>
                 <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
               
@@ -402,21 +417,33 @@ function App() {
         </div>
       )}
 
-      {/* ১ ও ২. প্রফাইল পেজ (Deactive & Delete অপশনসহ) */}
+      {/* প্রফাইল পেজ (স্ট্যাটাস ডট সহ) */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
             <div className="col-md-8 bg-black p-5 border border-secondary rounded-4 shadow-lg">
               <div className="d-flex align-items-center mb-4 gap-4">
-                <div style={{ width: '90px', height: '90px', borderRadius: '50%', backgroundColor: '#222', overflow: 'hidden', border: '2px solid #555', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {userInfo?.photo ? (
-                    <img src={userInfo.photo} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span className="fs-1 text-light">{userInfo?.name?.charAt(0) || 'U'}</span>
-                  )}
+                <div style={{ position: 'relative', width: '90px', height: '90px' }}>
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', backgroundColor: '#222', overflow: 'hidden', border: '2px solid #555', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {userInfo?.photo ? (
+                      <img src={userInfo.photo} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <span className="fs-1 text-light">{userInfo?.name?.charAt(0) || 'U'}</span>
+                    )}
+                  </div>
+                  {/* প্রোফাইল পিকচারের ওপর একটিভ স্ট্যাটাস ইন্ডিকেটর */}
+                  <span title={isLoggedIn ? "Online" : "Offline"} style={{
+                    position: 'absolute', bottom: '5px', right: '5px', width: '16px', height: '16px',
+                    backgroundColor: isLoggedIn ? '#0d6efd' : '#dc3545', borderRadius: '50%', border: '3px solid #000'
+                  }}></span>
                 </div>
                 <div>
-                  <h2 className="fw-bold mb-1 text-white" style={{ letterSpacing: '1px' }}>{userInfo?.name}</h2>
+                  <h2 className="fw-bold mb-1 text-white d-flex align-items-center gap-2" style={{ letterSpacing: '1px' }}>
+                    {userInfo?.name}
+                    <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', backgroundColor: isLoggedIn ? 'rgba(13, 110, 253, 0.2)' : 'rgba(220, 53, 69, 0.2)', color: isLoggedIn ? '#0d6efd' : '#dc3545', border: `1px solid ${isLoggedIn ? '#0d6efd' : '#dc3545'}` }}>
+                      {isLoggedIn ? '● Active Now' : '● Offline'}
+                    </span>
+                  </h2>
                   <p className="text-light mb-0" style={{ opacity: 0.8 }}>{userInfo?.email}</p>
                   <span className="badge bg-light text-dark text-uppercase mt-2">{userRole}</span>
                 </div>
@@ -436,7 +463,7 @@ function App() {
             </div>
              
             <div className="d-flex flex-wrap gap-3 align-items-center">
-              <button className="btn btn-light rounded-pill px-4 fw-bold" onClick={() => setActivePage('edit-profile')}>
+              <button className="btn btn-light rounded-pill px-4 fw-bold" onClick={() => { setEditName(userInfo?.name || ''); setActivePage('edit-profile'); }}>
                 Edit Profile & Security
               </button>
               {(userRole === 'seller' || userRole === 'admin') && (
@@ -444,14 +471,12 @@ function App() {
                   Upload New Product
                 </button>
               )}
-              {/* ২. নতুন Deactivate & Delete বাটন */}
               <button className="btn btn-outline-warning rounded-pill px-3" onClick={handleDeactivateAccount}>
                 Deactivate
               </button>
               <button className="btn btn-outline-danger rounded-pill px-3" onClick={handleDeleteAccount}>
                 Delete Account
               </button>
-              
               <button className="btn btn-outline-secondary rounded-pill px-4 ms-auto" onClick={handleLogout}>
                 Logout
               </button>
@@ -461,7 +486,7 @@ function App() {
       </div>
     )}
 
-    {/* প্রফাইল এডিট পেজ */}
+    {/* প্রফাইল এডিট পেজ (নাম অলরেডি প্রি-ফিল বা বসানো থাকবে) */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -474,7 +499,7 @@ function App() {
 
           <form onSubmit={handleUpdateProfile}>
             <div className="mb-3">
-              <label className="form-label text-light fw-semibold">Full Name</label>
+              <label className="form-label text-light fw-semibold">Full Name (Current name pre-filled)</label>
               <input type="text" className="form-control bg-dark text-white border-secondary" value={editName} onChange={(e) => setEditName(e.target.value)} required />
             </div>
              
@@ -485,9 +510,7 @@ function App() {
 
           <div className="mb-3">
             <label className="form-label text-light fw-semibold">Profile Photo</label>
-             
             <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleImageUploadFromFile} />
-
             <div className="d-flex gap-3 my-2 flex-wrap align-items-center">
               <span className="text-muted small">Or select preset:</span>
               {presetAvatars.map((url, idx) => (
@@ -518,13 +541,7 @@ function App() {
                   setIsCurrentPasswordValid(false); 
                 }} 
               />
-              <button 
-                type="button" 
-                className="btn btn-outline-light" 
-                onClick={handleVerifyCurrentPassword}
-              >
-                Verify
-              </button>
+              <button type="button" className="btn btn-outline-light" onClick={handleVerifyCurrentPassword}>Verify</button>
             </div>
             {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified successfully!</small>}
           </div>
