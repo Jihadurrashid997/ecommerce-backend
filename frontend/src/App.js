@@ -24,18 +24,23 @@ function App() {
 
   // সার্চ এবং মেসেজিং স্টেট
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchType, setSearchType] = useState('all'); // 'all', 'product', 'profile'
+  const [searchType, setSearchType] = useState('all'); 
   
-  // অলরেডি রেজিস্টার্ড বা স্যাম্পল প্রোফাইল লিস্ট (সার্চ করার জন্য)
   const [profilesList, setProfilesList] = useState([
     { name: 'JR Admin', role: 'admin', email: 'admin@jrstore.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
     { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' }
   ]);
 
-  const [messages, setMessages] = useState([
-    { sender: 'Customer/Seller Care', text: 'Hello! Welcome to JR Support. Tell us about your problem or query.', time: '10:00 AM' }
+  // ১. অ্যাডমিন কেয়ার চ্যাট স্টেট
+  const [adminMessages, setAdminMessages] = useState([
+    { sender: 'JR Admin (Care)', text: 'Hello! Welcome to Admin Customer/Seller Care. How can we help you?', time: '10:00 AM' }
   ]);
-  const [newMessage, setNewMessage] = useState('');
+  const [newAdminMessage, setNewAdminMessage] = useState('');
+
+  // ২. প্রোফাইল টু প্রোফাইল ডিরেক্ট চ্যাট স্টেট
+  const [chatTargetUser, setChatTargetUser] = useState(null); // যার সাথে চ্যাট করা হচ্ছে
+  const [directMessages, setDirectMessages] = useState({}); // { 'seller@jrstore.com': [{sender, text, time}] }
+  const [newDirectMessage, setNewDirectMessage] = useState('');
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -81,7 +86,6 @@ function App() {
       setEditPhone(parsedUser.phone || '');
       setEditPhoto(parsedUser.photo || ''); 
       
-      // প্রোফাইল লিস্টে বর্তমান ইউজারকে যুক্ত করা যাতে সার্চ করলে পাওয়া যায়
       setProfilesList(prev => {
         if (!prev.some(p => p.email === parsedUser.email)) {
           return [...prev, { name: parsedUser.name, role: storedRole, email: parsedUser.email, photo: parsedUser.photo }];
@@ -108,7 +112,7 @@ function App() {
     setConfirmModal({
       show: true,
       title: 'Deactivate Account',
-      message: 'Are you sure you want to temporarily deactivate your account? You can log back in anytime to reactivate it.',
+      message: 'Are you sure you want to temporarily deactivate your account?',
       type: 'warning',
       onConfirm: () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
@@ -122,7 +126,7 @@ function App() {
     setConfirmModal({
       show: true,
       title: 'Delete Account Permanently',
-      message: 'WARNING: This will permanently delete your account and all data. This action cannot be undone!',
+      message: 'WARNING: This will permanently delete your account and all data!',
       type: 'danger',
       onConfirm: () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
@@ -173,7 +177,7 @@ function App() {
       ...userInfo,
       name: editName,
       phone: editPhone,
-      photo: editPhoto // নিশ্চিত করা হলো যেন ফটো পার্মানেন্টলি সেভ থাকে
+      photo: editPhoto 
     };
 
     if (newPassword) {
@@ -190,18 +194,40 @@ function App() {
     setActivePage('profile');
   };
 
-  const handleSendMessage = (e) => {
+  // ১. অ্যাডমিন কেয়ার মেসেজ সেন্ড করার ফাংশন
+  const handleSendAdminMessage = (e) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newAdminMessage.trim()) return;
 
     const newMsgObj = { 
-      sender: userInfo?.name || 'Customer/Seller Care User', 
-      text: newMessage, 
+      sender: userInfo?.name || 'User', 
+      text: newAdminMessage, 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     };
-    setMessages([...messages, newMsgObj]);
-    setNewMessage('');
-    showToast("Problem message sent to support!", "success");
+    setAdminMessages([...adminMessages, newMsgObj]);
+    setNewAdminMessage('');
+    showToast("Message sent directly to Admin Care!", "success");
+  };
+
+  // ২. প্রোফাইল টু প্রোফাইল ডিরেক্ট মেসেজ সেন্ড করার ফাংশন
+  const handleSendDirectMessage = (e) => {
+    e.preventDefault();
+    if (!newDirectMessage.trim() || !chatTargetUser) return;
+
+    const chatKey = chatTargetUser.email;
+    const currentMsgs = directMessages[chatKey] || [];
+
+    const newMsgObj = {
+      sender: userInfo?.name,
+      text: newDirectMessage,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setDirectMessages({
+      ...directMessages,
+      [chatKey]: [...currentMsgs, newMsgObj]
+    });
+    setNewDirectMessage('');
   };
 
   const handleProductUpload = async (e) => {
@@ -278,7 +304,6 @@ function App() {
       setShowLoginModal(false);
       setName(''); setEmail(''); setPassword('');
 
-      // নতুন লগইন করা ইউজারকে প্রোফাইল লিস্টে যুক্ত করা
       setProfilesList(prev => [...prev, { name: userData.name, role: role, email: userData.email, photo: userData.photo }]);
 
     } catch (err) {
@@ -350,7 +375,6 @@ function App() {
             <span style={{color:'#ddd'}}>JR</span> STORE
           </a>
           
-          {/* সার্চ ফিল্টার ও ইনপুট বার */}
           <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '450px' }}>
             <select 
               className="form-select bg-dark text-white border-secondary rounded-pill text-center" 
@@ -379,11 +403,26 @@ function App() {
             <ul className="navbar-nav ms-auto align-items-center py-2 py-lg-0">
               <li className="nav-item"><a className="nav-link text-light" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }}>Home</a></li>
               
-              {/* কাস্টমার/সেলার কেয়ার বা মেসেজিং অপشن */}
+              {/* অপশন ১: অ্যাডমিন কেয়ার মেসেঞ্জার */}
               {isLoggedIn && (
                 <li className="nav-item">
-                  <a className="nav-link text-light position-relative" href="#support" onClick={(e) => { e.preventDefault(); setActivePage('support'); }}>
-                    Customer/Seller Care
+                  <a className="nav-link text-info fw-semibold" href="#admin-care" onClick={(e) => { e.preventDefault(); setActivePage('admin-support'); }}>
+                    🛡️ Admin Care
+                  </a>
+                </li>
+              )}
+
+              {/* অপশন ২: প্রোফাইল টু প্রোফাইল মেসেঞ্জার */}
+              {isLoggedIn && (
+                <li className="nav-item">
+                  <a className="nav-link text-warning fw-semibold" href="#profile-chat" onClick={(e) => { 
+                    e.preventDefault(); 
+                    // ডিফল্টভাবে প্রথম অন্য প্রোফাইল সিলেক্ট করে দেবো
+                    const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
+                    setChatTargetUser(otherProfile);
+                    setActivePage('profile-chat'); 
+                  }}>
+                    💬 Profile Chat
                   </a>
                 </li>
               )}
@@ -407,7 +446,12 @@ function App() {
                       {(userRole === 'seller' || userRole === 'admin') && (
                         <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Upload Product</button></li>
                       )}
-                      <li><button className="dropdown-item text-light" onClick={() => setActivePage('support')}>Customer/Seller Care</button></li>
+                      <li><button className="dropdown-item text-info" onClick={() => setActivePage('admin-support')}>🛡️ Admin Customer Care</button></li>
+                      <li><button className="dropdown-item text-warning" onClick={() => {
+                        const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
+                        setChatTargetUser(otherProfile);
+                        setActivePage('profile-chat');
+                      }}>💬 Profile Chat</button></li>
                       <li><hr className="dropdown-divider border-secondary" /></li>
                       <li><button className="dropdown-item text-danger" onClick={handleLogout}>Logout</button></li>
                     </ul>
@@ -475,20 +519,20 @@ function App() {
         </div>
       )}
 
-      {/* কাস্টমার/সেলার কেয়ার এবং মেসেজিং পেজ */}
-      {isLoggedIn && activePage === 'support' && (
+      {/* ১. অ্যাডমিন কাস্টমার/সেলার কেয়ার মেসেঞ্জার পেজ */}
+      {isLoggedIn && activePage === 'admin-support' && (
         <div className="container py-5">
           <div className="row justify-content-center">
-            <div className="col-md-8 bg-black p-4 border border-secondary rounded-4 shadow-lg text-start">
+            <div className="col-md-8 bg-black p-4 border border-info rounded-4 shadow-lg text-start">
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <h3 className="fw-bold text-white m-0">🛠️ Customer & Seller Care Support</h3>
+                <h3 className="fw-bold text-info m-0">🛡️ Admin Customer/Seller Care</h3>
                 <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
               </div>
-              <p className="text-muted small mb-4">Submit your account, order, or product problems here. Our support team or admin will respond.</p>
+              <p className="text-muted small mb-4">Messages sent here go directly to the official <b>JR Admin Profile</b> for support and problem resolving.</p>
               
               <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '350px', border: '1px solid #444' }}>
-                {messages.map((msg, index) => (
-                  <div key={index} className={`mb-3 p-3 rounded-3 ${msg.sender === (userInfo?.name || 'User') ? 'ms-auto bg-primary text-white' : 'bg-secondary text-dark'}`} style={{ maxWidth: '75%' }}>
+                {adminMessages.map((msg, index) => (
+                  <div key={index} className={`mb-3 p-3 rounded-3 ${msg.sender === (userInfo?.name || 'User') ? 'ms-auto bg-info text-dark fw-semibold' : 'bg-secondary text-white'}`} style={{ maxWidth: '75%' }}>
                     <div className="d-flex justify-content-between small fw-bold mb-1">
                       <span>{msg.sender}</span>
                       <span className="opacity-75" style={{ fontSize: '10px' }}>{msg.time}</span>
@@ -498,17 +542,97 @@ function App() {
                 ))}
               </div>
 
-              <form onSubmit={handleSendMessage} className="input-group">
+              <form onSubmit={handleSendAdminMessage} className="input-group">
                 <input 
                   type="text" 
                   className="form-control bg-dark text-white border-secondary" 
-                  placeholder="Describe your problem here..." 
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Send your problem directly to Admin..." 
+                  value={newAdminMessage}
+                  onChange={(e) => setNewAdminMessage(e.target.value)}
                   required
                 />
-                <button type="submit" className="btn btn-light px-4 fw-bold">Submit Problem</button>
+                <button type="submit" className="btn btn-info px-4 fw-bold text-dark">Send to Admin</button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ২. প্রোফাইল টু প্রোফাইল ডিরেক্ট ডিসকাশন মেসেঞ্জার পেজ */}
+      {isLoggedIn && activePage === 'profile-chat' && (
+        <div className="container py-5">
+          <div className="row justify-content-center">
+            <div className="col-md-10 bg-black p-4 border border-warning rounded-4 shadow-lg text-start">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h3 className="fw-bold text-warning m-0">💬 Profile-to-Profile Product Chat</h3>
+                <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
+              </div>
+              <p className="text-muted small mb-4">Chat directly with other sellers or customers regarding products and negotiations.</p>
+
+              <div className="row">
+                {/* বাঁধে ইউজার লিস্ট */}
+                <div className="col-md-4 border-end border-secondary pe-3">
+                  <h6 className="text-light mb-3">Select Profile to Chat:</h6>
+                  <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                    {profilesList.filter(p => p.email !== userInfo?.email).map((prof, idx) => (
+                      <div 
+                        key={idx} 
+                        onClick={() => setChatTargetUser(prof)}
+                        className={`p-2 rounded-3 d-flex align-items-center gap-2 cursor-pointer ${chatTargetUser?.email === prof.email ? 'bg-warning text-dark fw-bold' : 'bg-dark text-white'}`}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '35px', height: '35px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <div>
+                          <div style={{ fontSize: '14px' }}>{prof.name}</div>
+                          <span style={{ fontSize: '10px' }} className="text-uppercase opacity-75">{prof.role}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ডানে চ্যাট বক্স */}
+                <div className="col-md-8 ps-3 d-flex flex-column justify-content-between">
+                  {chatTargetUser ? (
+                    <>
+                      <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3">
+                        <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <h5 className="text-white m-0">{chatTargetUser.name} <span className="badge bg-secondary fs-6 text-uppercase">{chatTargetUser.role}</span></h5>
+                      </div>
+
+                      <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #444' }}>
+                        {(!directMessages[chatTargetUser.email] || directMessages[chatTargetUser.email].length === 0) ? (
+                          <p className="text-muted text-center mt-5 small">No conversation yet with {chatTargetUser.name}. Discuss product details below!</p>
+                        ) : (
+                          directMessages[chatTargetUser.email].map((msg, idx) => (
+                            <div key={idx} className={`mb-3 p-2 rounded-3 ${msg.sender === userInfo?.name ? 'ms-auto bg-warning text-dark fw-semibold' : 'bg-secondary text-white'}`} style={{ maxWidth: '75%' }}>
+                              <div className="d-flex justify-content-between small fw-bold mb-1" style={{ fontSize: '11px' }}>
+                                <span>{msg.sender}</span>
+                                <span className="opacity-75">{msg.time}</span>
+                              </div>
+                              <p className="mb-0" style={{ fontSize: '14px' }}>{msg.text}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <form onSubmit={handleSendDirectMessage} className="input-group">
+                        <input 
+                          type="text" 
+                          className="form-control bg-dark text-white border-secondary" 
+                          placeholder={`Message ${chatTargetUser.name} about product...`} 
+                          value={newDirectMessage}
+                          onChange={(e) => setNewDirectMessage(e.target.value)}
+                          required
+                        />
+                        <button type="submit" className="btn btn-warning px-4 fw-bold text-dark">Send</button>
+                      </form>
+                    </>
+                  ) : (
+                    <div className="text-center text-muted my-auto">Please select a profile from the left to start chatting.</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -567,14 +691,18 @@ function App() {
                   Upload New Product
                 </button>
               )}
-              <button className="btn btn-outline-info rounded-pill px-3" onClick={() => setActivePage('support')}>
-                Customer/Seller Care
+              <button className="btn btn-outline-info rounded-pill px-3" onClick={() => setActivePage('admin-support')}>
+                🛡️ Admin Care
               </button>
-              <button className="btn btn-outline-warning rounded-pill px-3" onClick={handleDeactivateAccount}>
+              <button className="btn btn-outline-warning rounded-pill px-3" onClick={() => {
+                const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
+                setChatTargetUser(otherProfile);
+                setActivePage('profile-chat');
+              }}>
+                💬 Profile Chat
+              </button>
+              <button className="btn btn-outline-danger rounded-pill px-3" onClick={handleDeactivateAccount}>
                 Deactivate
-              </button>
-              <button className="btn btn-outline-danger rounded-pill px-3" onClick={handleDeleteAccount}>
-                Delete Account
               </button>
               <button className="btn btn-outline-secondary rounded-pill px-4 ms-auto" onClick={handleLogout}>
                 Logout
@@ -729,12 +857,20 @@ function App() {
                     {profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
                         <div className="col-md-4" key={idx}>
-                          <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center gap-3">
-                            <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
-                            <div>
-                              <h5 className="mb-1 text-white">{prof.name}</h5>
-                              <span className="badge bg-secondary text-uppercase">{prof.role}</span>
+                          <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center justify-content-between">
+                            <div className="d-flex align-items-center gap-3">
+                              <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
+                              <div>
+                                <h5 className="mb-1 text-white">{prof.name}</h5>
+                                <span className="badge bg-secondary text-uppercase">{prof.role}</span>
+                              </div>
                             </div>
+                            {isLoggedIn && prof.email !== userInfo?.email && (
+                              <button className="btn btn-sm btn-outline-warning rounded-pill" onClick={() => {
+                                setChatTargetUser(prof);
+                                setActivePage('profile-chat');
+                              }}>Chat</button>
+                            )}
                           </div>
                         </div>
                       ))
@@ -760,10 +896,14 @@ function App() {
                             <div className="card-body text-center">
                               <h5 className="card-title fw-bold text-uppercase text-white mt-2">Signature Item {i}</h5>
                               <p className="text-light mb-3">$999.00</p>
-                              <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" onClick={() => {
+                              <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" onClick={() => {
                                 if(!isLoggedIn) setShowLoginModal(true);
-                                else setActivePage('support');
-                              }}>Contact Care / Buy</button>
+                                else {
+                                  const sellerProf = profilesList.find(p => p.role === 'seller') || profilesList[0];
+                                  setChatTargetUser(sellerProf);
+                                  setActivePage('profile-chat');
+                                }
+                              }}>Discuss Product with Seller</button>
                             </div>
                           </div>
                         </div>
@@ -787,13 +927,15 @@ function App() {
                   <div className="card-body text-center">
                     <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>Signature Item {i}</h5>
                     <p className="text-light mb-4" style={{opacity: 0.8}}>$999.00</p>
-                    <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}} onClick={() => {
+                    <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}} onClick={() => {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
                       } else {
-                        setActivePage('support');
+                        const sellerProf = profilesList.find(p => p.role === 'seller') || profilesList[0];
+                        setChatTargetUser(sellerProf);
+                        setActivePage('profile-chat');
                       }
-                    }}>Contact Seller / Support</button>
+                    }}>Discuss Product with Seller</button>
                   </div>
                 </motion.div>
               </div>
