@@ -37,7 +37,9 @@ function App() {
     { id: 2, title: 'Signature Item 2', price: '999.00', category: 'Luxury', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
     { id: 3, title: 'Classic Gold Watch', price: '1,499.00', category: 'Accessories', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300' },
     { id: 4, title: 'Executive Leather Bag', price: '799.00', category: 'Fashion', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=300' },
-    { id: 5, title: 'Wireless Pro Pods', price: '299.00', category: 'Electronics', seller: 'JR Super Admin', image: 'https://images.unsplash.com/photo-1572569511254-dbbc6925c1a1?w=300' }
+    { id: 5, title: 'Wireless Pro Pods', price: '299.00', category: 'Electronics', seller: 'JR Super Admin', image: 'https://images.unsplash.com/photo-1572569511254-dbbc6925c1a1?w=300' },
+    { id: 6, title: 'Luxury Diamond Ring', price: '2,999.00', category: 'Jewelry', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=300' },
+    { id: 7, title: 'Smart Fitness Band', price: '199.00', category: 'Electronics', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=300' }
   ]);
 
   const [adminMessages, setAdminMessages] = useState([
@@ -75,6 +77,30 @@ function App() {
     "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
     "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
   ];
+
+  // ফেসবুক স্টাইলের রিয়েল ব্লু টিক কম্পোনেন্ট (নীل ব্যাকগ্রাউন্ডে সাদা ঠিক চিহ্ন)
+  const FacebookBlueTick = () => (
+    <span 
+      title="Verified Master Admin" 
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '16px',
+        height: '16px',
+        backgroundColor: '#0866FF',
+        borderRadius: '50%',
+        color: '#fff',
+        fontSize: '10px',
+        fontWeight: 'bold',
+        marginLeft: '4px',
+        verticalAlign: 'middle',
+        boxShadow: '0 0 2px rgba(8, 102, 255, 0.5)'
+      }}
+    >
+      ✓
+    </span>
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setShowWelcome(false), 3000);
@@ -542,7 +568,7 @@ function App() {
         </div>
       )}
 
-      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড (ব্লু টিক সহ) */}
+      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড (ফেসবুক স্টাইল ব্লু টিক সহ) */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
           <div className="bg-black p-4 border border-danger rounded-4 shadow-lg mb-5">
@@ -550,7 +576,7 @@ function App() {
               <div>
                 <h2 className="fw-bold text-danger m-0 d-flex align-items-center gap-2">
                   ⚡ Super Admin Master Dashboard 
-                  <span title="Verified Master Admin" style={{ color: '#0d6efd', fontSize: '20px' }}>✓</span>
+                  <FacebookBlueTick />
                 </h2>
                 <p className="text-muted small mb-0">Control all users and product assets.</p>
               </div>
@@ -595,7 +621,7 @@ function App() {
                       <td className="d-flex align-items-center gap-2">
                         <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
                         {prof.name}
-                        {prof.role === 'admin' && <span style={{ color: '#0d6efd', fontWeight: 'bold' }} title="Verified Admin">✓</span>}
+                        {prof.role === 'admin' && <FacebookBlueTick />}
                       </td>
                       <td>{prof.email}</td>
                       <td><span className="badge bg-secondary text-uppercase">{prof.role}</span></td>
@@ -728,8 +754,8 @@ function App() {
                       >
                         <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} />
                         <div>
-                          <div style={{ fontSize: '14px' }}>
-                            {prof.name} {prof.role === 'admin' && <span style={{ color: '#0d6efd' }}>✓</span>}
+                          <div style={{ fontSize: '14px' }} className="d-flex align-items-center">
+                            {prof.name} {prof.role === 'admin' && <FacebookBlueTick />}
                           </div>
                           <span style={{ fontSize: '10px' }} className="text-uppercase opacity-75">{prof.role}</span>
                         </div>
@@ -743,8 +769,8 @@ function App() {
                     <>
                       <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3">
                         <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <h5 className="text-white m-0">
-                          {chatTargetUser.name} {chatTargetUser.role === 'admin' && <span style={{ color: '#0d6efd' }}>✓</span>} <span className="badge bg-secondary fs-6 text-uppercase">{chatTargetUser.role}</span>
+                        <h5 className="text-white m-0 d-flex align-items-center">
+                          {chatTargetUser.name} {chatTargetUser.role === 'admin' && <FacebookBlueTick />} <span className="badge bg-secondary fs-6 text-uppercase ms-2">{chatTargetUser.role}</span>
                         </h5>
                       </div>
 
@@ -792,7 +818,7 @@ function App() {
         </div>
       )}
 
-      {/* প্রোফাইল পেজ (ডিলিট ও ডিঅ্যাক্টিভেট অপশনসহ) */}
+      {/* প্রোফাইল পেজ */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
@@ -814,7 +840,7 @@ function App() {
                 <div>
                   <h2 className="fw-bold mb-1 text-white d-flex align-items-center gap-2" style={{ letterSpacing: '1px' }}>
                     {userInfo?.name}
-                    {userRole === 'admin' && <span style={{ color: '#0d6efd', fontSize: '22px' }} title="Verified Admin">✓</span>}
+                    {userRole === 'admin' && <FacebookBlueTick />}
                     <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', backgroundColor: 'rgba(13, 110, 253, 0.2)', color: '#0d6efd', border: '1px solid #0d6efd' }}>
                       ● Active Now
                     </span>
@@ -1023,8 +1049,8 @@ function App() {
                             <div className="d-flex align-items-center gap-3">
                               <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
                               <div>
-                                <h5 className="mb-1 text-white">
-                                  {prof.name} {prof.role === 'admin' && <span style={{ color: '#0d6efd' }}>✓</span>}
+                                <h5 className="mb-1 text-white d-flex align-items-center">
+                                  {prof.name} {prof.role === 'admin' && <FacebookBlueTick />}
                                 </h5>
                                 <span className="badge bg-secondary text-uppercase">{prof.role}</span>
                               </div>
