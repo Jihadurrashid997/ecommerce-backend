@@ -187,7 +187,7 @@ function App() {
     }
   };
 
-  // --- ব্যাকএন্ড API কানেকশন ও অথ হ্যান্ডলার (সঠিকভাবে ফিক্স করা হয়েছে) ---
+  // --- ব্যাকএন্ড API কানেকশন ও অথ হ্যান্ডলার ---
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     const baseUrl = 'https://ecommerce-api-9wc9.onrender.com';
@@ -206,7 +206,6 @@ function App() {
 
       const data = await response.json();
 
-      // রেসপন্স সাকসেসফুল না হলে (যেমন: ভুল পাসওয়ার্ড বা ইমেইল) এখানে আটকে দিবে
       if (!response.ok) {
         alert(data.message || data.error || "Authentication failed! Please check your credentials.");
         return;
@@ -214,11 +213,10 @@ function App() {
 
       alert(isRegisterMode ? "Registration Successful!" : "Login Successful!");
       
-      // টোকেন এবং ইউজার ডাটা লোকালস্টোরেজে সেভ করা
       localStorage.setItem('token', data.token || 'dummy-token');
       
       const userData = data.user || { name: name || 'User', email, password };
-      if (!userData.password) userData.password = password; // পাসওয়ার্ড ভ্যালিডেশনের জন্য সংরক্ষণ
+      if (!userData.password) userData.password = password; 
       
       localStorage.setItem('userInfo', JSON.stringify(userData));
       const role = data.role || data.user?.role || 'customer';
@@ -229,7 +227,6 @@ function App() {
       setUserRole(role);
       setShowLoginModal(false);
       
-      // ফিল্ড রিসেট
       setName('');
       setEmail('');
       setPassword('');
@@ -363,7 +360,7 @@ function App() {
         </div>
       )}
 
-      {/* ================= 1. আলাদা প্রফাইল পেজ (My Profile) ================= */}
+      {/* 1. প্রফাইল পেজ */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
@@ -414,7 +411,7 @@ function App() {
       </div>
     )}
 
-    {/* ================= 2. প্রফাইল এডিট পেজ (Edit Profile & Strict Password Security) ================= */}
+    {/* 2. প্রফাইল এডিট পেজ */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -436,7 +433,6 @@ function App() {
               <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
             </div>
 
-          {/* প্রোফাইল ছবি আপলোড */}
           <div className="mb-3">
             <label className="form-label text-light fw-semibold">Profile Photo (Upload from Device, Choose Avatar)</label>
              
@@ -459,7 +455,6 @@ function App() {
           <hr className="border-secondary my-4" />
           <h5 className="text-white mb-3">Change Password Security</h5>
 
-          {/* বর্তমান পাসওয়ার্ড ফিল্ড ও ভেরিফাই বাটন */}
           <div className="mb-3">
             <label className="form-label text-light fw-semibold">Current Password (Required to unlock new password)</label>
             <div className="input-group">
@@ -484,7 +479,6 @@ function App() {
             {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified successfully!</small>}
           </div>
 
-          {/* নতুন পাসওয়ার্ড ফিল্ড */}
           <div className="mb-4">
             <label className="form-label text-light fw-semibold">New Password</label>
             <input 
@@ -504,7 +498,7 @@ function App() {
     </div>
    )}
 
-    {/* ================= 3. প্রোডাক্ট আপলোড পেজ ================= */}
+    {/* 3. প্রোডাক্ট আপলোড পেজ */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -543,7 +537,7 @@ function App() {
       </div>
    )}
 
-    {/* ================= 4. মেইন হোমপেজ ================= */}
+    {/* 4. মেইন হোমপেজ */}
     {activePage === 'home' && (
       <>
         <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
@@ -568,16 +562,16 @@ function App() {
                     <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>Signature Item</h5>
                     <p className="text-light mb-4" style={{opacity: 0.8}}>$999.00</p>
                     <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}}>View</button>
-                </div>
-              </motion.div>
-            </div>
-          ))}
+                  </div>
+                </motion.div>
+              </div>
+            ))}
         </div>
         </div>
       </>
    )}
-  </motion.div>
-  );
+ </motion.div>
+ );
 }
 
 const modalStyles = {
