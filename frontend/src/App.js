@@ -26,26 +26,22 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   
-  // ডিফল্ট কিছু ডেমো প্রোফাইল রাখা হয়েছে যাতে সার্চ করলে সহজেই পাওয়া যায়
   const [profilesList, setProfilesList] = useState([
     { name: 'JR Super Admin', role: 'admin', email: 'admin@jrstore.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
     { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
     { name: 'Alice Customer', role: 'customer', email: 'alice@jrstore.com', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }
   ]);
 
-  // প্ল্যাটফর্মের প্রোডাক্ট লিস্ট
   const [allProductsList, setAllProductsList] = useState([
     { id: 1, title: 'Signature Item 1', price: '999.00', category: 'Luxury', seller: 'John Seller', image: '' },
     { id: 2, title: 'Signature Item 2', price: '999.00', category: 'Luxury', seller: 'John Seller', image: '' }
   ]);
 
-  // অ্যাডমিন কেয়ার মেসেজ স্টেট
   const [adminMessages, setAdminMessages] = useState([
     { sender: 'John Seller', text: 'Hello Admin, I need help regarding my store.', time: '10:00 AM' }
   ]);
   const [newAdminMessage, setNewAdminMessage] = useState('');
 
-  // প্রোফাইল টু প্রোফাইল চ্যাট স্টেট
   const [chatTargetUser, setChatTargetUser] = useState(null); 
   const [directMessages, setDirectMessages] = useState({}); 
   const [newDirectMessage, setNewDirectMessage] = useState('');
@@ -107,12 +103,10 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // প্রোফাইল লিস্ট লোকালস্টোরেজে সেভ রাখা যাতে রিলোড দিলেও মুছে না যায়
   useEffect(() => {
     localStorage.setItem('profilesList', JSON.stringify(profilesList));
   }, [profilesList]);
 
-  // মেসেজগুলো লোকালস্টোরেজে সিঙ্ক রাখা
   useEffect(() => {
     localStorage.setItem('directMessages', JSON.stringify(directMessages));
   }, [directMessages]);
@@ -190,7 +184,6 @@ function App() {
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
     setUserInfo(updatedUser);
     
-    // প্রোফাইল আপডেট করলে profilesList এও নাম ও ছবি আপডেট হবে
     setProfilesList(prev => prev.map(p => p.email === updatedUser.email ? { ...p, name: editName, photo: editPhoto } : p));
 
     setCurrentPassword('');
@@ -229,15 +222,12 @@ function App() {
     showToast("Message sent to Admin Support!", "success");
   };
 
-  // প্রোফাইল টু প্রোফাইল মেসেজ ফিক্সড লজিক
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
 
-    // দুই ইউজারের ইমেইল সর্ট করে একটি ইউনিক চ্যাট কি তৈরি করা হচ্ছে, যাতে উভয়ের চ্যাট সিঙ্ক থাকে
     const userEmails = [userInfo.email, chatTargetUser.email].sort();
     const chatKey = `${userEmails[0]}_${userEmails[1]}`;
-
     const currentMsgs = directMessages[chatKey] || [];
 
     const newMsgObj = {
@@ -293,7 +283,6 @@ function App() {
       setShowLoginModal(false);
       setName(''); setEmail(''); setPassword('');
 
-      // নতুন ইউজার রেজিস্টার বা লগইন করলে profilesList এ যুক্ত করা (যদি অলরেডি না থাকে)
       setProfilesList(prev => {
         if (!prev.some(p => p.email === userData.email)) {
           return [...prev, { name: userData.name, role: role, email: userData.email, photo: userData.photo }];
@@ -614,18 +603,31 @@ function App() {
         </div>
       )}
 
-      {/* অ্যাডমিন কেয়ার মেসেঞ্জার */}
+      {/* অ্যাডমিন কেয়ার মেসেঞ্জার (উন্নত এবং বড় লোগোসহ) */}
       {isLoggedIn && activePage === 'admin-support' && (
         <div className="container py-5">
           <div className="row justify-content-center">
             <div className="col-md-8 bg-black p-4 border border-info rounded-4 shadow-lg text-start">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <h3 className="fw-bold text-info m-0">🛡️ Admin Customer/Seller Care</h3>
-                <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
-              </div>
-              <p className="text-muted small mb-4">Direct communication line with Super Admin.</p>
               
-              <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '350px', border: '1px solid #444' }}>
+              {/* প্রিমিয়াম লোগো এবং হেডার সেকশন */}
+              <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="d-flex align-items-center justify-content-center shadow" style={{
+                    width: '64px', height: '64px', borderRadius: '16px',
+                    background: 'linear-gradient(135deg, #0dcaf0 0%, #035b75 100%)',
+                    border: '2px solid rgba(13, 202, 240, 0.4)', fontSize: '32px'
+                  }}>
+                    🛡️
+                  </div>
+                  <div>
+                    <h3 className="fw-bold text-info m-0 fs-2">Admin Customer Care</h3>
+                    <p className="text-muted small mb-0">Direct 24/7 secure communication line with Super Admin.</p>
+                  </div>
+                </div>
+                <button className="btn btn-sm btn-outline-light rounded-pill px-3" onClick={() => setActivePage('profile')}>Back</button>
+              </div>
+              
+              <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto shadow-inner" style={{ height: '350px', border: '1px solid #444' }}>
                 {adminMessages.map((msg, index) => (
                   <div key={index} className={`mb-3 p-3 rounded-3 ${msg.sender === (userInfo?.name || 'User') ? 'ms-auto bg-info text-dark fw-semibold' : 'bg-secondary text-white'}`} style={{ maxWidth: '75%' }}>
                     <div className="d-flex justify-content-between small fw-bold mb-1">
@@ -640,29 +642,42 @@ function App() {
               <form onSubmit={handleSendAdminMessage} className="input-group">
                 <input 
                   type="text" 
-                  className="form-control bg-dark text-white border-secondary" 
-                  placeholder="Type message for Admin..." 
+                  className="form-control bg-dark text-white border-secondary py-3 px-4 rounded-start-pill" 
+                  placeholder="Type message for Admin Support..." 
                   value={newAdminMessage}
                   onChange={(e) => setNewAdminMessage(e.target.value)}
                   required
                 />
-                <button type="submit" className="btn btn-info px-4 fw-bold text-dark">Send</button>
+                <button type="submit" className="btn btn-info px-4 fw-bold text-dark rounded-end-pill">Send Message</button>
               </form>
             </div>
           </div>
         </div>
       )}
 
-      {/* প্রোফাইল টু প্রোফাইল মেসেঞ্জার (ফিক্সড সিঙ্ক চ্যাট) */}
+      {/* প্রোফাইল টু প্রোফাইল মেসেঞ্জার / চ্যাট (বড় ও স্মার্ট লোগোসহ) */}
       {isLoggedIn && activePage === 'profile-chat' && (
         <div className="container py-5">
           <div className="row justify-content-center">
             <div className="col-md-10 bg-black p-4 border border-warning rounded-4 shadow-lg text-start">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h3 className="fw-bold text-warning m-0">💬 Profile-to-Profile Product Chat</h3>
-                <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
+              
+              {/* প্রিমিয়াম লোগো এবং হেডার সেকশন */}
+              <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
+                <div className="d-flex align-items-center gap-3">
+                  <div className="d-flex align-items-center justify-content-center shadow" style={{
+                    width: '64px', height: '64px', borderRadius: '16px',
+                    background: 'linear-gradient(135deg, #ffc107 0%, #b38600 100%)',
+                    border: '2px solid rgba(255, 193, 7, 0.4)', fontSize: '32px'
+                  }}>
+                    💬
+                  </div>
+                  <div>
+                    <h3 className="fw-bold text-warning m-0 fs-2">Profile Chat & Check</h3>
+                    <p className="text-muted small mb-0">Connect and discuss products directly with other members securely.</p>
+                  </div>
+                </div>
+                <button className="btn btn-sm btn-outline-light rounded-pill px-3" onClick={() => setActivePage('profile')}>Back</button>
               </div>
-              <p className="text-muted small mb-4">Discuss product details directly with other members seamlessly.</p>
 
               <div className="row">
                 <div className="col-md-4 border-end border-secondary pe-3">
@@ -675,7 +690,7 @@ function App() {
                         className={`p-2 rounded-3 d-flex align-items-center gap-2 cursor-pointer ${chatTargetUser?.email === prof.email ? 'bg-warning text-dark fw-bold' : 'bg-dark text-white'}`}
                         style={{ cursor: 'pointer' }}
                       >
-                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '35px', height: '35px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} />
                         <div>
                           <div style={{ fontSize: '14px' }}>{prof.name}</div>
                           <span style={{ fontSize: '10px' }} className="text-uppercase opacity-75">{prof.role}</span>
@@ -689,7 +704,7 @@ function App() {
                   {chatTargetUser ? (
                     <>
                       <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3">
-                        <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                         <h5 className="text-white m-0">{chatTargetUser.name} <span className="badge bg-secondary fs-6 text-uppercase">{chatTargetUser.role}</span></h5>
                       </div>
 
@@ -718,7 +733,7 @@ function App() {
                       <form onSubmit={handleSendDirectMessage} className="input-group">
                         <input 
                           type="text" 
-                          className="form-control bg-dark text-white border-secondary" 
+                          className="form-control bg-dark text-white border-secondary py-2" 
                           placeholder={`Message ${chatTargetUser.name}...`} 
                           value={newDirectMessage}
                           onChange={(e) => setNewDirectMessage(e.target.value)}
