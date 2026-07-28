@@ -24,8 +24,16 @@ function App() {
 
   // সার্চ এবং মেসেজিং স্টেট
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState('all'); // 'all', 'product', 'profile'
+  
+  // অলরেডি রেজিস্টার্ড বা স্যাম্পল প্রোফাইল লিস্ট (সার্চ করার জন্য)
+  const [profilesList, setProfilesList] = useState([
+    { name: 'JR Admin', role: 'admin', email: 'admin@jrstore.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
+    { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' }
+  ]);
+
   const [messages, setMessages] = useState([
-    { sender: 'Seller Support', text: 'Hello! Welcome to JR Store. How can I help you today?', time: '10:00 AM' }
+    { sender: 'Customer/Seller Care', text: 'Hello! Welcome to JR Support. Tell us about your problem or query.', time: '10:00 AM' }
   ]);
   const [newMessage, setNewMessage] = useState('');
 
@@ -71,7 +79,15 @@ function App() {
       
       setEditName(parsedUser.name || '');
       setEditPhone(parsedUser.phone || '');
-      setEditPhoto(parsedUser.photo || ''); // ফিক্সড: লগইন বা রিলোডের পর যাতে পিকচার হারিয়ে না যায়
+      setEditPhoto(parsedUser.photo || ''); 
+      
+      // প্রোফাইল লিস্টে বর্তমান ইউজারকে যুক্ত করা যাতে সার্চ করলে পাওয়া যায়
+      setProfilesList(prev => {
+        if (!prev.some(p => p.email === parsedUser.email)) {
+          return [...prev, { name: parsedUser.name, role: storedRole, email: parsedUser.email, photo: parsedUser.photo }];
+        }
+        return prev;
+      });
     }
 
     return () => clearTimeout(timer);
@@ -157,7 +173,7 @@ function App() {
       ...userInfo,
       name: editName,
       phone: editPhone,
-      photo: editPhoto // পার্মানেন্টলি ছবি সেভ রাখা হলো
+      photo: editPhoto // নিশ্চিত করা হলো যেন ফটো পার্মানেন্টলি সেভ থাকে
     };
 
     if (newPassword) {
@@ -178,10 +194,14 @@ function App() {
     e.preventDefault();
     if (!newMessage.trim()) return;
 
-    const newMsgObj = { sender: userInfo?.name || 'Customer', text: newMessage, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    const newMsgObj = { 
+      sender: userInfo?.name || 'Customer/Seller Care User', 
+      text: newMessage, 
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    };
     setMessages([...messages, newMsgObj]);
     setNewMessage('');
-    showToast("Message sent!", "success");
+    showToast("Problem message sent to support!", "success");
   };
 
   const handleProductUpload = async (e) => {
@@ -258,6 +278,9 @@ function App() {
       setShowLoginModal(false);
       setName(''); setEmail(''); setPassword('');
 
+      // নতুন লগইন করা ইউজারকে প্রোফাইল লিস্টে যুক্ত করা
+      setProfilesList(prev => [...prev, { name: userData.name, role: role, email: userData.email, photo: userData.photo }]);
+
     } catch (err) {
       setIsLoading(false);
       showToast("Network or Server error!", "danger");
@@ -327,12 +350,22 @@ function App() {
             <span style={{color:'#ddd'}}>JR</span> STORE
           </a>
           
-          {/* সার্চ ইনপুট ফিল্ড (প্রোডাক্ট বা প্রোফাইল খোঁজার জন্য) */}
-          <div className="d-none d-md-flex mx-auto" style={{ width: '300px' }}>
+          {/* সার্চ ফিল্টার ও ইনপুট বার */}
+          <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '450px' }}>
+            <select 
+              className="form-select bg-dark text-white border-secondary rounded-pill text-center" 
+              style={{ width: '130px', fontSize: '13px' }}
+              value={searchType}
+              onChange={(e) => setSearchType(e.target.value)}
+            >
+              <option value="all">All Search</option>
+              <option value="product">Products</option>
+              <option value="profile">Profiles</option>
+            </select>
             <input 
               type="text" 
               className="form-control bg-dark text-white border-secondary rounded-pill px-3" 
-              placeholder="Search products or profiles..." 
+              placeholder={searchType === 'profile' ? "Search user profiles..." : searchType === 'product' ? "Search products..." : "Search products & profiles..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -346,12 +379,11 @@ function App() {
             <ul className="navbar-nav ms-auto align-items-center py-2 py-lg-0">
               <li className="nav-item"><a className="nav-link text-light" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }}>Home</a></li>
               
-              {/* মেসেজিং অপশন */}
+              {/* কাস্টমার/সেলার কেয়ার বা মেসেজিং অপشن */}
               {isLoggedIn && (
                 <li className="nav-item">
-                  <a className="nav-link text-light position-relative" href="#messages" onClick={(e) => { e.preventDefault(); setActivePage('messages'); }}>
-                    Messages
-                    <span className="position-absolute top-2 start-100 translate-middle p-1 bg-primary border border-light rounded-circle"></span>
+                  <a className="nav-link text-light position-relative" href="#support" onClick={(e) => { e.preventDefault(); setActivePage('support'); }}>
+                    Customer/Seller Care
                   </a>
                 </li>
               )}
@@ -375,7 +407,7 @@ function App() {
                       {(userRole === 'seller' || userRole === 'admin') && (
                         <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Upload Product</button></li>
                       )}
-                      <li><button className="dropdown-item text-light" onClick={() => setActivePage('messages')}>Messages</button></li>
+                      <li><button className="dropdown-item text-light" onClick={() => setActivePage('support')}>Customer/Seller Care</button></li>
                       <li><hr className="dropdown-divider border-secondary" /></li>
                       <li><button className="dropdown-item text-danger" onClick={handleLogout}>Logout</button></li>
                     </ul>
@@ -443,17 +475,20 @@ function App() {
         </div>
       )}
 
-      {/* মেসেজিং বা চ্যাট পেজ (কাস্টমার ও সেলারের যোগাযোগের জন্য) */}
-      {isLoggedIn && activePage === 'messages' && (
+      {/* কাস্টমার/সেলার কেয়ার এবং মেসেজিং পেজ */}
+      {isLoggedIn && activePage === 'support' && (
         <div className="container py-5">
           <div className="row justify-content-center">
             <div className="col-md-8 bg-black p-4 border border-secondary rounded-4 shadow-lg text-start">
-              <h3 className="fw-bold text-white mb-3">💬 Customer & Seller Chat</h3>
-              <p className="text-muted small mb-4">Direct messaging for orders, custom requests, and support.</p>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h3 className="fw-bold text-white m-0">🛠️ Customer & Seller Care Support</h3>
+                <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
+              </div>
+              <p className="text-muted small mb-4">Submit your account, order, or product problems here. Our support team or admin will respond.</p>
               
               <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '350px', border: '1px solid #444' }}>
                 {messages.map((msg, index) => (
-                  <div key={index} className={`mb-3 p-3 rounded-3 ${msg.sender === (userInfo?.name || 'Customer') ? 'ms-auto bg-primary text-white' : 'bg-secondary text-dark'}`} style={{ maxWidth: '75%' }}>
+                  <div key={index} className={`mb-3 p-3 rounded-3 ${msg.sender === (userInfo?.name || 'User') ? 'ms-auto bg-primary text-white' : 'bg-secondary text-dark'}`} style={{ maxWidth: '75%' }}>
                     <div className="d-flex justify-content-between small fw-bold mb-1">
                       <span>{msg.sender}</span>
                       <span className="opacity-75" style={{ fontSize: '10px' }}>{msg.time}</span>
@@ -467,11 +502,12 @@ function App() {
                 <input 
                   type="text" 
                   className="form-control bg-dark text-white border-secondary" 
-                  placeholder="Type a message to seller/customer..." 
+                  placeholder="Describe your problem here..." 
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
+                  required
                 />
-                <button type="submit" className="btn btn-light px-4 fw-bold">Send</button>
+                <button type="submit" className="btn btn-light px-4 fw-bold">Submit Problem</button>
               </form>
             </div>
           </div>
@@ -492,16 +528,16 @@ function App() {
                       <span className="fs-1 text-light">{userInfo?.name?.charAt(0) || 'U'}</span>
                     )}
                   </div>
-                  <span title={isLoggedIn ? "Online" : "Offline"} style={{
+                  <span title="Online" style={{
                     position: 'absolute', bottom: '5px', right: '5px', width: '16px', height: '16px',
-                    backgroundColor: isLoggedIn ? '#0d6efd' : '#dc3545', borderRadius: '50%', border: '3px solid #000'
+                    backgroundColor: '#0d6efd', borderRadius: '50%', border: '3px solid #000'
                   }}></span>
                 </div>
                 <div>
                   <h2 className="fw-bold mb-1 text-white d-flex align-items-center gap-2" style={{ letterSpacing: '1px' }}>
                     {userInfo?.name}
-                    <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', backgroundColor: isLoggedIn ? 'rgba(13, 110, 253, 0.2)' : 'rgba(220, 53, 69, 0.2)', color: isLoggedIn ? '#0d6efd' : '#dc3545', border: `1px solid ${isLoggedIn ? '#0d6efd' : '#dc3545'}` }}>
-                      {isLoggedIn ? '● Active Now' : '● Offline'}
+                    <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', backgroundColor: 'rgba(13, 110, 253, 0.2)', color: '#0d6efd', border: '1px solid #0d6efd' }}>
+                      ● Active Now
                     </span>
                   </h2>
                   <p className="text-light mb-0" style={{ opacity: 0.8 }}>{userInfo?.email}</p>
@@ -531,6 +567,9 @@ function App() {
                   Upload New Product
                 </button>
               )}
+              <button className="btn btn-outline-info rounded-pill px-3" onClick={() => setActivePage('support')}>
+                Customer/Seller Care
+              </button>
               <button className="btn btn-outline-warning rounded-pill px-3" onClick={handleDeactivateAccount}>
                 Deactivate
               </button>
@@ -664,7 +703,7 @@ function App() {
       </div>
    )}
 
-    {/* হোমপেজ */}
+    {/* হোমপেজ (সার্চ রেজাল্ট সহ) */}
     {activePage === 'home' && (
       <>
         <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
@@ -679,11 +718,65 @@ function App() {
 
         <div className="container py-5">
           {searchQuery && (
-            <div className="mb-4 text-start text-white">
-              <h5>Search results for: "{searchQuery}"</h5>
-              <hr className="border-secondary" />
+            <div className="mb-5 text-start text-white">
+              <h4 className="border-bottom border-secondary pb-2">Search Results for: "{searchQuery}"</h4>
+              
+              {/* প্রোফাইল সার্চ রেজাল্ট */}
+              {(searchType === 'all' || searchType === 'profile') && (
+                <div className="my-4">
+                  <h6 className="text-muted text-uppercase mb-3">Matched Profiles</h6>
+                  <div className="row g-3">
+                    {profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                      profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
+                        <div className="col-md-4" key={idx}>
+                          <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center gap-3">
+                            <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
+                            <div>
+                              <h5 className="mb-1 text-white">{prof.name}</h5>
+                              <span className="badge bg-secondary text-uppercase">{prof.role}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted small">No profiles found matching "{searchQuery}"</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* প্রোডাক্ট সার্চ রেজাল্ট */}
+              {(searchType === 'all' || searchType === 'product') && (
+                <div className="my-4">
+                  <h6 className="text-muted text-uppercase mb-3">Matched Products</h6>
+                  <div className="row g-4">
+                    {[1, 2, 3].filter(i => `Signature Item ${i}`.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                      [1, 2, 3].filter(i => `Signature Item ${i}`.toLowerCase().includes(searchQuery.toLowerCase())).map((i) => (
+                        <div className="col-md-4" key={i}>
+                          <div className="card h-100 bg-black border border-secondary rounded-0 p-3">
+                            <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '200px', color:'#aaa' }}>
+                              Image {i}
+                            </div>
+                            <div className="card-body text-center">
+                              <h5 className="card-title fw-bold text-uppercase text-white mt-2">Signature Item {i}</h5>
+                              <p className="text-light mb-3">$999.00</p>
+                              <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" onClick={() => {
+                                if(!isLoggedIn) setShowLoginModal(true);
+                                else setActivePage('support');
+                              }}>Contact Care / Buy</button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-muted small">No products found matching "{searchQuery}"</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
+
           <div className="row g-4">
             {[1, 2, 3].map((i) => (
               <div className="col-md-4" key={i}>
@@ -698,9 +791,9 @@ function App() {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
                       } else {
-                        setActivePage('messages');
+                        setActivePage('support');
                       }
-                    }}>Contact Seller</button>
+                    }}>Contact Seller / Support</button>
                   </div>
                 </motion.div>
               </div>
