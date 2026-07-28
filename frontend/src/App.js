@@ -22,24 +22,30 @@ function App() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
 
-  // সার্চ এবং মেসেজিং স্টেট
+  // সার্চ এবং প্রোফাইল লিস্ট
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   
   const [profilesList, setProfilesList] = useState([
-    { name: 'JR Admin', role: 'admin', email: 'admin@jrstore.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
+    { name: 'JR Super Admin', role: 'admin', email: 'admin@jrstore.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
     { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' }
   ]);
 
-  // ১. অ্যাডমিন কেয়ার চ্যাট স্টেট
+  // প্ল্যাটফর্মের প্রোডাক্ট লিস্ট
+  const [allProductsList, setAllProductsList] = useState([
+    { id: 1, title: 'Signature Item 1', price: '999.00', category: 'Luxury', seller: 'John Seller', image: '' },
+    { id: 2, title: 'Signature Item 2', price: '999.00', category: 'Luxury', seller: 'John Seller', image: '' }
+  ]);
+
+  // ১. অ্যাডমিন কেয়ার মেসেজ স্টেট
   const [adminMessages, setAdminMessages] = useState([
-    { sender: 'JR Admin (Care)', text: 'Hello! Welcome to Admin Customer/Seller Care. How can we help you?', time: '10:00 AM' }
+    { sender: 'John Seller', text: 'Hello Admin, I need help regarding my store.', time: '10:00 AM' }
   ]);
   const [newAdminMessage, setNewAdminMessage] = useState('');
 
-  // ২. প্রোফাইল টু প্রোফাইল ডিরেক্ট চ্যাট স্টেট
-  const [chatTargetUser, setChatTargetUser] = useState(null); // যার সাথে চ্যাট করা হচ্ছে
-  const [directMessages, setDirectMessages] = useState({}); // { 'seller@jrstore.com': [{sender, text, time}] }
+  // ২. প্রোফাইল টু প্রোফাইল চ্যাট স্টেট (ফিক্সড: ইমেইল দিয়ে সঠিকভাবে মেসেজ ম্যাপ করা হয়েছে)
+  const [chatTargetUser, setChatTargetUser] = useState(null); 
+  const [directMessages, setDirectMessages] = useState({}); 
   const [newDirectMessage, setNewDirectMessage] = useState('');
 
   const showToast = (message, type = 'success') => {
@@ -122,23 +128,6 @@ function App() {
     });
   };
 
-  const handleDeleteAccount = () => {
-    setConfirmModal({
-      show: true,
-      title: 'Delete Account Permanently',
-      message: 'WARNING: This will permanently delete your account and all data!',
-      type: 'danger',
-      onConfirm: () => {
-        setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
-        localStorage.clear();
-        setIsLoggedIn(false);
-        setUserInfo(null);
-        setActivePage('home');
-        showToast("Account deleted permanently.", "danger");
-      }
-    });
-  };
-
   const handleImageUploadFromFile = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -194,7 +183,21 @@ function App() {
     setActivePage('profile');
   };
 
-  // ১. অ্যাডমিন কেয়ার মেসেজ সেন্ড করার ফাংশন
+  const handleDeleteUserByAdmin = (emailToDelete) => {
+    if (emailToDelete === 'admin@jrstore.com') {
+      showToast("Cannot delete Super Admin account!", "danger");
+      return;
+    }
+    setProfilesList(profilesList.filter(p => p.email !== emailToDelete));
+    showToast("User profile deleted by Admin!", "success");
+  };
+
+  const handleDeleteProductByAdmin = (productId) => {
+    setAllProductsList(allProductsList.filter(p => p.id !== productId));
+    showToast("Product removed by Admin!", "success");
+  };
+
+  // অ্যাডমিন কেয়ার মেসেজ পাঠানোর ফাংশন
   const handleSendAdminMessage = (e) => {
     e.preventDefault();
     if (!newAdminMessage.trim()) return;
@@ -206,19 +209,23 @@ function App() {
     };
     setAdminMessages([...adminMessages, newMsgObj]);
     setNewAdminMessage('');
-    showToast("Message sent directly to Admin Care!", "success");
+    showToast("Message sent to Admin Support!", "success");
   };
 
-  // ২. প্রোফাইল টু প্রোফাইল ডিরেক্ট মেসেজ সেন্ড করার ফাংশন
+  // প্রোফাইল টু প্রোফাইল মেসেজ পাঠানোর সঠিক ফাংশন (দুই পক্ষের চ্যাট সিঙ্ক রাখার জন্য)
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
 
-    const chatKey = chatTargetUser.email;
+    // চ্যাট ইউনিক রাখার জন্য দুই ইউজারের ইমেইল দিয়ে একটি ইউনিক চ্যাট কি (Key) তৈরি করা হলো
+    const userEmails = [userInfo.email, chatTargetUser.email].sort();
+    const chatKey = `${userEmails[0]}_${userEmails[1]}`;
+
     const currentMsgs = directMessages[chatKey] || [];
 
     const newMsgObj = {
-      sender: userInfo?.name,
+      sender: userInfo.name,
+      senderEmail: userInfo.email,
       text: newDirectMessage,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
@@ -232,70 +239,35 @@ function App() {
 
   const handleProductUpload = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
-    const productData = {
+    const newProd = {
+      id: Date.now(),
       title: productTitle,
       price: productPrice,
       category: productCategory,
       description: productDescription,
-      image: productImage
+      image: productImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300',
+      seller: userInfo?.name
     };
 
-    try {
-      const baseUrl = 'https://ecommerce-api-9wc9.onrender.com';
-      const response = await fetch(`${baseUrl}/api/products`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(productData)
-      });
-      const data = await response.json();
-      if (response.ok) {
-        showToast("Product uploaded successfully!", "success");
-        setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
-      } else {
-        showToast(data.message || "Failed to upload product", "danger");
-      }
-    } catch (err) {
-      showToast("Server error during product upload!", "danger");
-    }
+    setAllProductsList([newProd, ...allProductsList]);
+    showToast("Product uploaded successfully!", "success");
+    setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
+    setActivePage('home');
   };
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    const baseUrl = 'https://ecommerce-api-9wc9.onrender.com';
-    const endpoint = isRegisterMode ? '/api/users/register' : '/api/users/login';
 
-    const payload = isRegisterMode 
-      ? { name, email, password, role: selectedRole } 
-      : { email, password };
-
-    try {
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
+    setTimeout(() => {
       setIsLoading(false);
-
-      if (!response.ok) {
-        showToast(data.message || data.error || "Authentication failed!", "danger");
-        return;
-      }
-
       showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
-      localStorage.setItem('token', data.token || 'dummy-token');
+      localStorage.setItem('token', 'dummy-token-jr');
       
-      const userData = data.user || { name: name || 'User', email, password };
-      if (!userData.password) userData.password = password; 
+      const role = (email === 'admin@jrstore.com') ? 'admin' : (isRegisterMode ? selectedRole : 'customer');
+      const userData = { name: name || (role === 'admin' ? 'JR Super Admin' : 'User'), email, password, role };
       
       localStorage.setItem('userInfo', JSON.stringify(userData));
-      const role = isRegisterMode ? selectedRole : (data.role || data.user?.role || 'customer');
       localStorage.setItem('userRole', role);
 
       setIsLoggedIn(true);
@@ -304,12 +276,13 @@ function App() {
       setShowLoginModal(false);
       setName(''); setEmail(''); setPassword('');
 
-      setProfilesList(prev => [...prev, { name: userData.name, role: role, email: userData.email, photo: userData.photo }]);
-
-    } catch (err) {
-      setIsLoading(false);
-      showToast("Network or Server error!", "danger");
-    }
+      setProfilesList(prev => {
+        if (!prev.some(p => p.email === userData.email)) {
+          return [...prev, { name: userData.name, role: role, email: userData.email, photo: userData.photo }];
+        }
+        return prev;
+      });
+    }, 1000);
   };
 
   if (showWelcome) {
@@ -403,7 +376,14 @@ function App() {
             <ul className="navbar-nav ms-auto align-items-center py-2 py-lg-0">
               <li className="nav-item"><a className="nav-link text-light" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }}>Home</a></li>
               
-              {/* অপশন ১: অ্যাডমিন কেয়ার মেসেঞ্জার */}
+              {isLoggedIn && userRole === 'admin' && (
+                <li className="nav-item">
+                  <a className="nav-link text-danger fw-bold" href="#admin-dashboard" onClick={(e) => { e.preventDefault(); setActivePage('admin-dashboard'); }}>
+                    ⚡ Admin Master Panel
+                  </a>
+                </li>
+              )}
+
               {isLoggedIn && (
                 <li className="nav-item">
                   <a className="nav-link text-info fw-semibold" href="#admin-care" onClick={(e) => { e.preventDefault(); setActivePage('admin-support'); }}>
@@ -412,12 +392,10 @@ function App() {
                 </li>
               )}
 
-              {/* অপশন ২: প্রোফাইল টু প্রোফাইল মেসেঞ্জার */}
               {isLoggedIn && (
                 <li className="nav-item">
                   <a className="nav-link text-warning fw-semibold" href="#profile-chat" onClick={(e) => { 
                     e.preventDefault(); 
-                    // ডিফল্টভাবে প্রথম অন্য প্রোফাইল সিলেক্ট করে দেবো
                     const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                     setChatTargetUser(otherProfile);
                     setActivePage('profile-chat'); 
@@ -443,6 +421,9 @@ function App() {
                     </button>
                     <ul className="dropdown-menu dropdown-menu-dark bg-black border-secondary">
                       <li><button className="dropdown-item text-light" onClick={() => setActivePage('profile')}>My Profile</button></li>
+                      {userRole === 'admin' && (
+                        <li><button className="dropdown-item text-danger fw-bold" onClick={() => setActivePage('admin-dashboard')}>⚡ Admin Master Panel</button></li>
+                      )}
                       {(userRole === 'seller' || userRole === 'admin') && (
                         <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Upload Product</button></li>
                       )}
@@ -467,7 +448,7 @@ function App() {
         </div>
       </nav>
 
-      {/* সাইন ইন / রেজিস্ট্রেশন মডাল */}
+      {/* লগইন / রেজিস্ট্রেশন মডাল */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
@@ -488,13 +469,14 @@ function App() {
                     <select className="form-select bg-dark text-white border-secondary" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
                       <option value="customer">Customer Account</option>
                       <option value="seller">Seller Account</option>
+                      <option value="admin">Admin Account (Master)</option>
                     </select>
                   </div>
                 </>
               )}
               <div className="mb-3 text-start">
                 <label className="form-label text-light fw-semibold">Email address</label>
-                <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="admin@jrstore.com for Admin" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div className="mb-4 text-start">
                 <label className="form-label text-light fw-semibold">Password</label>
@@ -519,7 +501,102 @@ function App() {
         </div>
       )}
 
-      {/* ১. অ্যাডমিন কাস্টমার/সেলার কেয়ার মেসেঞ্জার পেজ */}
+      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড */}
+      {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
+        <div className="container py-5 text-start">
+          <div className="bg-black p-4 border border-danger rounded-4 shadow-lg mb-5">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <div>
+                <h2 className="fw-bold text-danger m-0">⚡ Super Admin Master Dashboard</h2>
+                <p className="text-muted small mb-0">Control all users and product assets.</p>
+              </div>
+              <button className="btn btn-outline-light btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</button>
+            </div>
+
+            <div className="row g-4 mb-5">
+              <div className="col-md-4">
+                <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
+                  <h6 className="text-muted uppercase">Total Users</h6>
+                  <h2 className="text-white fw-bold">{profilesList.length}</h2>
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
+                  <h6 className="text-muted uppercase">Total Products</h6>
+                  <h2 className="text-white fw-bold">{allProductsList.length}</h2>
+                </div>
+              </div>
+              <div className="col-md-4">
+                <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
+                  <h6 className="text-muted uppercase">Support Messages</h6>
+                  <h2 className="text-info fw-bold">{adminMessages.length}</h2>
+                </div>
+              </div>
+            </div>
+
+            <h4 className="text-white mb-3">👥 User Profiles Management</h4>
+            <div className="table-responsive mb-5">
+              <table className="table table-dark table-striped border border-secondary align-middle">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {profilesList.map((prof, idx) => (
+                    <tr key={idx}>
+                      <td className="d-flex align-items-center gap-2">
+                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
+                        {prof.name}
+                      </td>
+                      <td>{prof.email}</td>
+                      <td><span className="badge bg-secondary text-uppercase">{prof.role}</span></td>
+                      <td>
+                        {prof.email !== 'admin@jrstore.com' && (
+                          <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete User</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <h4 className="text-white mb-3">🛍️ Product Assets Control</h4>
+            <div className="table-responsive">
+              <table className="table table-dark table-striped border border-secondary align-middle">
+                <thead>
+                  <tr>
+                    <th>Product Title</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Seller</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allProductsList.map((prod) => (
+                    <tr key={prod.id}>
+                      <td className="fw-bold">{prod.title}</td>
+                      <td>{prod.category}</td>
+                      <td>${prod.price}</td>
+                      <td>{prod.seller || 'Admin'}</td>
+                      <td>
+                        <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteProductByAdmin(prod.id)}>Remove Product</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* অ্যাডমিন কেয়ার মেসেঞ্জার */}
       {isLoggedIn && activePage === 'admin-support' && (
         <div className="container py-5">
           <div className="row justify-content-center">
@@ -528,7 +605,7 @@ function App() {
                 <h3 className="fw-bold text-info m-0">🛡️ Admin Customer/Seller Care</h3>
                 <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
               </div>
-              <p className="text-muted small mb-4">Messages sent here go directly to the official <b>JR Admin Profile</b> for support and problem resolving.</p>
+              <p className="text-muted small mb-4">Direct communication line with Super Admin.</p>
               
               <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '350px', border: '1px solid #444' }}>
                 {adminMessages.map((msg, index) => (
@@ -546,19 +623,19 @@ function App() {
                 <input 
                   type="text" 
                   className="form-control bg-dark text-white border-secondary" 
-                  placeholder="Send your problem directly to Admin..." 
+                  placeholder="Type message for Admin..." 
                   value={newAdminMessage}
                   onChange={(e) => setNewAdminMessage(e.target.value)}
                   required
                 />
-                <button type="submit" className="btn btn-info px-4 fw-bold text-dark">Send to Admin</button>
+                <button type="submit" className="btn btn-info px-4 fw-bold text-dark">Send</button>
               </form>
             </div>
           </div>
         </div>
       )}
 
-      {/* ২. প্রোফাইল টু প্রোফাইল ডিরেক্ট ডিসকাশন মেসেঞ্জার পেজ */}
+      {/* প্রোফাইল টু প্রোফাইল মেসেঞ্জার (ফিক্সড সিঙ্ক চ্যাট) */}
       {isLoggedIn && activePage === 'profile-chat' && (
         <div className="container py-5">
           <div className="row justify-content-center">
@@ -567,10 +644,9 @@ function App() {
                 <h3 className="fw-bold text-warning m-0">💬 Profile-to-Profile Product Chat</h3>
                 <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
               </div>
-              <p className="text-muted small mb-4">Chat directly with other sellers or customers regarding products and negotiations.</p>
+              <p className="text-muted small mb-4">Discuss product details directly with other members seamlessly.</p>
 
               <div className="row">
-                {/* বাঁধে ইউজার লিস্ট */}
                 <div className="col-md-4 border-end border-secondary pe-3">
                   <h6 className="text-light mb-3">Select Profile to Chat:</h6>
                   <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
@@ -591,7 +667,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* ডানে চ্যাট বক্স */}
                 <div className="col-md-8 ps-3 d-flex flex-column justify-content-between">
                   {chatTargetUser ? (
                     <>
@@ -601,26 +676,32 @@ function App() {
                       </div>
 
                       <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #444' }}>
-                        {(!directMessages[chatTargetUser.email] || directMessages[chatTargetUser.email].length === 0) ? (
-                          <p className="text-muted text-center mt-5 small">No conversation yet with {chatTargetUser.name}. Discuss product details below!</p>
-                        ) : (
-                          directMessages[chatTargetUser.email].map((msg, idx) => (
-                            <div key={idx} className={`mb-3 p-2 rounded-3 ${msg.sender === userInfo?.name ? 'ms-auto bg-warning text-dark fw-semibold' : 'bg-secondary text-white'}`} style={{ maxWidth: '75%' }}>
+                        {(() => {
+                          const userEmails = [userInfo.email, chatTargetUser.email].sort();
+                          const chatKey = `${userEmails[0]}_${userEmails[1]}`;
+                          const currentMsgs = directMessages[chatKey] || [];
+
+                          if (currentMsgs.length === 0) {
+                            return <p className="text-muted text-center mt-5 small">No conversation yet with {chatTargetUser.name}. Start chatting below!</p>;
+                          }
+
+                          return currentMsgs.map((msg, idx) => (
+                            <div key={idx} className={`mb-3 p-2 rounded-3 ${msg.senderEmail === userInfo.email ? 'ms-auto bg-warning text-dark fw-semibold' : 'bg-secondary text-white'}`} style={{ maxWidth: '75%' }}>
                               <div className="d-flex justify-content-between small fw-bold mb-1" style={{ fontSize: '11px' }}>
                                 <span>{msg.sender}</span>
                                 <span className="opacity-75">{msg.time}</span>
                               </div>
                               <p className="mb-0" style={{ fontSize: '14px' }}>{msg.text}</p>
                             </div>
-                          ))
-                        )}
+                          ));
+                        })()}
                       </div>
 
                       <form onSubmit={handleSendDirectMessage} className="input-group">
                         <input 
                           type="text" 
                           className="form-control bg-dark text-white border-secondary" 
-                          placeholder={`Message ${chatTargetUser.name} about product...`} 
+                          placeholder={`Message ${chatTargetUser.name}...`} 
                           value={newDirectMessage}
                           onChange={(e) => setNewDirectMessage(e.target.value)}
                           required
@@ -629,7 +710,7 @@ function App() {
                       </form>
                     </>
                   ) : (
-                    <div className="text-center text-muted my-auto">Please select a profile from the left to start chatting.</div>
+                    <div className="text-center text-muted my-auto">Please select a profile from the left.</div>
                   )}
                 </div>
               </div>
@@ -665,7 +746,7 @@ function App() {
                     </span>
                   </h2>
                   <p className="text-light mb-0" style={{ opacity: 0.8 }}>{userInfo?.email}</p>
-                  <span className="badge bg-light text-dark text-uppercase mt-2">{userRole}</span>
+                  <span className={`badge ${userRole === 'admin' ? 'bg-danger' : 'bg-light text-dark'} text-uppercase mt-2`}>{userRole}</span>
                 </div>
               </div>
 
@@ -677,7 +758,7 @@ function App() {
                 <h5 className="text-white">{userInfo?.phone || 'Not Added Yet'}</h5>
               </div>
               <div className="col-md-6">
-                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Account Type</p>
+                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Account Role</p>
                 <h5 className="text-white text-uppercase">{userRole}</h5>
               </div>
             </div>
@@ -686,6 +767,11 @@ function App() {
               <button className="btn btn-light rounded-pill px-4 fw-bold" onClick={() => { setEditName(userInfo?.name || ''); setActivePage('edit-profile'); }}>
                 Edit Profile & Security
               </button>
+              {userRole === 'admin' && (
+                <button className="btn btn-danger rounded-pill px-4 fw-bold" onClick={() => setActivePage('admin-dashboard')}>
+                  ⚡ Master Admin Panel
+                </button>
+              )}
               {(userRole === 'seller' || userRole === 'admin') && (
                 <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setActivePage('upload')}>
                   Upload New Product
@@ -713,7 +799,7 @@ function App() {
       </div>
     )}
 
-    {/* প্রফাইল এডিট পেজ */}
+    {/* প্রোফাইল এডিট পেজ */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -732,7 +818,7 @@ function App() {
              
             <div className="mb-3">
               <label className="form-label text-light fw-semibold">Phone Number</label>
-              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
             </div>
 
           <div className="mb-3">
@@ -770,7 +856,7 @@ function App() {
               />
               <button type="button" className="btn btn-outline-light" onClick={handleVerifyCurrentPassword}>Verify</button>
             </div>
-            {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified successfully!</small>}
+            {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified!</small>}
           </div>
 
           <div className="mb-4">
@@ -778,7 +864,7 @@ function App() {
             <input 
               type="password" 
               className="form-control bg-dark text-white border-secondary" 
-              placeholder={isCurrentPasswordValid ? "Enter new password (min 8 chars)" : "Verify current password first..."} 
+              placeholder={isCurrentPasswordValid ? "Enter new password" : "Verify current password first..."} 
               value={newPassword} 
               onChange={(e) => setNewPassword(e.target.value)} 
               disabled={!isCurrentPasswordValid} 
@@ -831,14 +917,14 @@ function App() {
       </div>
    )}
 
-    {/* হোমপেজ (সার্চ রেজাল্ট সহ) */}
+    {/* হোমপেজ */}
     {activePage === 'home' && (
       <>
         <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
           <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.8}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '5px'}}>
             Pure Elegance
           </motion.h1>
-          <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.6, duration: 0.8}} className="lead fs-3 text-light" style={{opacity: 0.8}}>Discover our exclusive premium collection.</motion.p>
+          <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.6, duration: 0.8}} className="lead fs-3 text-light" style={{opacity: 0.8}}>Discover our exclusive collection.</motion.p>
           <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 1, duration: 0.5}}>
             <button className="btn btn-light btn-lg mt-4 px-5 py-3 rounded-pill fw-bold text-uppercase" style={{letterSpacing: '1px'}}>Shop Now</button>
           </motion.div>
@@ -849,7 +935,6 @@ function App() {
             <div className="mb-5 text-start text-white">
               <h4 className="border-bottom border-secondary pb-2">Search Results for: "{searchQuery}"</h4>
               
-              {/* প্রোফাইল সার্চ রেজাল্ট */}
               {(searchType === 'all' || searchType === 'profile') && (
                 <div className="my-4">
                   <h6 className="text-muted text-uppercase mb-3">Matched Profiles</h6>
@@ -875,27 +960,26 @@ function App() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-muted small">No profiles found matching "{searchQuery}"</p>
+                      <p className="text-muted small">No profiles found.</p>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* প্রোডাক্ট সার্চ রেজাল্ট */}
               {(searchType === 'all' || searchType === 'product') && (
                 <div className="my-4">
                   <h6 className="text-muted text-uppercase mb-3">Matched Products</h6>
                   <div className="row g-4">
-                    {[1, 2, 3].filter(i => `Signature Item ${i}`.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                      [1, 2, 3].filter(i => `Signature Item ${i}`.toLowerCase().includes(searchQuery.toLowerCase())).map((i) => (
-                        <div className="col-md-4" key={i}>
+                    {allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                      allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase())).map((prod) => (
+                        <div className="col-md-4" key={prod.id}>
                           <div className="card h-100 bg-black border border-secondary rounded-0 p-3">
-                            <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '200px', color:'#aaa' }}>
-                              Image {i}
+                            <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '200px', color:'#aaa', overflow: 'hidden' }}>
+                              {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'No Image'}
                             </div>
                             <div className="card-body text-center">
-                              <h5 className="card-title fw-bold text-uppercase text-white mt-2">Signature Item {i}</h5>
-                              <p className="text-light mb-3">$999.00</p>
+                              <h5 className="card-title fw-bold text-uppercase text-white mt-2">{prod.title}</h5>
+                              <p className="text-light mb-3">${prod.price}</p>
                               <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" onClick={() => {
                                 if(!isLoggedIn) setShowLoginModal(true);
                                 else {
@@ -903,13 +987,13 @@ function App() {
                                   setChatTargetUser(sellerProf);
                                   setActivePage('profile-chat');
                                 }
-                              }}>Discuss Product with Seller</button>
+                              }}>Discuss Product</button>
                             </div>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <p className="text-muted small">No products found matching "{searchQuery}"</p>
+                      <p className="text-muted small">No products found.</p>
                     )}
                   </div>
                 </div>
@@ -918,15 +1002,15 @@ function App() {
           )}
 
           <div className="row g-4">
-            {[1, 2, 3].map((i) => (
-              <div className="col-md-4" key={i}>
-                <motion.div initial={{y: 50, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.5, delay: i * 0.2}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
-                  <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '300px', color:'#aaa' }}>
-                    Image {i}
+            {allProductsList.map((prod) => (
+              <div className="col-md-4" key={prod.id}>
+                <motion.div initial={{y: 50, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.5}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
+                  <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '300px', color:'#aaa', overflow: 'hidden' }}>
+                    {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Image'}
                   </div>
                   <div className="card-body text-center">
-                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>Signature Item {i}</h5>
-                    <p className="text-light mb-4" style={{opacity: 0.8}}>$999.00</p>
+                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>{prod.title}</h5>
+                    <p className="text-light mb-4" style={{opacity: 0.8}}>${prod.price}</p>
                     <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}} onClick={() => {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
@@ -935,7 +1019,7 @@ function App() {
                         setChatTargetUser(sellerProf);
                         setActivePage('profile-chat');
                       }
-                    }}>Discuss Product with Seller</button>
+                    }}>Discuss Product</button>
                   </div>
                 </motion.div>
               </div>
