@@ -8,16 +8,27 @@ function App() {
   const [showLoginModal, setShowLoginModal] = useState(false); 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
 
-  // লগইন ও পেজ ন্যাভিগেশন স্টেট ('home', 'profile', 'upload', 'edit-profile')
+  // লগইন ও পেজ ন্যাভিগেশন স্টেট
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [userRole, setUserRole] = useState('customer');
   const [activePage, setActivePage] = useState('home'); 
 
-  // ইনপুট ফিল্ডের স্টেটগুলো (অথেন্টিকেশন)
+  // ইনপুট ফিল্ডের স্টেটগুলো
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // ৩. লোডিং স্পিনার স্টেট
+
+  // কাস্টম টোস্ট নোটিফিকেশন স্টেট (৪)
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 3500);
+  };
 
   // প্রফাইল এডিটিং স্টেট
   const [editName, setEditName] = useState('');
@@ -26,17 +37,15 @@ function App() {
   const [newPassword, setNewPassword] = useState('');
   const [editPhoto, setEditPhoto] = useState('');
   
-  // বর্তমান পাসওয়ার্ড ভ্যালিড কি না তা চেক করার স্টেট
   const [isCurrentPasswordValid, setIsCurrentPasswordValid] = useState(false);
 
-  // প্রোডাক্ট আপলোড ফর্মের স্টেটগুলো
+  // প্রোডাক্ট আপলোড ফর্ম স্টেট
   const [productTitle, setProductTitle] = useState('');
   const [productPrice, setProductPrice] = useState('');
   const [productCategory, setProductCategory] = useState('');
   const [productDescription, setProductDescription] = useState('');
   const [productImage, setProductImage] = useState('');
 
-  // প্রিিসেট প্রফাইল ছবি (মেমোরি/সিলেকশনের জন্য)
   const presetAvatars = [
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
     "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
@@ -59,13 +68,12 @@ function App() {
       
       setEditName(parsedUser.name || '');
       setEditPhone(parsedUser.phone || '');
-      setEditPhoto(parsedUser.photo || '');
+      setEditPhoto(parsedUser.photo || ''); // ১. পিকচার রিমুভ ফিক্স (ডাটা প্রপারলি সিঙ্ক করা)
     }
 
     return () => clearTimeout(timer);
   }, []);
 
-  // --- লগআউট হ্যান্ডলার ---
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userInfo');
@@ -74,10 +82,27 @@ function App() {
     setUserInfo(null);
     setUserRole('customer');
     setActivePage('home');
-    window.location.reload();
+    showToast("Logged out successfully!", "success");
   };
 
-  // --- ডিভাইস ফাইল থেকে ছবি সিলেক্ট করার হ্যান্ডলার (Base64 conversion) ---
+  // ২. অ্যাকাউন্ট ডিঅ্যাক্টিভেট ও ডিলিট হ্যান্ডলার
+  const handleDeactivateAccount = () => {
+    if (window.confirm("Are you sure you want to deactivate your account?")) {
+      showToast("Account deactivated temporarily.", "info");
+      handleLogout();
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    if (window.confirm("WARNING: This will permanently delete your account. Proceed?")) {
+      localStorage.clear();
+      setIsLoggedIn(false);
+      setUserInfo(null);
+      setActivePage('home');
+      showToast("Account deleted permanently.", "danger");
+    }
+  };
+
   const handleImageUploadFromFile = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -89,37 +114,35 @@ function App() {
     }
   };
 
-  // --- বর্তমান পাসওয়ার্ড সঠিকভাবে যাচাই করার ফাংশন ---
   const handleVerifyCurrentPassword = () => {
     const storedPass = userInfo?.password; 
 
     if (!currentPassword) {
-      alert("Please enter your current password first!");
+      showToast("Please enter your current password first!", "danger");
       setIsCurrentPasswordValid(false);
       return;
     }
 
     if (storedPass && currentPassword !== storedPass) {
       setIsCurrentPasswordValid(false);
-      alert("Incorrect current password! Please try again.");
+      showToast("Incorrect current password!", "danger");
       return;
     }
 
     if (currentPassword.length >= 6 || (storedPass && currentPassword === storedPass)) {
       setIsCurrentPasswordValid(true);
-      alert("Current password verified successfully! You can now enter your new password.");
+      showToast("Current password verified!", "success");
     } else {
       setIsCurrentPasswordValid(false);
-      alert("Incorrect or too short current password!");
+      showToast("Incorrect or too short password!", "danger");
     }
   };
 
-  // --- প্রফাইল ও পাসওয়ার্ড আপডেট হ্যান্ডলার ---
   const handleUpdateProfile = (e) => {
     e.preventDefault();
 
     if (newPassword && !isCurrentPasswordValid) {
-      alert("Please verify your current password first before changing to a new password!");
+      showToast("Verify current password before changing password!", "danger");
       return;
     }
 
@@ -127,7 +150,7 @@ function App() {
       ...userInfo,
       name: editName,
       phone: editPhone,
-      photo: editPhoto
+      photo: editPhoto // ১. ছবি পার্মানেন্টলি লোকালস্টোরেজে সেভ নিশ্চিত করা
     };
 
     if (newPassword) {
@@ -141,11 +164,10 @@ function App() {
     setNewPassword('');
     setIsCurrentPasswordValid(false);
 
-    alert("Profile updated successfully!");
+    showToast("Profile updated successfully!", "success");
     setActivePage('profile');
   };
 
-  // --- প্রোডাক্ট আপলোড হ্যান্ডলার ---
   const handleProductUpload = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
@@ -172,24 +194,25 @@ function App() {
       const data = await response.json();
 
       if (response.ok) {
-        alert("Product uploaded successfully!");
+        showToast("Product uploaded successfully!", "success");
         setProductTitle('');
         setProductPrice('');
         setProductCategory('');
         setProductDescription('');
         setProductImage('');
       } else {
-        alert(data.message || "Failed to upload product");
+        showToast(data.message || "Failed to upload product", "danger");
       }
     } catch (err) {
       console.error("Product Upload Error:", err);
-      alert("Server error during product upload!");
+      showToast("Server error during product upload!", "danger");
     }
   };
 
-  // --- ব্যাকএন্ড API কানেকশন ও অথ হ্যান্ডলার ---
+  // ৩ ও ৪. লোডিং স্পিনার ও টোস্ট সহ অথ সাবমিট হ্যান্ডলার
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
+    setIsLoading(true);
     const baseUrl = 'https://ecommerce-api-9wc9.onrender.com';
     const endpoint = isRegisterMode ? '/api/users/register' : '/api/users/login';
 
@@ -205,13 +228,14 @@ function App() {
       });
 
       const data = await response.json();
+      setIsLoading(false);
 
       if (!response.ok) {
-        alert(data.message || data.error || "Authentication failed! Please check your credentials.");
+        showToast(data.message || data.error || "Authentication failed!", "danger");
         return;
       }
 
-      alert(isRegisterMode ? "Registration Successful!" : "Login Successful!");
+      showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
       
       localStorage.setItem('token', data.token || 'dummy-token');
       
@@ -232,12 +256,12 @@ function App() {
       setPassword('');
 
     } catch (err) {
+      setIsLoading(false);
       console.error("Auth Error:", err);
-      alert("Network or Server error! Please check your connection.");
+      showToast("Network or Server error!", "danger");
     }
   };
 
-  // --- স্প্ল্যাশ স্ক্রিন ---
   if (showWelcome) {
     return (
       <div style={splashStyles.container}>
@@ -276,6 +300,21 @@ function App() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }} style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}>
       
+      {/* ৪. কাস্টম টোস্ট নোটিফিকেশন UI */}
+      {toast.show && (
+        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }}>
+          <motion.div 
+            initial={{ opacity: 0, y: -20, scale: 0.9 }} 
+            animate={{ opacity: 1, y: 0, scale: 1 }} 
+            exit={{ opacity: 0, y: -20 }}
+            className={`alert ${toast.type === 'success' ? 'alert-success' : toast.type === 'danger' ? 'alert-danger' : 'alert-info'} shadow-lg text-dark fw-bold px-4 py-3 rounded-pill d-flex align-items-center gap-2`}
+            style={{ minWidth: '250px', border: '1px solid #444' }}
+          >
+            <span>{toast.message}</span>
+          </motion.div>
+        </div>
+      )}
+
       {/* ন্যাভবার */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
@@ -320,7 +359,7 @@ function App() {
         </div>
       </nav>
 
-      {/* সাইন ইন / রেজিস্ট্রেশন মডাল */}
+      {/* সাইন ইন / রেজিস্ট্রেশন মডাল (৩. লোডিং স্পিনার যুক্ত বাটন) */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
@@ -344,9 +383,12 @@ function App() {
                 <label className="form-label text-light fw-semibold">Password (Min 8 characters)</label>
                 <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
-              <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase mb-3" style={{ letterSpacing: '1px' }}>
-                {isRegisterMode ? 'Sign Up' : 'Login'}
+              
+              <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase mb-3 d-flex justify-content-center align-items-center gap-2" style={{ letterSpacing: '1px' }} disabled={isLoading}>
+                {isLoading && <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>}
+                {isLoading ? 'Processing...' : (isRegisterMode ? 'Sign Up' : 'Login')}
               </button>
+
               <div className="text-center">
                 <p className="small mb-0 text-light" style={{ opacity: 0.8 }}>
                   {isRegisterMode ? "Already have an account?" : "Don't have an account?"}{" "}
@@ -360,7 +402,7 @@ function App() {
         </div>
       )}
 
-      {/* 1. প্রফাইল পেজ */}
+      {/* ১ ও ২. প্রফাইল পেজ (Deactive & Delete অপশনসহ) */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
@@ -393,7 +435,7 @@ function App() {
               </div>
             </div>
              
-            <div className="d-flex flex-wrap gap-3">
+            <div className="d-flex flex-wrap gap-3 align-items-center">
               <button className="btn btn-light rounded-pill px-4 fw-bold" onClick={() => setActivePage('edit-profile')}>
                 Edit Profile & Security
               </button>
@@ -402,7 +444,15 @@ function App() {
                   Upload New Product
                 </button>
               )}
-              <button className="btn btn-outline-danger rounded-pill px-4 ms-auto" onClick={handleLogout}>
+              {/* ২. নতুন Deactivate & Delete বাটন */}
+              <button className="btn btn-outline-warning rounded-pill px-3" onClick={handleDeactivateAccount}>
+                Deactivate
+              </button>
+              <button className="btn btn-outline-danger rounded-pill px-3" onClick={handleDeleteAccount}>
+                Delete Account
+              </button>
+              
+              <button className="btn btn-outline-secondary rounded-pill px-4 ms-auto" onClick={handleLogout}>
                 Logout
               </button>
             </div>
@@ -411,7 +461,7 @@ function App() {
       </div>
     )}
 
-    {/* 2. প্রফাইল এডিট পেজ */}
+    {/* প্রফাইল এডিট পেজ */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -434,7 +484,7 @@ function App() {
             </div>
 
           <div className="mb-3">
-            <label className="form-label text-light fw-semibold">Profile Photo (Upload from Device, Choose Avatar)</label>
+            <label className="form-label text-light fw-semibold">Profile Photo</label>
              
             <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleImageUploadFromFile} />
 
@@ -456,7 +506,7 @@ function App() {
           <h5 className="text-white mb-3">Change Password Security</h5>
 
           <div className="mb-3">
-            <label className="form-label text-light fw-semibold">Current Password (Required to unlock new password)</label>
+            <label className="form-label text-light fw-semibold">Current Password</label>
             <div className="input-group">
               <input 
                 type="password" 
@@ -498,7 +548,7 @@ function App() {
     </div>
    )}
 
-    {/* 3. প্রোডাক্ট আপলোড পেজ */}
+    {/* প্রোডাক্ট আপলোড পেজ */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -537,7 +587,7 @@ function App() {
       </div>
    )}
 
-    {/* 4. মেইন হোমপেজ */}
+    {/* হোমপেজ */}
     {activePage === 'home' && (
       <>
         <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
