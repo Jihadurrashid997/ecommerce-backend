@@ -33,8 +33,11 @@ function App() {
   ]);
 
   const [allProductsList, setAllProductsList] = useState([
-    { id: 1, title: 'Signature Item 1', price: '999.00', category: 'Luxury', seller: 'John Seller', image: '' },
-    { id: 2, title: 'Signature Item 2', price: '999.00', category: 'Luxury', seller: 'John Seller', image: '' }
+    { id: 1, title: 'Signature Item 1', price: '999.00', category: 'Luxury', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' },
+    { id: 2, title: 'Signature Item 2', price: '999.00', category: 'Luxury', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
+    { id: 3, title: 'Classic Gold Watch', price: '1,499.00', category: 'Accessories', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300' },
+    { id: 4, title: 'Executive Leather Bag', price: '799.00', category: 'Fashion', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=300' },
+    { id: 5, title: 'Wireless Pro Pods', price: '299.00', category: 'Electronics', seller: 'JR Super Admin', image: 'https://images.unsplash.com/photo-1572569511254-dbbc6925c1a1?w=300' }
   ]);
 
   const [adminMessages, setAdminMessages] = useState([
@@ -81,12 +84,16 @@ function App() {
     const storedRole = localStorage.getItem('userRole');
     const savedProfiles = localStorage.getItem('profilesList');
     const savedMessages = localStorage.getItem('directMessages');
+    const savedProducts = localStorage.getItem('allProductsList');
 
     if (savedProfiles) {
       try { setProfilesList(JSON.parse(savedProfiles)); } catch (e) {}
     }
     if (savedMessages) {
       try { setDirectMessages(JSON.parse(savedMessages)); } catch (e) {}
+    }
+    if (savedProducts) {
+      try { setAllProductsList(JSON.parse(savedProducts)); } catch (e) {}
     }
 
     if (token && storedUser) {
@@ -111,6 +118,10 @@ function App() {
     localStorage.setItem('directMessages', JSON.stringify(directMessages));
   }, [directMessages]);
 
+  useEffect(() => {
+    localStorage.setItem('allProductsList', JSON.stringify(allProductsList));
+  }, [allProductsList]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userInfo');
@@ -120,6 +131,9 @@ function App() {
     setUserRole('customer');
     setActivePage('home');
     showToast("Logged out successfully!", "success");
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   };
 
   const handleDeactivateAccount = () => {
@@ -131,6 +145,26 @@ function App() {
       onConfirm: () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
         showToast("Account deactivated temporarily.", "info");
+        handleLogout();
+      }
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    setConfirmModal({
+      show: true,
+      title: 'Delete Account',
+      message: 'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      type: 'danger',
+      onConfirm: () => {
+        if (userInfo?.email === 'admin@jrstore.com') {
+          showToast("Cannot delete Super Admin account!", "danger");
+          setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
+          return;
+        }
+        setProfilesList(profilesList.filter(p => p.email !== userInfo?.email));
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
+        showToast("Account deleted successfully!", "success");
         handleLogout();
       }
     });
@@ -401,13 +435,13 @@ function App() {
 
               {isLoggedIn && (
                 <li className="nav-item">
-                  <a className="nav-link text-warning fw-semibold" href="#profile-chat" onClick={(e) => { 
+                  <a className="nav-link text-warning fw-semibold" href="#messenger" onClick={(e) => { 
                     e.preventDefault(); 
                     const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                     setChatTargetUser(otherProfile);
-                    setActivePage('profile-chat'); 
+                    setActivePage('messenger'); 
                   }}>
-                    💬 Profile Chat
+                    💬 Messenger
                   </a>
                 </li>
               )}
@@ -438,8 +472,8 @@ function App() {
                       <li><button className="dropdown-item text-warning" onClick={() => {
                         const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                         setChatTargetUser(otherProfile);
-                        setActivePage('profile-chat');
-                      }}>💬 Profile Chat</button></li>
+                        setActivePage('messenger');
+                      }}>💬 Messenger</button></li>
                       <li><hr className="dropdown-divider border-secondary" /></li>
                       <li><button className="dropdown-item text-danger" onClick={handleLogout}>Logout</button></li>
                     </ul>
@@ -508,13 +542,16 @@ function App() {
         </div>
       )}
 
-      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড */}
+      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড (ব্লু টিক সহ) */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
           <div className="bg-black p-4 border border-danger rounded-4 shadow-lg mb-5">
             <div className="d-flex justify-content-between align-items-center mb-4">
               <div>
-                <h2 className="fw-bold text-danger m-0">⚡ Super Admin Master Dashboard</h2>
+                <h2 className="fw-bold text-danger m-0 d-flex align-items-center gap-2">
+                  ⚡ Super Admin Master Dashboard 
+                  <span title="Verified Master Admin" style={{ color: '#0d6efd', fontSize: '20px' }}>✓</span>
+                </h2>
                 <p className="text-muted small mb-0">Control all users and product assets.</p>
               </div>
               <button className="btn btn-outline-light btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</button>
@@ -558,6 +595,7 @@ function App() {
                       <td className="d-flex align-items-center gap-2">
                         <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
                         {prof.name}
+                        {prof.role === 'admin' && <span style={{ color: '#0d6efd', fontWeight: 'bold' }} title="Verified Admin">✓</span>}
                       </td>
                       <td>{prof.email}</td>
                       <td><span className="badge bg-secondary text-uppercase">{prof.role}</span></td>
@@ -603,13 +641,12 @@ function App() {
         </div>
       )}
 
-      {/* অ্যাডমিন কেয়ার মেসেঞ্জার (উন্নত এবং বড় লোগোসহ) */}
+      {/* অ্যাডমিন কেয়ার মেসেঞ্জার */}
       {isLoggedIn && activePage === 'admin-support' && (
         <div className="container py-5">
           <div className="row justify-content-center">
             <div className="col-md-8 bg-black p-4 border border-info rounded-4 shadow-lg text-start">
               
-              {/* প্রিমিয়াম লোগো এবং হেডার সেকশন */}
               <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
                 <div className="d-flex align-items-center gap-3">
                   <div className="d-flex align-items-center justify-content-center shadow" style={{
@@ -655,13 +692,12 @@ function App() {
         </div>
       )}
 
-      {/* প্রোফাইল টু প্রোফাইল মেসেঞ্জার / চ্যাট (বড় ও স্মার্ট লোগোসহ) */}
-      {isLoggedIn && activePage === 'profile-chat' && (
+      {/* স্মার্ট মেসেঞ্জার পেজ */}
+      {isLoggedIn && activePage === 'messenger' && (
         <div className="container py-5">
           <div className="row justify-content-center">
             <div className="col-md-10 bg-black p-4 border border-warning rounded-4 shadow-lg text-start">
               
-              {/* প্রিমিয়াম লোগো এবং হেডার সেকশন */}
               <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
                 <div className="d-flex align-items-center gap-3">
                   <div className="d-flex align-items-center justify-content-center shadow" style={{
@@ -672,8 +708,8 @@ function App() {
                     💬
                   </div>
                   <div>
-                    <h3 className="fw-bold text-warning m-0 fs-2">Profile Chat & Check</h3>
-                    <p className="text-muted small mb-0">Connect and discuss products directly with other members securely.</p>
+                    <h3 className="fw-bold text-warning m-0 fs-2">Messenger</h3>
+                    <p className="text-muted small mb-0">Connect and discuss products directly with members securely.</p>
                   </div>
                 </div>
                 <button className="btn btn-sm btn-outline-light rounded-pill px-3" onClick={() => setActivePage('profile')}>Back</button>
@@ -681,7 +717,7 @@ function App() {
 
               <div className="row">
                 <div className="col-md-4 border-end border-secondary pe-3">
-                  <h6 className="text-light mb-3">Select Profile to Chat:</h6>
+                  <h6 className="text-light mb-3">Chats & Members:</h6>
                   <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                     {profilesList.filter(p => p.email !== userInfo?.email).map((prof, idx) => (
                       <div 
@@ -692,7 +728,9 @@ function App() {
                       >
                         <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} />
                         <div>
-                          <div style={{ fontSize: '14px' }}>{prof.name}</div>
+                          <div style={{ fontSize: '14px' }}>
+                            {prof.name} {prof.role === 'admin' && <span style={{ color: '#0d6efd' }}>✓</span>}
+                          </div>
                           <span style={{ fontSize: '10px' }} className="text-uppercase opacity-75">{prof.role}</span>
                         </div>
                       </div>
@@ -705,7 +743,9 @@ function App() {
                     <>
                       <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3">
                         <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <h5 className="text-white m-0">{chatTargetUser.name} <span className="badge bg-secondary fs-6 text-uppercase">{chatTargetUser.role}</span></h5>
+                        <h5 className="text-white m-0">
+                          {chatTargetUser.name} {chatTargetUser.role === 'admin' && <span style={{ color: '#0d6efd' }}>✓</span>} <span className="badge bg-secondary fs-6 text-uppercase">{chatTargetUser.role}</span>
+                        </h5>
                       </div>
 
                       <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #444' }}>
@@ -715,7 +755,7 @@ function App() {
                           const currentMsgs = directMessages[chatKey] || [];
 
                           if (currentMsgs.length === 0) {
-                            return <p className="text-muted text-center mt-5 small">No conversation yet with {chatTargetUser.name}. Start chatting below!</p>;
+                            return <p className="text-muted text-center mt-5 small">No conversation yet with {chatTargetUser.name}. Start messaging below!</p>;
                           }
 
                           return currentMsgs.map((msg, idx) => (
@@ -743,7 +783,7 @@ function App() {
                       </form>
                     </>
                   ) : (
-                    <div className="text-center text-muted my-auto">Please select a profile from the left.</div>
+                    <div className="text-center text-muted my-auto">Please select a member from the left.</div>
                   )}
                 </div>
               </div>
@@ -752,7 +792,7 @@ function App() {
         </div>
       )}
 
-      {/* প্রোফাইল পেজ */}
+      {/* প্রোফাইল পেজ (ডিলিট ও ডিঅ্যাক্টিভেট অপশনসহ) */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
@@ -774,6 +814,7 @@ function App() {
                 <div>
                   <h2 className="fw-bold mb-1 text-white d-flex align-items-center gap-2" style={{ letterSpacing: '1px' }}>
                     {userInfo?.name}
+                    {userRole === 'admin' && <span style={{ color: '#0d6efd', fontSize: '22px' }} title="Verified Admin">✓</span>}
                     <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', backgroundColor: 'rgba(13, 110, 253, 0.2)', color: '#0d6efd', border: '1px solid #0d6efd' }}>
                       ● Active Now
                     </span>
@@ -816,12 +857,15 @@ function App() {
               <button className="btn btn-outline-warning rounded-pill px-3" onClick={() => {
                 const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                 setChatTargetUser(otherProfile);
-                setActivePage('profile-chat');
+                setActivePage('messenger');
               }}>
-                💬 Profile Chat
+                💬 Messenger
               </button>
-              <button className="btn btn-outline-danger rounded-pill px-3" onClick={handleDeactivateAccount}>
+              <button className="btn btn-outline-warning rounded-pill px-3" onClick={handleDeactivateAccount}>
                 Deactivate
+              </button>
+              <button className="btn btn-outline-danger rounded-pill px-3" onClick={handleDeleteAccount}>
+                Delete Account
               </button>
               <button className="btn btn-outline-secondary rounded-pill px-4 ms-auto" onClick={handleLogout}>
                 Logout
@@ -979,14 +1023,16 @@ function App() {
                             <div className="d-flex align-items-center gap-3">
                               <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
                               <div>
-                                <h5 className="mb-1 text-white">{prof.name}</h5>
+                                <h5 className="mb-1 text-white">
+                                  {prof.name} {prof.role === 'admin' && <span style={{ color: '#0d6efd' }}>✓</span>}
+                                </h5>
                                 <span className="badge bg-secondary text-uppercase">{prof.role}</span>
                               </div>
                             </div>
                             {isLoggedIn && prof.email !== userInfo?.email && (
                               <button className="btn btn-sm btn-outline-warning rounded-pill" onClick={() => {
                                 setChatTargetUser(prof);
-                                setActivePage('profile-chat');
+                                setActivePage('messenger');
                               }}>Chat</button>
                             )}
                           </div>
@@ -1018,7 +1064,7 @@ function App() {
                                 else {
                                   const sellerProf = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                                   setChatTargetUser(sellerProf);
-                                  setActivePage('profile-chat');
+                                  setActivePage('messenger');
                                 }
                               }}>Discuss Product</button>
                             </div>
@@ -1050,7 +1096,7 @@ function App() {
                       } else {
                         const sellerProf = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                         setChatTargetUser(sellerProf);
-                        setActivePage('profile-chat');
+                        setActivePage('messenger');
                       }
                     }}>Discuss Product</button>
                   </div>
