@@ -22,6 +22,13 @@ function App() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
 
+  // সার্চ এবং মেসেজিং স্টেট
+  const [searchQuery, setSearchQuery] = useState('');
+  const [messages, setMessages] = useState([
+    { sender: 'Seller Support', text: 'Hello! Welcome to JR Store. How can I help you today?', time: '10:00 AM' }
+  ]);
+  const [newMessage, setNewMessage] = useState('');
+
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => {
@@ -64,7 +71,7 @@ function App() {
       
       setEditName(parsedUser.name || '');
       setEditPhone(parsedUser.phone || '');
-      setEditPhoto(parsedUser.photo || '');
+      setEditPhoto(parsedUser.photo || ''); // ফিক্সড: লগইন বা রিলোডের পর যাতে পিকচার হারিয়ে না যায়
     }
 
     return () => clearTimeout(timer);
@@ -150,7 +157,7 @@ function App() {
       ...userInfo,
       name: editName,
       phone: editPhone,
-      photo: editPhoto
+      photo: editPhoto // পার্মানেন্টলি ছবি সেভ রাখা হলো
     };
 
     if (newPassword) {
@@ -165,6 +172,16 @@ function App() {
 
     showToast("Profile updated successfully!", "success");
     setActivePage('profile');
+  };
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    const newMsgObj = { sender: userInfo?.name || 'Customer', text: newMessage, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    setMessages([...messages, newMsgObj]);
+    setNewMessage('');
+    showToast("Message sent!", "success");
   };
 
   const handleProductUpload = async (e) => {
@@ -191,11 +208,7 @@ function App() {
       const data = await response.json();
       if (response.ok) {
         showToast("Product uploaded successfully!", "success");
-        setProductTitle(''); 
-        setProductPrice(''); 
-        setProductCategory(''); 
-        setProductDescription(''); 
-        setProductImage('');
+        setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
       } else {
         showToast(data.message || "Failed to upload product", "danger");
       }
@@ -307,20 +320,42 @@ function App() {
         </div>
       )}
 
+      {/* ন্যাভবার */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
           <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
             <span style={{color:'#ddd'}}>JR</span> STORE
           </a>
+          
+          {/* সার্চ ইনপুট ফিল্ড (প্রোডাক্ট বা প্রোফাইল খোঁজার জন্য) */}
+          <div className="d-none d-md-flex mx-auto" style={{ width: '300px' }}>
+            <input 
+              type="text" 
+              className="form-control bg-dark text-white border-secondary rounded-pill px-3" 
+              placeholder="Search products or profiles..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+
           <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span className="navbar-toggler-icon"></span>
           </button>
+          
           <div className="collapse navbar-collapse" id="navbarNav">
             <ul className="navbar-nav ms-auto align-items-center py-2 py-lg-0">
               <li className="nav-item"><a className="nav-link text-light" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }}>Home</a></li>
-              <li className="nav-item"><a className="nav-link text-light" href="#new" onClick={(e) => e.preventDefault()}>New Arrivals</a></li>
-              <li className="nav-item"><a className="nav-link text-light" href="#collections" onClick={(e) => e.preventDefault()}>Collections</a></li>
               
+              {/* মেসেজিং অপশন */}
+              {isLoggedIn && (
+                <li className="nav-item">
+                  <a className="nav-link text-light position-relative" href="#messages" onClick={(e) => { e.preventDefault(); setActivePage('messages'); }}>
+                    Messages
+                    <span className="position-absolute top-2 start-100 translate-middle p-1 bg-primary border border-light rounded-circle"></span>
+                  </a>
+                </li>
+              )}
+
               <li className="nav-item mt-2 mt-lg-0">
                 {isLoggedIn ? (
                   <div className="dropdown ms-lg-3">
@@ -340,6 +375,7 @@ function App() {
                       {(userRole === 'seller' || userRole === 'admin') && (
                         <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Upload Product</button></li>
                       )}
+                      <li><button className="dropdown-item text-light" onClick={() => setActivePage('messages')}>Messages</button></li>
                       <li><hr className="dropdown-divider border-secondary" /></li>
                       <li><button className="dropdown-item text-danger" onClick={handleLogout}>Logout</button></li>
                     </ul>
@@ -355,6 +391,7 @@ function App() {
         </div>
       </nav>
 
+      {/* সাইন ইন / রেজিস্ট্রেশন মডাল */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
@@ -406,6 +443,42 @@ function App() {
         </div>
       )}
 
+      {/* মেসেজিং বা চ্যাট পেজ (কাস্টমার ও সেলারের যোগাযোগের জন্য) */}
+      {isLoggedIn && activePage === 'messages' && (
+        <div className="container py-5">
+          <div className="row justify-content-center">
+            <div className="col-md-8 bg-black p-4 border border-secondary rounded-4 shadow-lg text-start">
+              <h3 className="fw-bold text-white mb-3">💬 Customer & Seller Chat</h3>
+              <p className="text-muted small mb-4">Direct messaging for orders, custom requests, and support.</p>
+              
+              <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '350px', border: '1px solid #444' }}>
+                {messages.map((msg, index) => (
+                  <div key={index} className={`mb-3 p-3 rounded-3 ${msg.sender === (userInfo?.name || 'Customer') ? 'ms-auto bg-primary text-white' : 'bg-secondary text-dark'}`} style={{ maxWidth: '75%' }}>
+                    <div className="d-flex justify-content-between small fw-bold mb-1">
+                      <span>{msg.sender}</span>
+                      <span className="opacity-75" style={{ fontSize: '10px' }}>{msg.time}</span>
+                    </div>
+                    <p className="mb-0">{msg.text}</p>
+                  </div>
+                ))}
+              </div>
+
+              <form onSubmit={handleSendMessage} className="input-group">
+                <input 
+                  type="text" 
+                  className="form-control bg-dark text-white border-secondary" 
+                  placeholder="Type a message to seller/customer..." 
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                />
+                <button type="submit" className="btn btn-light px-4 fw-bold">Send</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* প্রোফাইল পেজ */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
@@ -473,6 +546,7 @@ function App() {
       </div>
     )}
 
+    {/* প্রফাইল এডিট পেজ */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -551,6 +625,7 @@ function App() {
     </div>
    )}
 
+    {/* প্রোডাক্ট আপলোড পেজ */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -589,6 +664,7 @@ function App() {
       </div>
    )}
 
+    {/* হোমপেজ */}
     {activePage === 'home' && (
       <>
         <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
@@ -602,6 +678,12 @@ function App() {
         </header>
 
         <div className="container py-5">
+          {searchQuery && (
+            <div className="mb-4 text-start text-white">
+              <h5>Search results for: "{searchQuery}"</h5>
+              <hr className="border-secondary" />
+            </div>
+          )}
           <div className="row g-4">
             {[1, 2, 3].map((i) => (
               <div className="col-md-4" key={i}>
@@ -610,9 +692,15 @@ function App() {
                     Image {i}
                   </div>
                   <div className="card-body text-center">
-                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>Signature Item</h5>
+                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>Signature Item {i}</h5>
                     <p className="text-light mb-4" style={{opacity: 0.8}}>$999.00</p>
-                    <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}}>View</button>
+                    <button className="btn btn-outline-light w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}} onClick={() => {
+                      if(!isLoggedIn) {
+                        setShowLoginModal(true);
+                      } else {
+                        setActivePage('messages');
+                      }
+                    }}>Contact Seller</button>
                   </div>
                 </motion.div>
               </div>
