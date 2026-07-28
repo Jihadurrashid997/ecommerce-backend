@@ -26,9 +26,11 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   
+  // ডিফল্ট কিছু ডেমো প্রোফাইল রাখা হয়েছে যাতে সার্চ করলে সহজেই পাওয়া যায়
   const [profilesList, setProfilesList] = useState([
     { name: 'JR Super Admin', role: 'admin', email: 'admin@jrstore.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
-    { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' }
+    { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
+    { name: 'Alice Customer', role: 'customer', email: 'alice@jrstore.com', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }
   ]);
 
   // প্ল্যাটফর্মের প্রোডাক্ট লিস্ট
@@ -37,13 +39,13 @@ function App() {
     { id: 2, title: 'Signature Item 2', price: '999.00', category: 'Luxury', seller: 'John Seller', image: '' }
   ]);
 
-  // ১. অ্যাডমিন কেয়ার মেসেজ স্টেট
+  // অ্যাডমিন কেয়ার মেসেজ স্টেট
   const [adminMessages, setAdminMessages] = useState([
     { sender: 'John Seller', text: 'Hello Admin, I need help regarding my store.', time: '10:00 AM' }
   ]);
   const [newAdminMessage, setNewAdminMessage] = useState('');
 
-  // ২. প্রোফাইল টু প্রোফাইল চ্যাট স্টেট (ফিক্সড: ইমেইল দিয়ে সঠিকভাবে মেসেজ ম্যাপ করা হয়েছে)
+  // প্রোফাইল টু প্রোফাইল চ্যাট স্টেট
   const [chatTargetUser, setChatTargetUser] = useState(null); 
   const [directMessages, setDirectMessages] = useState({}); 
   const [newDirectMessage, setNewDirectMessage] = useState('');
@@ -76,11 +78,20 @@ function App() {
   ];
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowWelcome(false), 4000);
+    const timer = setTimeout(() => setShowWelcome(false), 3000);
 
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('userInfo');
     const storedRole = localStorage.getItem('userRole');
+    const savedProfiles = localStorage.getItem('profilesList');
+    const savedMessages = localStorage.getItem('directMessages');
+
+    if (savedProfiles) {
+      try { setProfilesList(JSON.parse(savedProfiles)); } catch (e) {}
+    }
+    if (savedMessages) {
+      try { setDirectMessages(JSON.parse(savedMessages)); } catch (e) {}
+    }
 
     if (token && storedUser) {
       setIsLoggedIn(true);
@@ -91,17 +102,20 @@ function App() {
       setEditName(parsedUser.name || '');
       setEditPhone(parsedUser.phone || '');
       setEditPhoto(parsedUser.photo || ''); 
-      
-      setProfilesList(prev => {
-        if (!prev.some(p => p.email === parsedUser.email)) {
-          return [...prev, { name: parsedUser.name, role: storedRole, email: parsedUser.email, photo: parsedUser.photo }];
-        }
-        return prev;
-      });
     }
 
     return () => clearTimeout(timer);
   }, []);
+
+  // প্রোফাইল লিস্ট লোকালস্টোরেজে সেভ রাখা যাতে রিলোড দিলেও মুছে না যায়
+  useEffect(() => {
+    localStorage.setItem('profilesList', JSON.stringify(profilesList));
+  }, [profilesList]);
+
+  // মেসেজগুলো লোকালস্টোরেজে সিঙ্ক রাখা
+  useEffect(() => {
+    localStorage.setItem('directMessages', JSON.stringify(directMessages));
+  }, [directMessages]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -175,6 +189,10 @@ function App() {
 
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
     setUserInfo(updatedUser);
+    
+    // প্রোফাইল আপডেট করলে profilesList এও নাম ও ছবি আপডেট হবে
+    setProfilesList(prev => prev.map(p => p.email === updatedUser.email ? { ...p, name: editName, photo: editPhoto } : p));
+
     setCurrentPassword('');
     setNewPassword('');
     setIsCurrentPasswordValid(false);
@@ -197,7 +215,6 @@ function App() {
     showToast("Product removed by Admin!", "success");
   };
 
-  // অ্যাডমিন কেয়ার মেসেজ পাঠানোর ফাংশন
   const handleSendAdminMessage = (e) => {
     e.preventDefault();
     if (!newAdminMessage.trim()) return;
@@ -212,12 +229,12 @@ function App() {
     showToast("Message sent to Admin Support!", "success");
   };
 
-  // প্রোফাইল টু প্রোফাইল মেসেজ পাঠানোর সঠিক ফাংশন (দুই পক্ষের চ্যাট সিঙ্ক রাখার জন্য)
+  // প্রোফাইল টু প্রোফাইল মেসেজ ফিক্সড লজিক
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
 
-    // চ্যাট ইউনিক রাখার জন্য দুই ইউজারের ইমেইল দিয়ে একটি ইউনিক চ্যাট কি (Key) তৈরি করা হলো
+    // দুই ইউজারের ইমেইল সর্ট করে একটি ইউনিক চ্যাট কি তৈরি করা হচ্ছে, যাতে উভয়ের চ্যাট সিঙ্ক থাকে
     const userEmails = [userInfo.email, chatTargetUser.email].sort();
     const chatKey = `${userEmails[0]}_${userEmails[1]}`;
 
@@ -265,7 +282,7 @@ function App() {
       localStorage.setItem('token', 'dummy-token-jr');
       
       const role = (email === 'admin@jrstore.com') ? 'admin' : (isRegisterMode ? selectedRole : 'customer');
-      const userData = { name: name || (role === 'admin' ? 'JR Super Admin' : 'User'), email, password, role };
+      const userData = { name: name || (role === 'admin' ? 'JR Super Admin' : 'User'), email, password, role, photo: presetAvatars[0] };
       
       localStorage.setItem('userInfo', JSON.stringify(userData));
       localStorage.setItem('userRole', role);
@@ -276,13 +293,14 @@ function App() {
       setShowLoginModal(false);
       setName(''); setEmail(''); setPassword('');
 
+      // নতুন ইউজার রেজিস্টার বা লগইন করলে profilesList এ যুক্ত করা (যদি অলরেডি না থাকে)
       setProfilesList(prev => {
         if (!prev.some(p => p.email === userData.email)) {
           return [...prev, { name: userData.name, role: role, email: userData.email, photo: userData.photo }];
         }
         return prev;
       });
-    }, 1000);
+    }, 800);
   };
 
   if (showWelcome) {
@@ -294,16 +312,16 @@ function App() {
               key="splash-content"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)", transition: { duration: 1.2, ease: "easeInOut" }}}
+              exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)", transition: { duration: 1, ease: "easeInOut" }}}
               style={splashStyles.content}
             >
-              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.3, duration: 0.8, type: "spring", bounce: 0.4 }} style={splashStyles.logoWrapper}>
+              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.6, type: "spring", bounce: 0.4 }} style={splashStyles.logoWrapper}>
                 <div style={splashStyles.logoGlow}></div>
                 <span style={splashStyles.logoText}>JR</span>
               </motion.div>
-              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, duration: 0.5 }} style={splashStyles.title}>Welcome to JR STORE</motion.h1>
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ delay: 2, duration: 0.8 }} style={splashStyles.subtitle}>The Art of Shopping</motion.p>
-              <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 1.5, duration: 2.5, ease: "linear" }} style={splashStyles.progressBar} />
+              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.4 }} style={splashStyles.title}>Welcome to JR STORE</motion.h1>
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ delay: 1.2, duration: 0.5 }} style={splashStyles.subtitle}>The Art of Shopping</motion.p>
+              <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 1, duration: 1.8, ease: "linear" }} style={splashStyles.progressBar} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -312,7 +330,7 @@ function App() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }} style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }} style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}>
       
       {toast.show && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }}>
@@ -344,7 +362,7 @@ function App() {
       {/* ন্যাভবার */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
-          <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
+          <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
             <span style={{color:'#ddd'}}>JR</span> STORE
           </a>
           
@@ -374,7 +392,7 @@ function App() {
           
           <div className="collapse navbar-collapse" id="navbarNav">
             <ul className="navbar-nav ms-auto align-items-center py-2 py-lg-0">
-              <li className="nav-item"><a className="nav-link text-light" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }}>Home</a></li>
+              <li className="nav-item"><a className="nav-link text-light" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }}>Home</a></li>
               
               {isLoggedIn && userRole === 'admin' && (
                 <li className="nav-item">
@@ -921,11 +939,11 @@ function App() {
     {activePage === 'home' && (
       <>
         <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
-          <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.8}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '5px'}}>
+          <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.6}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '5px'}}>
             Pure Elegance
           </motion.h1>
-          <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.6, duration: 0.8}} className="lead fs-3 text-light" style={{opacity: 0.8}}>Discover our exclusive collection.</motion.p>
-          <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 1, duration: 0.5}}>
+          <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.4, duration: 0.6}} className="lead fs-3 text-light" style={{opacity: 0.8}}>Discover our exclusive collection.</motion.p>
+          <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 0.6, duration: 0.4}}>
             <button className="btn btn-light btn-lg mt-4 px-5 py-3 rounded-pill fw-bold text-uppercase" style={{letterSpacing: '1px'}}>Shop Now</button>
           </motion.div>
         </header>
@@ -983,7 +1001,7 @@ function App() {
                               <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" onClick={() => {
                                 if(!isLoggedIn) setShowLoginModal(true);
                                 else {
-                                  const sellerProf = profilesList.find(p => p.role === 'seller') || profilesList[0];
+                                  const sellerProf = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                                   setChatTargetUser(sellerProf);
                                   setActivePage('profile-chat');
                                 }
@@ -1004,7 +1022,7 @@ function App() {
           <div className="row g-4">
             {allProductsList.map((prod) => (
               <div className="col-md-4" key={prod.id}>
-                <motion.div initial={{y: 50, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.5}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
+                <motion.div initial={{y: 30, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.4}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
                   <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '300px', color:'#aaa', overflow: 'hidden' }}>
                     {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Image'}
                   </div>
@@ -1015,7 +1033,7 @@ function App() {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
                       } else {
-                        const sellerProf = profilesList.find(p => p.role === 'seller') || profilesList[0];
+                        const sellerProf = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                         setChatTargetUser(sellerProf);
                         setActivePage('profile-chat');
                       }
