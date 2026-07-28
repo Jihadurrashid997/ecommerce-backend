@@ -45,7 +45,6 @@ function App() {
     { id: 7, title: 'Smart Fitness Band', price: '199.00', category: 'Electronics', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=300' }
   ]);
 
-  // অ্যাডমিন প্যানেলের মেসেজ বা সাপোর্ট ইনবক্স (সরাসরি মাস্টার অ্যাডমিন প্যানেলে দেখাবে)
   const [adminMessages, setAdminMessages] = useState([
     { sender: 'John Seller', senderEmail: 'seller@jrstore.com', text: 'Hello Admin, I need help regarding my store products.', time: '10:00 AM' }
   ]);
@@ -196,7 +195,7 @@ function App() {
     }
   };
 
-  const handleProductFile}_{\e} = (e) => {
+  const handleProductFile = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
@@ -264,7 +263,6 @@ function App() {
     showToast("Product removed by Admin!", "success");
   };
 
-  // ইউজার থেকে অ্যাডমিন মাস্টার প্যানেলে মেসেজ পাঠানোর হ্যান্ডলার
   const handleSendAdminMessage = (e) => {
     e.preventDefault();
     if (!newAdminMessage.trim()) return;
@@ -426,7 +424,6 @@ function App() {
         </div>
       )}
 
-      {/* ইউজার প্রোফাইল ভিউ মডাল (সার্চ থেকে প্রোফাইলে ক্লিক করলে ওপেন হবে) */}
       {selectedProfileModalUser && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
@@ -458,7 +455,6 @@ function App() {
         </div>
       )}
 
-      {/* ন্যাভবার */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
           <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
@@ -558,7 +554,6 @@ function App() {
         </div>
       </nav>
 
-      {/* লগইন / রেজিস্ট্রেশন মডাল */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
@@ -627,7 +622,6 @@ function App() {
         </div>
       )}
 
-      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড (যেখানে ইউজার সাপোর্ট মেসেজগুলো সরাসরি চলে আসবে) */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
           <div className="bg-black p-4 border border-danger rounded-4 shadow-lg mb-5">
@@ -645,25 +639,24 @@ function App() {
             <div className="row g-4 mb-5">
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-muted uppercase">Total Users</h6>
+                  <h6 className="text-muted text-uppercase">Total Users</h6>
                   <h2 className="text-white fw-bold">{profilesList.length}</h2>
                 </div>
               </div>
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-muted uppercase">Total Products</h6>
+                  <h6 className="text-muted text-uppercase">Total Products</h6>
                   <h2 className="text-white fw-bold">{allProductsList.length}</h2>
                 </div>
               </div>
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-muted uppercase">Direct Messages</h6>
+                  <h6 className="text-muted text-uppercase">Direct Messages</h6>
                   <h2 className="text-info fw-bold">{adminMessages.length}</h2>
                 </div>
               </div>
             </div>
 
-            {/* ডাইরেক্ট ইনকামিং সাপোর্ট মেসেজ ফ্রম কাস্টমার/সেলার */}
             <h4 className="text-white mb-3">🛡️ Direct User Messages to Admin Panel</h4>
             <div className="bg-dark p-3 rounded-3 mb-5 overflow-auto shadow-inner" style={{ height: '280px', border: '1px solid #444' }}>
               {adminMessages.length === 0 ? (
@@ -744,7 +737,6 @@ function App() {
         </div>
       )}
 
-      {/* স্মার্ট মেসেঞ্জার পেজ */}
       {isLoggedIn && activePage === 'messenger' && (
         <div className="container py-5">
           <div className="row justify-content-center">
@@ -789,7 +781,6 @@ function App() {
                     ))}
                   </div>
 
-                  {/* ইউজারদের জন্য সুপার অ্যাডমিনকে সরাসরি মেসেজ পাঠানোর অপশন */}
                   {userRole !== 'admin' && (
                     <div className="mt-4 pt-3 border-top border-secondary">
                       <h6 className="text-info mb-2" style={{ fontSize: '13px' }}>🛡️ Need Help? Contact Admin:</h6>
@@ -863,7 +854,6 @@ function App() {
         </div>
       )}
 
-      {/* প্রোফাইল পেজ */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
@@ -944,7 +934,6 @@ function App() {
       </div>
     )}
 
-    {/* প্রোফাইল এডিট পেজ */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -1040,7 +1029,6 @@ function App() {
     </div>
    )}
 
-    {/* প্রোডাক্ট আপলোড পেজ (যেখানে ইমেজ লিংকের পাশাপাশি লোকাল ফাইল আপলোডের অপশনও আছে) */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -1080,7 +1068,6 @@ function App() {
       </div>
    )}
 
-    {/* হোমপেজ */}
     {activePage === 'home' && (
       <>
         <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
