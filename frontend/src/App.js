@@ -19,7 +19,6 @@ function App() {
   const [selectedRole, setSelectedRole] = useState('customer');
   const [isLoading, setIsLoading] = useState(false);
 
-  // পাসওয়ার্ড শো/হাইড করার জন্য স্টেট
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -27,14 +26,13 @@ function App() {
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
 
-  // সার্চ এবং প্রোফাইল লিস্ট
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   
   const [profilesList, setProfilesList] = useState([
-    { name: 'Jihadur Rashid', role: 'admin', email: 'jihadurrashid997@gmail.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
-    { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
-    { name: 'Alice Customer', role: 'customer', email: 'alice@jrstore.com', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }
+    { name: 'Jihadur Rashid', role: 'admin', email: 'jihadurrashid997@gmail.com', phone: '01700000000', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
+    { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', phone: '01800000000', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
+    { name: 'Alice Customer', role: 'customer', email: 'alice@jrstore.com', phone: '01900000000', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }
   ]);
 
   const [allProductsList, setAllProductsList] = useState([
@@ -47,14 +45,16 @@ function App() {
     { id: 7, title: 'Smart Fitness Band', price: '199.00', category: 'Electronics', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=300' }
   ]);
 
+  // অ্যাডমিন প্যানেলের মেসেজ বা সাপোর্ট ইনবক্স (সরাসরি মাস্টার অ্যাডমিন প্যানেলে দেখাবে)
   const [adminMessages, setAdminMessages] = useState([
-    { sender: 'John Seller', text: 'Hello Admin, I need help regarding my store.', time: '10:00 AM' }
+    { sender: 'John Seller', senderEmail: 'seller@jrstore.com', text: 'Hello Admin, I need help regarding my store products.', time: '10:00 AM' }
   ]);
   const [newAdminMessage, setNewAdminMessage] = useState('');
 
   const [chatTargetUser, setChatTargetUser] = useState(null); 
   const [directMessages, setDirectMessages] = useState({}); 
   const [newDirectMessage, setNewDirectMessage] = useState('');
+  const [selectedProfileModalUser, setSelectedProfileModalUser] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
@@ -83,7 +83,6 @@ function App() {
     "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
   ];
 
-  // ফেসবুকের হুবহু স্টাইলের রিয়েল ব্লু টিক কম্পোনেন্ট
   const FacebookBlueTick = () => (
     <span 
       title="Verified Master Admin" 
@@ -116,16 +115,12 @@ function App() {
     const savedProfiles = localStorage.getItem('profilesList');
     const savedMessages = localStorage.getItem('directMessages');
     const savedProducts = localStorage.getItem('allProductsList');
+    const savedAdminMsgs = localStorage.getItem('adminMessages');
 
-    if (savedProfiles) {
-      try { setProfilesList(JSON.parse(savedProfiles)); } catch (e) {}
-    }
-    if (savedMessages) {
-      try { setDirectMessages(JSON.parse(savedMessages)); } catch (e) {}
-    }
-    if (savedProducts) {
-      try { setAllProductsList(JSON.parse(savedProducts)); } catch (e) {}
-    }
+    if (savedProfiles) { try { setProfilesList(JSON.parse(savedProfiles)); } catch (e) {} }
+    if (savedMessages) { try { setDirectMessages(JSON.parse(savedMessages)); } catch (e) {} }
+    if (savedProducts) { try { setAllProductsList(JSON.parse(savedProducts)); } catch (e) {} }
+    if (savedAdminMsgs) { try { setAdminMessages(JSON.parse(savedAdminMsgs)); } catch (e) {} }
 
     if (token && storedUser) {
       setIsLoggedIn(true);
@@ -141,17 +136,10 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('profilesList', JSON.stringify(profilesList));
-  }, [profilesList]);
-
-  useEffect(() => {
-    localStorage.setItem('directMessages', JSON.stringify(directMessages));
-  }, [directMessages]);
-
-  useEffect(() => {
-    localStorage.setItem('allProductsList', JSON.stringify(allProductsList));
-  }, [allProductsList]);
+  useEffect(() => { localStorage.setItem('profilesList', JSON.stringify(profilesList)); }, [profilesList]);
+  useEffect(() => { localStorage.setItem('directMessages', JSON.stringify(directMessages)); }, [directMessages]);
+  useEffect(() => { localStorage.setItem('allProductsList', JSON.stringify(allProductsList)); }, [allProductsList]);
+  useEffect(() => { localStorage.setItem('adminMessages', JSON.stringify(adminMessages)); }, [adminMessages]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -162,9 +150,7 @@ function App() {
     setUserRole('customer');
     setActivePage('home');
     showToast("Logged out successfully!", "success");
-    setTimeout(() => {
-      window.location.reload();
-    }, 500);
+    setTimeout(() => { window.location.reload(); }, 500);
   };
 
   const handleDeactivateAccount = () => {
@@ -205,9 +191,16 @@ function App() {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditPhoto(reader.result); 
-      };
+      reader.onloadend = () => { setEditPhoto(reader.result); };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProductFile}_{\e} = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => { setProductImage(reader.result); };
       reader.readAsDataURL(file);
     }
   };
@@ -242,14 +235,12 @@ function App() {
       photo: editPhoto 
     };
 
-    if (newPassword) {
-      updatedUser.password = newPassword;
-    }
+    if (newPassword) { updatedUser.password = newPassword; }
 
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
     setUserInfo(updatedUser);
     
-    setProfilesList(prev => prev.map(p => p.email === updatedUser.email ? { ...p, name: editName, photo: editPhoto } : p));
+    setProfilesList(prev => prev.map(p => p.email === updatedUser.email ? { ...p, name: editName, phone: editPhone, photo: editPhoto } : p));
 
     setCurrentPassword('');
     setNewPassword('');
@@ -273,18 +264,20 @@ function App() {
     showToast("Product removed by Admin!", "success");
   };
 
+  // ইউজার থেকে অ্যাডমিন মাস্টার প্যানেলে মেসেজ পাঠানোর হ্যান্ডলার
   const handleSendAdminMessage = (e) => {
     e.preventDefault();
     if (!newAdminMessage.trim()) return;
 
     const newMsgObj = { 
       sender: userInfo?.name || 'User', 
+      senderEmail: userInfo?.email || 'user@store.com',
       text: newAdminMessage, 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     };
     setAdminMessages([...adminMessages, newMsgObj]);
     setNewAdminMessage('');
-    showToast("Message sent to Admin Support!", "success");
+    showToast("Message sent directly to Super Admin Master Panel!", "success");
   };
 
   const handleSendDirectMessage = (e) => {
@@ -355,6 +348,7 @@ function App() {
         email, 
         password, 
         role, 
+        phone: '01700000000',
         photo: presetAvatars[0] 
       };
       
@@ -369,7 +363,7 @@ function App() {
 
       setProfilesList(prev => {
         if (!prev.some(p => p.email === userData.email)) {
-          return [...prev, { name: userData.name, role: role, email: userData.email, photo: userData.photo }];
+          return [...prev, { name: userData.name, role: role, email: userData.email, phone: userData.phone, photo: userData.photo }];
         }
         return prev;
       });
@@ -432,6 +426,38 @@ function App() {
         </div>
       )}
 
+      {/* ইউজার প্রোফাইল ভিউ মডাল (সার্চ থেকে প্রোফাইলে ক্লিক করলে ওপেন হবে) */}
+      {selectedProfileModalUser && (
+        <div style={modalStyles.overlay}>
+          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
+            <button className="btn-close btn-close-white position-absolute top-0 end-0 m-3" onClick={() => setSelectedProfileModalUser(null)}></button>
+            
+            <div className="my-3">
+              <img src={selectedProfileModalUser.photo || presetAvatars[0]} alt="Profile" style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #555' }} />
+            </div>
+            <h4 className="fw-bold text-white d-flex align-items-center justify-content-center gap-2">
+              {selectedProfileModalUser.name}
+              {selectedProfileModalUser.role === 'admin' && <FacebookBlueTick />}
+            </h4>
+            <p className="text-muted small mb-1">{selectedProfileModalUser.email}</p>
+            <p className="text-light small mb-3">Phone: {selectedProfileModalUser.phone || 'N/A'}</p>
+            <span className="badge bg-secondary text-uppercase mb-4">{selectedProfileModalUser.role}</span>
+            
+            <div className="d-flex justify-content-center gap-2">
+              {isLoggedIn && selectedProfileModalUser.email !== userInfo?.email && (
+                <button className="btn btn-warning rounded-pill px-4 fw-bold text-dark" onClick={() => {
+                  const target = selectedProfileModalUser;
+                  setSelectedProfileModalUser(null);
+                  setChatTargetUser(target);
+                  setActivePage('messenger');
+                }}>💬 Chat Now</button>
+              )}
+              <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setSelectedProfileModalUser(null)}>Close</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* ন্যাভবার */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
@@ -439,24 +465,26 @@ function App() {
             <span style={{color:'#ddd'}}>JR</span> STORE
           </a>
           
-          <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '450px' }}>
+          <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '480px' }}>
             <select 
               className="form-select bg-dark text-white border-secondary rounded-pill text-center" 
               style={{ width: '130px', fontSize: '13px' }}
               value={searchType}
               onChange={(e) => setSearchType(e.target.value)}
             >
-              <option value="all">All Search</option>
+              <option value="all">Search All</option>
               <option value="product">Products</option>
               <option value="profile">Profiles</option>
             </select>
-            <input 
-              type="text" 
-              className="form-control bg-dark text-white border-secondary rounded-pill px-3" 
-              placeholder={searchType === 'profile' ? "Search user profiles..." : searchType === 'product' ? "Search products..." : "Search products & profiles..."}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <div className="position-relative flex-grow-1">
+              <input 
+                type="text" 
+                className="form-control bg-dark text-white border-secondary rounded-pill px-3" 
+                placeholder={searchType === 'profile' ? "Search profile..." : searchType === 'product' ? "Search product..." : "Search product & profile..."}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
 
           <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -471,14 +499,6 @@ function App() {
                 <li className="nav-item">
                   <a className="nav-link text-danger fw-bold" href="#admin-dashboard" onClick={(e) => { e.preventDefault(); setActivePage('admin-dashboard'); }}>
                     ⚡ Admin Master Panel
-                  </a>
-                </li>
-              )}
-
-              {isLoggedIn && (
-                <li className="nav-item">
-                  <a className="nav-link text-info fw-semibold" href="#admin-care" onClick={(e) => { e.preventDefault(); setActivePage('admin-support'); }}>
-                    🛡️ Admin Care
                   </a>
                 </li>
               )}
@@ -518,7 +538,6 @@ function App() {
                       {(userRole === 'seller' || userRole === 'admin') && (
                         <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Upload Product</button></li>
                       )}
-                      <li><button className="dropdown-item text-info" onClick={() => setActivePage('admin-support')}>🛡️ Admin Customer Care</button></li>
                       <li><button className="dropdown-item text-warning" onClick={() => {
                         const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                         setChatTargetUser(otherProfile);
@@ -608,7 +627,7 @@ function App() {
         </div>
       )}
 
-      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড */}
+      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড (যেখানে ইউজার সাপোর্ট মেসেজগুলো সরাসরি চলে আসবে) */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
           <div className="bg-black p-4 border border-danger rounded-4 shadow-lg mb-5">
@@ -618,7 +637,7 @@ function App() {
                   ⚡ Super Admin Master Dashboard 
                   <FacebookBlueTick />
                 </h2>
-                <p className="text-muted small mb-0">Control all users and product assets.</p>
+                <p className="text-muted small mb-0">Control all users, product assets, and direct customer messages.</p>
               </div>
               <button className="btn btn-outline-light btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</button>
             </div>
@@ -638,10 +657,28 @@ function App() {
               </div>
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-muted uppercase">Support Messages</h6>
+                  <h6 className="text-muted uppercase">Direct Messages</h6>
                   <h2 className="text-info fw-bold">{adminMessages.length}</h2>
                 </div>
               </div>
+            </div>
+
+            {/* ডাইরেক্ট ইনকামিং সাপোর্ট মেসেজ ফ্রম কাস্টমার/সেলার */}
+            <h4 className="text-white mb-3">🛡️ Direct User Messages to Admin Panel</h4>
+            <div className="bg-dark p-3 rounded-3 mb-5 overflow-auto shadow-inner" style={{ height: '280px', border: '1px solid #444' }}>
+              {adminMessages.length === 0 ? (
+                <p className="text-muted text-center mt-5 small">No incoming messages from users.</p>
+              ) : (
+                adminMessages.map((msg, index) => (
+                  <div key={index} className="mb-3 p-3 rounded-3 bg-secondary text-white" style={{ maxWidth: '80%' }}>
+                    <div className="d-flex justify-content-between small fw-bold mb-1 text-info">
+                      <span>{msg.sender} ({msg.senderEmail})</span>
+                      <span className="opacity-75" style={{ fontSize: '10px' }}>{msg.time}</span>
+                    </div>
+                    <p className="mb-0">{msg.text}</p>
+                  </div>
+                ))
+              )}
             </div>
 
             <h4 className="text-white mb-3">👥 User Profiles Management</h4>
@@ -658,9 +695,9 @@ function App() {
                 <tbody>
                   {profilesList.map((prof, idx) => (
                     <tr key={idx}>
-                      <td className="d-flex align-items-center gap-2">
+                      <td className="d-flex align-items-center gap-2" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
                         <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
-                        {prof.name}
+                        <span className="text-decoration-underline">{prof.name}</span>
                         {prof.role === 'admin' && <FacebookBlueTick />}
                       </td>
                       <td>{prof.email}</td>
@@ -702,57 +739,6 @@ function App() {
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* অ্যাডমিন কেয়ার মেসেঞ্জার */}
-      {isLoggedIn && activePage === 'admin-support' && (
-        <div className="container py-5">
-          <div className="row justify-content-center">
-            <div className="col-md-8 bg-black p-4 border border-info rounded-4 shadow-lg text-start">
-              
-              <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
-                <div className="d-flex align-items-center gap-3">
-                  <div className="d-flex align-items-center justify-content-center shadow" style={{
-                    width: '64px', height: '64px', borderRadius: '16px',
-                    background: 'linear-gradient(135deg, #0dcaf0 0%, #035b75 100%)',
-                    border: '2px solid rgba(13, 202, 240, 0.4)', fontSize: '32px'
-                  }}>
-                    🛡️
-                  </div>
-                  <div>
-                    <h3 className="fw-bold text-info m-0 fs-2">Admin Customer Care</h3>
-                    <p className="text-muted small mb-0">Direct 24/7 secure communication line with Super Admin.</p>
-                  </div>
-                </div>
-                <button className="btn btn-sm btn-outline-light rounded-pill px-3" onClick={() => setActivePage('profile')}>Back</button>
-              </div>
-              
-              <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto shadow-inner" style={{ height: '350px', border: '1px solid #444' }}>
-                {adminMessages.map((msg, index) => (
-                  <div key={index} className={`mb-3 p-3 rounded-3 ${msg.sender === (userInfo?.name || 'User') ? 'ms-auto bg-info text-dark fw-semibold' : 'bg-secondary text-white'}`} style={{ maxWidth: '75%' }}>
-                    <div className="d-flex justify-content-between small fw-bold mb-1">
-                      <span>{msg.sender}</span>
-                      <span className="opacity-75" style={{ fontSize: '10px' }}>{msg.time}</span>
-                    </div>
-                    <p className="mb-0">{msg.text}</p>
-                  </div>
-                ))}
-              </div>
-
-              <form onSubmit={handleSendAdminMessage} className="input-group">
-                <input 
-                  type="text" 
-                  className="form-control bg-dark text-white border-secondary py-3 px-4 rounded-start-pill" 
-                  placeholder="Type message for Admin Support..." 
-                  value={newAdminMessage}
-                  onChange={(e) => setNewAdminMessage(e.target.value)}
-                  required
-                />
-                <button type="submit" className="btn btn-info px-4 fw-bold text-dark rounded-end-pill">Send Message</button>
-              </form>
             </div>
           </div>
         </div>
@@ -802,16 +788,35 @@ function App() {
                       </div>
                     ))}
                   </div>
+
+                  {/* ইউজারদের জন্য সুপার অ্যাডমিনকে সরাসরি মেসেজ পাঠানোর অপশন */}
+                  {userRole !== 'admin' && (
+                    <div className="mt-4 pt-3 border-top border-secondary">
+                      <h6 className="text-info mb-2" style={{ fontSize: '13px' }}>🛡️ Need Help? Contact Admin:</h6>
+                      <form onSubmit={handleSendAdminMessage}>
+                        <input 
+                          type="text" 
+                          className="form-control form-control-sm bg-dark text-white border-secondary mb-2" 
+                          placeholder="Message to Admin Panel..." 
+                          value={newAdminMessage}
+                          onChange={(e) => setNewAdminMessage(e.target.value)}
+                          required
+                        />
+                        <button type="submit" className="btn btn-sm btn-info w-100 text-dark fw-bold">Send to Admin Panel</button>
+                      </form>
+                    </div>
+                  )}
                 </div>
 
                 <div className="col-md-8 ps-3 d-flex flex-column justify-content-between">
                   {chatTargetUser ? (
                     <>
-                      <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3">
+                      <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(chatTargetUser)}>
                         <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                         <h5 className="text-white m-0 d-flex align-items-center">
                           {chatTargetUser.name} {chatTargetUser.role === 'admin' && <FacebookBlueTick />} <span className="badge bg-secondary fs-6 text-uppercase ms-2">{chatTargetUser.role}</span>
                         </h5>
+                        <small className="text-muted ms-auto">View Profile</small>
                       </div>
 
                       <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #444' }}>
@@ -917,9 +922,6 @@ function App() {
                   🛍️ Upload New Product
                 </button>
               )}
-              <button className="btn btn-outline-info rounded-pill px-3" onClick={() => setActivePage('admin-support')}>
-                🛡️ Admin Care
-              </button>
               <button className="btn btn-outline-warning rounded-pill px-3" onClick={() => {
                 const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
                 setChatTargetUser(otherProfile);
@@ -1038,7 +1040,7 @@ function App() {
     </div>
    )}
 
-    {/* প্রোডাক্ট আপলোড পেজ */}
+    {/* প্রোডাক্ট আপলোড পেজ (যেখানে ইমেজ লিংকের পাশাপাশি লোকাল ফাইল আপলোডের অপশনও আছে) */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -1067,8 +1069,9 @@ function App() {
               <textarea className="form-control bg-dark text-white border-secondary" rows="3" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
             </div>
             <div className="mb-4">
-              <label className="form-label text-light fw-semibold">Image URL</label>
-              <input type="text" className="form-control bg-dark text-white border-secondary" value={productImage} onChange={(e) => setProductImage(e.target.value)} required />
+              <label className="form-label text-light fw-semibold">Product Image (Choose File or Enter URL)</label>
+              <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleProductFile} />
+              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Or paste image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
             </div>
             <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Publish Product</button>
           </form>
@@ -1097,12 +1100,12 @@ function App() {
               
               {(searchType === 'all' || searchType === 'profile') && (
                 <div className="my-4">
-                  <h6 className="text-muted text-uppercase mb-3">Matched Profiles</h6>
+                  <h6 className="text-muted text-uppercase mb-3">Matched Profiles (Click to view profile)</h6>
                   <div className="row g-3">
                     {profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
                         <div className="col-md-4" key={idx}>
-                          <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center justify-content-between">
+                          <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center justify-content-between" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
                             <div className="d-flex align-items-center gap-3">
                               <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
                               <div>
@@ -1112,12 +1115,10 @@ function App() {
                                 <span className="badge bg-secondary text-uppercase">{prof.role}</span>
                               </div>
                             </div>
-                            {isLoggedIn && prof.email !== userInfo?.email && (
-                              <button className="btn btn-sm btn-outline-warning rounded-pill" onClick={() => {
-                                setChatTargetUser(prof);
-                                setActivePage('messenger');
-                              }}>Chat</button>
-                            )}
+                            <button className="btn btn-sm btn-outline-light rounded-pill" onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProfileModalUser(prof);
+                            }}>View</button>
                           </div>
                         </div>
                       ))
