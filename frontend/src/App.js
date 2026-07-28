@@ -8,23 +8,18 @@ function App() {
   const [showLoginModal, setShowLoginModal] = useState(false); 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
 
-  // লগইন ও পেজ ন্যাভিগেশন স্টেট
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [userRole, setUserRole] = useState('customer');
   const [activePage, setActivePage] = useState('home'); 
 
-  // ইনপুট ফিল্ড ও রেজিস্ট্রেশন রোল স্টেট
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedRole, setSelectedRole] = useState('customer'); // নতুন: রেজিস্ট্রেশনে রোল সিলেক্ট
+  const [selectedRole, setSelectedRole] = useState('customer');
   const [isLoading, setIsLoading] = useState(false);
 
-  // কাস্টম টোস্ট নোটিফিকেশন স্টেট
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-
-  // কাস্টম কনফার্মেশন মডাল স্টেট (브라우জার অ্যালার্ট বাদ দেওয়ার জন্য)
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
 
   const showToast = (message, type = 'success') => {
@@ -34,16 +29,13 @@ function App() {
     }, 3500);
   };
 
-  // প্রফাইল এডিটিং স্টেট
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [editPhoto, setEditPhoto] = useState('');
-  
   const [isCurrentPasswordValid, setIsCurrentPasswordValid] = useState(false);
 
-  // প্রোডাক্ট আপলোড ফর্ম স্টেট
   const [productTitle, setProductTitle] = useState('');
   const [productPrice, setProductPrice] = useState('');
   const [productCategory, setProductCategory] = useState('');
@@ -89,7 +81,6 @@ function App() {
     showToast("Logged out successfully!", "success");
   };
 
-  // ফেসবুক স্টাইল ডিঅ্যাক্টিভ ও ডিলিট কনফার্মেশন (কাস্টম মডালের মাধ্যমে)
   const handleDeactivateAccount = () => {
     setConfirmModal({
       show: true,
@@ -97,7 +88,7 @@ function App() {
       message: 'Are you sure you want to temporarily deactivate your account? You can log back in anytime to reactivate it.',
       type: 'warning',
       onConfirm: () => {
-        setConfirmModal({ show: false });
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
         showToast("Account deactivated temporarily.", "info");
         handleLogout();
       }
@@ -111,7 +102,7 @@ function App() {
       message: 'WARNING: This will permanently delete your account and all data. This action cannot be undone!',
       type: 'danger',
       onConfirm: () => {
-        setConfirmModal({ show: false });
+        setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
         localStorage.clear();
         setIsLoggedIn(false);
         setUserInfo(null);
@@ -200,7 +191,11 @@ function App() {
       const data = await response.json();
       if (response.ok) {
         showToast("Product uploaded successfully!", "success");
-        setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setImage('');
+        setProductTitle(''); 
+        setProductPrice(''); 
+        setProductCategory(''); 
+        setProductDescription(''); 
+        setProductImage('');
       } else {
         showToast(data.message || "Failed to upload product", "danger");
       }
@@ -285,7 +280,6 @@ function App() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }} style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}>
       
-      {/* কাস্টম টোস্ট নোটিফিকেশন */}
       {toast.show && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }}>
           <motion.div 
@@ -300,24 +294,22 @@ function App() {
         </div>
       )}
 
-      {/* কাস্টম কনফার্মেশন মডাল (ব্রাউজার অ্যালার্ট বাদ দিয়ে সুন্দর পপআপ) */}
       {confirmModal.show && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center' }}>
             <h4 className="fw-bold text-white mb-3">{confirmModal.title}</h4>
             <p className="text-light mb-4" style={{ fontSize: '15px', opacity: 0.9 }}>{confirmModal.message}</p>
             <div className="d-flex justify-content-center gap-3">
-              <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setConfirmModal({ show: false })}>Cancel</button>
+              <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' })}>Cancel</button>
               <button className={`btn ${confirmModal.type === 'danger' ? 'btn-danger' : 'btn-warning'} rounded-pill px-4 fw-bold`} onClick={confirmModal.onConfirm}>Confirm</button>
             </div>
           </motion.div>
         </div>
       )}
 
-      {/* ন্যাভবার */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
-          <a className="navbar-brand fw-bold fs-3 text-white" href="#" onClick={() => setActivePage('home')} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
+          <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
             <span style={{color:'#ddd'}}>JR</span> STORE
           </a>
           <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -325,15 +317,14 @@ function App() {
           </button>
           <div className="collapse navbar-collapse" id="navbarNav">
             <ul className="navbar-nav ms-auto align-items-center py-2 py-lg-0">
-              <li className="nav-item"><a className="nav-link text-light" href="#" onClick={() => setActivePage('home')}>Home</a></li>
-              <li className="nav-item"><a className="nav-link text-light" href="#">New Arrivals</a></li>
-              <li className="nav-item"><a className="nav-link text-light" href="#">Collections</a></li>
+              <li className="nav-item"><a className="nav-link text-light" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); }}>Home</a></li>
+              <li className="nav-item"><a className="nav-link text-light" href="#new" onClick={(e) => e.preventDefault()}>New Arrivals</a></li>
+              <li className="nav-item"><a className="nav-link text-light" href="#collections" onClick={(e) => e.preventDefault()}>Collections</a></li>
               
               <li className="nav-item mt-2 mt-lg-0">
                 {isLoggedIn ? (
                   <div className="dropdown ms-lg-3">
                     <button className="btn btn-outline-light rounded-pill px-4 dropdown-toggle d-flex align-items-center gap-2 position-relative" type="button" data-bs-toggle="dropdown">
-                      {/* অনলাইন স্ট্যাটাস ডট (নীল = অনলাইন, লাল = অফলাইন) */}
                       <span style={{
                         position: 'absolute', top: '6px', left: '10px', width: '10px', height: '10px',
                         backgroundColor: isLoggedIn ? '#0d6efd' : '#dc3545', borderRadius: '50%', border: '2px solid #000'
@@ -364,7 +355,6 @@ function App() {
         </div>
       </nav>
 
-      {/* সাইন ইন / রেজিস্ট্রেশন মডাল (রোল সিলেকশন সহ) */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
@@ -380,7 +370,6 @@ function App() {
                     <label className="form-label text-light fw-semibold">Full Name</label>
                     <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} required />
                   </div>
-                  {/* নতুন: রেজিস্ট্রেশনের সময় অ্যাকাউন্ট টাইপ সিলেক্ট */}
                   <div className="mb-3 text-start">
                     <label className="form-label text-light fw-semibold">Select Account Type</label>
                     <select className="form-select bg-dark text-white border-secondary" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
@@ -417,7 +406,6 @@ function App() {
         </div>
       )}
 
-      {/* প্রফাইল পেজ (স্ট্যাটাস ডট সহ) */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
@@ -431,7 +419,6 @@ function App() {
                       <span className="fs-1 text-light">{userInfo?.name?.charAt(0) || 'U'}</span>
                     )}
                   </div>
-                  {/* প্রোফাইল পিকচারের ওপর একটিভ স্ট্যাটাস ইন্ডিকেটর */}
                   <span title={isLoggedIn ? "Online" : "Offline"} style={{
                     position: 'absolute', bottom: '5px', right: '5px', width: '16px', height: '16px',
                     backgroundColor: isLoggedIn ? '#0d6efd' : '#dc3545', borderRadius: '50%', border: '3px solid #000'
@@ -486,7 +473,6 @@ function App() {
       </div>
     )}
 
-    {/* প্রফাইল এডিট পেজ (নাম অলরেডি প্রি-ফিল বা বসানো থাকবে) */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -499,7 +485,7 @@ function App() {
 
           <form onSubmit={handleUpdateProfile}>
             <div className="mb-3">
-              <label className="form-label text-light fw-semibold">Full Name (Current name pre-filled)</label>
+              <label className="form-label text-light fw-semibold">Full Name</label>
               <input type="text" className="form-control bg-dark text-white border-secondary" value={editName} onChange={(e) => setEditName(e.target.value)} required />
             </div>
              
@@ -565,7 +551,6 @@ function App() {
     </div>
    )}
 
-    {/* প্রোডাক্ট আপলোড পেজ */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
@@ -604,7 +589,6 @@ function App() {
       </div>
    )}
 
-    {/* হোমপেজ */}
     {activePage === 'home' && (
       <>
         <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
