@@ -19,6 +19,11 @@ function App() {
   const [selectedRole, setSelectedRole] = useState('customer');
   const [isLoading, setIsLoading] = useState(false);
 
+  // পাসওয়ার্ড শো/হাইড করার জন্য স্টেট
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
 
@@ -27,7 +32,7 @@ function App() {
   const [searchType, setSearchType] = useState('all'); 
   
   const [profilesList, setProfilesList] = useState([
-    { name: 'JR Super Admin', role: 'admin', email: 'admin@jrstore.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
+    { name: 'Jihadur Rashid', role: 'admin', email: 'jihadurrashid997@gmail.com', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
     { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
     { name: 'Alice Customer', role: 'customer', email: 'alice@jrstore.com', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }
   ]);
@@ -37,7 +42,7 @@ function App() {
     { id: 2, title: 'Signature Item 2', price: '999.00', category: 'Luxury', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
     { id: 3, title: 'Classic Gold Watch', price: '1,499.00', category: 'Accessories', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300' },
     { id: 4, title: 'Executive Leather Bag', price: '799.00', category: 'Fashion', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=300' },
-    { id: 5, title: 'Wireless Pro Pods', price: '299.00', category: 'Electronics', seller: 'JR Super Admin', image: 'https://images.unsplash.com/photo-1572569511254-dbbc6925c1a1?w=300' },
+    { id: 5, title: 'Wireless Pro Pods', price: '299.00', category: 'Electronics', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1572569511254-dbbc6925c1a1?w=300' },
     { id: 6, title: 'Luxury Diamond Ring', price: '2,999.00', category: 'Jewelry', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=300' },
     { id: 7, title: 'Smart Fitness Band', price: '199.00', category: 'Electronics', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=300' }
   ]);
@@ -78,7 +83,7 @@ function App() {
     "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
   ];
 
-  // ফেসবুক স্টাইলের রিয়েল ব্লু টিক কম্পোনেন্ট (নীل ব্যাকগ্রাউন্ডে সাদা ঠিক চিহ্ন)
+  // ফেসবুকের হুবহু স্টাইলের রিয়েল ব্লু টিক কম্পোনেন্ট
   const FacebookBlueTick = () => (
     <span 
       title="Verified Master Admin" 
@@ -86,16 +91,16 @@ function App() {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '16px',
-        height: '16px',
-        backgroundColor: '#0866FF',
+        width: '15px',
+        height: '15px',
+        backgroundColor: '#1877F2',
         borderRadius: '50%',
         color: '#fff',
-        fontSize: '10px',
-        fontWeight: 'bold',
+        fontSize: '9px',
+        fontWeight: '900',
         marginLeft: '4px',
         verticalAlign: 'middle',
-        boxShadow: '0 0 2px rgba(8, 102, 255, 0.5)'
+        boxShadow: '0 0 2px rgba(24, 119, 242, 0.6)'
       }}
     >
       ✓
@@ -183,7 +188,7 @@ function App() {
       message: 'Are you sure you want to permanently delete your account? This action cannot be undone.',
       type: 'danger',
       onConfirm: () => {
-        if (userInfo?.email === 'admin@jrstore.com') {
+        if (userInfo?.email === 'jihadurrashid997@gmail.com') {
           showToast("Cannot delete Super Admin account!", "danger");
           setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
           return;
@@ -255,7 +260,7 @@ function App() {
   };
 
   const handleDeleteUserByAdmin = (emailToDelete) => {
-    if (emailToDelete === 'admin@jrstore.com') {
+    if (emailToDelete === 'jihadurrashid997@gmail.com') {
       showToast("Cannot delete Super Admin account!", "danger");
       return;
     }
@@ -324,6 +329,19 @@ function App() {
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
+
+    if (isRegisterMode && selectedRole === 'admin') {
+      showToast("Admin account cannot be created via registration!", "danger");
+      return;
+    }
+
+    if (!isRegisterMode && email === 'jihadurrashid997@gmail.com') {
+      if (password !== '252002051') {
+        showToast("Incorrect Password for Super Admin!", "danger");
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     setTimeout(() => {
@@ -331,8 +349,14 @@ function App() {
       showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
       localStorage.setItem('token', 'dummy-token-jr');
       
-      const role = (email === 'admin@jrstore.com') ? 'admin' : (isRegisterMode ? selectedRole : 'customer');
-      const userData = { name: name || (role === 'admin' ? 'JR Super Admin' : 'User'), email, password, role, photo: presetAvatars[0] };
+      const role = (email === 'jihadurrashid997@gmail.com' && password === '252002051') ? 'admin' : (isRegisterMode ? selectedRole : 'customer');
+      const userData = { 
+        name: name || (role === 'admin' ? 'Jihadur Rashid' : 'User'), 
+        email, 
+        password, 
+        role, 
+        photo: presetAvatars[0] 
+      };
       
       localStorage.setItem('userInfo', JSON.stringify(userData));
       localStorage.setItem('userRole', role);
@@ -536,18 +560,34 @@ function App() {
                     <select className="form-select bg-dark text-white border-secondary" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
                       <option value="customer">Customer Account</option>
                       <option value="seller">Seller Account</option>
-                      <option value="admin">Admin Account (Master)</option>
                     </select>
+                    <small className="text-muted mt-1 d-block" style={{ fontSize: '11px' }}>* Admin account registration is strictly prohibited.</small>
                   </div>
                 </>
               )}
               <div className="mb-3 text-start">
                 <label className="form-label text-light fw-semibold">Email address</label>
-                <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="admin@jrstore.com for Admin" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
               <div className="mb-4 text-start">
                 <label className="form-label text-light fw-semibold">Password</label>
-                <input type="password" className="form-control bg-dark text-white border-secondary" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <div className="input-group">
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    className="form-control bg-dark text-white border-secondary" 
+                    placeholder="Password" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    required 
+                  />
+                  <button 
+                    type="button" 
+                    className="btn btn-outline-secondary text-light" 
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? "🙈" : "👁️"}
+                  </button>
+                </div>
               </div>
               
               <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase mb-3 d-flex justify-content-center align-items-center gap-2" style={{ letterSpacing: '1px' }} disabled={isLoading}>
@@ -568,7 +608,7 @@ function App() {
         </div>
       )}
 
-      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড (ফেসবুক স্টাইল ব্লু টিক সহ) */}
+      {/* সুপার অ্যাডমিন মাস্টার ড্যাশবোর্ড */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
           <div className="bg-black p-4 border border-danger rounded-4 shadow-lg mb-5">
@@ -626,7 +666,7 @@ function App() {
                       <td>{prof.email}</td>
                       <td><span className="badge bg-secondary text-uppercase">{prof.role}</span></td>
                       <td>
-                        {prof.email !== 'admin@jrstore.com' && (
+                        {prof.email !== 'jihadurrashid997@gmail.com' && (
                           <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete User</button>
                         )}
                       </td>
@@ -873,8 +913,8 @@ function App() {
                 </button>
               )}
               {(userRole === 'seller' || userRole === 'admin') && (
-                <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setActivePage('upload')}>
-                  Upload New Product
+                <button className="btn btn-warning text-dark rounded-pill px-4 fw-bold" onClick={() => setActivePage('upload')}>
+                  🛍️ Upload New Product
                 </button>
               )}
               <button className="btn btn-outline-info rounded-pill px-3" onClick={() => setActivePage('admin-support')}>
@@ -948,7 +988,7 @@ function App() {
             <label className="form-label text-light fw-semibold">Current Password</label>
             <div className="input-group">
               <input 
-                type="password" 
+                type={showCurrentPassword ? "text" : "password"} 
                 className="form-control bg-dark text-white border-secondary" 
                 placeholder="Enter current password" 
                 value={currentPassword} 
@@ -957,6 +997,13 @@ function App() {
                   setIsCurrentPasswordValid(false); 
                 }} 
               />
+              <button 
+                type="button" 
+                className="btn btn-outline-secondary text-light" 
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+              >
+                {showCurrentPassword ? "🙈" : "👁️"}
+              </button>
               <button type="button" className="btn btn-outline-light" onClick={handleVerifyCurrentPassword}>Verify</button>
             </div>
             {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified!</small>}
@@ -964,14 +1011,24 @@ function App() {
 
           <div className="mb-4">
             <label className="form-label text-light fw-semibold">New Password</label>
-            <input 
-              type="password" 
-              className="form-control bg-dark text-white border-secondary" 
-              placeholder={isCurrentPasswordValid ? "Enter new password" : "Verify current password first..."} 
-              value={newPassword} 
-              onChange={(e) => setNewPassword(e.target.value)} 
-              disabled={!isCurrentPasswordValid} 
-            />
+            <div className="input-group">
+              <input 
+                type={showNewPassword ? "text" : "password"} 
+                className="form-control bg-dark text-white border-secondary" 
+                placeholder={isCurrentPasswordValid ? "Enter new password" : "Verify current password first..."} 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                disabled={!isCurrentPasswordValid} 
+              />
+              <button 
+                type="button" 
+                className="btn btn-outline-secondary text-light" 
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                disabled={!isCurrentPasswordValid}
+              >
+                {showNewPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
           </div>
 
           <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Save All Changes</button>
