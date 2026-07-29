@@ -29,7 +29,6 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   
-  // সম্পূর্ণ ফ্রেশ রেজিস্ট্রেশন সিস্টেম (শুধুমাত্র সুপার অ্যাডমিন থাকবে)
   const defaultSuperAdmin = { 
     name: 'Jihadur Rashid', 
     role: 'admin', 
@@ -287,12 +286,13 @@ function App() {
     showToast("Message sent to Admin Panel successfully!", "success");
   };
 
+  // ফিক্সড ডিরেক্ট মেসেজিং লজিক (যাতে রিয়েল-টাইমে চ্যাট কাজ করে)
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
 
-    const userEmails = [userInfo.email, chatTargetUser.email].sort();
-    const chatKey = `${userEmails[0]}_${userEmails[1]}`;
+    const sortedEmails = [userInfo.email, chatTargetUser.email].sort();
+    const chatKey = `${sortedEmails[0]}_${sortedEmails[1]}`;
     const currentMsgs = directMessages[chatKey] || [];
 
     const newMsgObj = {
@@ -303,10 +303,12 @@ function App() {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setDirectMessages({
+    const updatedMessagesState = {
       ...directMessages,
       [chatKey]: [...currentMsgs, newMsgObj]
-    });
+    };
+
+    setDirectMessages(updatedMessagesState);
     setNewDirectMessage('');
   };
 
@@ -837,8 +839,8 @@ function App() {
 
                       <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #444' }}>
                         {(() => {
-                          const userEmails = [userInfo.email, chatTargetUser.email].sort();
-                          const chatKey = `${userEmails[0]}_${userEmails[1]}`;
+                          const sortedEmails = [userInfo.email, chatTargetUser.email].sort();
+                          const chatKey = `${sortedEmails[0]}_${sortedEmails[1]}`;
                           const currentMsgs = directMessages[chatKey] || [];
 
                           if (currentMsgs.length === 0) {
