@@ -173,11 +173,12 @@ function App() {
     });
   };
 
+  // ইউজার অ্যাকাউন্ট ডিলিট করলে প্রোডাক্ট ও মেসেজ রিমুভ হবে, কিন্তু অ্যাডমিন প্যানেলে হিস্ট্রি/প্রোফাইল থেকে যাবে
   const handleDeleteAccount = () => {
     setConfirmModal({
       show: true,
       title: 'Delete Account',
-      message: 'Are you sure you want to permanently delete your account?',
+      message: 'Are you sure you want to delete your account? Your products and active chats will be removed, but your profile record will remain visible in the Admin Panel for logs.',
       type: 'danger',
       onConfirm: () => {
         if (userInfo?.email === 'jihadurrashid997@gmail.com') {
@@ -185,9 +186,26 @@ function App() {
           setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
           return;
         }
-        setProfilesList(profilesList.filter(p => p.email !== userInfo?.email));
+
+        const userEmail = userInfo?.email;
+
+        // প্রোডাক্ট রিমুভ করা
+        setAllProductsList(allProductsList.filter(p => p.seller !== userInfo?.name && p.seller !== userEmail));
+
+        // চ্যাট বা মেসেজ রিমুভ করা
+        const updatedMessages = { ...directMessages };
+        Object.keys(updatedMessages).forEach(key => {
+          if (key.includes(userEmail)) {
+            delete updatedMessages[key];
+          }
+        });
+        setDirectMessages(updatedMessages);
+
+        // প্রোফাইল লিস্ট থেকে পুরোপুরি মুছে না ফেলে স্ট্যাটাস ডিলিটেড বা নিষ্ক্রিয় করা বা লিস্টে রাখা যাতে অ্যাডমিন দেখতে পারে
+        setProfilesList(prev => prev.map(p => p.email === userEmail ? { ...p, isDeleted: true, name: `${p.name} (Deleted)` } : p));
+
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
-        showToast("Account deleted successfully!", "success");
+        showToast("Account deleted successfully! Profile log kept for Admin.", "success");
         handleLogout();
       }
     });
@@ -286,7 +304,6 @@ function App() {
     showToast("Message sent to Admin Panel successfully!", "success");
   };
 
-  // ফিক্সড ডিরেক্ট মেসেজিং লজিক (যাতে রিয়েল-টাইমে চ্যাট কাজ করে)
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
@@ -358,14 +375,17 @@ function App() {
       localStorage.setItem('token', 'jr-secure-token-2026');
       
       const role = (email === 'jihadurrashid997@gmail.com' && password === '252002051') ? 'admin' : (isRegisterMode ? selectedRole : 'customer');
+      const userName = name || (role === 'admin' ? 'Jihadur Rashid' : email.split('@')[0]);
+      
       const userData = { 
-        name: name || (role === 'admin' ? 'Jihadur Rashid' : email.split('@')[0]), 
+        name: userName, 
         email, 
         password, 
         role, 
         phone: '01700000000',
         photo: presetAvatars[0],
-        isVerified: true
+        isVerified: true,
+        isDeleted: false
       };
       
       localStorage.setItem('userInfo', JSON.stringify(userData));
@@ -377,11 +397,16 @@ function App() {
       setShowLoginModal(false);
       setName(''); setEmail(''); setPassword('');
 
+      // আপডেট বা নতুন প্রোফাইল লিস্টে সেভ করা (যাতে নাম বা ছবি পরিবর্তন করলে সাথে সাথে আপডেট হয়)
       setProfilesList(prev => {
-        if (!prev.some(p => p.email === userData.email)) {
+        const existingIndex = prev.findIndex(p => p.email === userData.email);
+        if (existingIndex >= 0) {
+          const updated = [...prev];
+          updated[existingIndex] = { ...updated[existingIndex], ...userData, isDeleted: false };
+          return updated;
+        } else {
           return [...prev, userData];
         }
-        return prev.map(p => p.email === userData.email ? userData : p);
       });
     }, 600);
   };
@@ -457,10 +482,10 @@ function App() {
             <p className="text-light small mb-1">Email: {selectedProfileModalUser.email}</p>
             <div className="mb-2"><EmailBadge email={selectedProfileModalUser.email} /></div>
             <p className="text-light small mb-3">Phone: {selectedProfileModalUser.phone || 'N/A'}</p>
-            <span className="badge bg-secondary text-uppercase mb-4">{selectedProfileModalUser.role}</span>
+            <span className="badge bg-secondary text-uppercase mb-4">{selectedProfileModalUser.isDeleted ? 'Account Deleted by User' : selectedProfileModalUser.role}</span>
             
             <div className="d-flex justify-content-center gap-2">
-              {isLoggedIn && selectedProfileModalUser.email !== userInfo?.email && (
+              {isLoggedIn && !selectedProfileModalUser.isDeleted && selectedProfileModalUser.email !== userInfo?.email && (
                 <button className="btn btn-warning rounded-pill px-4 fw-bold text-dark" onClick={() => {
                   const target = selectedProfileModalUser;
                   setSelectedProfileModalUser(null);
@@ -522,7 +547,7 @@ function App() {
                 <li className="nav-item">
                   <a className="nav-link text-warning fw-semibold" href="#messenger" onClick={(e) => { 
                     e.preventDefault(); 
-                    const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
+                    const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
                     setChatTargetUser(otherProfile);
                     setActivePage('messenger'); 
                   }}>
@@ -554,7 +579,7 @@ function App() {
                         <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Upload Product</button></li>
                       )}
                       <li><button className="dropdown-item text-warning" onClick={() => {
-                        const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
+                        const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
                         setChatTargetUser(otherProfile);
                         setActivePage('messenger');
                       }}>💬 Messenger</button></li>
@@ -720,7 +745,11 @@ function App() {
                         <span className="text-white">{prof.email}</span>
                         <EmailBadge email={prof.email} />
                       </td>
-                      <td><span className="badge bg-secondary text-uppercase">{prof.role}</span></td>
+                      <td>
+                        <span className={`badge ${prof.isDeleted ? 'bg-danger' : 'bg-secondary'} text-uppercase`}>
+                          {prof.isDeleted ? 'Deleted by User' : prof.role}
+                        </span>
+                      </td>
                       <td>
                         {prof.email !== 'jihadurrashid997@gmail.com' && (
                           <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete Profile</button>
@@ -789,7 +818,7 @@ function App() {
                 <div className="col-md-4 border-end border-secondary pe-3">
                   <h6 className="text-light mb-3 fw-bold">All Profiles:</h6>
                   <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                    {profilesList.filter(p => p.email !== userInfo?.email).map((prof, idx) => (
+                    {profilesList.filter(p => p.email !== userInfo?.email && !p.isDeleted).map((prof, idx) => (
                       <div 
                         key={idx} 
                         onClick={() => setChatTargetUser(prof)}
@@ -941,7 +970,7 @@ function App() {
                 </button>
               )}
               <button className="btn btn-outline-warning rounded-pill px-3" onClick={() => {
-                const otherProfile = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
+                const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
                 setChatTargetUser(otherProfile);
                 setActivePage('messenger');
               }}>
@@ -1117,8 +1146,8 @@ function App() {
                 <div className="my-4">
                   <h6 className="text-light text-uppercase mb-3" style={{ opacity: 0.8 }}>Matched Profiles</h6>
                   <div className="row g-3">
-                    {profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                      profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
+                    {profilesList.filter(p => !p.isDeleted && p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                      profilesList.filter(p => !p.isDeleted && p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
                         <div className="col-md-4" key={idx}>
                           <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center justify-content-between">
                             <div className="d-flex align-items-center gap-3" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
