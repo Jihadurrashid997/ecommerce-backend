@@ -29,25 +29,24 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   
-  const [profilesList, setProfilesList] = useState([
-    { name: 'Jihadur Rashid', role: 'admin', email: 'jihadurrashid997@gmail.com', phone: '01700000000', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' },
-    { name: 'John Seller', role: 'seller', email: 'seller@jrstore.com', phone: '01800000000', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
-    { name: 'Alice Customer', role: 'customer', email: 'alice@jrstore.com', phone: '01900000000', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150' }
-  ]);
+  // সম্পূর্ণ ফ্রেশ রেজিস্ট্রেশন সিস্টেম (শুধুমাত্র সুপার অ্যাডমিন থাকবে)
+  const defaultSuperAdmin = { 
+    name: 'Jihadur Rashid', 
+    role: 'admin', 
+    email: 'jihadurrashid997@gmail.com', 
+    phone: '01700000000', 
+    photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    isVerified: true 
+  };
+
+  const [profilesList, setProfilesList] = useState([defaultSuperAdmin]);
 
   const [allProductsList, setAllProductsList] = useState([
-    { id: 1, title: 'Signature Item 1', price: '999.00', category: 'Luxury', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' },
-    { id: 2, title: 'Signature Item 2', price: '999.00', category: 'Luxury', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
-    { id: 3, title: 'Classic Gold Watch', price: '1,499.00', category: 'Accessories', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300' },
-    { id: 4, title: 'Executive Leather Bag', price: '799.00', category: 'Fashion', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=300' },
-    { id: 5, title: 'Wireless Pro Pods', price: '299.00', category: 'Electronics', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1572569511254-dbbc6925c1a1?w=300' },
-    { id: 6, title: 'Luxury Diamond Ring', price: '2,999.00', category: 'Jewelry', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=300' },
-    { id: 7, title: 'Smart Fitness Band', price: '199.00', category: 'Electronics', seller: 'John Seller', image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=300' }
+    { id: 1, title: 'Signature Luxury Item', price: '999.00', category: 'Luxury', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' },
+    { id: 2, title: 'Classic Gold Watch', price: '1,499.00', category: 'Accessories', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300' }
   ]);
 
-  const [adminMessages, setAdminMessages] = useState([
-    { sender: 'John Seller', senderEmail: 'seller@jrstore.com', text: 'Hello Admin, I need help regarding my store products.', time: '10:00 AM' }
-  ]);
+  const [adminMessages, setAdminMessages] = useState([]);
   const [newAdminMessage, setNewAdminMessage] = useState('');
 
   const [chatTargetUser, setChatTargetUser] = useState(null); 
@@ -84,7 +83,7 @@ function App() {
 
   const FacebookBlueTick = () => (
     <span 
-      title="Verified Master Admin" 
+      title="Verified Original Master Admin" 
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -105,8 +104,17 @@ function App() {
     </span>
   );
 
+  const EmailBadge = ({ email }) => {
+    const isOriginal = email === 'jihadurrashid997@gmail.com' || email.endsWith('@jrstore.com') || email.includes('admin');
+    return (
+      <span className={`badge ${isOriginal ? 'bg-success' : 'bg-warning text-dark'} ms-2`} style={{ fontSize: '10px' }}>
+        {isOriginal ? '✓ Original Official' : '⚡ Registered User'}
+      </span>
+    );
+  };
+
   useEffect(() => {
-    const timer = setTimeout(() => setShowWelcome(false), 3000);
+    const timer = setTimeout(() => setShowWelcome(false), 2500);
 
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('userInfo');
@@ -149,7 +157,7 @@ function App() {
     setUserRole('customer');
     setActivePage('home');
     showToast("Logged out successfully!", "success");
-    setTimeout(() => { window.location.reload(); }, 500);
+    setTimeout(() => { window.location.reload(); }, 400);
   };
 
   const handleDeactivateAccount = () => {
@@ -170,7 +178,7 @@ function App() {
     setConfirmModal({
       show: true,
       title: 'Delete Account',
-      message: 'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      message: 'Are you sure you want to permanently delete your account?',
       type: 'danger',
       onConfirm: () => {
         if (userInfo?.email === 'jihadurrashid997@gmail.com') {
@@ -270,12 +278,13 @@ function App() {
     const newMsgObj = { 
       sender: userInfo?.name || 'User', 
       senderEmail: userInfo?.email || 'user@store.com',
+      senderPhoto: userInfo?.photo || presetAvatars[0],
       text: newAdminMessage, 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     };
     setAdminMessages([...adminMessages, newMsgObj]);
     setNewAdminMessage('');
-    showToast("Message sent directly to Super Admin Master Panel!", "success");
+    showToast("Message sent to Admin Panel successfully!", "success");
   };
 
   const handleSendDirectMessage = (e) => {
@@ -289,6 +298,7 @@ function App() {
     const newMsgObj = {
       sender: userInfo.name,
       senderEmail: userInfo.email,
+      senderPhoto: userInfo.photo || presetAvatars[0],
       text: newDirectMessage,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
@@ -302,6 +312,11 @@ function App() {
 
   const handleProductUpload = async (e) => {
     e.preventDefault();
+    if (!productTitle || !productPrice || !productCategory) {
+      showToast("Please fill all required product fields!", "danger");
+      return;
+    }
+
     const newProd = {
       id: Date.now(),
       title: productTitle,
@@ -309,7 +324,7 @@ function App() {
       category: productCategory,
       description: productDescription,
       image: productImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300',
-      seller: userInfo?.name
+      seller: userInfo?.name || 'Admin'
     };
 
     setAllProductsList([newProd, ...allProductsList]);
@@ -321,8 +336,8 @@ function App() {
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
 
-    if (isRegisterMode && selectedRole === 'admin') {
-      showToast("Admin account cannot be created via registration!", "danger");
+    if (isRegisterMode && selectedRole === 'admin' && email !== 'jihadurrashid997@gmail.com') {
+      showToast("Admin account registration is restricted!", "danger");
       return;
     }
 
@@ -338,16 +353,17 @@ function App() {
     setTimeout(() => {
       setIsLoading(false);
       showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
-      localStorage.setItem('token', 'dummy-token-jr');
+      localStorage.setItem('token', 'jr-secure-token-2026');
       
       const role = (email === 'jihadurrashid997@gmail.com' && password === '252002051') ? 'admin' : (isRegisterMode ? selectedRole : 'customer');
       const userData = { 
-        name: name || (role === 'admin' ? 'Jihadur Rashid' : 'User'), 
+        name: name || (role === 'admin' ? 'Jihadur Rashid' : email.split('@')[0]), 
         email, 
         password, 
         role, 
         phone: '01700000000',
-        photo: presetAvatars[0] 
+        photo: presetAvatars[0],
+        isVerified: true
       };
       
       localStorage.setItem('userInfo', JSON.stringify(userData));
@@ -361,11 +377,11 @@ function App() {
 
       setProfilesList(prev => {
         if (!prev.some(p => p.email === userData.email)) {
-          return [...prev, { name: userData.name, role: role, email: userData.email, phone: userData.phone, photo: userData.photo }];
+          return [...prev, userData];
         }
-        return prev;
+        return prev.map(p => p.email === userData.email ? userData : p);
       });
-    }, 800);
+    }, 600);
   };
 
   if (showWelcome) {
@@ -377,16 +393,16 @@ function App() {
               key="splash-content"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)", transition: { duration: 1, ease: "easeInOut" }}}
+              exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)", transition: { duration: 0.8, ease: "easeInOut" }}}
               style={splashStyles.content}
             >
-              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.6, type: "spring", bounce: 0.4 }} style={splashStyles.logoWrapper}>
+              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5, type: "spring", bounce: 0.4 }} style={splashStyles.logoWrapper}>
                 <div style={splashStyles.logoGlow}></div>
                 <span style={splashStyles.logoText}>JR</span>
               </motion.div>
-              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.4 }} style={splashStyles.title}>Welcome to JR STORE</motion.h1>
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ delay: 1.2, duration: 0.5 }} style={splashStyles.subtitle}>The Art of Shopping</motion.p>
-              <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 1, duration: 1.8, ease: "linear" }} style={splashStyles.progressBar} />
+              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.4 }} style={splashStyles.title}>Welcome to JR STORE</motion.h1>
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.9 }} transition={{ delay: 0.9, duration: 0.4 }} style={splashStyles.subtitle}>Official Online Marketplace</motion.p>
+              <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 0.8, duration: 1.4, ease: "linear" }} style={splashStyles.progressBar} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -395,7 +411,7 @@ function App() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }} style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}>
       
       {toast.show && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }}>
@@ -436,7 +452,8 @@ function App() {
               {selectedProfileModalUser.name}
               {selectedProfileModalUser.role === 'admin' && <FacebookBlueTick />}
             </h4>
-            <p className="text-muted small mb-1">{selectedProfileModalUser.email}</p>
+            <p className="text-light small mb-1">Email: {selectedProfileModalUser.email}</p>
+            <div className="mb-2"><EmailBadge email={selectedProfileModalUser.email} /></div>
             <p className="text-light small mb-3">Phone: {selectedProfileModalUser.phone || 'N/A'}</p>
             <span className="badge bg-secondary text-uppercase mb-4">{selectedProfileModalUser.role}</span>
             
@@ -458,7 +475,7 @@ function App() {
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
         <div className="container">
           <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
-            <span style={{color:'#ddd'}}>JR</span> STORE
+            <span style={{color:'#fff'}}>JR</span> STORE
           </a>
           
           <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '480px' }}>
@@ -518,13 +535,13 @@ function App() {
                     <button className="btn btn-outline-light rounded-pill px-4 dropdown-toggle d-flex align-items-center gap-2 position-relative" type="button" data-bs-toggle="dropdown">
                       <span style={{
                         position: 'absolute', top: '6px', left: '10px', width: '10px', height: '10px',
-                        backgroundColor: isLoggedIn ? '#0d6efd' : '#dc3545', borderRadius: '50%', border: '2px solid #000'
+                        backgroundColor: '#0d6efd', borderRadius: '50%', border: '2px solid #000'
                       }}></span>
                       
                       {userInfo?.photo ? (
                         <img src={userInfo.photo} alt="Profile" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', marginLeft: '8px' }} />
                       ) : null}
-                      <span style={{ marginLeft: userInfo?.photo ? '0' : '10px' }}>{userInfo?.name || 'My Account'}</span>
+                      <span style={{ marginLeft: userInfo?.photo ? '0' : '10px', color: '#fff' }}>{userInfo?.name || 'My Account'}</span>
                     </button>
                     <ul className="dropdown-menu dropdown-menu-dark bg-black border-secondary">
                       <li><button className="dropdown-item text-light" onClick={() => setActivePage('profile')}>My Profile</button></li>
@@ -575,13 +592,13 @@ function App() {
                       <option value="customer">Customer Account</option>
                       <option value="seller">Seller Account</option>
                     </select>
-                    <small className="text-muted mt-1 d-block" style={{ fontSize: '11px' }}>* Admin account registration is strictly prohibited.</small>
                   </div>
                 </>
               )}
               <div className="mb-3 text-start">
                 <label className="form-label text-light fw-semibold">Email address</label>
                 <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <small className="text-info mt-1 d-block" style={{ fontSize: '11px' }}>* Official emails like admin are verified automatically.</small>
               </div>
               <div className="mb-4 text-start">
                 <label className="form-label text-light fw-semibold">Password</label>
@@ -610,9 +627,9 @@ function App() {
               </button>
 
               <div className="text-center">
-                <p className="small mb-0 text-light" style={{ opacity: 0.8 }}>
+                <p className="small mb-0 text-light" style={{ opacity: 0.9 }}>
                   {isRegisterMode ? "Already have an account?" : "Don't have an account?"}{" "}
-                  <span style={{ color: '#fff', cursor: 'pointer', textDecoration: 'underline', fontWeight: 'bold' }} onClick={() => setIsRegisterMode(!isRegisterMode)}>
+                  <span style={{ color: '#ffc107', cursor: 'pointer', textDecoration: 'underline', fontWeight: 'bold' }} onClick={() => setIsRegisterMode(!isRegisterMode)}>
                     {isRegisterMode ? "Sign In" : "Register here"}
                   </span>
                 </p>
@@ -631,7 +648,7 @@ function App() {
                   ⚡ Super Admin Master Dashboard 
                   <FacebookBlueTick />
                 </h2>
-                <p className="text-muted small mb-0">Control all users, product assets, and direct customer messages.</p>
+                <p className="text-light small mb-0">Control all user registrations, products, and direct messages.</p>
               </div>
               <button className="btn btn-outline-light btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</button>
             </div>
@@ -639,36 +656,40 @@ function App() {
             <div className="row g-4 mb-5">
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-muted text-uppercase">Total Users</h6>
+                  <h6 className="text-light text-uppercase">Total Profiles</h6>
                   <h2 className="text-white fw-bold">{profilesList.length}</h2>
                 </div>
               </div>
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-muted text-uppercase">Total Products</h6>
+                  <h6 className="text-light text-uppercase">Total Products</h6>
                   <h2 className="text-white fw-bold">{allProductsList.length}</h2>
                 </div>
               </div>
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-muted text-uppercase">Direct Messages</h6>
+                  <h6 className="text-light text-uppercase">Direct Messages</h6>
                   <h2 className="text-info fw-bold">{adminMessages.length}</h2>
                 </div>
               </div>
             </div>
 
-            <h4 className="text-white mb-3">🛡️ Direct User Messages to Admin Panel</h4>
-            <div className="bg-dark p-3 rounded-3 mb-5 overflow-auto shadow-inner" style={{ height: '280px', border: '1px solid #444' }}>
+            <h4 className="text-white mb-3">🛡️ Incoming Messages from Profiles</h4>
+            <div className="bg-dark p-3 rounded-3 mb-5 overflow-auto shadow-inner" style={{ height: '300px', border: '1px solid #444' }}>
               {adminMessages.length === 0 ? (
-                <p className="text-muted text-center mt-5 small">No incoming messages from users.</p>
+                <p className="text-light text-center mt-5 small">No incoming messages from users.</p>
               ) : (
                 adminMessages.map((msg, index) => (
-                  <div key={index} className="mb-3 p-3 rounded-3 bg-secondary text-white" style={{ maxWidth: '80%' }}>
-                    <div className="d-flex justify-content-between small fw-bold mb-1 text-info">
-                      <span>{msg.sender} ({msg.senderEmail})</span>
-                      <span className="opacity-75" style={{ fontSize: '10px' }}>{msg.time}</span>
+                  <div key={index} className="mb-3 p-3 rounded-3 bg-secondary text-white border border-secondary" style={{ maxWidth: '85%' }}>
+                    <div className="d-flex align-items-center justify-content-between mb-2">
+                      <div className="d-flex align-items-center gap-2">
+                        <img src={msg.senderPhoto || presetAvatars[0]} alt="Sender" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <span className="fw-bold text-warning">{msg.sender}</span>
+                        <span className="small text-light">({msg.senderEmail})</span>
+                      </div>
+                      <span className="text-light" style={{ fontSize: '11px' }}>{msg.time}</span>
                     </div>
-                    <p className="mb-0">{msg.text}</p>
+                    <p className="mb-0 text-white" style={{ fontSize: '15px' }}>{msg.text}</p>
                   </div>
                 ))
               )}
@@ -680,7 +701,7 @@ function App() {
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Email</th>
+                    <th>Email & Status</th>
                     <th>Role</th>
                     <th>Action</th>
                   </tr>
@@ -688,16 +709,19 @@ function App() {
                 <tbody>
                   {profilesList.map((prof, idx) => (
                     <tr key={idx}>
-                      <td className="d-flex align-items-center gap-2" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
-                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <span className="text-decoration-underline">{prof.name}</span>
+                      <td className="d-flex align-items-center gap-2 text-white" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
+                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <span className="text-decoration-underline fw-bold">{prof.name}</span>
                         {prof.role === 'admin' && <FacebookBlueTick />}
                       </td>
-                      <td>{prof.email}</td>
+                      <td>
+                        <span className="text-white">{prof.email}</span>
+                        <EmailBadge email={prof.email} />
+                      </td>
                       <td><span className="badge bg-secondary text-uppercase">{prof.role}</span></td>
                       <td>
                         {prof.email !== 'jihadurrashid997@gmail.com' && (
-                          <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete User</button>
+                          <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete Profile</button>
                         )}
                       </td>
                     </tr>
@@ -711,7 +735,7 @@ function App() {
               <table className="table table-dark table-striped border border-secondary align-middle">
                 <thead>
                   <tr>
-                    <th>Product Title</th>
+                    <th>Title</th>
                     <th>Category</th>
                     <th>Price</th>
                     <th>Seller</th>
@@ -721,10 +745,10 @@ function App() {
                 <tbody>
                   {allProductsList.map((prod) => (
                     <tr key={prod.id}>
-                      <td className="fw-bold">{prod.title}</td>
-                      <td>{prod.category}</td>
-                      <td>${prod.price}</td>
-                      <td>{prod.seller || 'Admin'}</td>
+                      <td className="fw-bold text-white">{prod.title}</td>
+                      <td className="text-light">{prod.category}</td>
+                      <td className="text-light">${prod.price}</td>
+                      <td className="text-light">{prod.seller || 'Admin'}</td>
                       <td>
                         <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteProductByAdmin(prod.id)}>Remove Product</button>
                       </td>
@@ -752,8 +776,8 @@ function App() {
                     💬
                   </div>
                   <div>
-                    <h3 className="fw-bold text-warning m-0 fs-2">Messenger</h3>
-                    <p className="text-muted small mb-0">Connect and discuss products directly with members securely.</p>
+                    <h3 className="fw-bold text-warning m-0 fs-2">Messenger Chat</h3>
+                    <p className="text-light small mb-0" style={{ opacity: 0.9 }}>Chat instantly and securely with any profile.</p>
                   </div>
                 </div>
                 <button className="btn btn-sm btn-outline-light rounded-pill px-3" onClick={() => setActivePage('profile')}>Back</button>
@@ -761,13 +785,13 @@ function App() {
 
               <div className="row">
                 <div className="col-md-4 border-end border-secondary pe-3">
-                  <h6 className="text-light mb-3">Chats & Members:</h6>
+                  <h6 className="text-light mb-3 fw-bold">All Profiles:</h6>
                   <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                     {profilesList.filter(p => p.email !== userInfo?.email).map((prof, idx) => (
                       <div 
                         key={idx} 
                         onClick={() => setChatTargetUser(prof)}
-                        className={`p-2 rounded-3 d-flex align-items-center gap-2 cursor-pointer ${chatTargetUser?.email === prof.email ? 'bg-warning text-dark fw-bold' : 'bg-dark text-white'}`}
+                        className={`p-2 rounded-3 d-flex align-items-center gap-2 ${chatTargetUser?.email === prof.email ? 'bg-warning text-dark fw-bold' : 'bg-dark text-white border border-secondary'}`}
                         style={{ cursor: 'pointer' }}
                       >
                         <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} />
@@ -783,12 +807,12 @@ function App() {
 
                   {userRole !== 'admin' && (
                     <div className="mt-4 pt-3 border-top border-secondary">
-                      <h6 className="text-info mb-2" style={{ fontSize: '13px' }}>🛡️ Need Help? Contact Admin:</h6>
+                      <h6 className="text-info mb-2 fw-bold" style={{ fontSize: '13px' }}>🛡️ Send Direct Message to Admin:</h6>
                       <form onSubmit={handleSendAdminMessage}>
                         <input 
                           type="text" 
                           className="form-control form-control-sm bg-dark text-white border-secondary mb-2" 
-                          placeholder="Message to Admin Panel..." 
+                          placeholder="Type message to admin..." 
                           value={newAdminMessage}
                           onChange={(e) => setNewAdminMessage(e.target.value)}
                           required
@@ -803,11 +827,12 @@ function App() {
                   {chatTargetUser ? (
                     <>
                       <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(chatTargetUser)}>
-                        <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <h5 className="text-white m-0 d-flex align-items-center">
-                          {chatTargetUser.name} {chatTargetUser.role === 'admin' && <FacebookBlueTick />} <span className="badge bg-secondary fs-6 text-uppercase ms-2">{chatTargetUser.role}</span>
+                        <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <h5 className="text-white m-0 d-flex align-items-center gap-1">
+                          {chatTargetUser.name} {chatTargetUser.role === 'admin' && <FacebookBlueTick />} 
+                          <span className="badge bg-secondary fs-6 text-uppercase ms-2">{chatTargetUser.role}</span>
                         </h5>
-                        <small className="text-muted ms-auto">View Profile</small>
+                        <small className="text-warning ms-auto">View Profile</small>
                       </div>
 
                       <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #444' }}>
@@ -817,7 +842,7 @@ function App() {
                           const currentMsgs = directMessages[chatKey] || [];
 
                           if (currentMsgs.length === 0) {
-                            return <p className="text-muted text-center mt-5 small">No conversation yet with {chatTargetUser.name}. Start messaging below!</p>;
+                            return <p className="text-light text-center mt-5 small" style={{ opacity: 0.7 }}>No conversation yet with {chatTargetUser.name}. Send your first message below!</p>;
                           }
 
                           return currentMsgs.map((msg, idx) => (
@@ -836,7 +861,7 @@ function App() {
                         <input 
                           type="text" 
                           className="form-control bg-dark text-white border-secondary py-2" 
-                          placeholder={`Message ${chatTargetUser.name}...`} 
+                          placeholder={`Type message to ${chatTargetUser.name}...`} 
                           value={newDirectMessage}
                           onChange={(e) => setNewDirectMessage(e.target.value)}
                           required
@@ -845,7 +870,7 @@ function App() {
                       </form>
                     </>
                   ) : (
-                    <div className="text-center text-muted my-auto">Please select a member from the left.</div>
+                    <div className="text-center text-light my-auto">Please select a profile from the left list to chat.</div>
                   )}
                 </div>
               </div>
@@ -880,8 +905,9 @@ function App() {
                       ● Active Now
                     </span>
                   </h2>
-                  <p className="text-light mb-0" style={{ opacity: 0.8 }}>{userInfo?.email}</p>
-                  <span className={`badge ${userRole === 'admin' ? 'bg-danger' : 'bg-light text-dark'} text-uppercase mt-2`}>{userRole}</span>
+                  <p className="text-light mb-1">{userInfo?.email}</p>
+                  <div className="mb-2"><EmailBadge email={userInfo?.email} /></div>
+                  <span className={`badge ${userRole === 'admin' ? 'bg-danger' : 'bg-light text-dark'} text-uppercase mt-1`}>{userRole}</span>
                 </div>
               </div>
 
@@ -889,12 +915,12 @@ function App() {
              
             <div className="row g-3 mb-4">
               <div className="col-md-6">
-                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Phone Number</p>
+                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.9 }}>Phone Number</p>
                 <h5 className="text-white">{userInfo?.phone || 'Not Added Yet'}</h5>
               </div>
               <div className="col-md-6">
-                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.8 }}>Account Role</p>
-                <h5 className="text-white text-uppercase">{userRole}</h5>
+                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.9 }}>Account Status</p>
+                <h5 className="text-success">Verified Active</h5>
               </div>
             </div>
              
@@ -959,14 +985,14 @@ function App() {
             <label className="form-label text-light fw-semibold">Profile Photo</label>
             <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleImageUploadFromFile} />
             <div className="d-flex gap-3 my-2 flex-wrap align-items-center">
-              <span className="text-muted small">Or select preset:</span>
+              <span className="text-light small">Or select preset avatar:</span>
               {presetAvatars.map((url, idx) => (
                 <img 
                   key={idx} 
                   src={url} 
                   alt="Avatar Preset" 
                   onClick={() => setEditPhoto(url)} 
-                  style={{ width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', border: editPhoto === url ? '3px solid #fff' : '2px solid #555', objectFit: 'cover' }} 
+                  style={{ width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', border: editPhoto === url ? '3px solid #ffc107' : '2px solid #555', objectFit: 'cover' }} 
                 />
               ))}
             </div>
@@ -1032,7 +1058,7 @@ function App() {
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
-          <div className="col-md-8 bg-black p-5 border border-secondary rounded-4">
+          <div className="col-md-8 bg-black p-5 border border-secondary rounded-4 shadow-lg">
             <div className="d-flex justify-content-between align-items-center mb-4">
               <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>UPLOAD PRODUCT</h3>
               <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
@@ -1042,26 +1068,26 @@ function App() {
           <form onSubmit={handleProductUpload}>
             <div className="mb-3">
               <label className="form-label text-light fw-semibold">Product Title</label>
-              <input type="text" className="form-control bg-dark text-white border-secondary" value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
+              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter product name..." value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
             </div>
             <div className="mb-3">
               <label className="form-label text-light fw-semibold">Price ($)</label>
-              <input type="number" className="form-control bg-dark text-white border-secondary" value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
+              <input type="number" className="form-control bg-dark text-white border-secondary" placeholder="Enter price..." value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
             </div>
             <div className="mb-3">
               <label className="form-label text-light fw-semibold">Category</label>
-              <input type="text" className="form-control bg-dark text-white border-secondary" value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
+              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="e.g. Luxury, Electronics..." value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
             </div>
             <div className="mb-3">
               <label className="form-label text-light fw-semibold">Description</label>
-              <textarea className="form-control bg-dark text-white border-secondary" rows="3" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
+              <textarea className="form-control bg-dark text-white border-secondary" rows="3" placeholder="Enter product description..." value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
             </div>
             <div className="mb-4">
               <label className="form-label text-light fw-semibold">Product Image (Choose File or Enter URL)</label>
               <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleProductFile} />
-              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Or paste image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
+              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Or paste direct image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
             </div>
-            <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Publish Product</button>
+            <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Publish Product Now</button>
           </form>
         </div>
         </div>
@@ -1070,13 +1096,13 @@ function App() {
 
     {activePage === 'home' && (
       <>
-        <header className="container-fluid text-center py-5" style={{ minHeight: '60vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
-          <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.6}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '5px'}}>
-            Pure Elegance
+        <header className="container-fluid text-center py-5" style={{ minHeight: '55vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
+          <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.5}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '4px'}}>
+            JR STORE
           </motion.h1>
-          <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.4, duration: 0.6}} className="lead fs-3 text-light" style={{opacity: 0.8}}>Discover our exclusive collection.</motion.p>
+          <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.4, duration: 0.5}} className="lead fs-3 text-light">Explore exclusive products and connect directly with sellers.</motion.p>
           <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 0.6, duration: 0.4}}>
-            <button className="btn btn-light btn-lg mt-4 px-5 py-3 rounded-pill fw-bold text-uppercase" style={{letterSpacing: '1px'}}>Shop Now</button>
+            <button className="btn btn-light btn-lg mt-4 px-5 py-3 rounded-pill fw-bold text-uppercase" onClick={() => window.scrollTo({ top: 500, behavior: 'smooth' })}>Browse Collection</button>
           </motion.div>
         </header>
 
@@ -1087,14 +1113,14 @@ function App() {
               
               {(searchType === 'all' || searchType === 'profile') && (
                 <div className="my-4">
-                  <h6 className="text-muted text-uppercase mb-3">Matched Profiles (Click to view profile)</h6>
+                  <h6 className="text-light text-uppercase mb-3" style={{ opacity: 0.8 }}>Matched Profiles</h6>
                   <div className="row g-3">
                     {profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
                         <div className="col-md-4" key={idx}>
-                          <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center justify-content-between" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
-                            <div className="d-flex align-items-center gap-3">
-                              <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '50px', height: '50px', borderRadius: '50%', objectFit: 'cover' }} />
+                          <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center justify-content-between">
+                            <div className="d-flex align-items-center gap-3" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
+                              <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover' }} />
                               <div>
                                 <h5 className="mb-1 text-white d-flex align-items-center">
                                   {prof.name} {prof.role === 'admin' && <FacebookBlueTick />}
@@ -1102,15 +1128,20 @@ function App() {
                                 <span className="badge bg-secondary text-uppercase">{prof.role}</span>
                               </div>
                             </div>
-                            <button className="btn btn-sm btn-outline-light rounded-pill" onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedProfileModalUser(prof);
-                            }}>View</button>
+                            <div className="d-flex gap-2">
+                              <button className="btn btn-sm btn-outline-light rounded-pill px-2" onClick={() => setSelectedProfileModalUser(prof)}>View</button>
+                              {isLoggedIn && prof.email !== userInfo?.email && (
+                                <button className="btn btn-sm btn-warning rounded-pill px-3 fw-bold text-dark" onClick={() => {
+                                  setChatTargetUser(prof);
+                                  setActivePage('messenger');
+                                }}>Chat</button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <p className="text-muted small">No profiles found.</p>
+                      <p className="text-light small" style={{ opacity: 0.7 }}>No profiles found matching query.</p>
                     )}
                   </div>
                 </div>
@@ -1118,13 +1149,13 @@ function App() {
 
               {(searchType === 'all' || searchType === 'product') && (
                 <div className="my-4">
-                  <h6 className="text-muted text-uppercase mb-3">Matched Products</h6>
+                  <h6 className="text-light text-uppercase mb-3" style={{ opacity: 0.8 }}>Matched Products</h6>
                   <div className="row g-4">
                     {allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase())).map((prod) => (
                         <div className="col-md-4" key={prod.id}>
                           <div className="card h-100 bg-black border border-secondary rounded-0 p-3">
-                            <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '200px', color:'#aaa', overflow: 'hidden' }}>
+                            <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '200px', overflow: 'hidden' }}>
                               {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'No Image'}
                             </div>
                             <div className="card-body text-center">
@@ -1133,7 +1164,7 @@ function App() {
                               <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" onClick={() => {
                                 if(!isLoggedIn) setShowLoginModal(true);
                                 else {
-                                  const sellerProf = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
+                                  const sellerProf = profilesList.find(p => p.name === prod.seller) || profilesList[0];
                                   setChatTargetUser(sellerProf);
                                   setActivePage('messenger');
                                 }
@@ -1143,7 +1174,7 @@ function App() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-muted small">No products found.</p>
+                      <p className="text-light small" style={{ opacity: 0.7 }}>No products found matching query.</p>
                     )}
                   </div>
                 </div>
@@ -1155,17 +1186,18 @@ function App() {
             {allProductsList.map((prod) => (
               <div className="col-md-4" key={prod.id}>
                 <motion.div initial={{y: 30, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.4}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
-                  <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '300px', color:'#aaa', overflow: 'hidden' }}>
+                  <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '280px', overflow: 'hidden' }}>
                     {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Image'}
                   </div>
                   <div className="card-body text-center">
-                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '2px'}}>{prod.title}</h5>
-                    <p className="text-light mb-4" style={{opacity: 0.8}}>${prod.price}</p>
+                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '1px'}}>{prod.title}</h5>
+                    <p className="text-light small mb-2">Seller: <span className="text-warning fw-semibold">{prod.seller || 'Admin'}</span></p>
+                    <p className="text-white fw-bold fs-5 mb-4">${prod.price}</p>
                     <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}} onClick={() => {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
                       } else {
-                        const sellerProf = profilesList.find(p => p.email !== userInfo?.email) || profilesList[0];
+                        const sellerProf = profilesList.find(p => p.name === prod.seller) || profilesList[0];
                         setChatTargetUser(sellerProf);
                         setActivePage('messenger');
                       }
@@ -1190,12 +1222,12 @@ const modalStyles = {
 const splashStyles = {
   container: { height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', overflow: 'hidden', position: 'fixed', top: 0, left: 0, zIndex: 1000 },
   content: { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%', height: '100%' },
-  logoWrapper: { position: 'relative', width: '120px', height: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '40px' },
+  logoWrapper: { position: 'relative', width: '120px', height: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '30px' },
   logoGlow: { position: 'absolute', width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(15px)' },
-  logoText: { fontSize: '60px', fontWeight: '100', color: '#fff', fontFamily: 'Helvetica Neue, Arial, sans-serif', letterSpacing: '2px', position: 'relative', zIndex: 1 },
-  title: { fontSize: '40px', fontWeight: '300', color: '#fff', textTransform: 'uppercase', letterSpacing: '8px', margin: '0 0 15px 0', fontFamily: 'Helvetica Neue, sans-serif' },
-  subtitle: { fontSize: '18px', color: '#fff', fontWeight: '200', letterSpacing: '4px', opacity: 0.8, marginBottom: '60px' },
-  progressBar: { height: '1px', background: 'linear-gradient(90deg, transparent, #fff, transparent)', position: 'absolute', bottom: '10%', width: '0%', left: 0 }
+  logoText: { fontSize: '55px', fontWeight: '200', color: '#fff', letterSpacing: '2px', position: 'relative', zIndex: 1 },
+  title: { fontSize: '36px', fontWeight: '300', color: '#fff', textTransform: 'uppercase', letterSpacing: '6px', margin: '0 0 10px 0' },
+  subtitle: { fontSize: '16px', color: '#fff', fontWeight: '200', letterSpacing: '3px', opacity: 0.8, marginBottom: '50px' },
+  progressBar: { height: '1px', background: 'linear-gradient(90deg, transparent, #fff, transparent)', position: 'absolute', bottom: '15%', width: '0%', left: 0 }
 };
 
 export default App;
