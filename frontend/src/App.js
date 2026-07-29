@@ -123,7 +123,16 @@ function App() {
     const savedProducts = localStorage.getItem('allProductsList');
     const savedAdminMsgs = localStorage.getItem('adminMessages');
 
-    if (savedProfiles) { try { setProfilesList(JSON.parse(savedProfiles)); } catch (e) {} }
+    if (savedProfiles) { 
+      try { 
+        const parsedProfiles = JSON.parse(savedProfiles);
+        // নিশ্চিত করা যে সুপার অ্যাডমিন লিস্টে সব সময় বিদ্যমান থাকে
+        if (!parsedProfiles.some(p => p.email === 'jihadurrashid997@gmail.com')) {
+          parsedProfiles.unshift(defaultSuperAdmin);
+        }
+        setProfilesList(parsedProfiles); 
+      } catch (e) {} 
+    }
     if (savedMessages) { try { setDirectMessages(JSON.parse(savedMessages)); } catch (e) {} }
     if (savedProducts) { try { setAllProductsList(JSON.parse(savedProducts)); } catch (e) {} }
     if (savedAdminMsgs) { try { setAdminMessages(JSON.parse(savedAdminMsgs)); } catch (e) {} }
@@ -142,7 +151,12 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  useEffect(() => { localStorage.setItem('profilesList', JSON.stringify(profilesList)); }, [profilesList]);
+  useEffect(() => { 
+    if (profilesList.length > 0) {
+      localStorage.setItem('profilesList', JSON.stringify(profilesList)); 
+    }
+  }, [profilesList]);
+
   useEffect(() => { localStorage.setItem('directMessages', JSON.stringify(directMessages)); }, [directMessages]);
   useEffect(() => { localStorage.setItem('allProductsList', JSON.stringify(allProductsList)); }, [allProductsList]);
   useEffect(() => { localStorage.setItem('adminMessages', JSON.stringify(adminMessages)); }, [adminMessages]);
@@ -198,7 +212,9 @@ function App() {
         });
         setDirectMessages(updatedMessages);
 
-        setProfilesList(prev => prev.map(p => p.email === userEmail ? { ...p, isDeleted: true, name: `${p.name} (Deleted)` } : p));
+        const updatedProfiles = profilesList.map(p => p.email === userEmail ? { ...p, isDeleted: true, name: `${p.name} (Deleted)` } : p);
+        setProfilesList(updatedProfiles);
+        localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
 
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
         showToast("Account deleted successfully! Profile log kept for Admin.", "success");
@@ -260,7 +276,9 @@ function App() {
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
     setUserInfo(updatedUser);
     
-    setProfilesList(prev => prev.map(p => p.email === updatedUser.email ? { ...p, name: editName, phone: editPhone, photo: editPhoto } : p));
+    const updatedProfiles = profilesList.map(p => p.email === updatedUser.email ? { ...p, name: editName, phone: editPhone, photo: editPhoto } : p);
+    setProfilesList(updatedProfiles);
+    localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
 
     setCurrentPassword('');
     setNewPassword('');
@@ -275,7 +293,9 @@ function App() {
       showToast("Cannot delete Super Admin account!", "danger");
       return;
     }
-    setProfilesList(profilesList.filter(p => p.email !== emailToDelete));
+    const updatedProfiles = profilesList.filter(p => p.email !== emailToDelete);
+    setProfilesList(updatedProfiles);
+    localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
     showToast("User profile deleted by Admin!", "success");
   };
 
@@ -348,13 +368,14 @@ function App() {
     setActivePage('home');
   };
 
-  // অথেন্টিকেশন লজিক (সাইন-আপ ও সাইন-ইন চেক এবং ডুপ্লিকেট ইমেইল রেস্ট্রিকশন)
+  // অথেন্টিকেশন ও প্রোফাইল সিঙ্ক লজিক
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
 
+    let updatedProfiles = [...profilesList];
+
     if (isRegisterMode) {
-      // ১. একটি জিমেইল দিয়ে একবারই অ্যাকাউন্ট খোলা যাবে কি না চেক করা
-      const existingUser = profilesList.find(p => p.email.toLowerCase() === email.toLowerCase() && !p.isDeleted);
+      const existingUser = updatedProfiles.find(p => p.email.toLowerCase() === email.toLowerCase() && !p.isDeleted);
       if (existingUser) {
         showToast("This email is already registered! Please sign in or use another email.", "danger");
         return;
@@ -365,8 +386,7 @@ function App() {
         return;
       }
     } else {
-      // লগইন মোড: চেক করা জিমেইল সিস্টেমে আছে কিনা বা সঠিক কিনা
-      const foundUser = profilesList.find(p => p.email.toLowerCase() === email.toLowerCase());
+      const foundUser = updatedProfiles.find(p => p.email.toLowerCase() === email.toLowerCase());
       if (!foundUser) {
         showToast("No account found with this email! Please register first.", "danger");
         return;
@@ -388,20 +408,26 @@ function App() {
       showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
       localStorage.setItem('token', 'jr-secure-token-2026');
       
-      const role = (email === 'jihadurrashid997@gmail.com') ? 'admin' : (isRegisterMode ? selectedRole : (profilesList.find(p => p.email === email)?.role || 'customer'));
-      const userName = name || (role === 'admin' ? 'Jihadur Rashid' : (profilesList.find(p => p.email === email)?.name || email.split('@')[0]));
+      const role = (email === 'jihadurrashid997@gmail.com') ? 'admin' : (isRegisterMode ? selectedRole : (updatedProfiles.find(p => p.email === email)?.role || 'customer'));
+      const userName = name || (role === 'admin' ? 'Jihadur Rashid' : (updatedProfiles.find(p => p.email === email)?.name || email.split('@')[0]));
       
       const userData = { 
         name: userName, 
         email, 
         password, 
         role, 
-        phone: profilesList.find(p => p.email === email)?.phone || '01700000000',
-        photo: profilesList.find(p => p.email === email)?.photo || presetAvatars[0],
+        phone: updatedProfiles.find(p => p.email === email)?.phone || '01700000000',
+        photo: updatedProfiles.find(p => p.email === email)?.photo || presetAvatars[0],
         isVerified: true,
         isDeleted: false
       };
       
+      if (isRegisterMode) {
+        updatedProfiles.push(userData);
+        setProfilesList(updatedProfiles);
+        localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
+      }
+
       localStorage.setItem('userInfo', JSON.stringify(userData));
       localStorage.setItem('userRole', role);
 
@@ -410,10 +436,6 @@ function App() {
       setUserRole(role);
       setShowLoginModal(false);
       setName(''); setEmail(''); setPassword('');
-
-      if (isRegisterMode) {
-        setProfilesList(prev => [...prev, userData]);
-      }
     }, 600);
   };
 
