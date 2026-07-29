@@ -126,7 +126,6 @@ function App() {
     if (savedProfiles) { 
       try { 
         const parsedProfiles = JSON.parse(savedProfiles);
-        // নিশ্চিত করা যে সুপার অ্যাডমিন লিস্টে সব সময় বিদ্যমান থাকে
         if (!parsedProfiles.some(p => p.email === 'jihadurrashid997@gmail.com')) {
           parsedProfiles.unshift(defaultSuperAdmin);
         }
@@ -315,11 +314,14 @@ function App() {
       text: newAdminMessage, 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
     };
-    setAdminMessages([...adminMessages, newMsgObj]);
+    const updatedAdminMsgs = [...adminMessages, newMsgObj];
+    setAdminMessages(updatedAdminMsgs);
+    localStorage.setItem('adminMessages', JSON.stringify(updatedAdminMsgs));
     setNewAdminMessage('');
     showToast("Message sent to Admin Panel successfully!", "success");
   };
 
+  // মেসেঞ্জার ইনস্ট্যান্ট সিঙ্ক ও লোকাল স্টোরেজ আপডেট ফিক্স
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
@@ -342,6 +344,7 @@ function App() {
     };
 
     setDirectMessages(updatedMessagesState);
+    localStorage.setItem('directMessages', JSON.stringify(updatedMessagesState));
     setNewDirectMessage('');
   };
 
@@ -362,40 +365,44 @@ function App() {
       seller: userInfo?.name || 'Admin'
     };
 
-    setAllProductsList([newProd, ...allProductsList]);
+    const updatedProducts = [newProd, ...allProductsList];
+    setAllProductsList(updatedProducts);
+    localStorage.setItem('allProductsList', JSON.stringify(updatedProducts));
+    
     showToast("Product uploaded successfully!", "success");
     setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
     setActivePage('home');
   };
 
-  // অথেন্টিকেশন ও প্রোফাইল সিঙ্ক লজিক
+  // পারফেক্ট রেজিস্ট্রেশন ও লগইন ভ্যালিডেশন লজিক (এক ইমেইল দিয়ে বারবার রেজিস্ট্রেশন ব্লক করা)
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
 
+    const cleanEmail = email.trim().toLowerCase();
     let updatedProfiles = [...profilesList];
 
     if (isRegisterMode) {
-      const existingUser = updatedProfiles.find(p => p.email.toLowerCase() === email.toLowerCase() && !p.isDeleted);
+      const existingUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail && !p.isDeleted);
       if (existingUser) {
-        showToast("This email is already registered! Please sign in or use another email.", "danger");
+        showToast("This email is already registered! Please sign in with this email.", "danger");
         return;
       }
 
-      if (selectedRole === 'admin' && email !== 'jihadurrashid997@gmail.com') {
+      if (selectedRole === 'admin' && cleanEmail !== 'jihadurrashid997@gmail.com') {
         showToast("Admin account registration is restricted!", "danger");
         return;
       }
     } else {
-      const foundUser = updatedProfiles.find(p => p.email.toLowerCase() === email.toLowerCase());
+      const foundUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail);
       if (!foundUser) {
         showToast("No account found with this email! Please register first.", "danger");
         return;
       }
-      if (email === 'jihadurrashid997@gmail.com' && password !== '252002051') {
+      if (cleanEmail === 'jihadurrashid997@gmail.com' && password !== '252002051') {
         showToast("Incorrect Password for Super Admin!", "danger");
         return;
       }
-      if (email !== 'jihadurrashid997@gmail.com' && foundUser.password && foundUser.password !== password) {
+      if (cleanEmail !== 'jihadurrashid997@gmail.com' && foundUser.password && foundUser.password !== password) {
         showToast("Incorrect password! Please check your credentials.", "danger");
         return;
       }
@@ -408,16 +415,16 @@ function App() {
       showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
       localStorage.setItem('token', 'jr-secure-token-2026');
       
-      const role = (email === 'jihadurrashid997@gmail.com') ? 'admin' : (isRegisterMode ? selectedRole : (updatedProfiles.find(p => p.email === email)?.role || 'customer'));
-      const userName = name || (role === 'admin' ? 'Jihadur Rashid' : (updatedProfiles.find(p => p.email === email)?.name || email.split('@')[0]));
+      const role = (cleanEmail === 'jihadurrashid997@gmail.com') ? 'admin' : (isRegisterMode ? selectedRole : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.role || 'customer'));
+      const userName = name || (role === 'admin' ? 'Jihadur Rashid' : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.name || cleanEmail.split('@')[0]));
       
       const userData = { 
         name: userName, 
-        email, 
+        email: cleanEmail, 
         password, 
         role, 
-        phone: updatedProfiles.find(p => p.email === email)?.phone || '01700000000',
-        photo: updatedProfiles.find(p => p.email === email)?.photo || presetAvatars[0],
+        phone: updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.phone || '01700000000',
+        photo: updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.photo || presetAvatars[0],
         isVerified: true,
         isDeleted: false
       };
