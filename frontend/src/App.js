@@ -173,7 +173,6 @@ function App() {
     });
   };
 
-  // ইউজার অ্যাকাউন্ট ডিলিট করলে প্রোডাক্ট ও মেসেজ রিমুভ হবে, কিন্তু অ্যাডমিন প্যানেলে হিস্ট্রি/প্রোফাইল থেকে যাবে
   const handleDeleteAccount = () => {
     setConfirmModal({
       show: true,
@@ -189,10 +188,8 @@ function App() {
 
         const userEmail = userInfo?.email;
 
-        // প্রোডাক্ট রিমুভ করা
         setAllProductsList(allProductsList.filter(p => p.seller !== userInfo?.name && p.seller !== userEmail));
 
-        // চ্যাট বা মেসেজ রিমুভ করা
         const updatedMessages = { ...directMessages };
         Object.keys(updatedMessages).forEach(key => {
           if (key.includes(userEmail)) {
@@ -201,7 +198,6 @@ function App() {
         });
         setDirectMessages(updatedMessages);
 
-        // প্রোফাইল লিস্ট থেকে পুরোপুরি মুছে না ফেলে স্ট্যাটাস ডিলিটেড বা নিষ্ক্রিয় করা বা লিস্টে রাখা যাতে অ্যাডমিন দেখতে পারে
         setProfilesList(prev => prev.map(p => p.email === userEmail ? { ...p, isDeleted: true, name: `${p.name} (Deleted)` } : p));
 
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
@@ -352,17 +348,35 @@ function App() {
     setActivePage('home');
   };
 
+  // অথেন্টিকেশন লজিক (সাইন-আপ ও সাইন-ইন চেক এবং ডুপ্লিকেট ইমেইল রেস্ট্রিকশন)
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
 
-    if (isRegisterMode && selectedRole === 'admin' && email !== 'jihadurrashid997@gmail.com') {
-      showToast("Admin account registration is restricted!", "danger");
-      return;
-    }
+    if (isRegisterMode) {
+      // ১. একটি জিমেইল দিয়ে একবারই অ্যাকাউন্ট খোলা যাবে কি না চেক করা
+      const existingUser = profilesList.find(p => p.email.toLowerCase() === email.toLowerCase() && !p.isDeleted);
+      if (existingUser) {
+        showToast("This email is already registered! Please sign in or use another email.", "danger");
+        return;
+      }
 
-    if (!isRegisterMode && email === 'jihadurrashid997@gmail.com') {
-      if (password !== '252002051') {
+      if (selectedRole === 'admin' && email !== 'jihadurrashid997@gmail.com') {
+        showToast("Admin account registration is restricted!", "danger");
+        return;
+      }
+    } else {
+      // লগইন মোড: চেক করা জিমেইল সিস্টেমে আছে কিনা বা সঠিক কিনা
+      const foundUser = profilesList.find(p => p.email.toLowerCase() === email.toLowerCase());
+      if (!foundUser) {
+        showToast("No account found with this email! Please register first.", "danger");
+        return;
+      }
+      if (email === 'jihadurrashid997@gmail.com' && password !== '252002051') {
         showToast("Incorrect Password for Super Admin!", "danger");
+        return;
+      }
+      if (email !== 'jihadurrashid997@gmail.com' && foundUser.password && foundUser.password !== password) {
+        showToast("Incorrect password! Please check your credentials.", "danger");
         return;
       }
     }
@@ -374,16 +388,16 @@ function App() {
       showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
       localStorage.setItem('token', 'jr-secure-token-2026');
       
-      const role = (email === 'jihadurrashid997@gmail.com' && password === '252002051') ? 'admin' : (isRegisterMode ? selectedRole : 'customer');
-      const userName = name || (role === 'admin' ? 'Jihadur Rashid' : email.split('@')[0]);
+      const role = (email === 'jihadurrashid997@gmail.com') ? 'admin' : (isRegisterMode ? selectedRole : (profilesList.find(p => p.email === email)?.role || 'customer'));
+      const userName = name || (role === 'admin' ? 'Jihadur Rashid' : (profilesList.find(p => p.email === email)?.name || email.split('@')[0]));
       
       const userData = { 
         name: userName, 
         email, 
         password, 
         role, 
-        phone: '01700000000',
-        photo: presetAvatars[0],
+        phone: profilesList.find(p => p.email === email)?.phone || '01700000000',
+        photo: profilesList.find(p => p.email === email)?.photo || presetAvatars[0],
         isVerified: true,
         isDeleted: false
       };
@@ -397,17 +411,9 @@ function App() {
       setShowLoginModal(false);
       setName(''); setEmail(''); setPassword('');
 
-      // আপডেট বা নতুন প্রোফাইল লিস্টে সেভ করা (যাতে নাম বা ছবি পরিবর্তন করলে সাথে সাথে আপডেট হয়)
-      setProfilesList(prev => {
-        const existingIndex = prev.findIndex(p => p.email === userData.email);
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = { ...updated[existingIndex], ...userData, isDeleted: false };
-          return updated;
-        } else {
-          return [...prev, userData];
-        }
-      });
+      if (isRegisterMode) {
+        setProfilesList(prev => [...prev, userData]);
+      }
     }, 600);
   };
 
@@ -625,7 +631,7 @@ function App() {
               <div className="mb-3 text-start">
                 <label className="form-label text-light fw-semibold">Email address</label>
                 <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                <small className="text-info mt-1 d-block" style={{ fontSize: '11px' }}>* Official emails like admin are verified automatically.</small>
+                <small className="text-info mt-1 d-block" style={{ fontSize: '11px' }}>* One email can only be used once to create a profile.</small>
               </div>
               <div className="mb-4 text-start">
                 <label className="form-label text-light fw-semibold">Password</label>
