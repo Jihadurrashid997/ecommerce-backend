@@ -41,8 +41,8 @@ function App() {
   const [profilesList, setProfilesList] = useState([defaultSuperAdmin]);
 
   const [allProductsList, setAllProductsList] = useState([
-    { id: 1, title: 'Signature Luxury Item', price: '999.00', category: 'Luxury', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' },
-    { id: 2, title: 'Classic Gold Watch', price: '1,499.00', category: 'Accessories', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300' }
+    { id: 1, title: 'Samurai Blade Master Edition', price: '999.00', category: 'Luxury', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' },
+    { id: 2, title: 'Cybernetic Relic Katana', price: '1,499.00', category: 'Accessories', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300' }
   ]);
 
   const [adminMessages, setAdminMessages] = useState([]);
@@ -80,40 +80,46 @@ function App() {
     "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
   ];
 
-  const FacebookBlueTick = () => (
+  const SamuraiBadge = () => (
     <span 
-      title="Verified Original Master Admin" 
+      title="Verified Samurai Master" 
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: '15px',
-        height: '15px',
-        backgroundColor: '#1877F2',
+        width: '16px',
+        height: '16px',
+        backgroundColor: '#dc3545',
         borderRadius: '50%',
         color: '#fff',
         fontSize: '9px',
         fontWeight: '900',
-        marginLeft: '4px',
+        marginLeft: '6px',
         verticalAlign: 'middle',
-        boxShadow: '0 0 2px rgba(24, 119, 242, 0.6)'
+        boxShadow: '0 0 8px rgba(220, 53, 69, 0.8)'
       }}
     >
-      ✓
+      ⚡
     </span>
   );
 
   const EmailBadge = ({ email }) => {
     const isOriginal = email === 'jihadurrashid997@gmail.com' || email.endsWith('@jrstore.com') || email.includes('admin');
     return (
-      <span className={`badge ${isOriginal ? 'bg-success' : 'bg-warning text-dark'} ms-2`} style={{ fontSize: '10px' }}>
-        {isOriginal ? '✓ Original Official' : '⚡ Registered User'}
+      <span className={`badge ${isOriginal ? 'bg-danger text-white' : 'bg-dark text-warning'} ms-2`} style={{ fontSize: '10px', border: '1px solid #444' }}>
+        {isOriginal ? '⚡ Master Core' : '⚡ Awakened User'}
       </span>
     );
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowWelcome(false), 2500);
+    // Inject Custom Fonts dynamically
+    const linkEl = document.createElement('link');
+    linkEl.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Space+Grotesk:wght@300;400;600&display=swap';
+    linkEl.rel = 'stylesheet';
+    document.head.appendChild(linkEl);
+
+    const timer = setTimeout(() => setShowWelcome(false), 2400);
 
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('userInfo');
@@ -141,7 +147,6 @@ function App() {
       const parsedUser = JSON.parse(storedUser);
       setUserInfo(parsedUser);
       setUserRole(storedRole || 'customer');
-      
       setEditName(parsedUser.name || '');
       setEditPhone(parsedUser.phone || '');
       setEditPhoto(parsedUser.photo || ''); 
@@ -168,19 +173,19 @@ function App() {
     setUserInfo(null);
     setUserRole('customer');
     setActivePage('home');
-    showToast("Logged out successfully!", "success");
+    showToast("Disconnected from Matrix successfully!", "success");
     setTimeout(() => { window.location.reload(); }, 400);
   };
 
   const handleDeactivateAccount = () => {
     setConfirmModal({
       show: true,
-      title: 'Deactivate Account',
-      message: 'Are you sure you want to temporarily deactivate your account?',
+      title: 'Deactivate Spirit',
+      message: 'Are you sure you want to temporarily seal your account?',
       type: 'warning',
       onConfirm: () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
-        showToast("Account deactivated temporarily.", "info");
+        showToast("Account sealed temporarily.", "info");
         handleLogout();
       }
     });
@@ -189,34 +194,31 @@ function App() {
   const handleDeleteAccount = () => {
     setConfirmModal({
       show: true,
-      title: 'Delete Account',
-      message: 'Are you sure you want to delete your account? Your products and active chats will be removed, but your profile record will remain visible in the Admin Panel for logs.',
+      title: 'Obliterate Account',
+      message: 'Are you sure you want to completely erase your data? Your profile log will remain sealed in the Master Core.',
       type: 'danger',
       onConfirm: () => {
         if (userInfo?.email === 'jihadurrashid997@gmail.com') {
-          showToast("Cannot delete Super Admin account!", "danger");
+          showToast("Cannot destroy Supreme Master Core!", "danger");
           setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
           return;
         }
 
         const userEmail = userInfo?.email;
-
         setAllProductsList(allProductsList.filter(p => p.seller !== userInfo?.name && p.seller !== userEmail));
 
         const updatedMessages = { ...directMessages };
         Object.keys(updatedMessages).forEach(key => {
-          if (key.includes(userEmail)) {
-            delete updatedMessages[key];
-          }
+          if (key.includes(userEmail)) { delete updatedMessages[key]; }
         });
         setDirectMessages(updatedMessages);
 
-        const updatedProfiles = profilesList.map(p => p.email === userEmail ? { ...p, isDeleted: true, name: `${p.name} (Deleted)` } : p);
+        const updatedProfiles = profilesList.map(p => p.email === userEmail ? { ...p, isDeleted: true, name: `${p.name} (Obliterated)` } : p);
         setProfilesList(updatedProfiles);
         localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
 
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
-        showToast("Account deleted successfully! Profile log kept for Admin.", "success");
+        showToast("Account obliterated successfully!", "success");
         handleLogout();
       }
     });
@@ -243,33 +245,27 @@ function App() {
   const handleVerifyCurrentPassword = () => {
     const storedPass = userInfo?.password; 
     if (!currentPassword) {
-      showToast("Please enter your current password first!", "danger");
+      showToast("Please enter current code first!", "danger");
       setIsCurrentPasswordValid(false);
       return;
     }
     if (storedPass && currentPassword !== storedPass) {
       setIsCurrentPasswordValid(false);
-      showToast("Incorrect current password!", "danger");
+      showToast("Incorrect security code!", "danger");
       return;
     }
     setIsCurrentPasswordValid(true);
-    showToast("Current password verified!", "success");
+    showToast("Security code verified!", "success");
   };
 
   const handleUpdateProfile = (e) => {
     e.preventDefault();
     if (newPassword && !isCurrentPasswordValid) {
-      showToast("Verify current password before changing password!", "danger");
+      showToast("Verify current code before updating password!", "danger");
       return;
     }
 
-    const updatedUser = {
-      ...userInfo,
-      name: editName,
-      phone: editPhone,
-      photo: editPhoto 
-    };
-
+    const updatedUser = { ...userInfo, name: editName, phone: editPhone, photo: editPhoto };
     if (newPassword) { updatedUser.password = newPassword; }
 
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
@@ -282,25 +278,24 @@ function App() {
     setCurrentPassword('');
     setNewPassword('');
     setIsCurrentPasswordValid(false);
-
-    showToast("Profile updated successfully!", "success");
+    showToast("Spirit upgraded successfully!", "success");
     setActivePage('profile');
   };
 
   const handleDeleteUserByAdmin = (emailToDelete) => {
     if (emailToDelete === 'jihadurrashid997@gmail.com') {
-      showToast("Cannot delete Super Admin account!", "danger");
+      showToast("Cannot erase Master Core!", "danger");
       return;
     }
     const updatedProfiles = profilesList.filter(p => p.email !== emailToDelete);
     setProfilesList(updatedProfiles);
     localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
-    showToast("User profile deleted by Admin!", "success");
+    showToast("Entity erased by Master Admin!", "success");
   };
 
   const handleDeleteProductByAdmin = (productId) => {
     setAllProductsList(allProductsList.filter(p => p.id !== productId));
-    showToast("Product removed by Admin!", "success");
+    showToast("Relic banished by Master Admin!", "success");
   };
 
   const handleSendAdminMessage = (e) => {
@@ -308,8 +303,8 @@ function App() {
     if (!newAdminMessage.trim()) return;
 
     const newMsgObj = { 
-      sender: userInfo?.name || 'User', 
-      senderEmail: userInfo?.email || 'user@store.com',
+      sender: userInfo?.name || 'Awakened', 
+      senderEmail: userInfo?.email || 'user@matrix.com',
       senderPhoto: userInfo?.photo || presetAvatars[0],
       text: newAdminMessage, 
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
@@ -318,10 +313,9 @@ function App() {
     setAdminMessages(updatedAdminMsgs);
     localStorage.setItem('adminMessages', JSON.stringify(updatedAdminMsgs));
     setNewAdminMessage('');
-    showToast("Message sent to Admin Panel successfully!", "success");
+    showToast("Signal transmitted to Master Core!", "success");
   };
 
-  // মেসেঞ্জার ইনস্ট্যান্ট সিঙ্ক ও লোকাল স্টোরেজ আপডেট ফিক্স
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
@@ -351,7 +345,7 @@ function App() {
   const handleProductUpload = async (e) => {
     e.preventDefault();
     if (!productTitle || !productPrice || !productCategory) {
-      showToast("Please fill all required product fields!", "danger");
+      showToast("Please fill all required relic fields!", "danger");
       return;
     }
 
@@ -362,58 +356,54 @@ function App() {
       category: productCategory,
       description: productDescription,
       image: productImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300',
-      seller: userInfo?.name || 'Admin'
+      seller: userInfo?.name || 'Master'
     };
 
     const updatedProducts = [newProd, ...allProductsList];
     setAllProductsList(updatedProducts);
     localStorage.setItem('allProductsList', JSON.stringify(updatedProducts));
     
-    showToast("Product uploaded successfully!", "success");
+    showToast("Relic forged successfully!", "success");
     setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
     setActivePage('home');
   };
 
-  // পারফেক্ট রেজিস্ট্রেশন ও লগইন ভ্যালিডেশন লজিক (এক ইমেইল দিয়ে বারবার রেজিস্ট্রেশন ব্লক করা)
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
-
     const cleanEmail = email.trim().toLowerCase();
     let updatedProfiles = [...profilesList];
 
     if (isRegisterMode) {
       const existingUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail && !p.isDeleted);
       if (existingUser) {
-        showToast("This email is already registered! Please sign in with this email.", "danger");
+        showToast("This spirit signature already exists! Sign in instead.", "danger");
         return;
       }
-
       if (selectedRole === 'admin' && cleanEmail !== 'jihadurrashid997@gmail.com') {
-        showToast("Admin account registration is restricted!", "danger");
+        showToast("Master Core registration is restricted!", "danger");
         return;
       }
     } else {
       const foundUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail);
       if (!foundUser) {
-        showToast("No account found with this email! Please register first.", "danger");
+        showToast("No spirit found with this signature! Register first.", "danger");
         return;
       }
       if (cleanEmail === 'jihadurrashid997@gmail.com' && password !== '252002051') {
-        showToast("Incorrect Password for Super Admin!", "danger");
+        showToast("Incorrect Master Cipher!", "danger");
         return;
       }
       if (cleanEmail !== 'jihadurrashid997@gmail.com' && foundUser.password && foundUser.password !== password) {
-        showToast("Incorrect password! Please check your credentials.", "danger");
+        showToast("Incorrect security code!", "danger");
         return;
       }
     }
 
     setIsLoading(true);
-
     setTimeout(() => {
       setIsLoading(false);
-      showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
-      localStorage.setItem('token', 'jr-secure-token-2026');
+      showToast(isRegisterMode ? "Awakening Successful!" : "Matrix Access Granted!", "success");
+      localStorage.setItem('token', 'jr-samurai-token-2026');
       
       const role = (cleanEmail === 'jihadurrashid997@gmail.com') ? 'admin' : (isRegisterMode ? selectedRole : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.role || 'customer'));
       const userName = name || (role === 'admin' ? 'Jihadur Rashid' : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.name || cleanEmail.split('@')[0]));
@@ -455,15 +445,15 @@ function App() {
               key="splash-content"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)", transition: { duration: 0.8, ease: "easeInOut" }}}
+              exit={{ opacity: 0, scale: 1.1, filter: "blur(12px)", transition: { duration: 0.8, ease: "easeInOut" }}}
               style={splashStyles.content}
             >
               <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5, type: "spring", bounce: 0.4 }} style={splashStyles.logoWrapper}>
                 <div style={splashStyles.logoGlow}></div>
-                <span style={splashStyles.logoText}>JR</span>
+                <span style={splashStyles.logoText}>刀</span>
               </motion.div>
-              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.4 }} style={splashStyles.title}>Welcome to JR STORE</motion.h1>
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.9 }} transition={{ delay: 0.9, duration: 0.4 }} style={splashStyles.subtitle}>Official Online Marketplace</motion.p>
+              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.4 }} style={splashStyles.title}>JR STORE</motion.h1>
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ delay: 0.9, duration: 0.4 }} style={splashStyles.subtitle}>To master the sword is to master the self.</motion.p>
               <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 0.8, duration: 1.4, ease: "linear" }} style={splashStyles.progressBar} />
             </motion.div>
           )}
@@ -473,17 +463,18 @@ function App() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} style={{ backgroundColor: '#111', minHeight: '100vh', color: '#fff', position: 'relative' }}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} style={{ backgroundColor: '#050505', minHeight: '100vh', color: '#f8f9fa', position: 'relative', fontFamily: "'Space Grotesk', sans-serif" }}>
       
       {toast.show && (
-        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }}>
+        <div style={{ position: 'fixed', top: '25px', right: '25px', zIndex: 9999 }}>
           <motion.div 
-            initial={{ opacity: 0, y: -20, scale: 0.9 }} 
+            initial={{ opacity: 0, y: -25, scale: 0.9 }} 
             animate={{ opacity: 1, y: 0, scale: 1 }} 
-            exit={{ opacity: 0, y: -20 }}
-            className={`alert ${toast.type === 'success' ? 'alert-success' : toast.type === 'danger' ? 'alert-danger' : 'alert-info'} shadow-lg text-dark fw-bold px-4 py-3 rounded-pill d-flex align-items-center gap-2`}
-            style={{ minWidth: '250px', border: '1px solid #444' }}
+            exit={{ opacity: 0, y: -25 }}
+            className={`alert ${toast.type === 'success' ? 'alert-danger' : 'alert-dark'} shadow-lg fw-bold px-4 py-3 rounded-0 d-flex align-items-center gap-2`}
+            style={{ minWidth: '280px', border: '1px solid #dc3545', backgroundColor: '#0c0c0c', color: '#fff' }}
           >
+            <span style={{ color: '#dc3545' }}>⚡</span>
             <span>{toast.message}</span>
           </motion.div>
         </div>
@@ -491,12 +482,12 @@ function App() {
 
       {confirmModal.show && (
         <div style={modalStyles.overlay}>
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center' }}>
-            <h4 className="fw-bold text-white mb-3">{confirmModal.title}</h4>
-            <p className="text-light mb-4" style={{ fontSize: '15px', opacity: 0.9 }}>{confirmModal.message}</p>
+          <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center' }}>
+            <h4 className="fw-bold text-white mb-3" style={{ fontFamily: "'Cinzel', serif", letterSpacing: '2px' }}>{confirmModal.title}</h4>
+            <p className="text-light mb-4" style={{ fontSize: '15px', opacity: 0.85 }}>{confirmModal.message}</p>
             <div className="d-flex justify-content-center gap-3">
-              <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' })}>Cancel</button>
-              <button className={`btn ${confirmModal.type === 'danger' ? 'btn-danger' : 'btn-warning'} rounded-pill px-4 fw-bold`} onClick={confirmModal.onConfirm}>Confirm</button>
+              <button className="btn btn-outline-light rounded-0 px-4" onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' })}>ABORT</button>
+              <button className="btn btn-danger rounded-0 px-4 fw-bold" onClick={confirmModal.onConfirm}>PROCEED</button>
             </div>
           </motion.div>
         </div>
@@ -504,65 +495,67 @@ function App() {
 
       {selectedProfileModalUser && (
         <div style={modalStyles.overlay}>
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
+          <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
             <button className="btn-close btn-close-white position-absolute top-0 end-0 m-3" onClick={() => setSelectedProfileModalUser(null)}></button>
             
             <div className="my-3">
-              <img src={selectedProfileModalUser.photo || presetAvatars[0]} alt="Profile" style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: '3px solid #555' }} />
+              <img src={selectedProfileModalUser.photo || presetAvatars[0]} alt="Profile" style={{ width: '90px', height: '90px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #dc3545', boxShadow: '0 0 15px rgba(220,53,69,0.4)' }} />
             </div>
-            <h4 className="fw-bold text-white d-flex align-items-center justify-content-center gap-2">
+            <h4 className="fw-bold text-white d-flex align-items-center justify-content-center gap-2" style={{ fontFamily: "'Cinzel', serif" }}>
               {selectedProfileModalUser.name}
-              {selectedProfileModalUser.role === 'admin' && <FacebookBlueTick />}
+              {selectedProfileModalUser.role === 'admin' && <SamuraiBadge />}
             </h4>
-            <p className="text-light small mb-1">Email: {selectedProfileModalUser.email}</p>
+            <p className="text-light small mb-1">Signature: {selectedProfileModalUser.email}</p>
             <div className="mb-2"><EmailBadge email={selectedProfileModalUser.email} /></div>
-            <p className="text-light small mb-3">Phone: {selectedProfileModalUser.phone || 'N/A'}</p>
-            <span className="badge bg-secondary text-uppercase mb-4">{selectedProfileModalUser.isDeleted ? 'Account Deleted by User' : selectedProfileModalUser.role}</span>
+            <p className="text-light small mb-3">Comms Link: {selectedProfileModalUser.phone || 'N/A'}</p>
+            <span className="badge bg-secondary text-uppercase mb-4 rounded-0">{selectedProfileModalUser.isDeleted ? 'Spirit Obliterated' : selectedProfileModalUser.role}</span>
             
             <div className="d-flex justify-content-center gap-2">
               {isLoggedIn && !selectedProfileModalUser.isDeleted && selectedProfileModalUser.email !== userInfo?.email && (
-                <button className="btn btn-warning rounded-pill px-4 fw-bold text-dark" onClick={() => {
+                <button className="btn btn-danger rounded-0 px-4 fw-bold" onClick={() => {
                   const target = selectedProfileModalUser;
                   setSelectedProfileModalUser(null);
                   setChatTargetUser(target);
                   setActivePage('messenger');
-                }}>💬 Chat Now</button>
+                }}>COMMUNICATE</button>
               )}
-              <button className="btn btn-outline-light rounded-pill px-4" onClick={() => setSelectedProfileModalUser(null)}>Close</button>
+              <button className="btn btn-outline-light rounded-0 px-4" onClick={() => setSelectedProfileModalUser(null)}>DISMISS</button>
             </div>
           </motion.div>
         </div>
       )}
 
-      <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom border-secondary">
+      {/* Cyber / Minimalist Header */}
+      <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom" style={{ borderColor: '#222 !important' }}>
         <div className="container">
-          <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }} style={{ letterSpacing: '2px', cursor: 'pointer' }}>
-            <span style={{color:'#fff'}}>JR</span> STORE
+          <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }} style={{ fontFamily: "'Cinzel', serif", letterSpacing: '4px', cursor: 'pointer' }}>
+            <span style={{color:'#dc3545'}}>JR</span> STORE
           </a>
           
-          <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '480px' }}>
+          <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '500px' }}>
             <select 
-              className="form-select bg-dark text-white border-secondary rounded-pill text-center" 
-              style={{ width: '130px', fontSize: '13px' }}
+              className="form-select bg-black text-white border-secondary rounded-0 text-center" 
+              style={{ width: '130px', fontSize: '13px', borderColor: '#333' }}
               value={searchType}
               onChange={(e) => setSearchType(e.target.value)}
             >
               <option value="all">Search All</option>
-              <option value="product">Products</option>
-              <option value="profile">Profiles</option>
+              <option value="product">Relics</option>
+              <option value="profile">Spirits</option>
             </select>
             <div className="position-relative flex-grow-1">
               <input 
                 type="text" 
-                className="form-control bg-dark text-white border-secondary rounded-pill px-3" 
-                placeholder={searchType === 'profile' ? "Search profile..." : searchType === 'product' ? "Search product..." : "Search product & profile..."}
+                className="form-control bg-black text-white border-secondary rounded-0 px-3" 
+                style={{ borderColor: '#333' }}
+                placeholder={searchType === 'profile' ? "Search spirit..." : searchType === 'product' ? "Search relic..." : "Search matrix..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
           </div>
 
-          <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+          <button className="navbar-toggler rounded-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span className="navbar-toggler-icon"></span>
           </button>
           
@@ -573,20 +566,20 @@ function App() {
               {isLoggedIn && userRole === 'admin' && (
                 <li className="nav-item">
                   <a className="nav-link text-danger fw-bold" href="#admin-dashboard" onClick={(e) => { e.preventDefault(); setActivePage('admin-dashboard'); }}>
-                    ⚡ Admin Master Panel
+                    ⚡ Master Core
                   </a>
                 </li>
               )}
 
               {isLoggedIn && (
                 <li className="nav-item">
-                  <a className="nav-link text-warning fw-semibold" href="#messenger" onClick={(e) => { 
+                  <a className="nav-link text-light fw-semibold" href="#messenger" onClick={(e) => { 
                     e.preventDefault(); 
                     const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
                     setChatTargetUser(otherProfile);
                     setActivePage('messenger'); 
                   }}>
-                    💬 Messenger
+                    Comms
                   </a>
                 </li>
               )}
@@ -594,36 +587,36 @@ function App() {
               <li className="nav-item mt-2 mt-lg-0">
                 {isLoggedIn ? (
                   <div className="dropdown ms-lg-3">
-                    <button className="btn btn-outline-light rounded-pill px-4 dropdown-toggle d-flex align-items-center gap-2 position-relative" type="button" data-bs-toggle="dropdown">
+                    <button className="btn btn-outline-light rounded-0 px-4 dropdown-toggle d-flex align-items-center gap-2 position-relative" type="button" data-bs-toggle="dropdown" style={{ borderColor: '#444' }}>
                       <span style={{
-                        position: 'absolute', top: '6px', left: '10px', width: '10px', height: '10px',
-                        backgroundColor: '#0d6efd', borderRadius: '50%', border: '2px solid #000'
+                        position: 'absolute', top: '6px', left: '10px', width: '8px', height: '8px',
+                        backgroundColor: '#dc3545', borderRadius: '50%', boxShadow: '0 0 6px #dc3545'
                       }}></span>
                       
                       {userInfo?.photo ? (
-                        <img src={userInfo.photo} alt="Profile" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', marginLeft: '8px' }} />
+                        <img src={userInfo.photo} alt="Profile" style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', marginLeft: '6px' }} />
                       ) : null}
-                      <span style={{ marginLeft: userInfo?.photo ? '0' : '10px', color: '#fff' }}>{userInfo?.name || 'My Account'}</span>
+                      <span style={{ marginLeft: userInfo?.photo ? '0' : '8px', color: '#fff' }}>{userInfo?.name || 'Matrix Profile'}</span>
                     </button>
-                    <ul className="dropdown-menu dropdown-menu-dark bg-black border-secondary">
-                      <li><button className="dropdown-item text-light" onClick={() => setActivePage('profile')}>My Profile</button></li>
+                    <ul className="dropdown-menu dropdown-menu-dark bg-black rounded-0 border" style={{ borderColor: '#333' }}>
+                      <li><button className="dropdown-item text-light" onClick={() => setActivePage('profile')}>My Sanctuary</button></li>
                       {userRole === 'admin' && (
-                        <li><button className="dropdown-item text-danger fw-bold" onClick={() => setActivePage('admin-dashboard')}>⚡ Admin Master Panel</button></li>
+                        <li><button className="dropdown-item text-danger fw-bold" onClick={() => setActivePage('admin-dashboard')}>⚡ Master Core</button></li>
                       )}
                       {(userRole === 'seller' || userRole === 'admin') && (
-                        <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Upload Product</button></li>
+                        <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Forge Relic</button></li>
                       )}
-                      <li><button className="dropdown-item text-warning" onClick={() => {
+                      <li><button className="dropdown-item text-light" onClick={() => {
                         const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
                         setChatTargetUser(otherProfile);
                         setActivePage('messenger');
-                      }}>💬 Messenger</button></li>
-                      <li><hr className="dropdown-divider border-secondary" /></li>
-                      <li><button className="dropdown-item text-danger" onClick={handleLogout}>Logout</button></li>
+                      }}>Comms Hub</button></li>
+                      <li><hr className="dropdown-divider" style={{ borderColor: '#333' }} /></li>
+                      <li><button className="dropdown-item text-danger" onClick={handleLogout}>Disconnect</button></li>
                     </ul>
                   </div>
                 ) : (
-                  <button className="btn btn-outline-light ms-lg-3 px-4 rounded-pill w-100 w-lg-auto" onClick={() => { setIsRegisterMode(false); setShowLoginModal(true); }}>
+                  <button className="btn btn-outline-danger ms-lg-3 px-4 rounded-0 w-100 w-lg-auto fw-bold" onClick={() => { setIsRegisterMode(false); setShowLoginModal(true); }}>
                     Sign In
                   </button>
                 )}
@@ -633,11 +626,12 @@ function App() {
         </div>
       </nav>
 
+      {/* Authentication Modal */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
+          <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>{isRegisterMode ? 'REGISTER' : 'SIGN IN'}</h3>
+              <h3 className="fw-bold m-0 text-white" style={{ fontFamily: "'Cinzel', serif", letterSpacing: '2px' }}>{isRegisterMode ? 'AWAKEN' : 'SIGN IN'}</h3>
               <button className="btn-close btn-close-white" onClick={() => setShowLoginModal(false)}></button>
             </div>
             
@@ -645,53 +639,55 @@ function App() {
               {isRegisterMode && (
                 <>
                   <div className="mb-3 text-start">
-                    <label className="form-label text-light fw-semibold">Full Name</label>
-                    <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} required />
+                    <label className="form-label text-light small fw-semibold">Spirit Name</label>
+                    <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} required />
                   </div>
                   <div className="mb-3 text-start">
-                    <label className="form-label text-light fw-semibold">Select Account Type</label>
-                    <select className="form-select bg-dark text-white border-secondary" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
-                      <option value="customer">Customer Account</option>
-                      <option value="seller">Seller Account</option>
+                    <label className="form-label text-light small fw-semibold">Path Designation</label>
+                    <select className="form-select bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
+                      <option value="customer">Seeker Account</option>
+                      <option value="seller">Forgemaster Account</option>
                     </select>
                   </div>
                 </>
               )}
               <div className="mb-3 text-start">
-                <label className="form-label text-light fw-semibold">Email address</label>
-                <input type="email" className="form-control bg-dark text-white border-secondary" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                <small className="text-info mt-1 d-block" style={{ fontSize: '11px' }}>* One email can only be used once to create a profile.</small>
+                <label className="form-label text-light small fw-semibold">Email Address Signature</label>
+                <input type="email" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <small className="text-danger mt-1 d-block" style={{ fontSize: '11px' }}>* One signature can only be bound once to create a profile.</small>
               </div>
               <div className="mb-4 text-start">
-                <label className="form-label text-light fw-semibold">Password</label>
+                <label className="form-label text-light small fw-semibold">Security Cipher</label>
                 <div className="input-group">
                   <input 
                     type={showPassword ? "text" : "password"} 
-                    className="form-control bg-dark text-white border-secondary" 
-                    placeholder="Password" 
+                    className="form-control bg-black text-white rounded-0 border-secondary" 
+                    style={{ borderColor: '#333' }}
+                    placeholder="Enter cipher" 
                     value={password} 
                     onChange={(e) => setPassword(e.target.value)} 
                     required 
                   />
                   <button 
                     type="button" 
-                    className="btn btn-outline-secondary text-light" 
+                    className="btn btn-outline-secondary text-light rounded-0" 
                     onClick={() => setShowPassword(!showPassword)}
+                    style={{ borderColor: '#333' }}
                   >
                     {showPassword ? "🙈" : "👁️"}
                   </button>
                 </div>
               </div>
               
-              <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase mb-3 d-flex justify-content-center align-items-center gap-2" style={{ letterSpacing: '1px' }} disabled={isLoading}>
+              <button type="submit" className="btn btn-danger w-100 rounded-0 fw-bold py-2 text-uppercase mb-3 d-flex justify-content-center align-items-center gap-2" style={{ letterSpacing: '2px' }} disabled={isLoading}>
                 {isLoading && <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>}
-                {isLoading ? 'Processing...' : (isRegisterMode ? 'Sign Up' : 'Login')}
+                {isLoading ? 'Processing...' : (isRegisterMode ? 'Complete Awakening' : 'Access Matrix')}
               </button>
 
               <div className="text-center">
-                <p className="small mb-0 text-light" style={{ opacity: 0.9 }}>
-                  {isRegisterMode ? "Already have an account?" : "Don't have an account?"}{" "}
-                  <span style={{ color: '#ffc107', cursor: 'pointer', textDecoration: 'underline', fontWeight: 'bold' }} onClick={() => setIsRegisterMode(!isRegisterMode)}>
+                <p className="small mb-0 text-light" style={{ opacity: 0.8 }}>
+                  {isRegisterMode ? "Already awakened?" : "Unregistered spirit?"}{" "}
+                  <span style={{ color: '#dc3545', cursor: 'pointer', textDecoration: 'underline', fontWeight: 'bold' }} onClick={() => setIsRegisterMode(!isRegisterMode)}>
                     {isRegisterMode ? "Sign In" : "Register here"}
                   </span>
                 </p>
@@ -701,70 +697,71 @@ function App() {
         </div>
       )}
 
+      {/* Master Core Admin Dashboard */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
-          <div className="bg-black p-4 border border-danger rounded-4 shadow-lg mb-5">
+          <div className="bg-black p-4 border border-danger rounded-0 shadow-lg mb-5" style={{ borderColor: '#dc3545 !important' }}>
             <div className="d-flex justify-content-between align-items-center mb-4">
               <div>
-                <h2 className="fw-bold text-danger m-0 d-flex align-items-center gap-2">
-                  ⚡ Super Admin Master Dashboard 
-                  <FacebookBlueTick />
+                <h2 className="fw-bold text-danger m-0 d-flex align-items-center gap-2" style={{ fontFamily: "'Cinzel', serif" }}>
+                  ⚡ Master Core Command 
+                  <SamuraiBadge />
                 </h2>
-                <p className="text-light small mb-0">Control all user registrations, products, and direct messages.</p>
+                <p className="text-light small mb-0">Total control over matrix entities, relics, and signals.</p>
               </div>
-              <button className="btn btn-outline-light btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</button>
+              <button className="btn btn-outline-light btn-sm rounded-0" onClick={() => setActivePage('profile')}>Return to Sanctuary</button>
             </div>
 
             <div className="row g-4 mb-5">
               <div className="col-md-4">
-                <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-light text-uppercase">Total Profiles</h6>
+                <div className="bg-dark p-3 rounded-0 border border-secondary text-center" style={{ borderColor: '#333 !important' }}>
+                  <h6 className="text-light text-uppercase small">Total Spirits</h6>
                   <h2 className="text-white fw-bold">{profilesList.length}</h2>
                 </div>
               </div>
               <div className="col-md-4">
-                <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-light text-uppercase">Total Products</h6>
+                <div className="bg-dark p-3 rounded-0 border border-secondary text-center" style={{ borderColor: '#333 !important' }}>
+                  <h6 className="text-light text-uppercase small">Total Relics</h6>
                   <h2 className="text-white fw-bold">{allProductsList.length}</h2>
                 </div>
               </div>
               <div className="col-md-4">
-                <div className="bg-dark p-3 rounded-3 border border-secondary text-center">
-                  <h6 className="text-light text-uppercase">Direct Messages</h6>
-                  <h2 className="text-info fw-bold">{adminMessages.length}</h2>
+                <div className="bg-dark p-3 rounded-0 border border-secondary text-center" style={{ borderColor: '#333 !important' }}>
+                  <h6 className="text-light text-uppercase small">Incoming Signals</h6>
+                  <h2 className="text-danger fw-bold">{adminMessages.length}</h2>
                 </div>
               </div>
             </div>
 
-            <h4 className="text-white mb-3">🛡️ Incoming Messages from Profiles</h4>
-            <div className="bg-dark p-3 rounded-3 mb-5 overflow-auto shadow-inner" style={{ height: '300px', border: '1px solid #444' }}>
+            <h4 className="text-white mb-3" style={{ fontFamily: "'Cinzel', serif" }}>🛡️ Direct Transmissions</h4>
+            <div className="bg-dark p-3 rounded-0 mb-5 overflow-auto shadow-inner" style={{ height: '300px', border: '1px solid #333' }}>
               {adminMessages.length === 0 ? (
-                <p className="text-light text-center mt-5 small">No incoming messages from users.</p>
+                <p className="text-light text-center mt-5 small" style={{ opacity: 0.6 }}>No signals received in Master Core.</p>
               ) : (
                 adminMessages.map((msg, index) => (
-                  <div key={index} className="mb-3 p-3 rounded-3 bg-secondary text-white border border-secondary" style={{ maxWidth: '85%' }}>
+                  <div key={index} className="mb-3 p-3 rounded-0 bg-black text-white border border-secondary" style={{ maxWidth: '85%', borderColor: '#333 !important' }}>
                     <div className="d-flex align-items-center justify-content-between mb-2">
                       <div className="d-flex align-items-center gap-2">
-                        <img src={msg.senderPhoto || presetAvatars[0]} alt="Sender" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <span className="fw-bold text-warning">{msg.sender}</span>
-                        <span className="small text-light">({msg.senderEmail})</span>
+                        <img src={msg.senderPhoto || presetAvatars[0]} alt="Sender" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <span className="fw-bold text-danger">{msg.sender}</span>
+                        <span className="small text-light opacity-75">({msg.senderEmail})</span>
                       </div>
-                      <span className="text-light" style={{ fontSize: '11px' }}>{msg.time}</span>
+                      <span className="text-light small" style={{ fontSize: '11px' }}>{msg.time}</span>
                     </div>
-                    <p className="mb-0 text-white" style={{ fontSize: '15px' }}>{msg.text}</p>
+                    <p className="mb-0 text-white" style={{ fontSize: '14px' }}>{msg.text}</p>
                   </div>
                 ))
               )}
             </div>
 
-            <h4 className="text-white mb-3">👥 User Profiles Management</h4>
+            <h4 className="text-white mb-3" style={{ fontFamily: "'Cinzel', serif" }}>👥 Spirit Matrix Registry</h4>
             <div className="table-responsive mb-5">
-              <table className="table table-dark table-striped border border-secondary align-middle">
+              <table className="table table-dark table-striped border border-secondary align-middle" style={{ borderColor: '#333 !important' }}>
                 <thead>
-                  <tr>
+                  <tr style={{ backgroundColor: '#111' }}>
                     <th>Name</th>
-                    <th>Email & Status</th>
-                    <th>Role</th>
+                    <th>Signature & Badge</th>
+                    <th>Path</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -772,22 +769,22 @@ function App() {
                   {profilesList.map((prof, idx) => (
                     <tr key={idx}>
                       <td className="d-flex align-items-center gap-2 text-white" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
-                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover' }} />
                         <span className="text-decoration-underline fw-bold">{prof.name}</span>
-                        {prof.role === 'admin' && <FacebookBlueTick />}
+                        {prof.role === 'admin' && <SamuraiBadge />}
                       </td>
                       <td>
-                        <span className="text-white">{prof.email}</span>
+                        <span className="text-white small">{prof.email}</span>
                         <EmailBadge email={prof.email} />
                       </td>
                       <td>
-                        <span className={`badge ${prof.isDeleted ? 'bg-danger' : 'bg-secondary'} text-uppercase`}>
-                          {prof.isDeleted ? 'Deleted by User' : prof.role}
+                        <span className={`badge ${prof.isDeleted ? 'bg-danger' : 'bg-secondary'} rounded-0 text-uppercase`}>
+                          {prof.isDeleted ? 'Obliterated' : prof.role}
                         </span>
                       </td>
                       <td>
                         {prof.email !== 'jihadurrashid997@gmail.com' && (
-                          <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete Profile</button>
+                          <button className="btn btn-sm btn-outline-danger rounded-0" onClick={() => handleDeleteUserByAdmin(prof.email)}>Erase Entity</button>
                         )}
                       </td>
                     </tr>
@@ -796,15 +793,15 @@ function App() {
               </table>
             </div>
 
-            <h4 className="text-white mb-3">🛍️ Product Assets Control</h4>
+            <h4 className="text-white mb-3" style={{ fontFamily: "'Cinzel', serif" }}>⚔️ Relic Arsenal Control</h4>
             <div className="table-responsive">
-              <table className="table table-dark table-striped border border-secondary align-middle">
+              <table className="table table-dark table-striped border border-secondary align-middle" style={{ borderColor: '#333 !important' }}>
                 <thead>
                   <tr>
                     <th>Title</th>
                     <th>Category</th>
                     <th>Price</th>
-                    <th>Seller</th>
+                    <th>Forgemaster</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -814,9 +811,9 @@ function App() {
                       <td className="fw-bold text-white">{prod.title}</td>
                       <td className="text-light">{prod.category}</td>
                       <td className="text-light">${prod.price}</td>
-                      <td className="text-light">{prod.seller || 'Admin'}</td>
+                      <td className="text-light">{prod.seller || 'Master'}</td>
                       <td>
-                        <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteProductByAdmin(prod.id)}>Remove Product</button>
+                        <button className="btn btn-sm btn-outline-danger rounded-0" onClick={() => handleDeleteProductByAdmin(prod.id)}>Banish Relic</button>
                       </td>
                     </tr>
                   ))}
@@ -827,43 +824,44 @@ function App() {
         </div>
       )}
 
+      {/* Comms / Messenger Hub */}
       {isLoggedIn && activePage === 'messenger' && (
         <div className="container py-5">
           <div className="row justify-content-center">
-            <div className="col-md-10 bg-black p-4 border border-warning rounded-4 shadow-lg text-start">
+            <div className="col-md-10 bg-black p-4 border border-secondary rounded-0 shadow-lg text-start" style={{ borderColor: '#333 !important' }}>
               
-              <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-secondary">
+              <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom" style={{ borderColor: '#333 !important' }}>
                 <div className="d-flex align-items-center gap-3">
                   <div className="d-flex align-items-center justify-content-center shadow" style={{
-                    width: '64px', height: '64px', borderRadius: '16px',
-                    background: 'linear-gradient(135deg, #ffc107 0%, #b38600 100%)',
-                    border: '2px solid rgba(255, 193, 7, 0.4)', fontSize: '32px'
+                    width: '56px', height: '56px', borderRadius: '0',
+                    background: 'linear-gradient(135deg, #dc3545 0%, #000 100%)',
+                    border: '1px solid #dc3545', fontSize: '24px'
                   }}>
-                    💬
+                    刀
                   </div>
                   <div>
-                    <h3 className="fw-bold text-warning m-0 fs-2">Messenger Chat</h3>
-                    <p className="text-light small mb-0" style={{ opacity: 0.9 }}>Chat instantly and securely with any profile.</p>
+                    <h3 className="fw-bold text-white m-0 fs-2" style={{ fontFamily: "'Cinzel', serif" }}>Comms Hub</h3>
+                    <p className="text-light small mb-0" style={{ opacity: 0.7 }}>Secure encrypted channels between awakened entities.</p>
                   </div>
                 </div>
-                <button className="btn btn-sm btn-outline-light rounded-pill px-3" onClick={() => setActivePage('profile')}>Back</button>
+                <button className="btn btn-sm btn-outline-light rounded-0 px-3" onClick={() => setActivePage('profile')}>Return</button>
               </div>
 
               <div className="row">
-                <div className="col-md-4 border-end border-secondary pe-3">
-                  <h6 className="text-light mb-3 fw-bold">All Profiles:</h6>
+                <div className="col-md-4 border-end border-secondary pe-3" style={{ borderColor: '#333 !important' }}>
+                  <h6 className="text-light mb-3 fw-bold small text-uppercase">Awakened Entities:</h6>
                   <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                     {profilesList.filter(p => p.email !== userInfo?.email && !p.isDeleted).map((prof, idx) => (
                       <div 
                         key={idx} 
                         onClick={() => setChatTargetUser(prof)}
-                        className={`p-2 rounded-3 d-flex align-items-center gap-2 ${chatTargetUser?.email === prof.email ? 'bg-warning text-dark fw-bold' : 'bg-dark text-white border border-secondary'}`}
-                        style={{ cursor: 'pointer' }}
+                        className={`p-2 rounded-0 d-flex align-items-center gap-2 ${chatTargetUser?.email === prof.email ? 'bg-danger text-white fw-bold' : 'bg-dark text-white border border-secondary'}`}
+                        style={{ cursor: 'pointer', borderColor: '#333 !important' }}
                       >
-                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
                         <div>
                           <div style={{ fontSize: '14px' }} className="d-flex align-items-center">
-                            {prof.name} {prof.role === 'admin' && <FacebookBlueTick />}
+                            {prof.name} {prof.role === 'admin' && <SamuraiBadge />}
                           </div>
                           <span style={{ fontSize: '10px' }} className="text-uppercase opacity-75">{prof.role}</span>
                         </div>
@@ -872,18 +870,19 @@ function App() {
                   </div>
 
                   {userRole !== 'admin' && (
-                    <div className="mt-4 pt-3 border-top border-secondary">
-                      <h6 className="text-info mb-2 fw-bold" style={{ fontSize: '13px' }}>🛡️ Send Direct Message to Admin:</h6>
+                    <div className="mt-4 pt-3 border-top" style={{ borderColor: '#333 !important' }}>
+                      <h6 className="text-danger mb-2 fw-bold small" style={{ fontSize: '12px' }}>⚡ Transmit Signal to Master Core:</h6>
                       <form onSubmit={handleSendAdminMessage}>
                         <input 
                           type="text" 
-                          className="form-control form-control-sm bg-dark text-white border-secondary mb-2" 
-                          placeholder="Type message to admin..." 
+                          className="form-control form-control-sm bg-black text-white rounded-0 border-secondary mb-2" 
+                          style={{ borderColor: '#333' }}
+                          placeholder="Type signal to core..." 
                           value={newAdminMessage}
                           onChange={(e) => setNewAdminMessage(e.target.value)}
                           required
                         />
-                        <button type="submit" className="btn btn-sm btn-info w-100 text-dark fw-bold">Send to Admin Panel</button>
+                        <button type="submit" className="btn btn-sm btn-danger w-100 rounded-0 fw-bold">Transmit Signal</button>
                       </form>
                     </div>
                   )}
@@ -892,30 +891,30 @@ function App() {
                 <div className="col-md-8 ps-3 d-flex flex-column justify-content-between">
                   {chatTargetUser ? (
                     <>
-                      <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(chatTargetUser)}>
-                        <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '34px', height: '34px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <h5 className="text-white m-0 d-flex align-items-center gap-1">
-                          {chatTargetUser.name} {chatTargetUser.role === 'admin' && <FacebookBlueTick />} 
-                          <span className="badge bg-secondary fs-6 text-uppercase ms-2">{chatTargetUser.role}</span>
+                      <div className="d-flex align-items-center gap-2 border-bottom border-secondary pb-2 mb-3" style={{ cursor: 'pointer', borderColor: '#333 !important' }} onClick={() => setSelectedProfileModalUser(chatTargetUser)}>
+                        <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <h5 className="text-white m-0 d-flex align-items-center gap-1" style={{ fontSize: '16px' }}>
+                          {chatTargetUser.name} {chatTargetUser.role === 'admin' && <SamuraiBadge />} 
+                          <span className="badge bg-secondary rounded-0 fs-6 text-uppercase ms-2">{chatTargetUser.role}</span>
                         </h5>
-                        <small className="text-warning ms-auto">View Profile</small>
+                        <small className="text-danger ms-auto">Examine Spirit</small>
                       </div>
 
-                      <div className="bg-dark p-3 rounded-3 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #444' }}>
+                      <div className="bg-dark p-3 rounded-0 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #333' }}>
                         {(() => {
                           const sortedEmails = [userInfo.email, chatTargetUser.email].sort();
                           const chatKey = `${sortedEmails[0]}_${sortedEmails[1]}`;
                           const currentMsgs = directMessages[chatKey] || [];
 
                           if (currentMsgs.length === 0) {
-                            return <p className="text-light text-center mt-5 small" style={{ opacity: 0.7 }}>No conversation yet with {chatTargetUser.name}. Send your first message below!</p>;
+                            return <p className="text-light text-center mt-5 small" style={{ opacity: 0.5 }}>No signal exchange yet with {chatTargetUser.name}. Transmit the first transmission below!</p>;
                           }
 
                           return currentMsgs.map((msg, idx) => (
-                            <div key={idx} className={`mb-3 p-2 rounded-3 ${msg.senderEmail === userInfo.email ? 'ms-auto bg-warning text-dark fw-semibold' : 'bg-secondary text-white'}`} style={{ maxWidth: '75%' }}>
-                              <div className="d-flex justify-content-between small fw-bold mb-1" style={{ fontSize: '11px' }}>
+                            <div key={idx} className={`mb-3 p-2 rounded-0 ${msg.senderEmail === userInfo.email ? 'ms-auto bg-danger text-white fw-semibold' : 'bg-secondary text-white'}`} style={{ maxWidth: '75%' }}>
+                              <div className="d-flex justify-content-between small fw-bold mb-1" style={{ fontSize: '11px', opacity: 0.8 }}>
                                 <span>{msg.sender}</span>
-                                <span className="opacity-75">{msg.time}</span>
+                                <span>{msg.time}</span>
                               </div>
                               <p className="mb-0" style={{ fontSize: '14px' }}>{msg.text}</p>
                             </div>
@@ -926,17 +925,18 @@ function App() {
                       <form onSubmit={handleSendDirectMessage} className="input-group">
                         <input 
                           type="text" 
-                          className="form-control bg-dark text-white border-secondary py-2" 
-                          placeholder={`Type message to ${chatTargetUser.name}...`} 
+                          className="form-control bg-black text-white rounded-0 border-secondary py-2" 
+                          style={{ borderColor: '#333' }}
+                          placeholder={`Transmit message to ${chatTargetUser.name}...`} 
                           value={newDirectMessage}
                           onChange={(e) => setNewDirectMessage(e.target.value)}
                           required
                         />
-                        <button type="submit" className="btn btn-warning px-4 fw-bold text-dark">Send</button>
+                        <button type="submit" className="btn btn-danger rounded-0 px-4 fw-bold">Transmit</button>
                       </form>
                     </>
                   ) : (
-                    <div className="text-center text-light my-auto">Please select a profile from the left list to chat.</div>
+                    <div className="text-center text-light my-auto" style={{ opacity: 0.5 }}>Select an entity from the matrix list to communicate.</div>
                   )}
                 </div>
               </div>
@@ -945,80 +945,81 @@ function App() {
         </div>
       )}
 
+      {/* Profile Sanctuary */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
           <div className="row justify-content-center">
-            <div className="col-md-8 bg-black p-5 border border-secondary rounded-4 shadow-lg">
+            <div className="col-md-8 bg-black p-5 border border-secondary rounded-0 shadow-lg" style={{ borderColor: '#333 !important' }}>
               <div className="d-flex align-items-center mb-4 gap-4">
                 <div style={{ position: 'relative', width: '90px', height: '90px' }}>
-                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', backgroundColor: '#222', overflow: 'hidden', border: '2px solid #555', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', backgroundColor: '#111', overflow: 'hidden', border: '2px solid #dc3545', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 12px rgba(220,53,69,0.3)' }}>
                     {userInfo?.photo ? (
                       <img src={userInfo.photo} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <span className="fs-1 text-light">{userInfo?.name?.charAt(0) || 'U'}</span>
+                      <span className="fs-1 text-light">{userInfo?.name?.charAt(0) || 'S'}</span>
                     )}
                   </div>
                   <span title="Online" style={{
-                    position: 'absolute', bottom: '5px', right: '5px', width: '16px', height: '16px',
-                    backgroundColor: '#0d6efd', borderRadius: '50%', border: '3px solid #000'
+                    position: 'absolute', bottom: '5px', right: '5px', width: '14px', height: '14px',
+                    backgroundColor: '#dc3545', borderRadius: '50%', border: '2px solid #000', boxShadow: '0 0 6px #dc3545'
                   }}></span>
                 </div>
                 <div>
-                  <h2 className="fw-bold mb-1 text-white d-flex align-items-center gap-2" style={{ letterSpacing: '1px' }}>
+                  <h2 className="fw-bold mb-1 text-white d-flex align-items-center gap-2" style={{ fontFamily: "'Cinzel', serif", letterSpacing: '1px' }}>
                     {userInfo?.name}
-                    {userRole === 'admin' && <FacebookBlueTick />}
-                    <span style={{ fontSize: '12px', padding: '3px 10px', borderRadius: '20px', backgroundColor: 'rgba(13, 110, 253, 0.2)', color: '#0d6efd', border: '1px solid #0d6efd' }}>
-                      ● Active Now
+                    {userRole === 'admin' && <SamuraiBadge />}
+                    <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '0', backgroundColor: 'rgba(220, 53, 69, 0.15)', color: '#dc3545', border: '1px solid #dc3545' }}>
+                      ● Active Spirit
                     </span>
                   </h2>
-                  <p className="text-light mb-1">{userInfo?.email}</p>
+                  <p className="text-light mb-1 small">{userInfo?.email}</p>
                   <div className="mb-2"><EmailBadge email={userInfo?.email} /></div>
-                  <span className={`badge ${userRole === 'admin' ? 'bg-danger' : 'bg-light text-dark'} text-uppercase mt-1`}>{userRole}</span>
+                  <span className={`badge ${userRole === 'admin' ? 'bg-danger' : 'bg-secondary'} rounded-0 text-uppercase mt-1`}>{userRole}</span>
                 </div>
               </div>
 
-            <hr className="border-secondary mb-4" />
+            <hr className="border-secondary mb-4" style={{ borderColor: '#333 !important' }} />
              
             <div className="row g-3 mb-4">
               <div className="col-md-6">
-                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.9 }}>Phone Number</p>
-                <h5 className="text-white">{userInfo?.phone || 'Not Added Yet'}</h5>
+                <p className="text-light fw-semibold mb-1 small" style={{ opacity: 0.7 }}>Comms Link</p>
+                <h5 className="text-white">{userInfo?.phone || 'Not Bound Yet'}</h5>
               </div>
               <div className="col-md-6">
-                <p className="text-light fw-semibold mb-1" style={{ opacity: 0.9 }}>Account Status</p>
-                <h5 className="text-success">Verified Active</h5>
+                <p className="text-light fw-semibold mb-1 small" style={{ opacity: 0.7 }}>Sanctuary Status</p>
+                <h5 className="text-danger">Secured & Awakened</h5>
               </div>
             </div>
              
             <div className="d-flex flex-wrap gap-3 align-items-center">
-              <button className="btn btn-light rounded-pill px-4 fw-bold" onClick={() => { setEditName(userInfo?.name || ''); setActivePage('edit-profile'); }}>
-                Edit Profile & Security
+              <button className="btn btn-outline-light rounded-0 px-4 fw-bold" onClick={() => { setEditName(userInfo?.name || ''); setActivePage('edit-profile'); }} style={{ borderColor: '#444' }}>
+                Refine Sanctuary
               </button>
               {userRole === 'admin' && (
-                <button className="btn btn-danger rounded-pill px-4 fw-bold" onClick={() => setActivePage('admin-dashboard')}>
-                  ⚡ Master Admin Panel
+                <button className="btn btn-danger rounded-0 px-4 fw-bold" onClick={() => setActivePage('admin-dashboard')}>
+                  ⚡ Master Core
                 </button>
               )}
               {(userRole === 'seller' || userRole === 'admin') && (
-                <button className="btn btn-warning text-dark rounded-pill px-4 fw-bold" onClick={() => setActivePage('upload')}>
-                  🛍️ Upload New Product
+                <button className="btn btn-outline-danger rounded-0 px-4 fw-bold" onClick={() => setActivePage('upload')}>
+                  ⚔️ Forge New Relic
                 </button>
               )}
-              <button className="btn btn-outline-warning rounded-pill px-3" onClick={() => {
+              <button className="btn btn-outline-light rounded-0 px-3" onClick={() => {
                 const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
                 setChatTargetUser(otherProfile);
                 setActivePage('messenger');
-              }}>
-                💬 Messenger
+              }} style={{ borderColor: '#444' }}>
+                Comms
               </button>
-              <button className="btn btn-outline-warning rounded-pill px-3" onClick={handleDeactivateAccount}>
-                Deactivate
+              <button className="btn btn-outline-warning rounded-0 px-3" onClick={handleDeactivateAccount}>
+                Seal
               </button>
-              <button className="btn btn-outline-danger rounded-pill px-3" onClick={handleDeleteAccount}>
-                Delete Account
+              <button className="btn btn-outline-danger rounded-0 px-3" onClick={handleDeleteAccount}>
+                Obliterate
               </button>
-              <button className="btn btn-outline-secondary rounded-pill px-4 ms-auto" onClick={handleLogout}>
-                Logout
+              <button className="btn btn-outline-secondary rounded-0 px-4 ms-auto" onClick={handleLogout} style={{ borderColor: '#444' }}>
+                Disconnect
               </button>
             </div>
           </div>
@@ -1026,54 +1027,56 @@ function App() {
       </div>
     )}
 
+    {/* Edit Profile Sanctuary */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
-          <div className="col-md-8 bg-black p-5 border border-secondary rounded-4 shadow-lg">
+          <div className="col-md-8 bg-black p-5 border border-secondary rounded-0 shadow-lg" style={{ borderColor: '#333 !important' }}>
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>EDIT PROFILE & PASSWORD</h3>
-              <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Cancel</button>
+              <h3 className="fw-bold m-0 text-white" style={{ fontFamily: "'Cinzel', serif", letterSpacing: '1px' }}>REFINE SANCTUARY</h3>
+              <button className="btn btn-sm btn-outline-light rounded-0" onClick={() => setActivePage('profile')}>Cancel</button>
           </div>
-          <hr className="border-secondary mb-4" />
+          <hr className="border-secondary mb-4" style={{ borderColor: '#333 !important' }} />
 
           <form onSubmit={handleUpdateProfile}>
             <div className="mb-3">
-              <label className="form-label text-light fw-semibold">Full Name</label>
-              <input type="text" className="form-control bg-dark text-white border-secondary" value={editName} onChange={(e) => setEditName(e.target.value)} required />
+              <label className="form-label text-light small fw-semibold">Spirit Name</label>
+              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} value={editName} onChange={(e) => setEditName(e.target.value)} required />
             </div>
              
             <div className="mb-3">
-              <label className="form-label text-light fw-semibold">Phone Number</label>
-              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+              <label className="form-label text-light small fw-semibold">Comms Link</label>
+              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter comms number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
             </div>
 
           <div className="mb-3">
-            <label className="form-label text-light fw-semibold">Profile Photo</label>
-            <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleImageUploadFromFile} />
+            <label className="form-label text-light small fw-semibold">Avatar Hologram</label>
+            <input type="file" accept="image/*" className="form-control bg-black text-white rounded-0 border-secondary mb-2" style={{ borderColor: '#333' }} onChange={handleImageUploadFromFile} />
             <div className="d-flex gap-3 my-2 flex-wrap align-items-center">
-              <span className="text-light small">Or select preset avatar:</span>
+              <span className="text-light small" style={{ opacity: 0.7 }}>Or select preset avatar:</span>
               {presetAvatars.map((url, idx) => (
                 <img 
                   key={idx} 
                   src={url} 
                   alt="Avatar Preset" 
                   onClick={() => setEditPhoto(url)} 
-                  style={{ width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', border: editPhoto === url ? '3px solid #ffc107' : '2px solid #555', objectFit: 'cover' }} 
+                  style={{ width: '40px', height: '40px', borderRadius: '50%', cursor: 'pointer', border: editPhoto === url ? '2px solid #dc3545' : '1px solid #444', objectFit: 'cover' }} 
                 />
               ))}
             </div>
           </div>
 
-          <hr className="border-secondary my-4" />
-          <h5 className="text-white mb-3">Change Password Security</h5>
+          <hr className="border-secondary my-4" style={{ borderColor: '#333 !important' }} />
+          <h5 className="text-white mb-3" style={{ fontFamily: "'Cinzel', serif", fontSize: '16px' }}>Security Cipher Update</h5>
 
           <div className="mb-3">
-            <label className="form-label text-light fw-semibold">Current Password</label>
+            <label className="form-label text-light small fw-semibold">Current Cipher</label>
             <div className="input-group">
               <input 
                 type={showCurrentPassword ? "text" : "password"} 
-                className="form-control bg-dark text-white border-secondary" 
-                placeholder="Enter current password" 
+                className="form-control bg-black text-white rounded-0 border-secondary" 
+                style={{ borderColor: '#333' }}
+                placeholder="Enter current cipher" 
                 value={currentPassword} 
                 onChange={(e) => {
                   setCurrentPassword(e.target.value);
@@ -1082,30 +1085,33 @@ function App() {
               />
               <button 
                 type="button" 
-                className="btn btn-outline-secondary text-light" 
+                className="btn btn-outline-secondary text-light rounded-0" 
+                style={{ borderColor: '#333' }}
                 onClick={() => setShowCurrentPassword(!showCurrentPassword)}
               >
                 {showCurrentPassword ? "🙈" : "👁️"}
               </button>
-              <button type="button" className="btn btn-outline-light" onClick={handleVerifyCurrentPassword}>Verify</button>
+              <button type="button" className="btn btn-outline-light rounded-0" onClick={handleVerifyCurrentPassword} style={{ borderColor: '#444' }}>Verify</button>
             </div>
-            {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Current password verified!</small>}
+            {isCurrentPasswordValid && <small className="text-danger mt-1 d-block">✓ Cipher verified successfully!</small>}
           </div>
 
           <div className="mb-4">
-            <label className="form-label text-light fw-semibold">New Password</label>
+            <label className="form-label text-light small fw-semibold">New Cipher</label>
             <div className="input-group">
               <input 
                 type={showNewPassword ? "text" : "password"} 
-                className="form-control bg-dark text-white border-secondary" 
-                placeholder={isCurrentPasswordValid ? "Enter new password" : "Verify current password first..."} 
+                className="form-control bg-black text-white rounded-0 border-secondary" 
+                style={{ borderColor: '#333' }}
+                placeholder={isCurrentPasswordValid ? "Enter new cipher" : "Verify current cipher first..."} 
                 value={newPassword} 
                 onChange={(e) => setNewPassword(e.target.value)} 
                 disabled={!isCurrentPasswordValid} 
               />
               <button 
                 type="button" 
-                className="btn btn-outline-secondary text-light" 
+                className="btn btn-outline-secondary text-light rounded-0" 
+                style={{ borderColor: '#333' }}
                 onClick={() => setShowNewPassword(!showNewPassword)}
                 disabled={!isCurrentPasswordValid}
               >
@@ -1114,100 +1120,106 @@ function App() {
             </div>
           </div>
 
-          <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Save All Changes</button>
+          <button type="submit" className="btn btn-danger w-100 rounded-0 fw-bold py-2 text-uppercase" style={{ letterSpacing: '2px' }}>Save Matrix Alterations</button>
         </form>
       </div>
       </div>
     </div>
    )}
 
+    {/* Upload Relic */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
-          <div className="col-md-8 bg-black p-5 border border-secondary rounded-4 shadow-lg">
+          <div className="col-md-8 bg-black p-5 border border-secondary rounded-0 shadow-lg" style={{ borderColor: '#333 !important' }}>
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <h3 className="fw-bold m-0 text-white" style={{ letterSpacing: '1px' }}>UPLOAD PRODUCT</h3>
-              <button className="btn btn-sm btn-outline-light" onClick={() => setActivePage('profile')}>Back to Profile</button>
+              <h3 className="fw-bold m-0 text-white" style={{ fontFamily: "'Cinzel', serif", letterSpacing: '1px' }}>FORGE RELIC</h3>
+              <button className="btn btn-sm btn-outline-light rounded-0" onClick={() => setActivePage('profile')}>Return</button>
           </div>
-          <hr className="border-secondary mb-4" />
+          <hr className="border-secondary mb-4" style={{ borderColor: '#333 !important' }} />
 
           <form onSubmit={handleProductUpload}>
             <div className="mb-3">
-              <label className="form-label text-light fw-semibold">Product Title</label>
-              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Enter product name..." value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
+              <label className="form-label text-light small fw-semibold">Relic Designation</label>
+              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter relic name..." value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
             </div>
             <div className="mb-3">
-              <label className="form-label text-light fw-semibold">Price ($)</label>
-              <input type="number" className="form-control bg-dark text-white border-secondary" placeholder="Enter price..." value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
+              <label className="form-label text-light small fw-semibold">Value ($)</label>
+              <input type="number" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter value..." value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
             </div>
             <div className="mb-3">
-              <label className="form-label text-light fw-semibold">Category</label>
-              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="e.g. Luxury, Electronics..." value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
+              <label className="form-label text-light small fw-semibold">Domain Category</label>
+              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="e.g. Luxury, Relics..." value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
             </div>
             <div className="mb-3">
-              <label className="form-label text-light fw-semibold">Description</label>
-              <textarea className="form-control bg-dark text-white border-secondary" rows="3" placeholder="Enter product description..." value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
+              <label className="form-label text-light small fw-semibold">Description</label>
+              <textarea className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} rows="3" placeholder="Describe the relic powers..." value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
             </div>
             <div className="mb-4">
-              <label className="form-label text-light fw-semibold">Product Image (Choose File or Enter URL)</label>
-              <input type="file" accept="image/*" className="form-control bg-dark text-white border-secondary mb-2" onChange={handleProductFile} />
-              <input type="text" className="form-control bg-dark text-white border-secondary" placeholder="Or paste direct image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
+              <label className="form-label text-light small fw-semibold">Visual Hologram File or URL</label>
+              <input type="file" accept="image/*" className="form-control bg-black text-white rounded-0 border-secondary mb-2" style={{ borderColor: '#333' }} onChange={handleProductFile} />
+              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Or paste direct image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
             </div>
-            <button type="submit" className="btn btn-light w-100 rounded-pill fw-bold py-2 text-uppercase">Publish Product Now</button>
+            <button type="submit" className="btn btn-danger w-100 rounded-0 fw-bold py-2 text-uppercase" style={{ letterSpacing: '2px' }}>Forge Relic Into Matrix</button>
           </form>
         </div>
         </div>
       </div>
    )}
 
+    {/* Home / Samurai Showcase */}
     {activePage === 'home' && (
       <>
-        <header className="container-fluid text-center py-5" style={{ minHeight: '55vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle, #222 0%, #000 100%)' }}>
-          <motion.h1 initial={{y: 30, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.5}} className="display-1 fw-bold mb-3 text-white" style={{textTransform: 'uppercase', letterSpacing: '4px'}}>
+        {/* Hero Section styled like the video */}
+        <header className="container-fluid text-center py-5" style={{ minHeight: '65vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle at center, #111 0%, #000 100%)', borderBottom: '1px solid #1a1a1a' }}>
+          <motion.div initial={{scale: 0.95, opacity: 0}} animate={{scale: 1, opacity: 1}} transition={{duration: 0.6}}>
+            <span className="badge bg-danger rounded-0 px-3 py-2 mb-3 text-uppercase fw-bold" style={{ letterSpacing: '3px', fontSize: '11px' }}>Awakened Code & Design</span>
+          </motion.div>
+          <motion.h1 initial={{y: 25, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.5}} className="display-1 fw-bold mb-3 text-white" style={{ fontFamily: "'Cinzel', serif", textTransform: 'uppercase', letterSpacing: '6px' }}>
             JR STORE
           </motion.h1>
-          <motion.p initial={{opacity: 0}} animate={{opacity: 0.9}} transition={{delay: 0.4, duration: 0.5}} className="lead fs-3 text-light">Explore exclusive products and connect directly with sellers.</motion.p>
+          <motion.p initial={{opacity: 0}} animate={{opacity: 0.8}} transition={{delay: 0.4, duration: 0.5}} className="lead fs-4 text-light" style={{ fontWeight: '300', letterSpacing: '1px' }}>To master the web is to master the self.</motion.p>
           <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 0.6, duration: 0.4}}>
-            <button className="btn btn-light btn-lg mt-4 px-5 py-3 rounded-pill fw-bold text-uppercase" onClick={() => window.scrollTo({ top: 500, behavior: 'smooth' })}>Browse Collection</button>
+            <button className="btn btn-outline-danger btn-lg mt-4 px-5 py-3 rounded-0 fw-bold text-uppercase" style={{ letterSpacing: '2px', borderWidth: '2px' }} onClick={() => window.scrollTo({ top: 550, behavior: 'smooth' })}>Enter Arsenal</button>
           </motion.div>
         </header>
 
         <div className="container py-5">
           {searchQuery && (
             <div className="mb-5 text-start text-white">
-              <h4 className="border-bottom border-secondary pb-2">Search Results for: "{searchQuery}"</h4>
+              <h4 className="border-bottom border-secondary pb-2" style={{ fontFamily: "'Cinzel', serif", borderColor: '#333 !important' }}>Matrix Search Results for: "{searchQuery}"</h4>
               
               {(searchType === 'all' || searchType === 'profile') && (
                 <div className="my-4">
-                  <h6 className="text-light text-uppercase mb-3" style={{ opacity: 0.8 }}>Matched Profiles</h6>
+                  <h6 className="text-light text-uppercase mb-3 small" style={{ opacity: 0.7 }}>Matched Spirits</h6>
                   <div className="row g-3">
                     {profilesList.filter(p => !p.isDeleted && p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       profilesList.filter(p => !p.isDeleted && p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
                         <div className="col-md-4" key={idx}>
-                          <div className="bg-black p-3 border border-secondary rounded-3 d-flex align-items-center justify-content-between">
+                          <div className="bg-black p-3 border border-secondary rounded-0 d-flex align-items-center justify-content-between" style={{ borderColor: '#333 !important' }}>
                             <div className="d-flex align-items-center gap-3" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
-                              <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '45px', height: '45px', borderRadius: '50%', objectFit: 'cover' }} />
+                              <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover' }} />
                               <div>
-                                <h5 className="mb-1 text-white d-flex align-items-center">
-                                  {prof.name} {prof.role === 'admin' && <FacebookBlueTick />}
+                                <h5 className="mb-1 text-white d-flex align-items-center fs-6">
+                                  {prof.name} {prof.role === 'admin' && <SamuraiBadge />}
                                 </h5>
-                                <span className="badge bg-secondary text-uppercase">{prof.role}</span>
+                                <span className="badge bg-secondary rounded-0 text-uppercase" style={{ fontSize: '10px' }}>{prof.role}</span>
                               </div>
                             </div>
                             <div className="d-flex gap-2">
-                              <button className="btn btn-sm btn-outline-light rounded-pill px-2" onClick={() => setSelectedProfileModalUser(prof)}>View</button>
+                              <button className="btn btn-sm btn-outline-light rounded-0 px-2" onClick={() => setSelectedProfileModalUser(prof)}>View</button>
                               {isLoggedIn && prof.email !== userInfo?.email && (
-                                <button className="btn btn-sm btn-warning rounded-pill px-3 fw-bold text-dark" onClick={() => {
+                                <button className="btn btn-sm btn-danger rounded-0 px-3 fw-bold" onClick={() => {
                                   setChatTargetUser(prof);
                                   setActivePage('messenger');
-                                }}>Chat</button>
+                                }}>Comms</button>
                               )}
                             </div>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <p className="text-light small" style={{ opacity: 0.7 }}>No profiles found matching query.</p>
+                      <p className="text-light small" style={{ opacity: 0.5 }}>No spirits matched the query.</p>
                     )}
                   </div>
                 </div>
@@ -1215,32 +1227,32 @@ function App() {
 
               {(searchType === 'all' || searchType === 'product') && (
                 <div className="my-4">
-                  <h6 className="text-light text-uppercase mb-3" style={{ opacity: 0.8 }}>Matched Products</h6>
+                  <h6 className="text-light text-uppercase mb-3 small" style={{ opacity: 0.7 }}>Matched Relics</h6>
                   <div className="row g-4">
                     {allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase())).map((prod) => (
                         <div className="col-md-4" key={prod.id}>
-                          <div className="card h-100 bg-black border border-secondary rounded-0 p-3">
+                          <div className="card h-100 bg-black border border-secondary rounded-0 p-3" style={{ borderColor: '#333 !important' }}>
                             <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '200px', overflow: 'hidden' }}>
-                              {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'No Image'}
+                              {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'No Hologram'}
                             </div>
                             <div className="card-body text-center">
-                              <h5 className="card-title fw-bold text-uppercase text-white mt-2">{prod.title}</h5>
+                              <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{ fontSize: '16px' }}>{prod.title}</h5>
                               <p className="text-light mb-3">${prod.price}</p>
-                              <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" onClick={() => {
+                              <button className="btn btn-outline-danger w-100 rounded-0 text-uppercase fw-bold" onClick={() => {
                                 if(!isLoggedIn) setShowLoginModal(true);
                                 else {
                                   const sellerProf = profilesList.find(p => p.name === prod.seller) || profilesList[0];
                                   setChatTargetUser(sellerProf);
                                   setActivePage('messenger');
                                 }
-                              }}>Discuss Product</button>
+                              }}>Examine Relic</button>
                             </div>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <p className="text-light small" style={{ opacity: 0.7 }}>No products found matching query.</p>
+                      <p className="text-light small" style={{ opacity: 0.5 }}>No relics matched the query.</p>
                     )}
                   </div>
                 </div>
@@ -1251,15 +1263,15 @@ function App() {
           <div className="row g-4">
             {allProductsList.map((prod) => (
               <div className="col-md-4" key={prod.id}>
-                <motion.div initial={{y: 30, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.4}} className="card h-100 bg-black border border-secondary rounded-0 p-3">
-                  <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '280px', overflow: 'hidden' }}>
-                    {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Image'}
+                <motion.div initial={{y: 25, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.4}} className="card h-100 bg-black border border-secondary rounded-0 p-3" style={{ borderColor: '#333 !important' }}>
+                  <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '260px', overflow: 'hidden' }}>
+                    {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Hologram'}
                   </div>
                   <div className="card-body text-center">
-                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '1px'}}>{prod.title}</h5>
-                    <p className="text-light small mb-2">Seller: <span className="text-warning fw-semibold">{prod.seller || 'Admin'}</span></p>
+                    <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '1px', fontFamily: "'Cinzel', serif", fontSize: '17px'}}>{prod.title}</h5>
+                    <p className="text-light small mb-2">Forgemaster: <span className="text-danger fw-semibold">{prod.seller || 'Master'}</span></p>
                     <p className="text-white fw-bold fs-5 mb-4">${prod.price}</p>
-                    <button className="btn btn-outline-warning w-100 rounded-0 text-uppercase" style={{letterSpacing: '1px'}} onClick={() => {
+                    <button className="btn btn-outline-danger w-100 rounded-0 text-uppercase fw-bold" style={{letterSpacing: '1px'}} onClick={() => {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
                       } else {
@@ -1267,7 +1279,7 @@ function App() {
                         setChatTargetUser(sellerProf);
                         setActivePage('messenger');
                       }
-                    }}>Discuss Product</button>
+                    }}>Examine Relic</button>
                   </div>
                 </motion.div>
               </div>
@@ -1281,19 +1293,19 @@ function App() {
 }
 
 const modalStyles = {
-  overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-  box: { backgroundColor: '#161616', padding: '30px', borderRadius: '12px', width: '90%', maxWidth: '400px', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.7)' }
+  overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
+  box: { backgroundColor: '#0d0d0d', padding: '35px', borderRadius: '0', width: '90%', maxWidth: '420px', border: '1px solid #333', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }
 };
 
 const splashStyles = {
   container: { height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', overflow: 'hidden', position: 'fixed', top: 0, left: 0, zIndex: 1000 },
   content: { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%', height: '100%' },
   logoWrapper: { position: 'relative', width: '120px', height: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '30px' },
-  logoGlow: { position: 'absolute', width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(15px)' },
-  logoText: { fontSize: '55px', fontWeight: '200', color: '#fff', letterSpacing: '2px', position: 'relative', zIndex: 1 },
-  title: { fontSize: '36px', fontWeight: '300', color: '#fff', textTransform: 'uppercase', letterSpacing: '6px', margin: '0 0 10px 0' },
-  subtitle: { fontSize: '16px', color: '#fff', fontWeight: '200', letterSpacing: '3px', opacity: 0.8, marginBottom: '50px' },
-  progressBar: { height: '1px', background: 'linear-gradient(90deg, transparent, #fff, transparent)', position: 'absolute', bottom: '15%', width: '0%', left: 0 }
+  logoGlow: { position: 'absolute', width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(220,53,69,0.3) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(20px)' },
+  logoText: { fontSize: '65px', fontWeight: '900', color: '#dc3545', letterSpacing: '2px', position: 'relative', zIndex: 1, fontFamily: "'Cinzel', serif" },
+  title: { fontSize: '38px', fontWeight: '700', color: '#fff', textTransform: 'uppercase', letterSpacing: '8px', margin: '0 0 10px 0', fontFamily: "'Cinzel', serif" },
+  subtitle: { fontSize: '15px', color: '#fff', fontWeight: '300', letterSpacing: '2px', opacity: '0.7', marginBottom: '50px' },
+  progressBar: { height: '2px', background: 'linear-gradient(90deg, transparent, #dc3545, transparent)', position: 'absolute', bottom: '15%', width: '0%', left: 0 }
 };
 
 export default App;
