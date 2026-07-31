@@ -13,6 +13,9 @@ function App() {
   const [userRole, setUserRole] = useState('customer');
   const [activePage, setActivePage] = useState('home'); 
 
+  // High-Profile Product Modal State
+  const [selectedProduct, setSelectedProduct] = useState(null);
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,8 +44,8 @@ function App() {
   const [profilesList, setProfilesList] = useState([defaultSuperAdmin]);
 
   const [allProductsList, setAllProductsList] = useState([
-    { id: 1, title: 'Samurai Blade Master Edition', price: '999.00', category: 'Luxury', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' },
-    { id: 2, title: 'Cybernetic Relic Katana', price: '1,499.00', category: 'Accessories', seller: 'Jihadur Rashid', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=300' }
+    { id: 1, title: 'Samurai Blade Master Edition', price: '999.00', category: 'Luxury', seller: 'Jihadur Rashid', description: 'Forged from the absolute depths of high-performance architecture. Built for absolute precision and dominance.', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500' },
+    { id: 2, title: 'Cybernetic Relic Katana', price: '1,499.00', category: 'Accessories', seller: 'Jihadur Rashid', description: 'An elite cyberpunk masterpiece engineered with modular perfection and fluid animation layout.', image: 'https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500' }
   ]);
 
   const [adminMessages, setAdminMessages] = useState([]);
@@ -82,7 +85,7 @@ function App() {
 
   const SamuraiBadge = () => (
     <span 
-      title="Verified Samurai Master" 
+      title="Verified High-Profile Master" 
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -96,7 +99,7 @@ function App() {
         fontWeight: '900',
         marginLeft: '6px',
         verticalAlign: 'middle',
-        boxShadow: '0 0 8px rgba(220, 53, 69, 0.8)'
+        boxShadow: '0 0 10px rgba(220, 53, 69, 0.9)'
       }}
     >
       ⚡
@@ -107,13 +110,12 @@ function App() {
     const isOriginal = email === 'jihadurrashid997@gmail.com' || email.endsWith('@jrstore.com') || email.includes('admin');
     return (
       <span className={`badge ${isOriginal ? 'bg-danger text-white' : 'bg-dark text-warning'} ms-2`} style={{ fontSize: '10px', border: '1px solid #444' }}>
-        {isOriginal ? '⚡ Master Core' : '⚡ Awakened User'}
+        {isOriginal ? '⚡ Elite Core' : '⚡ Awakened Entity'}
       </span>
     );
   };
 
   useEffect(() => {
-    // Inject Custom Fonts dynamically
     const linkEl = document.createElement('link');
     linkEl.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Space+Grotesk:wght@300;400;600&display=swap';
     linkEl.rel = 'stylesheet';
@@ -173,15 +175,15 @@ function App() {
     setUserInfo(null);
     setUserRole('customer');
     setActivePage('home');
-    showToast("Disconnected from Matrix successfully!", "success");
+    showToast("Disconnected from matrix successfully!", "success");
     setTimeout(() => { window.location.reload(); }, 400);
   };
 
   const handleDeactivateAccount = () => {
     setConfirmModal({
       show: true,
-      title: 'Deactivate Spirit',
-      message: 'Are you sure you want to temporarily seal your account?',
+      title: 'Seal Sanctuary',
+      message: 'Are you sure you want to temporarily seal your account profile?',
       type: 'warning',
       onConfirm: () => {
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
@@ -195,11 +197,11 @@ function App() {
     setConfirmModal({
       show: true,
       title: 'Obliterate Account',
-      message: 'Are you sure you want to completely erase your data? Your profile log will remain sealed in the Master Core.',
+      message: 'Are you sure you want to completely erase your data? Your profile log will remain sealed in Elite Core.',
       type: 'danger',
       onConfirm: () => {
         if (userInfo?.email === 'jihadurrashid997@gmail.com') {
-          showToast("Cannot destroy Supreme Master Core!", "danger");
+          showToast("Cannot destroy Supreme Elite Core!", "danger");
           setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
           return;
         }
@@ -278,24 +280,24 @@ function App() {
     setCurrentPassword('');
     setNewPassword('');
     setIsCurrentPasswordValid(false);
-    showToast("Spirit upgraded successfully!", "success");
+    showToast("Profile upgraded successfully!", "success");
     setActivePage('profile');
   };
 
   const handleDeleteUserByAdmin = (emailToDelete) => {
     if (emailToDelete === 'jihadurrashid997@gmail.com') {
-      showToast("Cannot erase Master Core!", "danger");
+      showToast("Cannot erase Elite Core!", "danger");
       return;
     }
     const updatedProfiles = profilesList.filter(p => p.email !== emailToDelete);
     setProfilesList(updatedProfiles);
     localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
-    showToast("Entity erased by Master Admin!", "success");
+    showToast("Entity erased by Admin!", "success");
   };
 
   const handleDeleteProductByAdmin = (productId) => {
     setAllProductsList(allProductsList.filter(p => p.id !== productId));
-    showToast("Relic banished by Master Admin!", "success");
+    showToast("Relic removed by Admin!", "success");
   };
 
   const handleSendAdminMessage = (e) => {
@@ -313,7 +315,7 @@ function App() {
     setAdminMessages(updatedAdminMsgs);
     localStorage.setItem('adminMessages', JSON.stringify(updatedAdminMsgs));
     setNewAdminMessage('');
-    showToast("Signal transmitted to Master Core!", "success");
+    showToast("Signal transmitted to Elite Core!", "success");
   };
 
   const handleSendDirectMessage = (e) => {
@@ -354,8 +356,8 @@ function App() {
       title: productTitle,
       price: productPrice,
       category: productCategory,
-      description: productDescription,
-      image: productImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300',
+      description: productDescription || 'An exclusive high-end crafted master relic.',
+      image: productImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500',
       seller: userInfo?.name || 'Master'
     };
 
@@ -376,21 +378,21 @@ function App() {
     if (isRegisterMode) {
       const existingUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail && !p.isDeleted);
       if (existingUser) {
-        showToast("This spirit signature already exists! Sign in instead.", "danger");
+        showToast("This email signature already exists! Sign in instead.", "danger");
         return;
       }
       if (selectedRole === 'admin' && cleanEmail !== 'jihadurrashid997@gmail.com') {
-        showToast("Master Core registration is restricted!", "danger");
+        showToast("Elite Core registration is restricted!", "danger");
         return;
       }
     } else {
       const foundUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail);
       if (!foundUser) {
-        showToast("No spirit found with this signature! Register first.", "danger");
+        showToast("No profile found with this email! Register first.", "danger");
         return;
       }
       if (cleanEmail === 'jihadurrashid997@gmail.com' && password !== '252002051') {
-        showToast("Incorrect Master Cipher!", "danger");
+        showToast("Incorrect Admin Code!", "danger");
         return;
       }
       if (cleanEmail !== 'jihadurrashid997@gmail.com' && foundUser.password && foundUser.password !== password) {
@@ -402,8 +404,8 @@ function App() {
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      showToast(isRegisterMode ? "Awakening Successful!" : "Matrix Access Granted!", "success");
-      localStorage.setItem('token', 'jr-samurai-token-2026');
+      showToast(isRegisterMode ? "Awakening Successful!" : "Access Granted!", "success");
+      localStorage.setItem('token', 'jr-high-profile-token-2026');
       
       const role = (cleanEmail === 'jihadurrashid997@gmail.com') ? 'admin' : (isRegisterMode ? selectedRole : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.role || 'customer'));
       const userName = name || (role === 'admin' ? 'Jihadur Rashid' : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.name || cleanEmail.split('@')[0]));
@@ -445,16 +447,21 @@ function App() {
               key="splash-content"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0, scale: 1.1, filter: "blur(12px)", transition: { duration: 0.8, ease: "easeInOut" }}}
+              exit={{ opacity: 0, scale: 1.15, filter: "blur(15px)", transition: { duration: 0.8, ease: "easeInOut" }}}
               style={splashStyles.content}
             >
-              <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5, type: "spring", bounce: 0.4 }} style={splashStyles.logoWrapper}>
+              <motion.div 
+                initial={{ scale: 0, rotate: -180, opacity: 0 }} 
+                animate={{ scale: 1, rotate: 0, opacity: 1 }} 
+                transition={{ delay: 0.2, duration: 0.6, type: "spring", bounce: 0.5 }} 
+                style={splashStyles.logoWrapper}
+              >
                 <div style={splashStyles.logoGlow}></div>
-                <span style={splashStyles.logoText}>刀</span>
+                <span style={splashStyles.logoText}>JR</span>
               </motion.div>
-              <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.4 }} style={splashStyles.title}>JR STORE</motion.h1>
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} transition={{ delay: 0.9, duration: 0.4 }} style={splashStyles.subtitle}>To master the sword is to master the self.</motion.p>
-              <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 0.8, duration: 1.4, ease: "linear" }} style={splashStyles.progressBar} />
+              <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.5 }} style={splashStyles.title}>JR STORE</motion.h1>
+              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 0.85 }} transition={{ delay: 0.8, duration: 0.5 }} style={splashStyles.subtitle}>High-Profile Architecture & Digital Relics</motion.p>
+              <motion.div initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ delay: 0.7, duration: 1.4, ease: "easeInOut" }} style={splashStyles.progressBar} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -465,14 +472,15 @@ function App() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} style={{ backgroundColor: '#050505', minHeight: '100vh', color: '#f8f9fa', position: 'relative', fontFamily: "'Space Grotesk', sans-serif" }}>
       
+      {/* Toast Notification */}
       {toast.show && (
         <div style={{ position: 'fixed', top: '25px', right: '25px', zIndex: 9999 }}>
           <motion.div 
             initial={{ opacity: 0, y: -25, scale: 0.9 }} 
             animate={{ opacity: 1, y: 0, scale: 1 }} 
             exit={{ opacity: 0, y: -25 }}
-            className={`alert ${toast.type === 'success' ? 'alert-danger' : 'alert-dark'} shadow-lg fw-bold px-4 py-3 rounded-0 d-flex align-items-center gap-2`}
-            style={{ minWidth: '280px', border: '1px solid #dc3545', backgroundColor: '#0c0c0c', color: '#fff' }}
+            className="alert shadow-lg fw-bold px-4 py-3 rounded-0 d-flex align-items-center gap-2"
+            style={{ minWidth: '280px', border: '1px solid #dc3545', backgroundColor: '#0c0c0c', color: '#fff', boxShadow: '0 0 20px rgba(220,53,69,0.3)' }}
           >
             <span style={{ color: '#dc3545' }}>⚡</span>
             <span>{toast.message}</span>
@@ -480,6 +488,51 @@ function App() {
         </div>
       )}
 
+      {/* High-Profile Product Details Modal with Smooth Animation */}
+      {selectedProduct && (
+        <div style={modalStyles.overlay}>
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0, y: 30 }} 
+            animate={{ scale: 1, opacity: 1, y: 0 }} 
+            exit={{ scale: 0.8, opacity: 0 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            style={{ ...modalStyles.box, maxWidth: '750px', padding: '0', overflow: 'hidden', border: '1px solid #dc3545' }}
+          >
+            <div className="row g-0">
+              <div className="col-md-6 bg-dark d-flex align-items-center justify-content-center p-3" style={{ minHeight: '320px' }}>
+                <img src={selectedProduct.image} alt={selectedProduct.title} style={{ width: '100%', height: '100%', objectFit: 'cover', maxHeight: '350px' }} />
+              </div>
+              <div className="col-md-6 p-4 d-flex flex-column justify-content-between text-start bg-black">
+                <div>
+                  <button className="btn-close btn-close-white float-end" onClick={() => setSelectedProduct(null)}></button>
+                  <span className="badge bg-danger rounded-0 text-uppercase mb-2" style={{ letterSpacing: '2px', fontSize: '10px' }}>{selectedProduct.category}</span>
+                  <h3 className="fw-bold text-white mb-2" style={{ fontFamily: "'Cinzel', serif", fontSize: '20px' }}>{selectedProduct.title}</h3>
+                  <h4 className="text-danger fw-bold mb-3">${selectedProduct.price}</h4>
+                  <p className="text-light small mb-4" style={{ opacity: 0.85, lineHeight: '1.6' }}>{selectedProduct.description}</p>
+                  <p className="text-secondary small mb-3">Forgemaster: <span className="text-white fw-semibold">{selectedProduct.seller || 'Master'}</span></p>
+                </div>
+                
+                <div className="d-flex gap-2">
+                  <button className="btn btn-danger w-100 rounded-0 fw-bold text-uppercase py-2" style={{ letterSpacing: '1px' }} onClick={() => {
+                    const prod = selectedProduct;
+                    setSelectedProduct(null);
+                    if(!isLoggedIn) {
+                      setShowLoginModal(true);
+                    } else {
+                      const sellerProf = profilesList.find(p => p.name === prod.seller) || profilesList[0];
+                      setChatTargetUser(sellerProf);
+                      setActivePage('messenger');
+                    }
+                  }}>Inquire Relic</button>
+                  <button className="btn btn-outline-light rounded-0 px-3" onClick={() => setSelectedProduct(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
       {confirmModal.show && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center' }}>
@@ -493,6 +546,7 @@ function App() {
         </div>
       )}
 
+      {/* Profile Modal Viewer */}
       {selectedProfileModalUser && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
@@ -505,10 +559,10 @@ function App() {
               {selectedProfileModalUser.name}
               {selectedProfileModalUser.role === 'admin' && <SamuraiBadge />}
             </h4>
-            <p className="text-light small mb-1">Signature: {selectedProfileModalUser.email}</p>
+            <p className="text-light small mb-1">Email: {selectedProfileModalUser.email}</p>
             <div className="mb-2"><EmailBadge email={selectedProfileModalUser.email} /></div>
-            <p className="text-light small mb-3">Comms Link: {selectedProfileModalUser.phone || 'N/A'}</p>
-            <span className="badge bg-secondary text-uppercase mb-4 rounded-0">{selectedProfileModalUser.isDeleted ? 'Spirit Obliterated' : selectedProfileModalUser.role}</span>
+            <p className="text-light small mb-3">Phone: {selectedProfileModalUser.phone || 'N/A'}</p>
+            <span className="badge bg-secondary text-uppercase mb-4 rounded-0">{selectedProfileModalUser.isDeleted ? 'Entity Obliterated' : selectedProfileModalUser.role}</span>
             
             <div className="d-flex justify-content-center gap-2">
               {isLoggedIn && !selectedProfileModalUser.isDeleted && selectedProfileModalUser.email !== userInfo?.email && (
@@ -525,14 +579,14 @@ function App() {
         </div>
       )}
 
-      {/* Cyber / Minimalist Header */}
+      {/* High-End Header / Navbar */}
       <nav className="navbar navbar-expand-lg navbar-dark bg-black p-3 sticky-top border-bottom" style={{ borderColor: '#222 !important' }}>
         <div className="container">
           <a className="navbar-brand fw-bold fs-3 text-white" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }} style={{ fontFamily: "'Cinzel', serif", letterSpacing: '4px', cursor: 'pointer' }}>
             <span style={{color:'#dc3545'}}>JR</span> STORE
           </a>
           
-          <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '500px' }}>
+          <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '480px' }}>
             <select 
               className="form-select bg-black text-white border-secondary rounded-0 text-center" 
               style={{ width: '130px', fontSize: '13px', borderColor: '#333' }}
@@ -541,14 +595,14 @@ function App() {
             >
               <option value="all">Search All</option>
               <option value="product">Relics</option>
-              <option value="profile">Spirits</option>
+              <option value="profile">Profiles</option>
             </select>
             <div className="position-relative flex-grow-1">
               <input 
                 type="text" 
                 className="form-control bg-black text-white border-secondary rounded-0 px-3" 
                 style={{ borderColor: '#333' }}
-                placeholder={searchType === 'profile' ? "Search spirit..." : searchType === 'product' ? "Search relic..." : "Search matrix..."}
+                placeholder={searchType === 'profile' ? "Search profile..." : searchType === 'product' ? "Search relic..." : "Search high-end store..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -566,7 +620,7 @@ function App() {
               {isLoggedIn && userRole === 'admin' && (
                 <li className="nav-item">
                   <a className="nav-link text-danger fw-bold" href="#admin-dashboard" onClick={(e) => { e.preventDefault(); setActivePage('admin-dashboard'); }}>
-                    ⚡ Master Core
+                    ⚡ Elite Core
                   </a>
                 </li>
               )}
@@ -596,12 +650,12 @@ function App() {
                       {userInfo?.photo ? (
                         <img src={userInfo.photo} alt="Profile" style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', marginLeft: '6px' }} />
                       ) : null}
-                      <span style={{ marginLeft: userInfo?.photo ? '0' : '8px', color: '#fff' }}>{userInfo?.name || 'Matrix Profile'}</span>
+                      <span style={{ marginLeft: userInfo?.photo ? '0' : '8px', color: '#fff' }}>{userInfo?.name || 'Sanctuary'}</span>
                     </button>
                     <ul className="dropdown-menu dropdown-menu-dark bg-black rounded-0 border" style={{ borderColor: '#333' }}>
                       <li><button className="dropdown-item text-light" onClick={() => setActivePage('profile')}>My Sanctuary</button></li>
                       {userRole === 'admin' && (
-                        <li><button className="dropdown-item text-danger fw-bold" onClick={() => setActivePage('admin-dashboard')}>⚡ Master Core</button></li>
+                        <li><button className="dropdown-item text-danger fw-bold" onClick={() => setActivePage('admin-dashboard')}>⚡ Elite Core</button></li>
                       )}
                       {(userRole === 'seller' || userRole === 'admin') && (
                         <li><button className="dropdown-item text-light" onClick={() => setActivePage('upload')}>Forge Relic</button></li>
@@ -639,11 +693,11 @@ function App() {
               {isRegisterMode && (
                 <>
                   <div className="mb-3 text-start">
-                    <label className="form-label text-light small fw-semibold">Spirit Name</label>
+                    <label className="form-label text-light small fw-semibold">Your Name</label>
                     <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter your name" value={name} onChange={(e) => setName(e.target.value)} required />
                   </div>
                   <div className="mb-3 text-start">
-                    <label className="form-label text-light small fw-semibold">Path Designation</label>
+                    <label className="form-label text-light small fw-semibold">Account Role</label>
                     <select className="form-select bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)}>
                       <option value="customer">Seeker Account</option>
                       <option value="seller">Forgemaster Account</option>
@@ -652,9 +706,8 @@ function App() {
                 </>
               )}
               <div className="mb-3 text-start">
-                <label className="form-label text-light small fw-semibold">Email Address Signature</label>
+                <label className="form-label text-light small fw-semibold">Email Address</label>
                 <input type="email" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                <small className="text-danger mt-1 d-block" style={{ fontSize: '11px' }}>* One signature can only be bound once to create a profile.</small>
               </div>
               <div className="mb-4 text-start">
                 <label className="form-label text-light small fw-semibold">Security Cipher</label>
@@ -681,12 +734,12 @@ function App() {
               
               <button type="submit" className="btn btn-danger w-100 rounded-0 fw-bold py-2 text-uppercase mb-3 d-flex justify-content-center align-items-center gap-2" style={{ letterSpacing: '2px' }} disabled={isLoading}>
                 {isLoading && <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>}
-                {isLoading ? 'Processing...' : (isRegisterMode ? 'Complete Awakening' : 'Access Matrix')}
+                {isLoading ? 'Processing...' : (isRegisterMode ? 'Complete Awakening' : 'Access Store')}
               </button>
 
               <div className="text-center">
                 <p className="small mb-0 text-light" style={{ opacity: 0.8 }}>
-                  {isRegisterMode ? "Already awakened?" : "Unregistered spirit?"}{" "}
+                  {isRegisterMode ? "Already registered?" : "New user?"}{" "}
                   <span style={{ color: '#dc3545', cursor: 'pointer', textDecoration: 'underline', fontWeight: 'bold' }} onClick={() => setIsRegisterMode(!isRegisterMode)}>
                     {isRegisterMode ? "Sign In" : "Register here"}
                   </span>
@@ -697,17 +750,17 @@ function App() {
         </div>
       )}
 
-      {/* Master Core Admin Dashboard */}
+      {/* Elite Core Admin Dashboard */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
           <div className="bg-black p-4 border border-danger rounded-0 shadow-lg mb-5" style={{ borderColor: '#dc3545 !important' }}>
             <div className="d-flex justify-content-between align-items-center mb-4">
               <div>
                 <h2 className="fw-bold text-danger m-0 d-flex align-items-center gap-2" style={{ fontFamily: "'Cinzel', serif" }}>
-                  ⚡ Master Core Command 
+                  ⚡ Elite Core Command 
                   <SamuraiBadge />
                 </h2>
-                <p className="text-light small mb-0">Total control over matrix entities, relics, and signals.</p>
+                <p className="text-light small mb-0">Total high-profile control over system profiles, relics, and communications.</p>
               </div>
               <button className="btn btn-outline-light btn-sm rounded-0" onClick={() => setActivePage('profile')}>Return to Sanctuary</button>
             </div>
@@ -715,7 +768,7 @@ function App() {
             <div className="row g-4 mb-5">
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-0 border border-secondary text-center" style={{ borderColor: '#333 !important' }}>
-                  <h6 className="text-light text-uppercase small">Total Spirits</h6>
+                  <h6 className="text-light text-uppercase small">Total Users</h6>
                   <h2 className="text-white fw-bold">{profilesList.length}</h2>
                 </div>
               </div>
@@ -727,16 +780,16 @@ function App() {
               </div>
               <div className="col-md-4">
                 <div className="bg-dark p-3 rounded-0 border border-secondary text-center" style={{ borderColor: '#333 !important' }}>
-                  <h6 className="text-light text-uppercase small">Incoming Signals</h6>
+                  <h6 className="text-light text-uppercase small">Core Signals</h6>
                   <h2 className="text-danger fw-bold">{adminMessages.length}</h2>
                 </div>
               </div>
             </div>
 
-            <h4 className="text-white mb-3" style={{ fontFamily: "'Cinzel', serif" }}>🛡️ Direct Transmissions</h4>
+            <h4 className="text-white mb-3" style={{ fontFamily: "'Cinzel', serif" }}>🛡️ Direct Core Transmissions</h4>
             <div className="bg-dark p-3 rounded-0 mb-5 overflow-auto shadow-inner" style={{ height: '300px', border: '1px solid #333' }}>
               {adminMessages.length === 0 ? (
-                <p className="text-light text-center mt-5 small" style={{ opacity: 0.6 }}>No signals received in Master Core.</p>
+                <p className="text-light text-center mt-5 small" style={{ opacity: 0.6 }}>No signals received in Elite Core.</p>
               ) : (
                 adminMessages.map((msg, index) => (
                   <div key={index} className="mb-3 p-3 rounded-0 bg-black text-white border border-secondary" style={{ maxWidth: '85%', borderColor: '#333 !important' }}>
@@ -754,14 +807,14 @@ function App() {
               )}
             </div>
 
-            <h4 className="text-white mb-3" style={{ fontFamily: "'Cinzel', serif" }}>👥 Spirit Matrix Registry</h4>
+            <h4 className="text-white mb-3" style={{ fontFamily: "'Cinzel', serif" }}>👥 User Profiles Registry</h4>
             <div className="table-responsive mb-5">
               <table className="table table-dark table-striped border border-secondary align-middle" style={{ borderColor: '#333 !important' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#111' }}>
                     <th>Name</th>
-                    <th>Signature & Badge</th>
-                    <th>Path</th>
+                    <th>Email & Status</th>
+                    <th>Role</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -813,7 +866,7 @@ function App() {
                       <td className="text-light">${prod.price}</td>
                       <td className="text-light">{prod.seller || 'Master'}</td>
                       <td>
-                        <button className="btn btn-sm btn-outline-danger rounded-0" onClick={() => handleDeleteProductByAdmin(prod.id)}>Banish Relic</button>
+                        <button className="btn btn-sm btn-outline-danger rounded-0" onClick={() => handleDeleteProductByAdmin(prod.id)}>Remove Relic</button>
                       </td>
                     </tr>
                   ))}
@@ -835,13 +888,13 @@ function App() {
                   <div className="d-flex align-items-center justify-content-center shadow" style={{
                     width: '56px', height: '56px', borderRadius: '0',
                     background: 'linear-gradient(135deg, #dc3545 0%, #000 100%)',
-                    border: '1px solid #dc3545', fontSize: '24px'
+                    border: '1px solid #dc3545', fontSize: '22px', fontWeight: 'bold'
                   }}>
-                    刀
+                    JR
                   </div>
                   <div>
                     <h3 className="fw-bold text-white m-0 fs-2" style={{ fontFamily: "'Cinzel', serif" }}>Comms Hub</h3>
-                    <p className="text-light small mb-0" style={{ opacity: 0.7 }}>Secure encrypted channels between awakened entities.</p>
+                    <p className="text-light small mb-0" style={{ opacity: 0.7 }}>Secure encrypted channels between verified accounts.</p>
                   </div>
                 </div>
                 <button className="btn btn-sm btn-outline-light rounded-0 px-3" onClick={() => setActivePage('profile')}>Return</button>
@@ -849,7 +902,7 @@ function App() {
 
               <div className="row">
                 <div className="col-md-4 border-end border-secondary pe-3" style={{ borderColor: '#333 !important' }}>
-                  <h6 className="text-light mb-3 fw-bold small text-uppercase">Awakened Entities:</h6>
+                  <h6 className="text-light mb-3 fw-bold small text-uppercase">Active Entities:</h6>
                   <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                     {profilesList.filter(p => p.email !== userInfo?.email && !p.isDeleted).map((prof, idx) => (
                       <div 
@@ -871,18 +924,18 @@ function App() {
 
                   {userRole !== 'admin' && (
                     <div className="mt-4 pt-3 border-top" style={{ borderColor: '#333 !important' }}>
-                      <h6 className="text-danger mb-2 fw-bold small" style={{ fontSize: '12px' }}>⚡ Transmit Signal to Master Core:</h6>
+                      <h6 className="text-danger mb-2 fw-bold small" style={{ fontSize: '12px' }}>⚡ Transmit Signal to Elite Core:</h6>
                       <form onSubmit={handleSendAdminMessage}>
                         <input 
                           type="text" 
                           className="form-control form-control-sm bg-black text-white rounded-0 border-secondary mb-2" 
                           style={{ borderColor: '#333' }}
-                          placeholder="Type signal to core..." 
+                          placeholder="Type signal..." 
                           value={newAdminMessage}
                           onChange={(e) => setNewAdminMessage(e.target.value)}
                           required
                         />
-                        <button type="submit" className="btn btn-sm btn-danger w-100 rounded-0 fw-bold">Transmit Signal</button>
+                        <button type="submit" className="btn btn-sm btn-danger w-100 rounded-0 fw-bold">Send Signal</button>
                       </form>
                     </div>
                   )}
@@ -897,7 +950,7 @@ function App() {
                           {chatTargetUser.name} {chatTargetUser.role === 'admin' && <SamuraiBadge />} 
                           <span className="badge bg-secondary rounded-0 fs-6 text-uppercase ms-2">{chatTargetUser.role}</span>
                         </h5>
-                        <small className="text-danger ms-auto">Examine Spirit</small>
+                        <small className="text-danger ms-auto">View Profile</small>
                       </div>
 
                       <div className="bg-dark p-3 rounded-0 mb-3 overflow-auto" style={{ height: '270px', border: '1px solid #333' }}>
@@ -907,7 +960,7 @@ function App() {
                           const currentMsgs = directMessages[chatKey] || [];
 
                           if (currentMsgs.length === 0) {
-                            return <p className="text-light text-center mt-5 small" style={{ opacity: 0.5 }}>No signal exchange yet with {chatTargetUser.name}. Transmit the first transmission below!</p>;
+                            return <p className="text-light text-center mt-5 small" style={{ opacity: 0.5 }}>No messages yet with {chatTargetUser.name}. Send the first message below!</p>;
                           }
 
                           return currentMsgs.map((msg, idx) => (
@@ -927,16 +980,16 @@ function App() {
                           type="text" 
                           className="form-control bg-black text-white rounded-0 border-secondary py-2" 
                           style={{ borderColor: '#333' }}
-                          placeholder={`Transmit message to ${chatTargetUser.name}...`} 
+                          placeholder={`Message ${chatTargetUser.name}...`} 
                           value={newDirectMessage}
                           onChange={(e) => setNewDirectMessage(e.target.value)}
                           required
                         />
-                        <button type="submit" className="btn btn-danger rounded-0 px-4 fw-bold">Transmit</button>
+                        <button type="submit" className="btn btn-danger rounded-0 px-4 fw-bold">Send</button>
                       </form>
                     </>
                   ) : (
-                    <div className="text-center text-light my-auto" style={{ opacity: 0.5 }}>Select an entity from the matrix list to communicate.</div>
+                    <div className="text-center text-light my-auto" style={{ opacity: 0.5 }}>Select a user from the list to start communicating.</div>
                   )}
                 </div>
               </div>
@@ -969,7 +1022,7 @@ function App() {
                     {userInfo?.name}
                     {userRole === 'admin' && <SamuraiBadge />}
                     <span style={{ fontSize: '11px', padding: '3px 10px', borderRadius: '0', backgroundColor: 'rgba(220, 53, 69, 0.15)', color: '#dc3545', border: '1px solid #dc3545' }}>
-                      ● Active Spirit
+                      ● Online
                     </span>
                   </h2>
                   <p className="text-light mb-1 small">{userInfo?.email}</p>
@@ -982,22 +1035,22 @@ function App() {
              
             <div className="row g-3 mb-4">
               <div className="col-md-6">
-                <p className="text-light fw-semibold mb-1 small" style={{ opacity: 0.7 }}>Comms Link</p>
-                <h5 className="text-white">{userInfo?.phone || 'Not Bound Yet'}</h5>
+                <p className="text-light fw-semibold mb-1 small" style={{ opacity: 0.7 }}>Phone Number</p>
+                <h5 className="text-white">{userInfo?.phone || 'Not Provided'}</h5>
               </div>
               <div className="col-md-6">
-                <p className="text-light fw-semibold mb-1 small" style={{ opacity: 0.7 }}>Sanctuary Status</p>
-                <h5 className="text-danger">Secured & Awakened</h5>
+                <p className="text-light fw-semibold mb-1 small" style={{ opacity: 0.7 }}>Account Status</p>
+                <h5 className="text-danger">Secured & Active</h5>
               </div>
             </div>
              
             <div className="d-flex flex-wrap gap-3 align-items-center">
               <button className="btn btn-outline-light rounded-0 px-4 fw-bold" onClick={() => { setEditName(userInfo?.name || ''); setActivePage('edit-profile'); }} style={{ borderColor: '#444' }}>
-                Refine Sanctuary
+                Edit Profile
               </button>
               {userRole === 'admin' && (
                 <button className="btn btn-danger rounded-0 px-4 fw-bold" onClick={() => setActivePage('admin-dashboard')}>
-                  ⚡ Master Core
+                  ⚡ Elite Core
                 </button>
               )}
               {(userRole === 'seller' || userRole === 'admin') && (
@@ -1027,33 +1080,33 @@ function App() {
       </div>
     )}
 
-    {/* Edit Profile Sanctuary */}
+    {/* Edit Profile */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
         <div className="row justify-content-center">
           <div className="col-md-8 bg-black p-5 border border-secondary rounded-0 shadow-lg" style={{ borderColor: '#333 !important' }}>
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <h3 className="fw-bold m-0 text-white" style={{ fontFamily: "'Cinzel', serif", letterSpacing: '1px' }}>REFINE SANCTUARY</h3>
+              <h3 className="fw-bold m-0 text-white" style={{ fontFamily: "'Cinzel', serif", letterSpacing: '1px' }}>EDIT PROFILE</h3>
               <button className="btn btn-sm btn-outline-light rounded-0" onClick={() => setActivePage('profile')}>Cancel</button>
           </div>
           <hr className="border-secondary mb-4" style={{ borderColor: '#333 !important' }} />
 
           <form onSubmit={handleUpdateProfile}>
             <div className="mb-3">
-              <label className="form-label text-light small fw-semibold">Spirit Name</label>
+              <label className="form-label text-light small fw-semibold">Name</label>
               <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} value={editName} onChange={(e) => setEditName(e.target.value)} required />
             </div>
              
             <div className="mb-3">
-              <label className="form-label text-light small fw-semibold">Comms Link</label>
-              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter comms number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+              <label className="form-label text-light small fw-semibold">Phone Number</label>
+              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
             </div>
 
           <div className="mb-3">
-            <label className="form-label text-light small fw-semibold">Avatar Hologram</label>
+            <label className="form-label text-light small fw-semibold">Avatar Image</label>
             <input type="file" accept="image/*" className="form-control bg-black text-white rounded-0 border-secondary mb-2" style={{ borderColor: '#333' }} onChange={handleImageUploadFromFile} />
             <div className="d-flex gap-3 my-2 flex-wrap align-items-center">
-              <span className="text-light small" style={{ opacity: 0.7 }}>Or select preset avatar:</span>
+              <span className="text-light small" style={{ opacity: 0.7 }}>Or choose preset avatar:</span>
               {presetAvatars.map((url, idx) => (
                 <img 
                   key={idx} 
@@ -1120,7 +1173,7 @@ function App() {
             </div>
           </div>
 
-          <button type="submit" className="btn btn-danger w-100 rounded-0 fw-bold py-2 text-uppercase" style={{ letterSpacing: '2px' }}>Save Matrix Alterations</button>
+          <button type="submit" className="btn btn-danger w-100 rounded-0 fw-bold py-2 text-uppercase" style={{ letterSpacing: '2px' }}>Save Changes</button>
         </form>
       </div>
       </div>
@@ -1140,58 +1193,58 @@ function App() {
 
           <form onSubmit={handleProductUpload}>
             <div className="mb-3">
-              <label className="form-label text-light small fw-semibold">Relic Designation</label>
-              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter relic name..." value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
+              <label className="form-label text-light small fw-semibold">Relic Name</label>
+              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter relic title..." value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
             </div>
             <div className="mb-3">
-              <label className="form-label text-light small fw-semibold">Value ($)</label>
-              <input type="number" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter value..." value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
+              <label className="form-label text-light small fw-semibold">Price ($)</label>
+              <input type="number" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Enter price..." value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
             </div>
             <div className="mb-3">
-              <label className="form-label text-light small fw-semibold">Domain Category</label>
-              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="e.g. Luxury, Relics..." value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
+              <label className="form-label text-light small fw-semibold">Category</label>
+              <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="e.g. Luxury, Accessories..." value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
             </div>
             <div className="mb-3">
               <label className="form-label text-light small fw-semibold">Description</label>
-              <textarea className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} rows="3" placeholder="Describe the relic powers..." value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
+              <textarea className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} rows="3" placeholder="Describe the item powers..." value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
             </div>
             <div className="mb-4">
-              <label className="form-label text-light small fw-semibold">Visual Hologram File or URL</label>
+              <label className="form-label text-light small fw-semibold">Image File or URL</label>
               <input type="file" accept="image/*" className="form-control bg-black text-white rounded-0 border-secondary mb-2" style={{ borderColor: '#333' }} onChange={handleProductFile} />
               <input type="text" className="form-control bg-black text-white rounded-0 border-secondary" style={{ borderColor: '#333' }} placeholder="Or paste direct image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
             </div>
-            <button type="submit" className="btn btn-danger w-100 rounded-0 fw-bold py-2 text-uppercase" style={{ letterSpacing: '2px' }}>Forge Relic Into Matrix</button>
+            <button type="submit" className="btn btn-danger w-100 rounded-0 fw-bold py-2 text-uppercase" style={{ letterSpacing: '2px' }}>Forge Relic Into Store</button>
           </form>
         </div>
         </div>
       </div>
    )}
 
-    {/* Home / Samurai Showcase */}
+    {/* Home / High-Profile Showcase */}
     {activePage === 'home' && (
       <>
-        {/* Hero Section styled like the video */}
+        {/* Hero Section */}
         <header className="container-fluid text-center py-5" style={{ minHeight: '65vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'radial-gradient(circle at center, #111 0%, #000 100%)', borderBottom: '1px solid #1a1a1a' }}>
           <motion.div initial={{scale: 0.95, opacity: 0}} animate={{scale: 1, opacity: 1}} transition={{duration: 0.6}}>
-            <span className="badge bg-danger rounded-0 px-3 py-2 mb-3 text-uppercase fw-bold" style={{ letterSpacing: '3px', fontSize: '11px' }}>Awakened Code & Design</span>
+            <span className="badge bg-danger rounded-0 px-3 py-2 mb-3 text-uppercase fw-bold" style={{ letterSpacing: '3px', fontSize: '11px' }}>High-Profile Architecture & Design</span>
           </motion.div>
           <motion.h1 initial={{y: 25, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.2, duration: 0.5}} className="display-1 fw-bold mb-3 text-white" style={{ fontFamily: "'Cinzel', serif", textTransform: 'uppercase', letterSpacing: '6px' }}>
             JR STORE
           </motion.h1>
-          <motion.p initial={{opacity: 0}} animate={{opacity: 0.8}} transition={{delay: 0.4, duration: 0.5}} className="lead fs-4 text-light" style={{ fontWeight: '300', letterSpacing: '1px' }}>To master the web is to master the self.</motion.p>
+          <motion.p initial={{opacity: 0}} animate={{opacity: 0.8}} transition={{delay: 0.4, duration: 0.5}} className="lead fs-4 text-light" style={{ fontWeight: '300', letterSpacing: '1px' }}>To master the digital art is to master the self.</motion.p>
           <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 0.6, duration: 0.4}}>
-            <button className="btn btn-outline-danger btn-lg mt-4 px-5 py-3 rounded-0 fw-bold text-uppercase" style={{ letterSpacing: '2px', borderWidth: '2px' }} onClick={() => window.scrollTo({ top: 550, behavior: 'smooth' })}>Enter Arsenal</button>
+            <button className="btn btn-outline-danger btn-lg mt-4 px-5 py-3 rounded-0 fw-bold text-uppercase" style={{ letterSpacing: '2px', borderWidth: '2px' }} onClick={() => window.scrollTo({ top: 550, behavior: 'smooth' })}>Explore Arsenal</button>
           </motion.div>
         </header>
 
         <div className="container py-5">
           {searchQuery && (
             <div className="mb-5 text-start text-white">
-              <h4 className="border-bottom border-secondary pb-2" style={{ fontFamily: "'Cinzel', serif", borderColor: '#333 !important' }}>Matrix Search Results for: "{searchQuery}"</h4>
+              <h4 className="border-bottom border-secondary pb-2" style={{ fontFamily: "'Cinzel', serif", borderColor: '#333 !important' }}>Search Results for: "{searchQuery}"</h4>
               
               {(searchType === 'all' || searchType === 'profile') && (
                 <div className="my-4">
-                  <h6 className="text-light text-uppercase mb-3 small" style={{ opacity: 0.7 }}>Matched Spirits</h6>
+                  <h6 className="text-light text-uppercase mb-3 small" style={{ opacity: 0.7 }}>Matched Profiles</h6>
                   <div className="row g-3">
                     {profilesList.filter(p => !p.isDeleted && p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
                       profilesList.filter(p => !p.isDeleted && p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
@@ -1219,7 +1272,7 @@ function App() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-light small" style={{ opacity: 0.5 }}>No spirits matched the query.</p>
+                      <p className="text-light small" style={{ opacity: 0.5 }}>No profiles matched the query.</p>
                     )}
                   </div>
                 </div>
@@ -1234,19 +1287,12 @@ function App() {
                         <div className="col-md-4" key={prod.id}>
                           <div className="card h-100 bg-black border border-secondary rounded-0 p-3" style={{ borderColor: '#333 !important' }}>
                             <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '200px', overflow: 'hidden' }}>
-                              {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'No Hologram'}
+                              {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'No Image'}
                             </div>
                             <div className="card-body text-center">
                               <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{ fontSize: '16px' }}>{prod.title}</h5>
                               <p className="text-light mb-3">${prod.price}</p>
-                              <button className="btn btn-outline-danger w-100 rounded-0 text-uppercase fw-bold" onClick={() => {
-                                if(!isLoggedIn) setShowLoginModal(true);
-                                else {
-                                  const sellerProf = profilesList.find(p => p.name === prod.seller) || profilesList[0];
-                                  setChatTargetUser(sellerProf);
-                                  setActivePage('messenger');
-                                }
-                              }}>Examine Relic</button>
+                              <button className="btn btn-outline-danger w-100 rounded-0 text-uppercase fw-bold" onClick={() => setSelectedProduct(prod)}>Examine Relic</button>
                             </div>
                           </div>
                         </div>
@@ -1263,22 +1309,26 @@ function App() {
           <div className="row g-4">
             {allProductsList.map((prod) => (
               <div className="col-md-4" key={prod.id}>
-                <motion.div initial={{y: 25, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.4}} className="card h-100 bg-black border border-secondary rounded-0 p-3" style={{ borderColor: '#333 !important' }}>
+                <motion.div 
+                  initial={{y: 25, opacity: 0}} 
+                  whileInView={{y: 0, opacity: 1}} 
+                  viewport={{once: true}} 
+                  transition={{duration: 0.4}} 
+                  whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                  className="card h-100 bg-black border border-secondary rounded-0 p-3 shadow-lg" 
+                  style={{ borderColor: '#333 !important', cursor: 'pointer' }}
+                  onClick={() => setSelectedProduct(prod)}
+                >
                   <div className="bg-dark d-flex align-items-center justify-content-center" style={{ height: '260px', overflow: 'hidden' }}>
-                    {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Hologram'}
+                    {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease' }} /> : 'Image'}
                   </div>
                   <div className="card-body text-center">
                     <h5 className="card-title fw-bold text-uppercase text-white mt-2" style={{letterSpacing: '1px', fontFamily: "'Cinzel', serif", fontSize: '17px'}}>{prod.title}</h5>
                     <p className="text-light small mb-2">Forgemaster: <span className="text-danger fw-semibold">{prod.seller || 'Master'}</span></p>
                     <p className="text-white fw-bold fs-5 mb-4">${prod.price}</p>
-                    <button className="btn btn-outline-danger w-100 rounded-0 text-uppercase fw-bold" style={{letterSpacing: '1px'}} onClick={() => {
-                      if(!isLoggedIn) {
-                        setShowLoginModal(true);
-                      } else {
-                        const sellerProf = profilesList.find(p => p.name === prod.seller) || profilesList[0];
-                        setChatTargetUser(sellerProf);
-                        setActivePage('messenger');
-                      }
+                    <button className="btn btn-outline-danger w-100 rounded-0 text-uppercase fw-bold" style={{letterSpacing: '1px'}} onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedProduct(prod);
                     }}>Examine Relic</button>
                   </div>
                 </motion.div>
@@ -1293,18 +1343,18 @@ function App() {
 }
 
 const modalStyles = {
-  overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.9)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-  box: { backgroundColor: '#0d0d0d', padding: '35px', borderRadius: '0', width: '90%', maxWidth: '420px', border: '1px solid #333', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }
+  overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.85)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
+  box: { backgroundColor: '#0d0d0d', padding: '35px', borderRadius: '0', width: '90%', maxWidth: '450px', border: '1px solid #333', boxShadow: '0 15px 50px rgba(0,0,0,0.9)' }
 };
 
 const splashStyles = {
   container: { height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#000', overflow: 'hidden', position: 'fixed', top: 0, left: 0, zIndex: 1000 },
   content: { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%', height: '100%' },
   logoWrapper: { position: 'relative', width: '120px', height: '120px', display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '30px' },
-  logoGlow: { position: 'absolute', width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(220,53,69,0.3) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(20px)' },
-  logoText: { fontSize: '65px', fontWeight: '900', color: '#dc3545', letterSpacing: '2px', position: 'relative', zIndex: 1, fontFamily: "'Cinzel', serif" },
+  logoGlow: { position: 'absolute', width: '100%', height: '100%', background: 'radial-gradient(circle, rgba(220,53,69,0.35) 0%, rgba(0,0,0,0) 70%)', filter: 'blur(20px)' },
+  logoText: { fontSize: '48px', fontWeight: '900', color: '#dc3545', letterSpacing: '4px', position: 'relative', zIndex: 1, fontFamily: "'Cinzel', serif" },
   title: { fontSize: '38px', fontWeight: '700', color: '#fff', textTransform: 'uppercase', letterSpacing: '8px', margin: '0 0 10px 0', fontFamily: "'Cinzel', serif" },
-  subtitle: { fontSize: '15px', color: '#fff', fontWeight: '300', letterSpacing: '2px', opacity: '0.7', marginBottom: '50px' },
+  subtitle: { fontSize: '15px', color: '#fff', fontWeight: '300', letterSpacing: '2px', opacity: '0.75', marginBottom: '50px' },
   progressBar: { height: '2px', background: 'linear-gradient(90deg, transparent, #dc3545, transparent)', position: 'absolute', bottom: '15%', width: '0%', left: 0 }
 };
 
