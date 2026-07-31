@@ -2,30 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
-
 function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false); 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
-
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [userRole, setUserRole] = useState('customer');
   const [activePage, setActivePage] = useState('home'); 
-
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRole, setSelectedRole] = useState('customer');
   const [isLoading, setIsLoading] = useState(false);
-
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
-
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   
@@ -37,49 +31,40 @@ function App() {
     photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     isVerified: true 
   };
-
   const [profilesList, setProfilesList] = useState([defaultSuperAdmin]);
-
   const [allProductsList, setAllProductsList] = useState([
     { id: 1, title: 'Wireless Premium Headphones', price: '99.00', category: 'Electronics', seller: 'Admin User', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
     { id: 2, title: 'Smart Fitness Watch', price: '149.00', category: 'Accessories', seller: 'Admin User', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' }
   ]);
-
   const [adminMessages, setAdminMessages] = useState([]);
   const [newAdminMessage, setNewAdminMessage] = useState('');
-
   const [chatTargetUser, setChatTargetUser] = useState(null); 
   const [directMessages, setDirectMessages] = useState({}); 
   const [newDirectMessage, setNewDirectMessage] = useState('');
   const [selectedProfileModalUser, setSelectedProfileModalUser] = useState(null);
-
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => {
       setToast({ show: false, message: '', type: 'success' });
     }, 3500);
   };
-
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [editPhoto, setEditPhoto] = useState('');
   const [isCurrentPasswordValid, setIsCurrentPasswordValid] = useState(false);
-
   const [productTitle, setProductTitle] = useState('');
   const [productPrice, setProductPrice] = useState('');
   const [productCategory, setProductCategory] = useState('');
   const [productDescription, setProductDescription] = useState('');
   const [productImage, setProductImage] = useState('');
-
   const presetAvatars = [
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
     "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
     "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
     "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
   ];
-
   const VerifiedBadge = () => (
     <span 
       title="Verified User" 
@@ -101,7 +86,6 @@ function App() {
       ✓
     </span>
   );
-
   const EmailBadge = ({ email }) => {
     const isOriginal = email === 'admin@store.com' || email.includes('admin');
     return (
@@ -110,10 +94,8 @@ function App() {
       </span>
     );
   };
-
   useEffect(() => {
     const timer = setTimeout(() => setShowWelcome(false), 1500);
-
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('userInfo');
     const storedRole = localStorage.getItem('userRole');
@@ -121,7 +103,6 @@ function App() {
     const savedMessages = localStorage.getItem('directMessages');
     const savedProducts = localStorage.getItem('allProductsList');
     const savedAdminMsgs = localStorage.getItem('adminMessages');
-
     if (savedProfiles) { 
       try { 
         const parsedProfiles = JSON.parse(savedProfiles);
@@ -134,7 +115,6 @@ function App() {
     if (savedMessages) { try { setDirectMessages(JSON.parse(savedMessages)); } catch (e) {} }
     if (savedProducts) { try { setAllProductsList(JSON.parse(savedProducts)); } catch (e) {} }
     if (savedAdminMsgs) { try { setAdminMessages(JSON.parse(savedAdminMsgs)); } catch (e) {} }
-
     if (token && storedUser) {
       setIsLoggedIn(true);
       const parsedUser = JSON.parse(storedUser);
@@ -144,20 +124,16 @@ function App() {
       setEditPhone(parsedUser.phone || '');
       setEditPhoto(parsedUser.photo || ''); 
     }
-
     return () => clearTimeout(timer);
   }, []);
-
   useEffect(() => { 
     if (profilesList.length > 0) {
       localStorage.setItem('profilesList', JSON.stringify(profilesList)); 
     }
   }, [profilesList]);
-
   useEffect(() => { localStorage.setItem('directMessages', JSON.stringify(directMessages)); }, [directMessages]);
   useEffect(() => { localStorage.setItem('allProductsList', JSON.stringify(allProductsList)); }, [allProductsList]);
   useEffect(() => { localStorage.setItem('adminMessages', JSON.stringify(adminMessages)); }, [adminMessages]);
-
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userInfo');
@@ -169,7 +145,6 @@ function App() {
     showToast("Logged out successfully!", "success");
     setTimeout(() => { window.location.reload(); }, 400);
   };
-
   const handleDeactivateAccount = () => {
     setConfirmModal({
       show: true,
@@ -183,7 +158,6 @@ function App() {
       }
     });
   };
-
   const handleDeleteAccount = () => {
     setConfirmModal({
       show: true,
@@ -196,27 +170,22 @@ function App() {
           setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
           return;
         }
-
         const userEmail = userInfo?.email;
         setAllProductsList(allProductsList.filter(p => p.seller !== userInfo?.name && p.seller !== userEmail));
-
         const updatedMessages = { ...directMessages };
         Object.keys(updatedMessages).forEach(key => {
           if (key.includes(userEmail)) { delete updatedMessages[key]; }
         });
         setDirectMessages(updatedMessages);
-
         const updatedProfiles = profilesList.map(p => p.email === userEmail ? { ...p, isDeleted: true, name: `${p.name} (Deleted)` } : p);
         setProfilesList(updatedProfiles);
         localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
-
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
         showToast("Account deleted successfully!", "success");
         handleLogout();
       }
     });
   };
-
   const handleImageUploadFromFile = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -225,7 +194,6 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
-
   const handleProductFile = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -234,7 +202,6 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
-
   const handleVerifyCurrentPassword = () => {
     const storedPass = userInfo?.password; 
     if (!currentPassword) {
@@ -250,31 +217,26 @@ function App() {
     setIsCurrentPasswordValid(true);
     showToast("Password verified!", "success");
   };
-
   const handleUpdateProfile = (e) => {
     e.preventDefault();
     if (newPassword && !isCurrentPasswordValid) {
       showToast("Verify current password before updating!", "danger");
       return;
     }
-
     const updatedUser = { ...userInfo, name: editName, phone: editPhone, photo: editPhoto };
     if (newPassword) { updatedUser.password = newPassword; }
-
     localStorage.setItem('userInfo', JSON.stringify(updatedUser));
     setUserInfo(updatedUser);
     
     const updatedProfiles = profilesList.map(p => p.email === updatedUser.email ? { ...p, name: editName, phone: editPhone, photo: editPhoto } : p);
     setProfilesList(updatedProfiles);
     localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
-
     setCurrentPassword('');
     setNewPassword('');
     setIsCurrentPasswordValid(false);
     showToast("Profile updated successfully!", "success");
     setActivePage('profile');
   };
-
   const handleDeleteUserByAdmin = (emailToDelete) => {
     if (emailToDelete === 'admin@store.com') {
       showToast("Cannot delete Super Admin!", "danger");
@@ -285,16 +247,13 @@ function App() {
     localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
     showToast("User deleted by Admin!", "success");
   };
-
   const handleDeleteProductByAdmin = (productId) => {
     setAllProductsList(allProductsList.filter(p => p.id !== productId));
     showToast("Product deleted by Admin!", "success");
   };
-
   const handleSendAdminMessage = (e) => {
     e.preventDefault();
     if (!newAdminMessage.trim()) return;
-
     const newMsgObj = { 
       sender: userInfo?.name || 'User', 
       senderEmail: userInfo?.email || 'user@store.com',
@@ -308,15 +267,12 @@ function App() {
     setNewAdminMessage('');
     showToast("Message sent to Support!", "success");
   };
-
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
-
     const sortedEmails = [userInfo.email, chatTargetUser.email].sort();
     const chatKey = `${sortedEmails[0]}_${sortedEmails[1]}`;
     const currentMsgs = directMessages[chatKey] || [];
-
     const newMsgObj = {
       sender: userInfo.name,
       senderEmail: userInfo.email,
@@ -324,24 +280,20 @@ function App() {
       text: newDirectMessage,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-
     const updatedMessagesState = {
       ...directMessages,
       [chatKey]: [...currentMsgs, newMsgObj]
     };
-
     setDirectMessages(updatedMessagesState);
     localStorage.setItem('directMessages', JSON.stringify(updatedMessagesState));
     setNewDirectMessage('');
   };
-
   const handleProductUpload = async (e) => {
     e.preventDefault();
     if (!productTitle || !productPrice || !productCategory) {
       showToast("Please fill all required product fields!", "danger");
       return;
     }
-
     const newProd = {
       id: Date.now(),
       title: productTitle,
@@ -351,7 +303,6 @@ function App() {
       image: productImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300',
       seller: userInfo?.name || 'Admin'
     };
-
     const updatedProducts = [newProd, ...allProductsList];
     setAllProductsList(updatedProducts);
     localStorage.setItem('allProductsList', JSON.stringify(updatedProducts));
@@ -360,12 +311,10 @@ function App() {
     setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
     setActivePage('home');
   };
-
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
     let updatedProfiles = [...profilesList];
-
     if (isRegisterMode) {
       const existingUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail && !p.isDeleted);
       if (existingUser) {
@@ -391,7 +340,6 @@ function App() {
         return;
       }
     }
-
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
@@ -417,10 +365,8 @@ function App() {
         setProfilesList(updatedProfiles);
         localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
       }
-
       localStorage.setItem('userInfo', JSON.stringify(userData));
       localStorage.setItem('userRole', role);
-
       setIsLoggedIn(true);
       setUserInfo(userData);
       setUserRole(role);
@@ -428,7 +374,6 @@ function App() {
       setName(''); setEmail(''); setPassword('');
     }, 600);
   };
-
   if (showWelcome) {
     return (
       <div style={splashStyles.container}>
@@ -441,7 +386,7 @@ function App() {
               exit={{ opacity: 0, scale: 1.05, transition: { duration: 0.5 } }}
               style={splashStyles.content}
             >
-              <h1 style={splashStyles.title}>E-COMMERCE STORE</h1>
+              <h1 style={splashStyles.title}>JR STORE</h1>
               <p style={splashStyles.subtitle}>Loading application...</p>
             </motion.div>
           )}
@@ -449,7 +394,6 @@ function App() {
       </div>
     );
   }
-
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', color: '#212529', position: 'relative' }}>
       
@@ -466,7 +410,6 @@ function App() {
           </motion.div>
         </div>
       )}
-
       {confirmModal.show && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center' }}>
@@ -479,7 +422,6 @@ function App() {
           </motion.div>
         </div>
       )}
-
       {selectedProfileModalUser && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
@@ -511,12 +453,11 @@ function App() {
           </motion.div>
         </div>
       )}
-
       {/* Navbar */}
       <nav className="navbar navbar-expand-lg navbar-light bg-white p-3 shadow-sm sticky-top">
         <div className="container">
           <a className="navbar-brand fw-bold fs-4 text-primary" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }}>
-            E-COMMERCE STORE
+            JR STORE
           </a>
           
           <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '450px' }}>
@@ -540,7 +481,6 @@ function App() {
               />
             </div>
           </div>
-
           <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span className="navbar-toggler-icon"></span>
           </button>
@@ -556,7 +496,6 @@ function App() {
                   </a>
                 </li>
               )}
-
               {isLoggedIn && (
                 <li className="nav-item">
                   <a className="nav-link fw-semibold" href="#messenger" onClick={(e) => { 
@@ -569,7 +508,6 @@ function App() {
                   </a>
                 </li>
               )}
-
               <li className="nav-item mt-2 mt-lg-0">
                 {isLoggedIn ? (
                   <div className="dropdown ms-lg-3">
@@ -606,7 +544,6 @@ function App() {
           </div>
         </div>
       </nav>
-
       {/* Authentication Modal */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
@@ -661,7 +598,6 @@ function App() {
                 {isLoading && <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>}
                 {isLoading ? 'Processing...' : (isRegisterMode ? 'Register' : 'Sign In')}
               </button>
-
               <div className="text-center">
                 <p className="small mb-0 text-muted">
                   {isRegisterMode ? "Already have an account?" : "Don't have an account?"}{" "}
@@ -674,7 +610,6 @@ function App() {
           </motion.div>
         </div>
       )}
-
       {/* Admin Dashboard */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
@@ -689,7 +624,6 @@ function App() {
               </div>
               <button className="btn btn-outline-secondary btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</button>
             </div>
-
             <div className="row g-4 mb-5">
               <div className="col-md-4">
                 <div className="bg-light p-3 rounded border text-center">
@@ -710,7 +644,6 @@ function App() {
                 </div>
               </div>
             </div>
-
             <h4 className="mb-3">Support Inquiries</h4>
             <div className="bg-light p-3 rounded mb-5 overflow-auto shadow-sm" style={{ height: '280px' }}>
               {adminMessages.length === 0 ? (
@@ -731,7 +664,6 @@ function App() {
                 ))
               )}
             </div>
-
             <h4 className="mb-3">User Registry</h4>
             <div className="table-responsive mb-5">
               <table className="table table-striped border align-middle">
@@ -770,7 +702,6 @@ function App() {
                 </tbody>
               </table>
             </div>
-
             <h4 className="mb-3">Product Catalog</h4>
             <div className="table-responsive">
               <table className="table table-striped border align-middle">
@@ -801,7 +732,6 @@ function App() {
           </div>
         </div>
       )}
-
       {/* Messages Hub */}
       {isLoggedIn && activePage === 'messenger' && (
         <div className="container py-5">
@@ -815,7 +745,6 @@ function App() {
                 </div>
                 <button className="btn btn-sm btn-outline-secondary px-3" onClick={() => setActivePage('profile')}>Back</button>
               </div>
-
               <div className="row">
                 <div className="col-md-4 border-end pe-3">
                   <h6 className="text-muted mb-3 fw-bold small text-uppercase">Users:</h6>
@@ -837,7 +766,6 @@ function App() {
                       </div>
                     ))}
                   </div>
-
                   {userRole !== 'admin' && (
                     <div className="mt-4 pt-3 border-top">
                       <h6 className="text-primary mb-2 fw-bold small" style={{ fontSize: '12px' }}>Send Support Message:</h6>
@@ -855,7 +783,6 @@ function App() {
                     </div>
                   )}
                 </div>
-
                 <div className="col-md-8 ps-3 d-flex flex-column justify-content-between">
                   {chatTargetUser ? (
                     <>
@@ -867,17 +794,14 @@ function App() {
                         </h5>
                         <small className="text-primary ms-auto">View Profile</small>
                       </div>
-
                       <div className="bg-light p-3 rounded mb-3 overflow-auto border" style={{ height: '270px' }}>
                         {(() => {
                           const sortedEmails = [userInfo.email, chatTargetUser.email].sort();
                           const chatKey = `${sortedEmails[0]}_${sortedEmails[1]}`;
                           const currentMsgs = directMessages[chatKey] || [];
-
                           if (currentMsgs.length === 0) {
                             return <p className="text-muted text-center mt-5 small">No messages yet with {chatTargetUser.name}. Send the first message below!</p>;
                           }
-
                           return currentMsgs.map((msg, idx) => (
                             <div key={idx} className={`mb-3 p-2 rounded ${msg.senderEmail === userInfo.email ? 'ms-auto bg-primary text-white fw-semibold' : 'bg-white border text-dark'}`} style={{ maxWidth: '75%' }}>
                               <div className="d-flex justify-content-between small fw-bold mb-1" style={{ fontSize: '11px', opacity: 0.8 }}>
@@ -889,7 +813,6 @@ function App() {
                           ));
                         })()}
                       </div>
-
                       <form onSubmit={handleSendDirectMessage} className="input-group">
                         <input 
                           type="text" 
@@ -911,7 +834,6 @@ function App() {
           </div>
         </div>
       )}
-
       {/* User Profile */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
@@ -944,7 +866,6 @@ function App() {
                   <span className={`badge ${userRole === 'admin' ? 'bg-primary' : 'bg-secondary'} text-uppercase mt-1`}>{userRole}</span>
                 </div>
               </div>
-
             <hr className="border-secondary mb-4 opacity-25" />
              
             <div className="row g-3 mb-4">
@@ -993,7 +914,6 @@ function App() {
         </div>
       </div>
     )}
-
     {/* Edit Profile */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
@@ -1004,7 +924,6 @@ function App() {
               <button className="btn btn-sm btn-outline-secondary" onClick={() => setActivePage('profile')}>Cancel</button>
           </div>
           <hr className="border-secondary mb-4 opacity-25" />
-
           <form onSubmit={handleUpdateProfile}>
             <div className="mb-3">
               <label className="form-label small fw-semibold">Full Name</label>
@@ -1015,7 +934,6 @@ function App() {
               <label className="form-label small fw-semibold">Phone Number</label>
               <input type="text" className="form-control" placeholder="Enter phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
             </div>
-
           <div className="mb-3">
             <label className="form-label small fw-semibold">Profile Picture</label>
             <input type="file" accept="image/*" className="form-control mb-2" onChange={handleImageUploadFromFile} />
@@ -1032,10 +950,8 @@ function App() {
               ))}
             </div>
           </div>
-
           <hr className="my-4" />
           <h5 className="mb-3" style={{ fontSize: '16px' }}>Change Password</h5>
-
           <div className="mb-3">
             <label className="form-label small fw-semibold">Current Password</label>
             <div className="input-group">
@@ -1060,7 +976,6 @@ function App() {
             </div>
             {isCurrentPasswordValid && <small className="text-success mt-1 d-block">✓ Password verified successfully!</small>}
           </div>
-
           <div className="mb-4">
             <label className="form-label small fw-semibold">New Password</label>
             <div className="input-group">
@@ -1082,14 +997,12 @@ function App() {
               </button>
             </div>
           </div>
-
           <button type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase">Save Changes</button>
         </form>
       </div>
       </div>
     </div>
    )}
-
     {/* Add Product */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
@@ -1100,7 +1013,6 @@ function App() {
               <button className="btn btn-sm btn-outline-secondary" onClick={() => setActivePage('profile')}>Back</button>
           </div>
           <hr className="border-secondary mb-4 opacity-25" />
-
           <form onSubmit={handleProductUpload}>
             <div className="mb-3">
               <label className="form-label small fw-semibold">Product Title</label>
@@ -1129,14 +1041,13 @@ function App() {
         </div>
       </div>
    )}
-
     {/* Home / Product Showcase */}
     {activePage === 'home' && (
       <>
         {/* Hero Section */}
         <header className="container-fluid text-center py-5 bg-white border-bottom" style={{ minHeight: '50vh', display:'flex', flexDirection:'column', justifyContent:'center' }}>
           <motion.div initial={{scale: 0.95, opacity: 0}} animate={{scale: 1, opacity: 1}} transition={{duration: 0.4}}>
-            <span className="badge bg-primary rounded px-3 py-2 mb-3 text-uppercase fw-bold" style={{ fontSize: '11px' }}>Welcome to Our Store</span>
+            <span className="badge bg-primary rounded px-3 py-2 mb-3 text-uppercase fw-bold" style={{ fontSize: '11px' }}>Welcome to JR STORE</span>
           </motion.div>
           <motion.h1 initial={{y: 20, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.1, duration: 0.4}} className="display-4 fw-bold mb-3 text-dark" style={{ textTransform: 'uppercase' }}>
             Discover Amazing Products
@@ -1146,6 +1057,25 @@ function App() {
             <button className="btn btn-outline-primary btn-lg mt-3 px-5 py-2 fw-bold text-uppercase" onClick={() => window.scrollTo({ top: 450, behavior: 'smooth' })}>Shop Now</button>
           </motion.div>
         </header>
+
+        {/* 3D Animation Showcase Section */}
+        <div className="container my-5">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            whileInView={{ opacity: 1, y: 0 }} 
+            viewport={{ once: true }} 
+            transition={{ duration: 0.5 }}
+            style={{ width: '100%', height: '450px', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', background: '#fff', border: '1px solid #eaeaea' }}
+          >
+            <iframe 
+              src='https://my.spline.design/cube-10499cf2d5f818b6e6bb23bc7b7fc2f0/' 
+              frameBorder='0' 
+              width='100%' 
+              height='100%'
+              title="JR STORE 3D Animation"
+            ></iframe>
+          </motion.div>
+        </div>
 
         <div className="container py-5">
           {searchQuery && (
@@ -1187,7 +1117,6 @@ function App() {
                   </div>
                 </div>
               )}
-
               {(searchType === 'all' || searchType === 'product') && (
                 <div className="my-4">
                   <h6 className="text-muted text-uppercase mb-3 small">Matched Products</h6>
@@ -1222,7 +1151,6 @@ function App() {
               )}
             </div>
           )}
-
           <div className="row g-4">
             {allProductsList.map((prod) => (
               <div className="col-md-4" key={prod.id}>
@@ -1254,17 +1182,14 @@ function App() {
  </motion.div>
  );
 }
-
 const modalStyles = {
   overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
   box: { backgroundColor: '#fff', padding: '35px', borderRadius: '8px', width: '90%', maxWidth: '420px', border: '1px solid #ddd', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }
 };
-
 const splashStyles = {
   container: { height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#fff', overflow: 'hidden', position: 'fixed', top: 0, left: 0, zIndex: 1000 },
   content: { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: '28px', fontWeight: '700', color: '#212529', textTransform: 'uppercase', marginBottom: '10px' },
   subtitle: { fontSize: '14px', color: '#6c757d' }
 };
-
 export default App;
