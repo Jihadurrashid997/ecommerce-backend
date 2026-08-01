@@ -1,7 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+
+// Shared motion presets — keeps animation timing/easing consistent across the app
+const staggerContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } }
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] } }
+};
+
+const pageTransition = {
+  initial: { opacity: 0, y: 16 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -16 },
+  transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
+};
+
+// Defined once at module scope (not inside App) so React doesn't recreate
+// these components — and lose their identity — on every single render.
+const VerifiedBadge = () => (
+  <span
+    title="Verified JR Master Super Admin"
+    style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '16px',
+      height: '16px',
+      backgroundColor: '#0d6efd',
+      borderRadius: '50%',
+      color: '#fff',
+      fontSize: '9px',
+      fontWeight: '900',
+      marginLeft: '6px',
+      verticalAlign: 'middle'
+    }}
+  >
+    ✓
+  </span>
+);
+
+const EmailBadge = ({ email }) => {
+  const isOriginal = email === 'jihadurrashid997@gmail.com';
+  return (
+    <span className={`badge ${isOriginal ? 'bg-primary text-white' : 'bg-secondary text-light'} ms-2`} style={{ fontSize: '10px' }}>
+      {isOriginal ? 'JR Master Core' : 'User'}
+    </span>
+  );
+};
 
 function App() {
   const [showWelcome, setShowWelcome] = useState(true);
@@ -23,6 +74,7 @@ function App() {
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
+  const [isScrolled, setIsScrolled] = useState(false);
   
   // Exclusive JR Master Super Admin Info
   const jrMasterAdmin = { 
@@ -85,37 +137,6 @@ function App() {
     return { valid: true };
   };
 
-  const VerifiedBadge = () => (
-    <span 
-      title="Verified JR Master Super Admin" 
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '16px',
-        height: '16px',
-        backgroundColor: '#0d6efd',
-        borderRadius: '50%',
-        color: '#fff',
-        fontSize: '9px',
-        fontWeight: '900',
-        marginLeft: '6px',
-        verticalAlign: 'middle'
-      }}
-    >
-      ✓
-    </span>
-  );
-
-  const EmailBadge = ({ email }) => {
-    const isOriginal = email === 'jihadurrashid997@gmail.com';
-    return (
-      <span className={`badge ${isOriginal ? 'bg-primary text-white' : 'bg-secondary text-light'} ms-2`} style={{ fontSize: '10px' }}>
-        {isOriginal ? 'JR Master Core' : 'User'}
-      </span>
-    );
-  };
-
   useEffect(() => {
     const timer = setTimeout(() => setShowWelcome(false), 1800);
     const token = localStorage.getItem('token');
@@ -169,6 +190,12 @@ function App() {
   useEffect(() => { localStorage.setItem('directMessages', JSON.stringify(directMessages)); }, [directMessages]);
   useEffect(() => { localStorage.setItem('allProductsList', JSON.stringify(allProductsList)); }, [allProductsList]);
   useEffect(() => { localStorage.setItem('adminMessages', JSON.stringify(adminMessages)); }, [adminMessages]);
+
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 12);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -454,59 +481,93 @@ function App() {
 
   if (showWelcome) {
     return (
-      <div style={splashStyles.container}>
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 1.1 }}
-          transition={{ duration: 0.8, ease: "easeInOut" }}
-          style={splashStyles.content}
-        >
-          <motion.div 
-            animate={{ rotate: 360 }} 
-            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-            style={{ width: '70px', height: '70px', border: '5px solid rgba(13, 110, 253, 0.2)', borderTopColor: '#0d6efd', borderRadius: '50%', margin: '0 auto 20px auto' }}
+      <AnimatePresence>
+        <motion.div style={splashStyles.container} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+          <motion.div
+            animate={{
+              background: [
+                'radial-gradient(circle at 30% 30%, rgba(13,110,253,0.12), transparent 60%)',
+                'radial-gradient(circle at 70% 60%, rgba(13,202,240,0.14), transparent 60%)',
+                'radial-gradient(circle at 30% 30%, rgba(13,110,253,0.12), transparent 60%)'
+              ]
+            }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+            style={{ position: 'absolute', inset: 0 }}
           />
-          <h1 style={splashStyles.title}>JR STORE</h1>
-          <p style={splashStyles.subtitle}>Loading JR Master High-Performance Suite...</p>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.1 }}
+            transition={{ duration: 0.6, ease: 'easeInOut' }}
+            style={{ ...splashStyles.content, position: 'relative', zIndex: 1 }}
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: 'linear' }}
+              style={{ width: '64px', height: '64px', border: '4px solid rgba(13, 110, 253, 0.15)', borderTopColor: '#0d6efd', borderRadius: '50%', margin: '0 auto 22px auto' }}
+            />
+            <motion.h1
+              initial={{ letterSpacing: '6px', opacity: 0 }}
+              animate={{ letterSpacing: '1px', opacity: 1 }}
+              transition={{ duration: 0.9, ease: 'easeOut' }}
+              style={splashStyles.title}
+            >
+              JR STORE
+            </motion.h1>
+            <p style={splashStyles.subtitle}>Loading JR Master High-Performance Suite...</p>
+            <div style={{ width: '160px', height: '3px', background: 'rgba(13,110,253,0.15)', borderRadius: '3px', margin: '18px auto 0 auto', overflow: 'hidden' }}>
+              <motion.div
+                initial={{ x: '-100%' }}
+                animate={{ x: '100%' }}
+                transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ width: '50%', height: '100%', background: 'linear-gradient(90deg, #0d6efd, #13c9f0)', borderRadius: '3px' }}
+              />
+            </div>
+          </motion.div>
         </motion.div>
-      </div>
+      </AnimatePresence>
     );
   }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', color: '#212529', position: 'relative' }}>
       
-      {toast.show && (
-        <div style={{ position: 'fixed', top: '25px', right: '25px', zIndex: 9999 }}>
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: -20 }}
-            className={`alert ${toast.type === 'success' ? 'alert-success' : 'alert-danger'} shadow fw-bold px-4 py-3 rounded d-flex align-items-center gap-2`}
-            style={{ minWidth: '280px' }}
-          >
-            <span>{toast.message}</span>
-          </motion.div>
-        </div>
-      )}
+      <AnimatePresence>
+        {toast.show && (
+          <div style={{ position: 'fixed', top: '25px', right: '25px', zIndex: 9999 }}>
+            <motion.div 
+              initial={{ opacity: 0, y: -20, scale: 0.95 }} 
+              animate={{ opacity: 1, y: 0, scale: 1 }} 
+              exit={{ opacity: 0, y: -14, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className={`alert ${toast.type === 'success' ? 'alert-success' : toast.type === 'info' ? 'alert-info' : 'alert-danger'} shadow-lg fw-bold px-4 py-3 rounded-3 d-flex align-items-center gap-2`}
+              style={{ minWidth: '280px', borderLeft: `4px solid ${toast.type === 'success' ? '#198754' : toast.type === 'info' ? '#0dcaf0' : '#dc3545'}` }}
+            >
+              <span>{toast.message}</span>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
-      {confirmModal.show && (
-        <div style={modalStyles.overlay}>
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center' }}>
-            <h4 className="fw-bold mb-3">{confirmModal.title}</h4>
-            <p className="text-muted mb-4">{confirmModal.message}</p>
-            <div className="d-flex justify-content-center gap-3">
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary px-4" onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' })}>Cancel</motion.button>
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-danger px-4 fw-bold" onClick={confirmModal.onConfirm}>Confirm</motion.button>
-            </div>
+      <AnimatePresence>
+        {confirmModal.show && (
+          <motion.div style={modalStyles.overlay} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <motion.div initial={{ scale: 0.9, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0 }} transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} style={{ ...modalStyles.box, textAlign: 'center' }}>
+              <h4 className="fw-bold mb-3">{confirmModal.title}</h4>
+              <p className="text-muted mb-4">{confirmModal.message}</p>
+              <div className="d-flex justify-content-center gap-3">
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary px-4" onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' })}>Cancel</motion.button>
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-danger px-4 fw-bold" onClick={confirmModal.onConfirm}>Confirm</motion.button>
+              </div>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
-      {selectedProfileModalUser && (
-        <div style={modalStyles.overlay}>
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
+      <AnimatePresence>
+        {selectedProfileModalUser && (
+        <motion.div style={modalStyles.overlay} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+          <motion.div initial={{ scale: 0.9, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0 }} transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
             <button className="btn-close position-absolute top-0 end-0 m-3" onClick={() => setSelectedProfileModalUser(null)}></button>
             
             <div className="my-3">
@@ -533,11 +594,21 @@ function App() {
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary px-4" onClick={() => setSelectedProfileModalUser(null)}>Close</motion.button>
             </div>
           </motion.div>
-        </div>
-      )}
+        </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Navbar */}
-      <nav className="navbar navbar-expand-lg navbar-light bg-white p-3 shadow-sm sticky-top">
+      <motion.nav
+        animate={{
+          boxShadow: isScrolled ? '0 8px 24px rgba(13,17,23,0.08)' : '0 1px 2px rgba(13,17,23,0.03)',
+          paddingTop: isScrolled ? '10px' : '16px',
+          paddingBottom: isScrolled ? '10px' : '16px'
+        }}
+        transition={{ duration: 0.25, ease: 'easeOut' }}
+        className="navbar navbar-expand-lg navbar-light bg-white px-3 sticky-top"
+        style={{ zIndex: 1030 }}
+      >
         <div className="container">
           <motion.a whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="navbar-brand fw-bold fs-4 text-primary" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }}>
             JR STORE
@@ -554,15 +625,31 @@ function App() {
               <option value="product">Products</option>
               <option value="profile">Users</option>
             </select>
-            <div className="position-relative flex-grow-1">
+            <motion.div className="position-relative flex-grow-1" whileFocus={{ scale: 1.01 }}>
               <input 
                 type="text" 
                 className="form-control px-3 shadow-sm" 
                 placeholder={searchType === 'profile' ? "Search user..." : searchType === 'product' ? "Search product..." : "Search..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ transition: 'box-shadow 0.2s ease, border-color 0.2s ease' }}
               />
-            </div>
+              <AnimatePresence>
+                {searchQuery && (
+                  <motion.button
+                    type="button"
+                    initial={{ opacity: 0, scale: 0.7 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.7 }}
+                    transition={{ duration: 0.15 }}
+                    onClick={() => setSearchQuery('')}
+                    className="btn-close position-absolute"
+                    style={{ right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '10px' }}
+                    aria-label="Clear search"
+                  />
+                )}
+              </AnimatePresence>
+            </motion.div>
           </div>
           <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span className="navbar-toggler-icon"></span>
@@ -626,12 +713,13 @@ function App() {
             </ul>
           </div>
         </div>
-      </nav>
+      </motion.nav>
 
       {/* Authentication Modal */}
-      {showLoginModal && (
-        <div style={modalStyles.overlay}>
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
+      <AnimatePresence>
+        {showLoginModal && (
+        <motion.div style={modalStyles.overlay} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+          <motion.div initial={{ scale: 0.9, opacity: 0, y: 10 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0 }} transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} style={modalStyles.box}>
             <div className="d-flex justify-content-between align-items-center mb-4">
               <h3 className="fw-bold m-0">{isRegisterMode ? 'Register (Gmail Verified)' : 'Sign In'}</h3>
               <button className="btn-close" onClick={() => setShowLoginModal(false)}></button>
@@ -693,13 +781,14 @@ function App() {
               </div>
             </form>
           </motion.div>
-        </div>
-      )}
+        </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* JR Master Admin Panel */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
-        <div className="container py-5 text-start">
-          <div className="bg-white p-4 border rounded shadow-sm mb-5">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className="container py-5 text-start">
+          <div className="bg-white p-4 border rounded-4 shadow-sm mb-5">
             <div className="d-flex justify-content-between align-items-center mb-4">
               <div>
                 <h2 className="fw-bold text-primary m-0 d-flex align-items-center gap-2">
@@ -735,24 +824,26 @@ function App() {
               {adminMessages.length === 0 ? (
                 <p className="text-muted text-center mt-5 small">No support inquiries found.</p>
               ) : (
-                adminMessages.map((msg, index) => (
-                  <div key={index} className="mb-3 p-3 rounded bg-white border shadow-sm" style={{ maxWidth: '85%' }}>
-                    <div className="d-flex align-items-center justify-content-between mb-2">
-                      <div className="d-flex align-items-center gap-2">
-                        <img src={msg.senderPhoto || presetAvatars[0]} alt="Sender" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
-                        <span className="fw-bold text-primary">{msg.sender}</span>
-                        <span className="small text-muted">({msg.senderEmail})</span>
+                <motion.div variants={staggerContainer} initial="hidden" animate="show">
+                  {adminMessages.map((msg, index) => (
+                    <motion.div key={index} variants={staggerItem} whileHover={{ x: 4 }} className="mb-3 p-3 rounded-3 bg-white border-0 shadow-sm" style={{ maxWidth: '85%' }}>
+                      <div className="d-flex align-items-center justify-content-between mb-2">
+                        <div className="d-flex align-items-center gap-2">
+                          <img src={msg.senderPhoto || presetAvatars[0]} alt="Sender" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
+                          <span className="fw-bold text-primary">{msg.sender}</span>
+                          <span className="small text-muted">({msg.senderEmail})</span>
+                        </div>
+                        <span className="text-muted small">{msg.time}</span>
                       </div>
-                      <span className="text-muted small">{msg.time}</span>
-                    </div>
-                    <p className="mb-0 text-dark" style={{ fontSize: '14px' }}>{msg.text}</p>
-                    <button className="btn btn-sm btn-outline-primary mt-2" onClick={() => {
-                      const target = profilesList.find(p => p.email === msg.senderEmail) || { name: msg.sender, email: msg.senderEmail, photo: msg.senderPhoto, role: 'customer' };
-                      setChatTargetUser(target);
-                      setActivePage('messenger');
-                    }}>Reply directly</button>
-                  </div>
-                ))
+                      <p className="mb-0 text-dark" style={{ fontSize: '14px' }}>{msg.text}</p>
+                      <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-primary mt-2" onClick={() => {
+                        const target = profilesList.find(p => p.email === msg.senderEmail) || { name: msg.sender, email: msg.senderEmail, photo: msg.senderPhoto, role: 'customer' };
+                        setChatTargetUser(target);
+                        setActivePage('messenger');
+                      }}>Reply directly</motion.button>
+                    </motion.div>
+                  ))}
+                </motion.div>
               )}
             </div>
             <h4 className="mb-3">Complete User & Profile Registry (Full Access Control)</h4>
@@ -819,12 +910,12 @@ function App() {
               </table>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Messages Hub */}
       {isLoggedIn && activePage === 'messenger' && (
-        <div className="container py-5">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className="container py-5">
           <div className="row justify-content-center">
             <div className="col-md-10 bg-white p-4 border rounded shadow-sm text-start">
               
@@ -892,15 +983,27 @@ function App() {
                           if (currentMsgs.length === 0) {
                             return <p className="text-muted text-center mt-5 small">No messages yet with {chatTargetUser.name}. Start conversation below!</p>;
                           }
-                          return currentMsgs.map((msg, idx) => (
-                            <div key={idx} className={`mb-3 p-2 rounded shadow-sm ${msg.senderEmail === userInfo.email ? 'ms-auto bg-primary text-white fw-semibold' : 'bg-white border text-dark'}`} style={{ maxWidth: '75%' }}>
-                              <div className="d-flex justify-content-between small fw-bold mb-1" style={{ fontSize: '11px', opacity: 0.8 }}>
-                                <span>{msg.sender}</span>
-                                <span>{msg.time}</span>
-                              </div>
-                              <p className="mb-0" style={{ fontSize: '14px' }}>{msg.text}</p>
-                            </div>
-                          ));
+                          return (
+                            <motion.div initial="hidden" animate="show" variants={staggerContainer}>
+                              {currentMsgs.map((msg, idx) => {
+                                const isMine = msg.senderEmail === userInfo.email;
+                                return (
+                                  <motion.div
+                                    key={idx}
+                                    variants={{ hidden: { opacity: 0, x: isMine ? 24 : -24 }, show: { opacity: 1, x: 0, transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } } }}
+                                    className={`mb-3 p-2 rounded-3 shadow-sm ${isMine ? 'ms-auto bg-primary text-white fw-semibold' : 'bg-white border text-dark'}`}
+                                    style={{ maxWidth: '75%' }}
+                                  >
+                                    <div className="d-flex justify-content-between small fw-bold mb-1" style={{ fontSize: '11px', opacity: 0.8 }}>
+                                      <span>{msg.sender}</span>
+                                      <span>{msg.time}</span>
+                                    </div>
+                                    <p className="mb-0" style={{ fontSize: '14px' }}>{msg.text}</p>
+                                  </motion.div>
+                                );
+                              })}
+                            </motion.div>
+                          );
                         })()}
                       </div>
                       <form onSubmit={handleSendDirectMessage} className="input-group">
@@ -922,12 +1025,12 @@ function App() {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* User Profile */}
       {isLoggedIn && activePage === 'profile' && (
-        <div className="container py-5 text-start">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className="container py-5 text-start">
           <div className="row justify-content-center">
             <div className="col-md-8 bg-white p-5 border rounded shadow-sm">
               <div className="d-flex align-items-center mb-4 gap-4">
@@ -1026,12 +1129,12 @@ function App() {
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
     )}
 
     {/* Edit Profile */}
     {isLoggedIn && activePage === 'edit-profile' && (
-      <div className="container py-5 text-start">
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className="container py-5 text-start">
         <div className="row justify-content-center">
           <div className="col-md-8 bg-white p-5 border rounded shadow-sm">
             <div className="d-flex justify-content-between align-items-center mb-4">
@@ -1118,12 +1221,12 @@ function App() {
         </form>
       </div>
       </div>
-    </div>
+    </motion.div>
    )}
 
     {/* Add Product */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
-      <div className="container py-5 text-start">
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} className="container py-5 text-start">
         <div className="row justify-content-center">
           <div className="col-md-8 bg-white p-5 border rounded shadow-sm">
             <div className="d-flex justify-content-between align-items-center mb-4">
@@ -1152,12 +1255,26 @@ function App() {
               <label className="form-label small fw-semibold">Product Image File or URL</label>
               <input type="file" accept="image/*" className="form-control mb-2 shadow-sm" onChange={handleProductFile} />
               <input type="text" className="form-control shadow-sm" placeholder="Or paste direct image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
+              <AnimatePresence>
+                {productImage && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                    animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <span className="text-muted small d-block mb-1">Preview:</span>
+                    <img src={productImage} alt="Product preview" className="rounded-3 border shadow-sm" style={{ width: '140px', height: '140px', objectFit: 'cover' }} onError={(e) => { e.target.style.display = 'none'; }} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase shadow">Add Product</motion.button>
           </form>
         </div>
         </div>
-      </div>
+      </motion.div>
    )}
 
     {/* Home / Product Showcase */}
@@ -1227,6 +1344,28 @@ function App() {
                 SHOP NOW 🚀
               </motion.button>
             </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.5 }}
+              className="d-flex justify-content-center gap-5 mt-5"
+            >
+              <div className="text-center">
+                <h3 className="fw-bold mb-0 text-primary">{allProductsList.length}+</h3>
+                <span className="text-muted small text-uppercase" style={{ letterSpacing: '0.5px' }}>Products</span>
+              </div>
+              <div className="text-center">
+                <h3 className="fw-bold mb-0 text-primary">{profilesList.length}+</h3>
+                <span className="text-muted small text-uppercase" style={{ letterSpacing: '0.5px' }}>Verified Users</span>
+              </div>
+              <div className="text-center">
+                <h3 className="fw-bold mb-0 text-primary d-flex align-items-center justify-content-center gap-1">
+                  100% <VerifiedBadge />
+                </h3>
+                <span className="text-muted small text-uppercase" style={{ letterSpacing: '0.5px' }}>Secure Checkout</span>
+              </div>
+            </motion.div>
           </div>
         </header>
 
@@ -1267,18 +1406,29 @@ function App() {
         </div>
 
         <div className="container py-5">
-          {searchQuery && (
-            <div className="mb-5 text-start text-dark">
+          <AnimatePresence>
+          {searchQuery && (() => {
+            const matchedUsers = profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+            const matchedProducts = allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase()));
+            return (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-5 text-start text-dark"
+              style={{ overflow: 'hidden' }}
+            >
               <h4 className="border-bottom pb-2">Search Results for: "{searchQuery}"</h4>
               
               {(searchType === 'all' || searchType === 'profile') && (
                 <div className="my-4">
                   <h6 className="text-muted text-uppercase mb-3 small">Matched Users</h6>
-                  <div className="row g-3">
-                    {profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                      profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
-                        <div className="col-md-4" key={idx}>
-                          <div className="bg-white p-3 border rounded d-flex align-items-center justify-content-between shadow-sm">
+                  <motion.div className="row g-3" variants={staggerContainer} initial="hidden" animate="show">
+                    {matchedUsers.length > 0 ? (
+                      matchedUsers.map((prof, idx) => (
+                        <motion.div className="col-md-4" key={idx} variants={staggerItem}>
+                          <motion.div whileHover={{ y: -4, boxShadow: '0 10px 24px rgba(13,17,23,0.08)' }} transition={{ duration: 0.2 }} className="bg-white p-3 border-0 rounded-3 d-flex align-items-center justify-content-between shadow-sm">
                             <div className="d-flex align-items-center gap-3" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
                               <img src={prof.photo || presetAvatars[0]} alt="Profile" style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover' }} />
                               <div>
@@ -1297,24 +1447,24 @@ function App() {
                                 }}>Message</motion.button>
                               )}
                             </div>
-                          </div>
-                        </div>
+                          </motion.div>
+                        </motion.div>
                       ))
                     ) : (
                       <p className="text-muted small">No users matched the query.</p>
                     )}
-                  </div>
+                  </motion.div>
                 </div>
               )}
               {(searchType === 'all' || searchType === 'product') && (
                 <div className="my-4">
                   <h6 className="text-muted text-uppercase mb-3 small">Matched Products</h6>
-                  <div className="row g-4">
-                    {allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                      allProductsList.filter(p => p.title.toLowerCase().includes(searchQuery.toLowerCase())).map((prod) => (
-                        <div className="col-md-4" key={prod.id}>
-                          <div className="card h-100 bg-white border shadow-sm p-3">
-                            <div className="bg-light d-flex align-items-center justify-content-center" style={{ height: '200px', overflow: 'hidden' }}>
+                  <motion.div className="row g-4" variants={staggerContainer} initial="hidden" animate="show">
+                    {matchedProducts.length > 0 ? (
+                      matchedProducts.map((prod) => (
+                        <motion.div className="col-md-4" key={prod.id} variants={staggerItem}>
+                          <motion.div whileHover={{ y: -6, boxShadow: '0 15px 30px rgba(13,17,23,0.1)' }} transition={{ duration: 0.2 }} className="card h-100 bg-white border-0 shadow-sm p-3 rounded-4">
+                            <div className="bg-light d-flex align-items-center justify-content-center rounded-3" style={{ height: '200px', overflow: 'hidden' }}>
                               {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'No Image'}
                             </div>
                             <div className="card-body text-center">
@@ -1329,36 +1479,54 @@ function App() {
                                 }
                               }}>View Product</motion.button>
                             </div>
-                          </div>
-                        </div>
+                          </motion.div>
+                        </motion.div>
                       ))
                     ) : (
                       <p className="text-muted small">No products matched the query.</p>
                     )}
-                  </div>
+                  </motion.div>
                 </div>
               )}
-            </div>
-          )}
+            </motion.div>
+            );
+          })()}
+          </AnimatePresence>
 
-          <div className="row g-4">
+          <motion.div initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.4 }} className="d-flex align-items-center justify-content-between mb-4">
+            <h3 className="fw-bold m-0">Featured Products</h3>
+            <span className="text-muted small">{allProductsList.length} item{allProductsList.length !== 1 ? 's' : ''}</span>
+          </motion.div>
+
+          <motion.div className="row g-4" variants={staggerContainer} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.15 }}>
             {allProductsList.map((prod) => (
-              <div className="col-md-4" key={prod.id}>
+              <motion.div className="col-md-4" key={prod.id} variants={staggerItem}>
                 <motion.div 
-                  initial={{y: 20, opacity: 0}} 
-                  whileInView={{y: 0, opacity: 1}} 
-                  viewport={{once: true}} 
-                  transition={{duration: 0.3}} 
-                  whileHover={{ y: -8, boxShadow: '0 15px 30px rgba(0,0,0,0.1)' }}
-                  className="card h-100 bg-white border shadow-sm p-3 rounded-4"
+                  whileHover={{ y: -10, boxShadow: '0 20px 40px rgba(13,110,253,0.15)' }}
+                  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  className="card h-100 bg-white border-0 shadow-sm p-3 rounded-4 position-relative overflow-hidden"
                 >
-                  <div className="bg-light d-flex align-items-center justify-content-center rounded-3" style={{ height: '260px', overflow: 'hidden' }}>
-                    {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Image'}
+                  <div className="bg-light d-flex align-items-center justify-content-center rounded-3 position-relative" style={{ height: '260px', overflow: 'hidden' }}>
+                    {prod.image ? (
+                      <motion.img
+                        whileHover={{ scale: 1.08 }}
+                        transition={{ duration: 0.4, ease: 'easeOut' }}
+                        src={prod.image}
+                        alt="Prod"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : 'Image'}
+                    <span
+                      className="badge text-uppercase fw-bold position-absolute"
+                      style={{ top: '10px', left: '10px', fontSize: '10px', letterSpacing: '0.5px', background: 'linear-gradient(135deg, #0d6efd, #13c9f0)', color: '#fff' }}
+                    >
+                      {prod.category}
+                    </span>
                   </div>
                   <div className="card-body text-center">
                     <h5 className="card-title fw-bold text-uppercase mt-2" style={{ fontSize: '17px' }}>{prod.title}</h5>
                     <p className="text-muted small mb-2">Seller: <span className="text-primary fw-semibold">{prod.seller || 'JR Master'}</span></p>
-                    <p className="text-dark fw-bold fs-5 mb-4">${prod.price}</p>
+                    <p className="fw-bold fs-5 mb-4" style={{ background: 'linear-gradient(135deg, #0d6efd, #0a58ca)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>${prod.price}</p>
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-primary w-100 text-uppercase fw-bold rounded-pill" onClick={() => {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
@@ -1370,9 +1538,9 @@ function App() {
                     }}>View Product</motion.button>
                   </div>
                 </motion.div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </>
     )}
