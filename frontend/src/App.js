@@ -34,8 +34,8 @@ function App() {
   };
   const [profilesList, setProfilesList] = useState([defaultSuperAdmin]);
   const [allProductsList, setAllProductsList] = useState([
-    { id: 1, title: 'Wireless Premium Headphones', price: '99.00', category: 'Electronics', seller: 'Admin User', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
-    { id: 2, title: 'Smart Fitness Watch', price: '149.00', category: 'Accessories', seller: 'Admin User', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' }
+    { id: 1, title: 'Wireless Premium Headphones', price: '99.00', category: 'Electronics', seller: 'Admin User', sellerEmail: 'admin@store.com', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
+    { id: 2, title: 'Smart Fitness Watch', price: '149.00', category: 'Accessories', seller: 'Admin User', sellerEmail: 'admin@store.com', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' }
   ]);
   const [adminMessages, setAdminMessages] = useState([]);
   const [newAdminMessage, setNewAdminMessage] = useState('');
@@ -102,7 +102,7 @@ function App() {
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowWelcome(false), 1500);
+    const timer = setTimeout(() => setShowWelcome(false), 1800);
     const token = localStorage.getItem('token');
     const storedUser = localStorage.getItem('userInfo');
     const storedRole = localStorage.getItem('userRole');
@@ -155,7 +155,6 @@ function App() {
     setUserRole('customer');
     setActivePage('home');
     showToast("Logged out successfully!", "success");
-    setTimeout(() => { window.location.reload(); }, 400);
   };
 
   const handleDeactivateAccount = () => {
@@ -185,7 +184,7 @@ function App() {
           return;
         }
         const userEmail = userInfo?.email;
-        setAllProductsList(allProductsList.filter(p => p.seller !== userInfo?.name && p.seller !== userEmail));
+        setAllProductsList(allProductsList.filter(p => p.sellerEmail !== userEmail && p.seller !== userInfo?.name));
         const updatedMessages = { ...directMessages };
         Object.keys(updatedMessages).forEach(key => {
           if (key.includes(userEmail)) { delete updatedMessages[key]; }
@@ -324,13 +323,14 @@ function App() {
       category: productCategory,
       description: productDescription,
       image: productImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300',
-      seller: userInfo?.name || 'Admin'
+      seller: userInfo?.name || 'Admin',
+      sellerEmail: userInfo?.email || 'admin@store.com'
     };
     const updatedProducts = [newProd, ...allProductsList];
     setAllProductsList(updatedProducts);
     localStorage.setItem('allProductsList', JSON.stringify(updatedProducts));
     
-    showToast("Product added successfully!", "success");
+    showToast("Product added successfully! Visible to all users.", "success");
     setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
     setActivePage('home');
   };
@@ -371,15 +371,16 @@ function App() {
       localStorage.setItem('token', 'store-user-token');
       
       const role = (cleanEmail === 'admin@store.com') ? 'admin' : (isRegisterMode ? selectedRole : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.role || 'customer'));
-      const userName = name || (role === 'admin' ? 'Admin User' : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.name || cleanEmail.split('@')[0]));
+      const foundProfileData = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail);
+      const userName = name || (role === 'admin' ? 'Admin User' : (foundProfileData?.name || cleanEmail.split('@')[0]));
       
       const userData = { 
         name: userName, 
         email: cleanEmail, 
         password, 
         role, 
-        phone: updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.phone || '01700000000',
-        photo: updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.photo || presetAvatars[0],
+        phone: foundProfileData?.phone || '01700000000',
+        photo: foundProfileData?.photo || presetAvatars[0],
         isVerified: true,
         isDeleted: false
       };
@@ -388,7 +389,13 @@ function App() {
         updatedProfiles.push(userData);
         setProfilesList(updatedProfiles);
         localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
+      } else {
+        // Update existing profile info if needed in list
+        updatedProfiles = updatedProfiles.map(p => p.email.toLowerCase() === cleanEmail ? { ...p, ...userData, isDeleted: false } : p);
+        setProfilesList(updatedProfiles);
+        localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
       }
+
       localStorage.setItem('userInfo', JSON.stringify(userData));
       localStorage.setItem('userRole', role);
       setIsLoggedIn(true);
@@ -402,20 +409,21 @@ function App() {
   if (showWelcome) {
     return (
       <div style={splashStyles.container}>
-        <AnimatePresence mode="wait">
-          {showWelcome && (
-            <motion.div
-              key="splash-content"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, scale: 1.05, transition: { duration: 0.5 } }}
-              style={splashStyles.content}
-            >
-              <h1 style={splashStyles.title}>JR STORE</h1>
-              <p style={splashStyles.subtitle}>Loading application...</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 1.1 }}
+          transition={{ duration: 0.8, ease: "easeInOut" }}
+          style={splashStyles.content}
+        >
+          <motion.div 
+            animate={{ rotate: 360 }} 
+            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+            style={{ width: '70px', height: '70px', border: '5px solid rgba(13, 110, 253, 0.2)', borderTopColor: '#0d6efd', borderRadius: '50%', margin: '0 auto 20px auto' }}
+          />
+          <h1 style={splashStyles.title}>JR STORE</h1>
+          <p style={splashStyles.subtitle}>Loading High-Performance Experience...</p>
+        </motion.div>
       </div>
     );
   }
@@ -443,8 +451,8 @@ function App() {
             <h4 className="fw-bold mb-3">{confirmModal.title}</h4>
             <p className="text-muted mb-4">{confirmModal.message}</p>
             <div className="d-flex justify-content-center gap-3">
-              <button className="btn btn-outline-secondary px-4" onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' })}>Cancel</button>
-              <button className="btn btn-danger px-4 fw-bold" onClick={confirmModal.onConfirm}>Confirm</button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary px-4" onClick={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' })}>Cancel</motion.button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-danger px-4 fw-bold" onClick={confirmModal.onConfirm}>Confirm</motion.button>
             </div>
           </motion.div>
         </div>
@@ -469,14 +477,14 @@ function App() {
             
             <div className="d-flex justify-content-center gap-2">
               {isLoggedIn && !selectedProfileModalUser.isDeleted && selectedProfileModalUser.email !== userInfo?.email && (
-                <button className="btn btn-primary px-4 fw-bold" onClick={() => {
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-primary px-4 fw-bold" onClick={() => {
                   const target = selectedProfileModalUser;
                   setSelectedProfileModalUser(null);
                   setChatTargetUser(target);
                   setActivePage('messenger');
-                }}>Message</button>
+                }}>Message</motion.button>
               )}
-              <button className="btn btn-outline-secondary px-4" onClick={() => setSelectedProfileModalUser(null)}>Close</button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary px-4" onClick={() => setSelectedProfileModalUser(null)}>Close</motion.button>
             </div>
           </motion.div>
         </div>
@@ -485,13 +493,13 @@ function App() {
       {/* Navbar */}
       <nav className="navbar navbar-expand-lg navbar-light bg-white p-3 shadow-sm sticky-top">
         <div className="container">
-          <a className="navbar-brand fw-bold fs-4 text-primary" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }}>
+          <motion.a whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="navbar-brand fw-bold fs-4 text-primary" href="#home" onClick={(e) => { e.preventDefault(); setActivePage('home'); setSearchQuery(''); }}>
             JR STORE
-          </a>
+          </motion.a>
           
           <div className="d-none d-md-flex mx-auto align-items-center gap-2" style={{ width: '450px' }}>
             <select 
-              className="form-select text-center" 
+              className="form-select text-center shadow-sm" 
               style={{ width: '130px', fontSize: '13px' }}
               value={searchType}
               onChange={(e) => setSearchType(e.target.value)}
@@ -503,7 +511,7 @@ function App() {
             <div className="position-relative flex-grow-1">
               <input 
                 type="text" 
-                className="form-control px-3" 
+                className="form-control px-3 shadow-sm" 
                 placeholder={searchType === 'profile' ? "Search user..." : searchType === 'product' ? "Search product..." : "Search..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -564,9 +572,9 @@ function App() {
                     </ul>
                   </div>
                 ) : (
-                  <button className="btn btn-primary ms-lg-3 px-4 w-100 w-lg-auto fw-bold" onClick={() => { setIsRegisterMode(false); setShowLoginModal(true); }}>
+                  <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-primary ms-lg-3 px-4 w-100 w-lg-auto fw-bold shadow-sm" onClick={() => { setIsRegisterMode(false); setShowLoginModal(true); }}>
                     Sign In
-                  </button>
+                  </motion.button>
                 )}
               </li>
             </ul>
@@ -624,10 +632,10 @@ function App() {
                 </div>
               </div>
               
-              <button type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase mb-3 d-flex justify-content-center align-items-center gap-2" disabled={isLoading}>
+              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase mb-3 d-flex justify-content-center align-items-center gap-2 shadow" disabled={isLoading}>
                 {isLoading && <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>}
                 {isLoading ? 'Processing...' : (isRegisterMode ? 'Register' : 'Sign In')}
-              </button>
+              </motion.button>
               <div className="text-center">
                 <p className="small mb-0 text-muted">
                   {isRegisterMode ? "Already have an account?" : "Don't have an account?"}{" "}
@@ -653,23 +661,23 @@ function App() {
                 </h2>
                 <p className="text-muted small mb-0">Manage users, products, and support messages.</p>
               </div>
-              <button className="btn btn-outline-secondary btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</motion.button>
             </div>
             <div className="row g-4 mb-5">
               <div className="col-md-4">
-                <div className="bg-light p-3 rounded border text-center">
+                <div className="bg-light p-3 rounded border text-center shadow-sm">
                   <h6 className="text-muted text-uppercase small">Total Users</h6>
                   <h2 className="fw-bold">{profilesList.length}</h2>
                 </div>
               </div>
               <div className="col-md-4">
-                <div className="bg-light p-3 rounded border text-center">
+                <div className="bg-light p-3 rounded border text-center shadow-sm">
                   <h6 className="text-muted text-uppercase small">Total Products</h6>
                   <h2 className="fw-bold">{allProductsList.length}</h2>
                 </div>
               </div>
               <div className="col-md-4">
-                <div className="bg-light p-3 rounded border text-center">
+                <div className="bg-light p-3 rounded border text-center shadow-sm">
                   <h6 className="text-muted text-uppercase small">Support Messages</h6>
                   <h2 className="fw-bold text-primary">{adminMessages.length}</h2>
                 </div>
@@ -725,7 +733,7 @@ function App() {
                       </td>
                       <td>
                         {prof.email !== 'admin@store.com' && (
-                          <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete</button>
+                          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete</motion.button>
                         )}
                       </td>
                     </tr>
@@ -753,7 +761,7 @@ function App() {
                       <td>${prod.price}</td>
                       <td>{prod.seller || 'Admin'}</td>
                       <td>
-                        <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteProductByAdmin(prod.id)}>Delete</button>
+                        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteProductByAdmin(prod.id)}>Delete</motion.button>
                       </td>
                     </tr>
                   ))}
@@ -773,19 +781,19 @@ function App() {
               <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom">
                 <div>
                   <h3 className="fw-bold m-0 fs-2">Messages</h3>
-                  <p className="text-muted small mb-0">Secure chats with other users.</p>
+                  <p className="text-muted small mb-0">Secure real-time chats across all profiles.</p>
                 </div>
-                <button className="btn btn-sm btn-outline-secondary px-3" onClick={() => setActivePage('profile')}>Back</button>
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-secondary px-3" onClick={() => setActivePage('profile')}>Back</motion.button>
               </div>
               <div className="row">
                 <div className="col-md-4 border-end pe-3">
-                  <h6 className="text-muted mb-3 fw-bold small text-uppercase">Users:</h6>
+                  <h6 className="text-muted mb-3 fw-bold small text-uppercase">All Profiles:</h6>
                   <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                     {profilesList.filter(p => p.email !== userInfo?.email && !p.isDeleted).map((prof, idx) => (
                       <div 
                         key={idx} 
                         onClick={() => setChatTargetUser(prof)}
-                        className={`p-2 rounded d-flex align-items-center gap-2 ${chatTargetUser?.email === prof.email ? 'bg-primary text-white fw-bold' : 'bg-light text-dark border'}`}
+                        className={`p-2 rounded d-flex align-items-center gap-2 ${chatTargetUser?.email === prof.email ? 'bg-primary text-white fw-bold shadow-sm' : 'bg-light text-dark border'}`}
                         style={{ cursor: 'pointer' }}
                       >
                         <img src={prof.photo || presetAvatars[0]} alt="Avatar" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
@@ -804,13 +812,13 @@ function App() {
                       <form onSubmit={handleSendAdminMessage}>
                         <input 
                           type="text" 
-                          className="form-control form-control-sm mb-2" 
+                          className="form-control form-control-sm mb-2 shadow-sm" 
                           placeholder="Type message to support..." 
                           value={newAdminMessage}
                           onChange={(e) => setNewAdminMessage(e.target.value)}
                           required
                         />
-                        <button type="submit" className="btn btn-sm btn-primary w-100 fw-bold">Send Message</button>
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-sm btn-primary w-100 fw-bold shadow-sm">Send Message</motion.button>
                       </form>
                     </div>
                   )}
@@ -826,7 +834,7 @@ function App() {
                         </h5>
                         <small className="text-primary ms-auto">View Profile</small>
                       </div>
-                      <div className="bg-light p-3 rounded mb-3 overflow-auto border" style={{ height: '270px' }}>
+                      <div className="bg-light p-3 rounded mb-3 overflow-auto border shadow-sm" style={{ height: '270px' }}>
                         {(() => {
                           const sortedEmails = [userInfo.email, chatTargetUser.email].sort();
                           const chatKey = `${sortedEmails[0]}_${sortedEmails[1]}`;
@@ -835,7 +843,7 @@ function App() {
                             return <p className="text-muted text-center mt-5 small">No messages yet with {chatTargetUser.name}. Send the first message below!</p>;
                           }
                           return currentMsgs.map((msg, idx) => (
-                            <div key={idx} className={`mb-3 p-2 rounded ${msg.senderEmail === userInfo.email ? 'ms-auto bg-primary text-white fw-semibold' : 'bg-white border text-dark'}`} style={{ maxWidth: '75%' }}>
+                            <div key={idx} className={`mb-3 p-2 rounded shadow-sm ${msg.senderEmail === userInfo.email ? 'ms-auto bg-primary text-white fw-semibold' : 'bg-white border text-dark'}`} style={{ maxWidth: '75%' }}>
                               <div className="d-flex justify-content-between small fw-bold mb-1" style={{ fontSize: '11px', opacity: 0.8 }}>
                                 <span>{msg.sender}</span>
                                 <span>{msg.time}</span>
@@ -848,13 +856,13 @@ function App() {
                       <form onSubmit={handleSendDirectMessage} className="input-group">
                         <input 
                           type="text" 
-                          className="form-control py-2" 
+                          className="form-control py-2 shadow-sm" 
                           placeholder={`Message ${chatTargetUser.name}...`} 
                           value={newDirectMessage}
                           onChange={(e) => setNewDirectMessage(e.target.value)}
                           required
                         />
-                        <button type="submit" className="btn btn-primary px-4 fw-bold">Send</button>
+                        <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} type="submit" className="btn btn-primary px-4 fw-bold shadow-sm">Send</motion.button>
                       </form>
                     </>
                   ) : (
@@ -911,37 +919,61 @@ function App() {
                 <h5 className="text-success">Verified & Secure</h5>
               </div>
             </div>
+
+            {/* Seller Uploaded Products Showcase in Profile */}
+            {(userRole === 'seller' || userRole === 'admin') && (
+              <div className="mb-4">
+                <h5 className="fw-bold text-primary mb-3">Products Uploaded By You</h5>
+                <div className="row g-3">
+                  {allProductsList.filter(p => p.sellerEmail === userInfo?.email || p.seller === userInfo?.name).length === 0 ? (
+                    <p className="text-muted small">You haven't uploaded any products yet.</p>
+                  ) : (
+                    allProductsList.filter(p => p.sellerEmail === userInfo?.email || p.seller === userInfo?.name).map(prod => (
+                      <div className="col-md-6" key={prod.id}>
+                        <div className="p-3 border rounded bg-light shadow-sm d-flex gap-3 align-items-center">
+                          <img src={prod.image} alt="Prod" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '6px' }} />
+                          <div>
+                            <h6 className="fw-bold mb-1" style={{ fontSize: '14px' }}>{prod.title}</h6>
+                            <p className="text-muted small mb-0">${prod.price} | {prod.category}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
              
             <div className="d-flex flex-wrap gap-3 align-items-center">
-              <button className="btn btn-outline-secondary px-4 fw-bold" onClick={() => { setEditName(userInfo?.name || ''); setActivePage('edit-profile'); }}>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary px-4 fw-bold" onClick={() => { setEditName(userInfo?.name || ''); setActivePage('edit-profile'); }}>
                 Edit Profile
-              </button>
+              </motion.button>
               {userRole === 'admin' && (
-                <button className="btn btn-primary px-4 fw-bold" onClick={() => setActivePage('admin-dashboard')}>
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-primary px-4 fw-bold" onClick={() => setActivePage('admin-dashboard')}>
                   Admin Dashboard
-                </button>
+                </motion.button>
               )}
               {(userRole === 'seller' || userRole === 'admin') && (
-                <button className="btn btn-outline-primary px-4 fw-bold" onClick={() => setActivePage('upload')}>
+                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-primary px-4 fw-bold" onClick={() => setActivePage('upload')}>
                   Add Product
-                </button>
+                </motion.button>
               )}
-              <button className="btn btn-outline-secondary px-3" onClick={() => {
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary px-3" onClick={() => {
                 const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
                 setChatTargetUser(otherProfile);
                 setActivePage('messenger');
               }}>
                 Messages
-              </button>
-              <button className="btn btn-outline-warning px-3" onClick={handleDeactivateAccount}>
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-warning px-3" onClick={handleDeactivateAccount}>
                 Deactivate
-              </button>
-              <button className="btn btn-outline-danger px-3" onClick={handleDeleteAccount}>
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-danger px-3" onClick={handleDeleteAccount}>
                 Delete
-              </button>
-              <button className="btn btn-outline-dark px-4 ms-auto" onClick={handleLogout}>
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-dark px-4 ms-auto" onClick={handleLogout}>
                 Logout
-              </button>
+              </motion.button>
             </div>
           </div>
         </div>
@@ -955,26 +987,28 @@ function App() {
           <div className="col-md-8 bg-white p-5 border rounded shadow-sm">
             <div className="d-flex justify-content-between align-items-center mb-4">
               <h3 className="fw-bold m-0">Edit Profile</h3>
-              <button className="btn btn-sm btn-outline-secondary" onClick={() => setActivePage('profile')}>Cancel</button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-secondary" onClick={() => setActivePage('profile')}>Cancel</motion.button>
           </div>
           <hr className="border-secondary mb-4 opacity-25" />
           <form onSubmit={handleUpdateProfile}>
             <div className="mb-3">
               <label className="form-label small fw-semibold">Full Name</label>
-              <input type="text" className="form-control" value={editName} onChange={(e) => setEditName(e.target.value)} required />
+              <input type="text" className="form-control shadow-sm" value={editName} onChange={(e) => setEditName(e.target.value)} required />
             </div>
              
             <div className="mb-3">
               <label className="form-label small fw-semibold">Phone Number</label>
-              <input type="text" className="form-control" placeholder="Enter phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+              <input type="text" className="form-control shadow-sm" placeholder="Enter phone number" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
             </div>
           <div className="mb-3">
             <label className="form-label small fw-semibold">Profile Picture</label>
-            <input type="file" accept="image/*" className="form-control mb-2" onChange={handleImageUploadFromFile} />
+            <input type="file" accept="image/*" className="form-control mb-2 shadow-sm" onChange={handleImageUploadFromFile} />
             <div className="d-flex gap-3 my-2 flex-wrap align-items-center">
               <span className="text-muted small">Or select preset avatar:</span>
               {presetAvatars.map((url, idx) => (
-                <img 
+                <motion.img 
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
                   key={idx} 
                   src={url} 
                   alt="Avatar Preset" 
@@ -991,7 +1025,7 @@ function App() {
             <div className="input-group">
               <input 
                 type={showCurrentPassword ? "text" : "password"} 
-                className="form-control" 
+                className="form-control shadow-sm" 
                 placeholder="Enter current password" 
                 value={currentPassword} 
                 onChange={(e) => {
@@ -1015,7 +1049,7 @@ function App() {
             <div className="input-group">
               <input 
                 type={showNewPassword ? "text" : "password"} 
-                className="form-control" 
+                className="form-control shadow-sm" 
                 placeholder={isCurrentPasswordValid ? "Enter new password" : "Verify current password first..."} 
                 value={newPassword} 
                 onChange={(e) => setNewPassword(e.target.value)} 
@@ -1031,7 +1065,7 @@ function App() {
               </button>
             </div>
           </div>
-          <button type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase">Save Changes</button>
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase shadow">Save Changes</motion.button>
         </form>
       </div>
       </div>
@@ -1045,32 +1079,32 @@ function App() {
           <div className="col-md-8 bg-white p-5 border rounded shadow-sm">
             <div className="d-flex justify-content-between align-items-center mb-4">
               <h3 className="fw-bold m-0">Add New Product</h3>
-              <button className="btn btn-sm btn-outline-secondary" onClick={() => setActivePage('profile')}>Back</button>
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-secondary" onClick={() => setActivePage('profile')}>Back</motion.button>
           </div>
           <hr className="border-secondary mb-4 opacity-25" />
           <form onSubmit={handleProductUpload}>
             <div className="mb-3">
               <label className="form-label small fw-semibold">Product Title</label>
-              <input type="text" className="form-control" placeholder="Enter product name..." value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
+              <input type="text" className="form-control shadow-sm" placeholder="Enter product name..." value={productTitle} onChange={(e) => setProductTitle(e.target.value)} required />
             </div>
             <div className="mb-3">
               <label className="form-label small fw-semibold">Price ($)</label>
-              <input type="number" className="form-control" placeholder="Enter price..." value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
+              <input type="number" className="form-control shadow-sm" placeholder="Enter price..." value={productPrice} onChange={(e) => setProductPrice(e.target.value)} required />
             </div>
             <div className="mb-3">
               <label className="form-label small fw-semibold">Category</label>
-              <input type="text" className="form-control" placeholder="e.g. Electronics, Accessories..." value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
+              <input type="text" className="form-control shadow-sm" placeholder="e.g. Electronics, Accessories..." value={productCategory} onChange={(e) => setProductCategory(e.target.value)} required />
             </div>
             <div className="mb-3">
               <label className="form-label small fw-semibold">Description</label>
-              <textarea className="form-control" rows="3" placeholder="Describe the product..." value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
+              <textarea className="form-control shadow-sm" rows="3" placeholder="Describe the product..." value={productDescription} onChange={(e) => setProductDescription(e.target.value)} required></textarea>
             </div>
             <div className="mb-4">
               <label className="form-label small fw-semibold">Product Image File or URL</label>
-              <input type="file" accept="image/*" className="form-control mb-2" onChange={handleProductFile} />
-              <input type="text" className="form-control" placeholder="Or paste direct image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
+              <input type="file" accept="image/*" className="form-control mb-2 shadow-sm" onChange={handleProductFile} />
+              <input type="text" className="form-control shadow-sm" placeholder="Or paste direct image URL here..." value={productImage} onChange={(e) => setProductImage(e.target.value)} />
             </div>
-            <button type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase">Add Product</button>
+            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase shadow">Add Product</motion.button>
           </form>
         </div>
         </div>
@@ -1080,34 +1114,33 @@ function App() {
     {/* Home / Product Showcase */}
     {activePage === 'home' && (
       <>
-        {/* Unique High-Animation Hero Section */}
+        {/* High Animation Live Hero Section */}
         <header className="container-fluid text-center py-5 bg-white border-bottom position-relative overflow-hidden" style={{ minHeight: '65vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
           
-          {/* Animated Background Glow Orbs */}
           <motion.div 
             animate={{ 
-              scale: [1, 1.2, 1],
+              scale: [1, 1.25, 1],
               opacity: [0.3, 0.6, 0.3],
-              x: [0, 50, 0],
-              y: [0, -30, 0]
+              x: [0, 60, 0],
+              y: [0, -40, 0]
             }} 
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            style={{ position: 'absolute', top: '10%', left: '15%', width: '250px', height: '250px', background: 'rgba(13, 110, 253, 0.12)', borderRadius: '50%', filter: 'blur(50px)', zIndex: 0 }} 
+            transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}
+            style={{ position: 'absolute', top: '10%', left: '15%', width: '280px', height: '280px', background: 'rgba(13, 110, 253, 0.15)', borderRadius: '50%', filter: 'blur(50px)', zIndex: 0 }} 
           />
           <motion.div 
             animate={{ 
-              scale: [1, 1.3, 1],
+              scale: [1, 1.35, 1],
               opacity: [0.2, 0.5, 0.2],
-              x: [0, -40, 0],
-              y: [0, 40, 0]
+              x: [0, -50, 0],
+              y: [0, 50, 0]
             }} 
-            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-            style={{ position: 'absolute', bottom: '10%', right: '15%', width: '300px', height: '300px', background: 'rgba(13, 202, 240, 0.12)', borderRadius: '50%', filter: 'blur(60px)', zIndex: 0 }} 
+            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+            style={{ position: 'absolute', bottom: '10%', right: '15%', width: '320px', height: '320px', background: 'rgba(13, 202, 240, 0.15)', borderRadius: '50%', filter: 'blur(60px)', zIndex: 0 }} 
           />
 
           <div className="container position-relative" style={{ zIndex: 1 }}>
             <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} transition={{duration: 0.5}}>
-              <span className="badge bg-primary rounded-pill px-4 py-2 mb-3 text-uppercase fw-bold shadow-sm" style={{ fontSize: '11px', letterSpacing: '1px' }}>✨ Welcome to JR STORE - Next-Gen E-Commerce</span>
+              <span className="badge bg-primary rounded-pill px-4 py-2 mb-3 text-uppercase fw-bold shadow-sm" style={{ fontSize: '11px', letterSpacing: '1px' }}>✨ Live High-Performance Animation Hub</span>
             </motion.div>
 
             <motion.h1 
@@ -1117,7 +1150,7 @@ function App() {
               className="display-3 fw-bold mb-3 text-dark" 
               style={{ textTransform: 'uppercase', letterSpacing: '-1px' }}
             >
-              Discover Amazing Products
+              DISCOVER AMAZING PRODUCTS
             </motion.h1>
 
             <motion.p 
@@ -1127,7 +1160,7 @@ function App() {
               className="lead fs-5 text-muted mx-auto" 
               style={{ maxWidth: '600px' }}
             >
-              Explore top-tier gadgets, premium accessories, and exclusive items handpicked just for you.
+              Find the best quality items at affordable prices with real-time cross-profile synchronization.
             </motion.p>
 
             <motion.div 
@@ -1137,31 +1170,31 @@ function App() {
               className="d-flex justify-content-center gap-3 mt-4"
             >
               <motion.button 
-                whileHover={{ scale: 1.05, boxShadow: '0 10px 25px rgba(13, 110, 253, 0.3)' }}
-                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.08, boxShadow: '0 12px 30px rgba(13, 110, 253, 0.4)' }}
+                whileTap={{ scale: 0.92 }}
                 className="btn btn-primary btn-lg px-5 py-3 fw-bold text-uppercase rounded-pill shadow" 
                 onClick={() => window.scrollTo({ top: 500, behavior: 'smooth' })}
               >
-                Shop Now 🚀
+                SHOP NOW 🚀
               </motion.button>
             </motion.div>
           </div>
         </header>
 
-        {/* Floating 3D Showcase Banner */}
+        {/* Floating Interactive 3D Banner */}
         <div className="container my-5">
           <motion.div 
             initial={{ opacity: 0, y: 30 }} 
             whileInView={{ opacity: 1, y: 0 }} 
             viewport={{ once: true }} 
             transition={{ duration: 0.6 }}
-            whileHover={{ scale: 1.01 }}
+            whileHover={{ scale: 1.015 }}
             style={{ 
               width: '100%', 
-              height: '420px', 
+              height: '400px', 
               borderRadius: '24px', 
               overflow: 'hidden', 
-              boxShadow: '0 20px 40px rgba(0,0,0,0.1)', 
+              boxShadow: '0 20px 40px rgba(0,0,0,0.12)', 
               background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', 
               display: 'flex',
               alignItems: 'center',
@@ -1171,15 +1204,15 @@ function App() {
             }}
           >
             <motion.div 
-              animate={{ y: [-10, 10, -10] }} 
-              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              animate={{ y: [-12, 12, -12] }} 
+              transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
               className="text-center p-4"
             >
-              <h2 className="display-5 fw-bold mb-3">🔥 Premium Collection 2026</h2>
-              <p className="lead opacity-75 mb-4">Experience the ultimate shopping convenience with lightning-fast delivery and secure messaging.</p>
-              <button className="btn btn-light text-primary px-4 py-2 fw-bold rounded-pill shadow" onClick={() => window.scrollTo({ top: 500, behavior: 'smooth' })}>
+              <h2 className="display-5 fw-bold mb-3">🔥 Multi-Profile Synchronized Store</h2>
+              <p className="lead opacity-75 mb-4">Every product uploaded by any seller appears instantly here and in their respective profile!</p>
+              <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }} className="btn btn-light text-primary px-4 py-2 fw-bold rounded-pill shadow" onClick={() => window.scrollTo({ top: 500, behavior: 'smooth' })}>
                 Browse Catalog
-              </button>
+              </motion.button>
             </motion.div>
           </motion.div>
         </div>
@@ -1207,12 +1240,12 @@ function App() {
                               </div>
                             </div>
                             <div className="d-flex gap-2">
-                              <button className="btn btn-sm btn-outline-secondary px-2" onClick={() => setSelectedProfileModalUser(prof)}>View</button>
+                              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-secondary px-2" onClick={() => setSelectedProfileModalUser(prof)}>View</motion.button>
                               {isLoggedIn && prof.email !== userInfo?.email && (
-                                <button className="btn btn-sm btn-primary px-3 fw-bold" onClick={() => {
+                                <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-primary px-3 fw-bold" onClick={() => {
                                   setChatTargetUser(prof);
                                   setActivePage('messenger');
-                                }}>Message</button>
+                                }}>Message</motion.button>
                               )}
                             </div>
                           </div>
@@ -1238,14 +1271,14 @@ function App() {
                             <div className="card-body text-center">
                               <h5 className="card-title fw-bold text-uppercase mt-2" style={{ fontSize: '16px' }}>{prod.title}</h5>
                               <p className="text-muted mb-3">${prod.price}</p>
-                              <button className="btn btn-outline-primary w-100 text-uppercase fw-bold" onClick={() => {
+                              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-primary w-100 text-uppercase fw-bold" onClick={() => {
                                 if(!isLoggedIn) setShowLoginModal(true);
                                 else {
-                                  const sellerProf = profilesList.find(p => p.name === prod.seller) || profilesList[0];
+                                  const sellerProf = profilesList.find(p => p.email === prod.sellerEmail || p.name === prod.seller) || profilesList[0];
                                   setChatTargetUser(sellerProf);
                                   setActivePage('messenger');
                                 }
-                              }}>View Product</button>
+                              }}>View Product</motion.button>
                             </div>
                           </div>
                         </div>
@@ -1267,7 +1300,7 @@ function App() {
                   whileInView={{y: 0, opacity: 1}} 
                   viewport={{once: true}} 
                   transition={{duration: 0.3}} 
-                  whileHover={{ y: -5 }}
+                  whileHover={{ y: -8, boxShadow: '0 15px 30px rgba(0,0,0,0.1)' }}
                   className="card h-100 bg-white border shadow-sm p-3 rounded-4"
                 >
                   <div className="bg-light d-flex align-items-center justify-content-center rounded-3" style={{ height: '260px', overflow: 'hidden' }}>
@@ -1277,15 +1310,15 @@ function App() {
                     <h5 className="card-title fw-bold text-uppercase mt-2" style={{ fontSize: '17px' }}>{prod.title}</h5>
                     <p className="text-muted small mb-2">Seller: <span className="text-primary fw-semibold">{prod.seller || 'Admin'}</span></p>
                     <p className="text-dark fw-bold fs-5 mb-4">${prod.price}</p>
-                    <button className="btn btn-outline-primary w-100 text-uppercase fw-bold rounded-pill" onClick={() => {
+                    <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-primary w-100 text-uppercase fw-bold rounded-pill" onClick={() => {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
                       } else {
-                        const sellerProf = profilesList.find(p => p.name === prod.seller) || profilesList[0];
+                        const sellerProf = profilesList.find(p => p.email === prod.sellerEmail || p.name === prod.seller) || profilesList[0];
                         setChatTargetUser(sellerProf);
                         setActivePage('messenger');
                       }
-                    }}>View Product</button>
+                    }}>View Product</motion.button>
                   </div>
                 </motion.div>
               </div>
@@ -1300,14 +1333,14 @@ function App() {
 
 const modalStyles = {
   overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
-  box: { backgroundColor: '#fff', padding: '35px', borderRadius: '8px', width: '90%', maxWidth: '420px', border: '1px solid #ddd', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }
+  box: { backgroundColor: '#fff', padding: '35px', borderRadius: '12px', width: '90%', maxWidth: '420px', border: '1px solid #ddd', boxShadow: '0 15px 35px rgba(0,0,0,0.15)' }
 };
 
 const splashStyles = {
-  container: { height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#fff', overflow: 'hidden', position: 'fixed', top: 0, left: 0, zIndex: 1000 },
+  container: { height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#ffffff', overflow: 'hidden', position: 'fixed', top: 0, left: 0, zIndex: 1000 },
   content: { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: '28px', fontWeight: '700', color: '#212529', textTransform: 'uppercase', marginBottom: '10px' },
-  subtitle: { fontSize: '14px', color: '#6c757d' }
+  title: { fontSize: '32px', fontWeight: '800', color: '#212529', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '1px' },
+  subtitle: { fontSize: '14px', color: '#6c757d', fontWeight: '500' }
 };
 
 export default App;
