@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+
 function App() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false); 
@@ -42,12 +43,14 @@ function App() {
   const [directMessages, setDirectMessages] = useState({}); 
   const [newDirectMessage, setNewDirectMessage] = useState('');
   const [selectedProfileModalUser, setSelectedProfileModalUser] = useState(null);
+  
   const showToast = (message, type = 'success') => {
     setToast({ show: true, message, type });
     setTimeout(() => {
       setToast({ show: false, message: '', type: 'success' });
     }, 3500);
   };
+  
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -59,12 +62,14 @@ function App() {
   const [productCategory, setProductCategory] = useState('');
   const [productDescription, setProductDescription] = useState('');
   const [productImage, setProductImage] = useState('');
+  
   const presetAvatars = [
     "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
     "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
     "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
     "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
   ];
+
   const VerifiedBadge = () => (
     <span 
       title="Verified User" 
@@ -86,6 +91,7 @@ function App() {
       ✓
     </span>
   );
+
   const EmailBadge = ({ email }) => {
     const isOriginal = email === 'admin@store.com' || email.includes('admin');
     return (
@@ -94,6 +100,7 @@ function App() {
       </span>
     );
   };
+
   useEffect(() => {
     const timer = setTimeout(() => setShowWelcome(false), 1500);
     const token = localStorage.getItem('token');
@@ -103,6 +110,7 @@ function App() {
     const savedMessages = localStorage.getItem('directMessages');
     const savedProducts = localStorage.getItem('allProductsList');
     const savedAdminMsgs = localStorage.getItem('adminMessages');
+    
     if (savedProfiles) { 
       try { 
         const parsedProfiles = JSON.parse(savedProfiles);
@@ -115,6 +123,7 @@ function App() {
     if (savedMessages) { try { setDirectMessages(JSON.parse(savedMessages)); } catch (e) {} }
     if (savedProducts) { try { setAllProductsList(JSON.parse(savedProducts)); } catch (e) {} }
     if (savedAdminMsgs) { try { setAdminMessages(JSON.parse(savedAdminMsgs)); } catch (e) {} }
+    
     if (token && storedUser) {
       setIsLoggedIn(true);
       const parsedUser = JSON.parse(storedUser);
@@ -126,14 +135,17 @@ function App() {
     }
     return () => clearTimeout(timer);
   }, []);
+
   useEffect(() => { 
     if (profilesList.length > 0) {
       localStorage.setItem('profilesList', JSON.stringify(profilesList)); 
     }
   }, [profilesList]);
+
   useEffect(() => { localStorage.setItem('directMessages', JSON.stringify(directMessages)); }, [directMessages]);
   useEffect(() => { localStorage.setItem('allProductsList', JSON.stringify(allProductsList)); }, [allProductsList]);
   useEffect(() => { localStorage.setItem('adminMessages', JSON.stringify(adminMessages)); }, [adminMessages]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userInfo');
@@ -145,6 +157,7 @@ function App() {
     showToast("Logged out successfully!", "success");
     setTimeout(() => { window.location.reload(); }, 400);
   };
+
   const handleDeactivateAccount = () => {
     setConfirmModal({
       show: true,
@@ -158,6 +171,7 @@ function App() {
       }
     });
   };
+
   const handleDeleteAccount = () => {
     setConfirmModal({
       show: true,
@@ -186,6 +200,7 @@ function App() {
       }
     });
   };
+
   const handleImageUploadFromFile = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -194,6 +209,7 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
+
   const handleProductFile = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -202,6 +218,7 @@ function App() {
       reader.readAsDataURL(file);
     }
   };
+
   const handleVerifyCurrentPassword = () => {
     const storedPass = userInfo?.password; 
     if (!currentPassword) {
@@ -217,6 +234,7 @@ function App() {
     setIsCurrentPasswordValid(true);
     showToast("Password verified!", "success");
   };
+
   const handleUpdateProfile = (e) => {
     e.preventDefault();
     if (newPassword && !isCurrentPasswordValid) {
@@ -237,6 +255,7 @@ function App() {
     showToast("Profile updated successfully!", "success");
     setActivePage('profile');
   };
+
   const handleDeleteUserByAdmin = (emailToDelete) => {
     if (emailToDelete === 'admin@store.com') {
       showToast("Cannot delete Super Admin!", "danger");
@@ -247,10 +266,12 @@ function App() {
     localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
     showToast("User deleted by Admin!", "success");
   };
+
   const handleDeleteProductByAdmin = (productId) => {
     setAllProductsList(allProductsList.filter(p => p.id !== productId));
     showToast("Product deleted by Admin!", "success");
   };
+
   const handleSendAdminMessage = (e) => {
     e.preventDefault();
     if (!newAdminMessage.trim()) return;
@@ -267,6 +288,7 @@ function App() {
     setNewAdminMessage('');
     showToast("Message sent to Support!", "success");
   };
+
   const handleSendDirectMessage = (e) => {
     e.preventDefault();
     if (!newDirectMessage.trim() || !chatTargetUser) return;
@@ -288,6 +310,7 @@ function App() {
     localStorage.setItem('directMessages', JSON.stringify(updatedMessagesState));
     setNewDirectMessage('');
   };
+
   const handleProductUpload = async (e) => {
     e.preventDefault();
     if (!productTitle || !productPrice || !productCategory) {
@@ -311,6 +334,7 @@ function App() {
     setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
     setActivePage('home');
   };
+
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
@@ -374,6 +398,7 @@ function App() {
       setName(''); setEmail(''); setPassword('');
     }, 600);
   };
+
   if (showWelcome) {
     return (
       <div style={splashStyles.container}>
@@ -394,6 +419,7 @@ function App() {
       </div>
     );
   }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', color: '#212529', position: 'relative' }}>
       
@@ -410,6 +436,7 @@ function App() {
           </motion.div>
         </div>
       )}
+
       {confirmModal.show && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center' }}>
@@ -422,6 +449,7 @@ function App() {
           </motion.div>
         </div>
       )}
+
       {selectedProfileModalUser && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={{ ...modalStyles.box, textAlign: 'center', position: 'relative' }}>
@@ -453,6 +481,7 @@ function App() {
           </motion.div>
         </div>
       )}
+
       {/* Navbar */}
       <nav className="navbar navbar-expand-lg navbar-light bg-white p-3 shadow-sm sticky-top">
         <div className="container">
@@ -544,6 +573,7 @@ function App() {
           </div>
         </div>
       </nav>
+
       {/* Authentication Modal */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
@@ -610,6 +640,7 @@ function App() {
           </motion.div>
         </div>
       )}
+
       {/* Admin Dashboard */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
@@ -732,6 +763,7 @@ function App() {
           </div>
         </div>
       )}
+
       {/* Messages Hub */}
       {isLoggedIn && activePage === 'messenger' && (
         <div className="container py-5">
@@ -834,6 +866,7 @@ function App() {
           </div>
         </div>
       )}
+
       {/* User Profile */}
       {isLoggedIn && activePage === 'profile' && (
         <div className="container py-5 text-start">
@@ -914,6 +947,7 @@ function App() {
         </div>
       </div>
     )}
+
     {/* Edit Profile */}
     {isLoggedIn && activePage === 'edit-profile' && (
       <div className="container py-5 text-start">
@@ -1003,6 +1037,7 @@ function App() {
       </div>
     </div>
    )}
+
     {/* Add Product */}
     {isLoggedIn && activePage === 'upload' && (userRole === 'seller' || userRole === 'admin') && (
       <div className="container py-5 text-start">
@@ -1041,39 +1076,111 @@ function App() {
         </div>
       </div>
    )}
+
     {/* Home / Product Showcase */}
     {activePage === 'home' && (
       <>
-        {/* Hero Section */}
-        <header className="container-fluid text-center py-5 bg-white border-bottom" style={{ minHeight: '50vh', display:'flex', flexDirection:'column', justifyContent:'center' }}>
-          <motion.div initial={{scale: 0.95, opacity: 0}} animate={{scale: 1, opacity: 1}} transition={{duration: 0.4}}>
-            <span className="badge bg-primary rounded px-3 py-2 mb-3 text-uppercase fw-bold" style={{ fontSize: '11px' }}>Welcome to JR STORE</span>
-          </motion.div>
-          <motion.h1 initial={{y: 20, opacity: 0}} animate={{y:0, opacity:1}} transition={{delay: 0.1, duration: 0.4}} className="display-4 fw-bold mb-3 text-dark" style={{ textTransform: 'uppercase' }}>
-            Discover Amazing Products
-          </motion.h1>
-          <motion.p initial={{opacity: 0}} animate={{opacity: 0.8}} transition={{delay: 0.2, duration: 0.4}} className="lead fs-5 text-muted">Find the best quality items at affordable prices.</motion.p>
-          <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity:1}} transition={{delay: 0.3, duration: 0.3}}>
-            <button className="btn btn-outline-primary btn-lg mt-3 px-5 py-2 fw-bold text-uppercase" onClick={() => window.scrollTo({ top: 450, behavior: 'smooth' })}>Shop Now</button>
-          </motion.div>
+        {/* Unique High-Animation Hero Section */}
+        <header className="container-fluid text-center py-5 bg-white border-bottom position-relative overflow-hidden" style={{ minHeight: '65vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
+          
+          {/* Animated Background Glow Orbs */}
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.2, 1],
+              opacity: [0.3, 0.6, 0.3],
+              x: [0, 50, 0],
+              y: [0, -30, 0]
+            }} 
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            style={{ position: 'absolute', top: '10%', left: '15%', width: '250px', height: '250px', background: 'rgba(13, 110, 253, 0.12)', borderRadius: '50%', filter: 'blur(50px)', zIndex: 0 }} 
+          />
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.3, 1],
+              opacity: [0.2, 0.5, 0.2],
+              x: [0, -40, 0],
+              y: [0, 40, 0]
+            }} 
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+            style={{ position: 'absolute', bottom: '10%', right: '15%', width: '300px', height: '300px', background: 'rgba(13, 202, 240, 0.12)', borderRadius: '50%', filter: 'blur(60px)', zIndex: 0 }} 
+          />
+
+          <div className="container position-relative" style={{ zIndex: 1 }}>
+            <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} transition={{duration: 0.5}}>
+              <span className="badge bg-primary rounded-pill px-4 py-2 mb-3 text-uppercase fw-bold shadow-sm" style={{ fontSize: '11px', letterSpacing: '1px' }}>✨ Welcome to JR STORE - Next-Gen E-Commerce</span>
+            </motion.div>
+
+            <motion.h1 
+              initial={{y: 30, opacity: 0}} 
+              animate={{y: 0, opacity: 1}} 
+              transition={{delay: 0.1, duration: 0.6, type: "spring", stiffness: 100}} 
+              className="display-3 fw-bold mb-3 text-dark" 
+              style={{ textTransform: 'uppercase', letterSpacing: '-1px' }}
+            >
+              Discover Amazing Products
+            </motion.h1>
+
+            <motion.p 
+              initial={{opacity: 0, y: 15}} 
+              animate={{opacity: 1, y: 0}} 
+              transition={{delay: 0.2, duration: 0.5}} 
+              className="lead fs-5 text-muted mx-auto" 
+              style={{ maxWidth: '600px' }}
+            >
+              Explore top-tier gadgets, premium accessories, and exclusive items handpicked just for you.
+            </motion.p>
+
+            <motion.div 
+              initial={{scale: 0.8, opacity: 0}} 
+              animate={{scale: 1, opacity: 1}} 
+              transition={{delay: 0.3, duration: 0.4}}
+              className="d-flex justify-content-center gap-3 mt-4"
+            >
+              <motion.button 
+                whileHover={{ scale: 1.05, boxShadow: '0 10px 25px rgba(13, 110, 253, 0.3)' }}
+                whileTap={{ scale: 0.95 }}
+                className="btn btn-primary btn-lg px-5 py-3 fw-bold text-uppercase rounded-pill shadow" 
+                onClick={() => window.scrollTo({ top: 500, behavior: 'smooth' })}
+              >
+                Shop Now 🚀
+              </motion.button>
+            </motion.div>
+          </div>
         </header>
 
-        {/* 3D Animation Showcase Section */}
+        {/* Floating 3D Showcase Banner */}
         <div className="container my-5">
           <motion.div 
-            initial={{ opacity: 0, y: 20 }} 
+            initial={{ opacity: 0, y: 30 }} 
             whileInView={{ opacity: 1, y: 0 }} 
             viewport={{ once: true }} 
-            transition={{ duration: 0.5 }}
-            style={{ width: '100%', height: '450px', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', background: '#fff', border: '1px solid #eaeaea' }}
+            transition={{ duration: 0.6 }}
+            whileHover={{ scale: 1.01 }}
+            style={{ 
+              width: '100%', 
+              height: '420px', 
+              borderRadius: '24px', 
+              overflow: 'hidden', 
+              boxShadow: '0 20px 40px rgba(0,0,0,0.1)', 
+              background: 'linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%)', 
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              position: 'relative'
+            }}
           >
-            <iframe 
-              src='https://my.spline.design/cube-10499cf2d5f818b6e6bb23bc7b7fc2f0/' 
-              frameBorder='0' 
-              width='100%' 
-              height='100%'
-              title="JR STORE 3D Animation"
-            ></iframe>
+            <motion.div 
+              animate={{ y: [-10, 10, -10] }} 
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="text-center p-4"
+            >
+              <h2 className="display-5 fw-bold mb-3">🔥 Premium Collection 2026</h2>
+              <p className="lead opacity-75 mb-4">Experience the ultimate shopping convenience with lightning-fast delivery and secure messaging.</p>
+              <button className="btn btn-light text-primary px-4 py-2 fw-bold rounded-pill shadow" onClick={() => window.scrollTo({ top: 500, behavior: 'smooth' })}>
+                Browse Catalog
+              </button>
+            </motion.div>
           </motion.div>
         </div>
 
@@ -1151,18 +1258,26 @@ function App() {
               )}
             </div>
           )}
+
           <div className="row g-4">
             {allProductsList.map((prod) => (
               <div className="col-md-4" key={prod.id}>
-                <motion.div initial={{y: 20, opacity: 0}} whileInView={{y: 0, opacity: 1}} viewport={{once: true}} transition={{duration: 0.3}} className="card h-100 bg-white border shadow-sm p-3">
-                  <div className="bg-light d-flex align-items-center justify-content-center" style={{ height: '260px', overflow: 'hidden' }}>
+                <motion.div 
+                  initial={{y: 20, opacity: 0}} 
+                  whileInView={{y: 0, opacity: 1}} 
+                  viewport={{once: true}} 
+                  transition={{duration: 0.3}} 
+                  whileHover={{ y: -5 }}
+                  className="card h-100 bg-white border shadow-sm p-3 rounded-4"
+                >
+                  <div className="bg-light d-flex align-items-center justify-content-center rounded-3" style={{ height: '260px', overflow: 'hidden' }}>
                     {prod.image ? <img src={prod.image} alt="Prod" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'Image'}
                   </div>
                   <div className="card-body text-center">
                     <h5 className="card-title fw-bold text-uppercase mt-2" style={{ fontSize: '17px' }}>{prod.title}</h5>
                     <p className="text-muted small mb-2">Seller: <span className="text-primary fw-semibold">{prod.seller || 'Admin'}</span></p>
                     <p className="text-dark fw-bold fs-5 mb-4">${prod.price}</p>
-                    <button className="btn btn-outline-primary w-100 text-uppercase fw-bold" onClick={() => {
+                    <button className="btn btn-outline-primary w-100 text-uppercase fw-bold rounded-pill" onClick={() => {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
                       } else {
@@ -1175,21 +1290,24 @@ function App() {
                 </motion.div>
               </div>
             ))}
-        </div>
+          </div>
         </div>
       </>
-   )}
- </motion.div>
- );
+    )}
+   </motion.div>
+  );
 }
+
 const modalStyles = {
   overlay: { position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0, 0, 0, 0.6)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2000 },
   box: { backgroundColor: '#fff', padding: '35px', borderRadius: '8px', width: '90%', maxWidth: '420px', border: '1px solid #ddd', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }
 };
+
 const splashStyles = {
   container: { height: '100vh', width: '100vw', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#fff', overflow: 'hidden', position: 'fixed', top: 0, left: 0, zIndex: 1000 },
   content: { textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: '28px', fontWeight: '700', color: '#212529', textTransform: 'uppercase', marginBottom: '10px' },
   subtitle: { fontSize: '14px', color: '#6c757d' }
 };
+
 export default App;
