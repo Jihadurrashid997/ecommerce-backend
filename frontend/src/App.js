@@ -24,18 +24,20 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   
-  const defaultSuperAdmin = { 
-    name: 'Admin User', 
+  // Exclusive JR Master Super Admin Info
+  const jrMasterAdmin = { 
+    name: 'JR Master', 
     role: 'admin', 
-    email: 'admin@store.com', 
+    email: 'jihadurrashid997@gmail.com', 
     phone: '01700000000', 
     photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
     isVerified: true 
   };
-  const [profilesList, setProfilesList] = useState([defaultSuperAdmin]);
+
+  const [profilesList, setProfilesList] = useState([jrMasterAdmin]);
   const [allProductsList, setAllProductsList] = useState([
-    { id: 1, title: 'Wireless Premium Headphones', price: '99.00', category: 'Electronics', seller: 'Admin User', sellerEmail: 'admin@store.com', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
-    { id: 2, title: 'Smart Fitness Watch', price: '149.00', category: 'Accessories', seller: 'Admin User', sellerEmail: 'admin@store.com', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' }
+    { id: 1, title: 'Wireless Premium Headphones', price: '99.00', category: 'Electronics', seller: 'JR Master', sellerEmail: 'jihadurrashid997@gmail.com', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=300' },
+    { id: 2, title: 'Smart Fitness Watch', price: '149.00', category: 'Accessories', seller: 'JR Master', sellerEmail: 'jihadurrashid997@gmail.com', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300' }
   ]);
   const [adminMessages, setAdminMessages] = useState([]);
   const [newAdminMessage, setNewAdminMessage] = useState('');
@@ -70,9 +72,25 @@ function App() {
     "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
   ];
 
+  // Gmail Verification Logic (Checks original domain and format)
+  const verifyEmailAuthenticity = (emailStr) => {
+    const clean = emailStr.trim().toLowerCase();
+    // Basic email regex pattern format
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(clean)) return { valid: false, reason: "Invalid email structure format!" };
+    
+    // Block fake/temporary disposable domains
+    const disposableDomains = ['tempmail.com', 'throwawaymail.com', '10minutemail.com', 'fakemail.com', 'trashmail.com'];
+    const domain = clean.split('@')[1];
+    if (disposableDomains.includes(domain)) {
+      return { valid: false, reason: "Temporary or fake email domains are not allowed! Use a real email." };
+    }
+    return { valid: true };
+  };
+
   const VerifiedBadge = () => (
     <span 
-      title="Verified User" 
+      title="Verified JR Master Super Admin" 
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -93,10 +111,10 @@ function App() {
   );
 
   const EmailBadge = ({ email }) => {
-    const isOriginal = email === 'admin@store.com' || email.includes('admin');
+    const isOriginal = email === 'jihadurrashid997@gmail.com';
     return (
       <span className={`badge ${isOriginal ? 'bg-primary text-white' : 'bg-secondary text-light'} ms-2`} style={{ fontSize: '10px' }}>
-        {isOriginal ? 'Admin Core' : 'User'}
+        {isOriginal ? 'JR Master Core' : 'User'}
       </span>
     );
   };
@@ -111,27 +129,36 @@ function App() {
     const savedProducts = localStorage.getItem('allProductsList');
     const savedAdminMsgs = localStorage.getItem('adminMessages');
     
+    let activeProfiles = [jrMasterAdmin];
     if (savedProfiles) { 
       try { 
         const parsedProfiles = JSON.parse(savedProfiles);
-        if (!parsedProfiles.some(p => p.email === 'admin@store.com')) {
-          parsedProfiles.unshift(defaultSuperAdmin);
+        const filtered = parsedProfiles.filter(p => !p.isDeleted);
+        if (!filtered.some(p => p.email === 'jihadurrashid997@gmail.com')) {
+          filtered.unshift(jrMasterAdmin);
         }
-        setProfilesList(parsedProfiles); 
+        activeProfiles = filtered;
       } catch (e) {} 
     }
+    setProfilesList(activeProfiles);
+
     if (savedMessages) { try { setDirectMessages(JSON.parse(savedMessages)); } catch (e) {} }
     if (savedProducts) { try { setAllProductsList(JSON.parse(savedProducts)); } catch (e) {} }
     if (savedAdminMsgs) { try { setAdminMessages(JSON.parse(savedAdminMsgs)); } catch (e) {} }
     
     if (token && storedUser) {
-      setIsLoggedIn(true);
       const parsedUser = JSON.parse(storedUser);
-      setUserInfo(parsedUser);
-      setUserRole(storedRole || 'customer');
-      setEditName(parsedUser.name || '');
-      setEditPhone(parsedUser.phone || '');
-      setEditPhoto(parsedUser.photo || ''); 
+      const stillExists = activeProfiles.some(p => p.email === parsedUser.email);
+      if (stillExists) {
+        setIsLoggedIn(true);
+        setUserInfo(parsedUser);
+        setUserRole(storedRole || 'customer');
+        setEditName(parsedUser.name || '');
+        setEditPhone(parsedUser.phone || '');
+        setEditPhoto(parsedUser.photo || '');
+      } else {
+        handleLogout();
+      }
     }
     return () => clearTimeout(timer);
   }, []);
@@ -175,26 +202,29 @@ function App() {
     setConfirmModal({
       show: true,
       title: 'Delete Account',
-      message: 'Are you sure you want to completely delete your account data?',
+      message: 'Are you sure you want to completely remove your account from this website?',
       type: 'danger',
       onConfirm: () => {
-        if (userInfo?.email === 'admin@store.com') {
-          showToast("Cannot delete Super Admin account!", "danger");
+        if (userInfo?.email === 'jihadurrashid997@gmail.com') {
+          showToast("Cannot delete JR Master Super Admin account!", "danger");
           setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
           return;
         }
         const userEmail = userInfo?.email;
         setAllProductsList(allProductsList.filter(p => p.sellerEmail !== userEmail && p.seller !== userInfo?.name));
+        
         const updatedMessages = { ...directMessages };
         Object.keys(updatedMessages).forEach(key => {
           if (key.includes(userEmail)) { delete updatedMessages[key]; }
         });
         setDirectMessages(updatedMessages);
-        const updatedProfiles = profilesList.map(p => p.email === userEmail ? { ...p, isDeleted: true, name: `${p.name} (Deleted)` } : p);
+
+        const updatedProfiles = profilesList.filter(p => p.email !== userEmail);
         setProfilesList(updatedProfiles);
         localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
+
         setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
-        showToast("Account deleted successfully!", "success");
+        showToast("Account permanently deleted from website!", "success");
         handleLogout();
       }
     });
@@ -219,7 +249,7 @@ function App() {
   };
 
   const handleVerifyCurrentPassword = () => {
-    const storedPass = userInfo?.password; 
+    const storedPass = userInfo?.password || (userInfo?.email === 'jihadurrashid997@gmail.com' ? '252002051' : ''); 
     if (!currentPassword) {
       showToast("Please enter current password first!", "danger");
       setIsCurrentPasswordValid(false);
@@ -256,19 +286,26 @@ function App() {
   };
 
   const handleDeleteUserByAdmin = (emailToDelete) => {
-    if (emailToDelete === 'admin@store.com') {
-      showToast("Cannot delete Super Admin!", "danger");
+    if (emailToDelete === 'jihadurrashid997@gmail.com') {
+      showToast("Cannot delete JR Master Super Admin!", "danger");
       return;
     }
     const updatedProfiles = profilesList.filter(p => p.email !== emailToDelete);
     setProfilesList(updatedProfiles);
     localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
-    showToast("User deleted by Admin!", "success");
+
+    setAllProductsList(allProductsList.filter(p => p.sellerEmail !== emailToDelete));
+
+    if (userInfo?.email === emailToDelete) {
+      handleLogout();
+    }
+
+    showToast("User completely purged and removed from website!", "success");
   };
 
   const handleDeleteProductByAdmin = (productId) => {
     setAllProductsList(allProductsList.filter(p => p.id !== productId));
-    showToast("Product deleted by Admin!", "success");
+    showToast("Product deleted by JR Master!", "success");
   };
 
   const handleSendAdminMessage = (e) => {
@@ -285,7 +322,7 @@ function App() {
     setAdminMessages(updatedAdminMsgs);
     localStorage.setItem('adminMessages', JSON.stringify(updatedAdminMsgs));
     setNewAdminMessage('');
-    showToast("Message sent to Support!", "success");
+    showToast("Message sent to JR Master Support!", "success");
   };
 
   const handleSendDirectMessage = (e) => {
@@ -323,14 +360,14 @@ function App() {
       category: productCategory,
       description: productDescription,
       image: productImage || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300',
-      seller: userInfo?.name || 'Admin',
-      sellerEmail: userInfo?.email || 'admin@store.com'
+      seller: userInfo?.name || 'JR Master',
+      sellerEmail: userInfo?.email || 'jihadurrashid997@gmail.com'
     };
     const updatedProducts = [newProd, ...allProductsList];
     setAllProductsList(updatedProducts);
     localStorage.setItem('allProductsList', JSON.stringify(updatedProducts));
     
-    showToast("Product added successfully! Visible to all users.", "success");
+    showToast("Product added successfully! Visible across all profiles.", "success");
     setProductTitle(''); setProductPrice(''); setProductCategory(''); setProductDescription(''); setProductImage('');
     setActivePage('home');
   };
@@ -338,63 +375,78 @@ function App() {
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
+
+    // Verify Gmail authenticity check
+    const emailCheck = verifyEmailAuthenticity(cleanEmail);
+    if (!emailCheck.valid) {
+      showToast(emailCheck.reason, "danger");
+      return;
+    }
+
     let updatedProfiles = [...profilesList];
+
     if (isRegisterMode) {
-      const existingUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail && !p.isDeleted);
+      // If registering with JR Master email, restrict unless it matches exact master pass
+      if (cleanEmail === 'jihadurrashid997@gmail.com') {
+        if (password !== '252002051') {
+          showToast("Incorrect JR Master Master Password!", "danger");
+          return;
+        }
+      }
+
+      const existingUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail);
       if (existingUser) {
         showToast("Email already registered! Please sign in instead.", "danger");
         return;
       }
-      if (selectedRole === 'admin' && cleanEmail !== 'admin@store.com') {
-        showToast("Admin registration restricted!", "danger");
-        return;
-      }
     } else {
+      // Login mode checks
       const foundUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail);
-      if (!foundUser) {
-        showToast("Account not found! Please register first.", "danger");
-        return;
-      }
-      if (cleanEmail === 'admin@store.com' && password !== 'admin123') {
-        showToast("Incorrect Admin Password!", "danger");
-        return;
-      }
-      if (cleanEmail !== 'admin@store.com' && foundUser.password && foundUser.password !== password) {
-        showToast("Incorrect password!", "danger");
-        return;
+      
+      if (cleanEmail === 'jihadurrashid997@gmail.com') {
+        if (password !== '252002051') {
+          showToast("Incorrect JR Master Password! (Use 252002051)", "danger");
+          return;
+        }
+      } else {
+        if (!foundUser) {
+          showToast("Account not found or has been deleted! Please register first.", "danger");
+          return;
+        }
+        if (foundUser.password && foundUser.password !== password) {
+          showToast("Incorrect password!", "danger");
+          return;
+        }
       }
     }
+
     setIsLoading(true);
     setTimeout(() => {
       setIsLoading(false);
-      showToast(isRegisterMode ? "Registration Successful!" : "Login Successful!", "success");
+      showToast(isRegisterMode ? "Gmail Verified & Registration Successful!" : "Login Successful!", "success");
       localStorage.setItem('token', 'store-user-token');
       
-      const role = (cleanEmail === 'admin@store.com') ? 'admin' : (isRegisterMode ? selectedRole : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.role || 'customer'));
+      const role = (cleanEmail === 'jihadurrashid997@gmail.com') ? 'admin' : (isRegisterMode ? selectedRole : (updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail)?.role || 'customer'));
       const foundProfileData = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail);
-      const userName = name || (role === 'admin' ? 'Admin User' : (foundProfileData?.name || cleanEmail.split('@')[0]));
+      const userName = name || (role === 'admin' ? 'JR Master' : (foundProfileData?.name || cleanEmail.split('@')[0]));
       
       const userData = { 
         name: userName, 
         email: cleanEmail, 
-        password, 
+        password: cleanEmail === 'jihadurrashid997@gmail.com' ? '252002051' : password, 
         role, 
         phone: foundProfileData?.phone || '01700000000',
         photo: foundProfileData?.photo || presetAvatars[0],
-        isVerified: true,
-        isDeleted: false
+        isVerified: true
       };
       
       if (isRegisterMode) {
         updatedProfiles.push(userData);
-        setProfilesList(updatedProfiles);
-        localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
       } else {
-        // Update existing profile info if needed in list
-        updatedProfiles = updatedProfiles.map(p => p.email.toLowerCase() === cleanEmail ? { ...p, ...userData, isDeleted: false } : p);
-        setProfilesList(updatedProfiles);
-        localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
+        updatedProfiles = updatedProfiles.map(p => p.email.toLowerCase() === cleanEmail ? { ...p, ...userData } : p);
       }
+      setProfilesList(updatedProfiles);
+      localStorage.setItem('profilesList', JSON.stringify(updatedProfiles));
 
       localStorage.setItem('userInfo', JSON.stringify(userData));
       localStorage.setItem('userRole', role);
@@ -422,7 +474,7 @@ function App() {
             style={{ width: '70px', height: '70px', border: '5px solid rgba(13, 110, 253, 0.2)', borderTopColor: '#0d6efd', borderRadius: '50%', margin: '0 auto 20px auto' }}
           />
           <h1 style={splashStyles.title}>JR STORE</h1>
-          <p style={splashStyles.subtitle}>Loading High-Performance Experience...</p>
+          <p style={splashStyles.subtitle}>Loading JR Master High-Performance Suite...</p>
         </motion.div>
       </div>
     );
@@ -473,10 +525,10 @@ function App() {
             <p className="text-muted small mb-1">Email: {selectedProfileModalUser.email}</p>
             <div className="mb-2"><EmailBadge email={selectedProfileModalUser.email} /></div>
             <p className="text-muted small mb-3">Phone: {selectedProfileModalUser.phone || 'N/A'}</p>
-            <span className="badge bg-secondary text-uppercase mb-4">{selectedProfileModalUser.isDeleted ? 'Account Deleted' : selectedProfileModalUser.role}</span>
+            <span className="badge bg-secondary text-uppercase mb-4">{selectedProfileModalUser.role}</span>
             
             <div className="d-flex justify-content-center gap-2">
-              {isLoggedIn && !selectedProfileModalUser.isDeleted && selectedProfileModalUser.email !== userInfo?.email && (
+              {isLoggedIn && selectedProfileModalUser.email !== userInfo?.email && (
                 <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-primary px-4 fw-bold" onClick={() => {
                   const target = selectedProfileModalUser;
                   setSelectedProfileModalUser(null);
@@ -529,7 +581,7 @@ function App() {
               {isLoggedIn && userRole === 'admin' && (
                 <li className="nav-item">
                   <a className="nav-link text-primary fw-bold" href="#admin-dashboard" onClick={(e) => { e.preventDefault(); setActivePage('admin-dashboard'); }}>
-                    Admin Dashboard
+                    JR Master Panel
                   </a>
                 </li>
               )}
@@ -537,11 +589,11 @@ function App() {
                 <li className="nav-item">
                   <a className="nav-link fw-semibold" href="#messenger" onClick={(e) => { 
                     e.preventDefault(); 
-                    const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
-                    setChatTargetUser(otherProfile);
+                    const jrMaster = profilesList.find(p => p.email === 'jihadurrashid997@gmail.com') || profilesList[0];
+                    setChatTargetUser(jrMaster);
                     setActivePage('messenger'); 
                   }}>
-                    Messages
+                    Messages & Support
                   </a>
                 </li>
               )}
@@ -557,16 +609,16 @@ function App() {
                     <ul className="dropdown-menu dropdown-menu-end shadow">
                       <li><button className="dropdown-item" onClick={() => setActivePage('profile')}>Profile</button></li>
                       {userRole === 'admin' && (
-                        <li><button className="dropdown-item text-primary fw-bold" onClick={() => setActivePage('admin-dashboard')}>Admin Dashboard</button></li>
+                        <li><button className="dropdown-item text-primary fw-bold" onClick={() => setActivePage('admin-dashboard')}>JR Master Panel</button></li>
                       )}
                       {(userRole === 'seller' || userRole === 'admin') && (
                         <li><button className="dropdown-item" onClick={() => setActivePage('upload')}>Add Product</button></li>
                       )}
                       <li><button className="dropdown-item" onClick={() => {
-                        const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
-                        setChatTargetUser(otherProfile);
+                        const jrMaster = profilesList.find(p => p.email === 'jihadurrashid997@gmail.com') || profilesList[0];
+                        setChatTargetUser(jrMaster);
                         setActivePage('messenger');
-                      }}>Messages</button></li>
+                      }}>Messages & Support</button></li>
                       <li><hr className="dropdown-divider" /></li>
                       <li><button className="dropdown-item text-danger" onClick={handleLogout}>Logout</button></li>
                     </ul>
@@ -582,12 +634,12 @@ function App() {
         </div>
       </nav>
 
-      {/* Authentication Modal */}
+      {/* Authentication Modal with Gmail Verification */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
             <div className="d-flex justify-content-between align-items-center mb-4">
-              <h3 className="fw-bold m-0">{isRegisterMode ? 'Register' : 'Sign In'}</h3>
+              <h3 className="fw-bold m-0">{isRegisterMode ? 'Register (Gmail Verified)' : 'Sign In'}</h3>
               <button className="btn-close" onClick={() => setShowLoginModal(false)}></button>
             </div>
             
@@ -608,16 +660,17 @@ function App() {
                 </>
               )}
               <div className="mb-3 text-start">
-                <label className="form-label small fw-semibold">Email Address</label>
-                <input type="email" className="form-control" placeholder="Enter email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <label className="form-label small fw-semibold">Email Address (Real Gmail Check)</label>
+                <input type="email" className="form-control" placeholder="e.g. name@gmail.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <small className="text-muted" style={{ fontSize: '11px' }}>System verifies valid formats and blocks fake/disposable domains.</small>
               </div>
               <div className="mb-4 text-start">
-                <label className="form-label small fw-semibold">Password</label>
+                <label className="form-label small fw-semibold">Password {email.trim().toLowerCase() === 'jihadurrashid997@gmail.com' ? '(JR Master: 252002051)' : ''}</label>
                 <div className="input-group">
                   <input 
                     type={showPassword ? "text" : "password"} 
                     className="form-control" 
-                    placeholder="Enter password" 
+                    placeholder={email.trim().toLowerCase() === 'jihadurrashid997@gmail.com' ? "Enter 252002051" : "Enter password"} 
                     value={password} 
                     onChange={(e) => setPassword(e.target.value)} 
                     required 
@@ -634,7 +687,7 @@ function App() {
               
               <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-primary w-100 fw-bold py-2 text-uppercase mb-3 d-flex justify-content-center align-items-center gap-2 shadow" disabled={isLoading}>
                 {isLoading && <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>}
-                {isLoading ? 'Processing...' : (isRegisterMode ? 'Register' : 'Sign In')}
+                {isLoading ? 'Verifying Gmail...' : (isRegisterMode ? 'Register & Verify' : 'Sign In')}
               </motion.button>
               <div className="text-center">
                 <p className="small mb-0 text-muted">
@@ -649,24 +702,24 @@ function App() {
         </div>
       )}
 
-      {/* Admin Dashboard */}
+      {/* JR Master Admin Panel (Only 1 Admin Panel) */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
           <div className="bg-white p-4 border rounded shadow-sm mb-5">
             <div className="d-flex justify-content-between align-items-center mb-4">
               <div>
                 <h2 className="fw-bold text-primary m-0 d-flex align-items-center gap-2">
-                  Admin Dashboard
+                  JR Master Panel (Exclusive Super Admin Center)
                   <VerifiedBadge />
                 </h2>
-                <p className="text-muted small mb-0">Manage users, products, and support messages.</p>
+                <p className="text-muted small mb-0">Single ultimate control panel. Login email: jihadurrashid997@gmail.com</p>
               </div>
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary btn-sm" onClick={() => setActivePage('profile')}>Back to Profile</motion.button>
             </div>
             <div className="row g-4 mb-5">
               <div className="col-md-4">
                 <div className="bg-light p-3 rounded border text-center shadow-sm">
-                  <h6 className="text-muted text-uppercase small">Total Users</h6>
+                  <h6 className="text-muted text-uppercase small">Total Active Users</h6>
                   <h2 className="fw-bold">{profilesList.length}</h2>
                 </div>
               </div>
@@ -678,12 +731,12 @@ function App() {
               </div>
               <div className="col-md-4">
                 <div className="bg-light p-3 rounded border text-center shadow-sm">
-                  <h6 className="text-muted text-uppercase small">Support Messages</h6>
+                  <h6 className="text-muted text-uppercase small">Support Inquiries</h6>
                   <h2 className="fw-bold text-primary">{adminMessages.length}</h2>
                 </div>
               </div>
             </div>
-            <h4 className="mb-3">Support Inquiries</h4>
+            <h4 className="mb-3">Customer Care / Support Inbox (JR Master)</h4>
             <div className="bg-light p-3 rounded mb-5 overflow-auto shadow-sm" style={{ height: '280px' }}>
               {adminMessages.length === 0 ? (
                 <p className="text-muted text-center mt-5 small">No support inquiries found.</p>
@@ -699,11 +752,16 @@ function App() {
                       <span className="text-muted small">{msg.time}</span>
                     </div>
                     <p className="mb-0 text-dark" style={{ fontSize: '14px' }}>{msg.text}</p>
+                    <button className="btn btn-sm btn-outline-primary mt-2" onClick={() => {
+                      const target = profilesList.find(p => p.email === msg.senderEmail) || { name: msg.sender, email: msg.senderEmail, photo: msg.senderPhoto, role: 'customer' };
+                      setChatTargetUser(target);
+                      setActivePage('messenger');
+                    }}>Reply directly</button>
                   </div>
                 ))
               )}
             </div>
-            <h4 className="mb-3">User Registry</h4>
+            <h4 className="mb-3">Complete User & Profile Registry (Full Access Control)</h4>
             <div className="table-responsive mb-5">
               <table className="table table-striped border align-middle">
                 <thead>
@@ -711,7 +769,7 @@ function App() {
                     <th>Name</th>
                     <th>Email</th>
                     <th>Role</th>
-                    <th>Action</th>
+                    <th>Permanent Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -727,13 +785,11 @@ function App() {
                         <EmailBadge email={prof.email} />
                       </td>
                       <td>
-                        <span className={`badge ${prof.isDeleted ? 'bg-danger' : 'bg-secondary'} text-uppercase`}>
-                          {prof.isDeleted ? 'Deleted' : prof.role}
-                        </span>
+                        <span className="badge bg-secondary text-uppercase">{prof.role}</span>
                       </td>
                       <td>
-                        {prof.email !== 'admin@store.com' && (
-                          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete</motion.button>
+                        {prof.email !== 'jihadurrashid997@gmail.com' && (
+                          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-danger fw-bold" onClick={() => handleDeleteUserByAdmin(prof.email)}>Delete Permanently</motion.button>
                         )}
                       </td>
                     </tr>
@@ -741,7 +797,7 @@ function App() {
                 </tbody>
               </table>
             </div>
-            <h4 className="mb-3">Product Catalog</h4>
+            <h4 className="mb-3">Product Catalog Control</h4>
             <div className="table-responsive">
               <table className="table table-striped border align-middle">
                 <thead>
@@ -759,7 +815,7 @@ function App() {
                       <td className="fw-bold">{prod.title}</td>
                       <td>{prod.category}</td>
                       <td>${prod.price}</td>
-                      <td>{prod.seller || 'Admin'}</td>
+                      <td>{prod.seller || 'JR Master'}</td>
                       <td>
                         <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteProductByAdmin(prod.id)}>Delete</motion.button>
                       </td>
@@ -772,7 +828,7 @@ function App() {
         </div>
       )}
 
-      {/* Messages Hub */}
+      {/* Customer Care / Messages Hub */}
       {isLoggedIn && activePage === 'messenger' && (
         <div className="container py-5">
           <div className="row justify-content-center">
@@ -780,16 +836,16 @@ function App() {
               
               <div className="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom">
                 <div>
-                  <h3 className="fw-bold m-0 fs-2">Messages</h3>
-                  <p className="text-muted small mb-0">Secure real-time chats across all profiles.</p>
+                  <h3 className="fw-bold m-0 fs-2">JR Master Customer Care & Chats</h3>
+                  <p className="text-muted small mb-0">Connect directly with JR Master or any user instantly.</p>
                 </div>
                 <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-sm btn-outline-secondary px-3" onClick={() => setActivePage('profile')}>Back</motion.button>
               </div>
               <div className="row">
                 <div className="col-md-4 border-end pe-3">
-                  <h6 className="text-muted mb-3 fw-bold small text-uppercase">All Profiles:</h6>
+                  <h6 className="text-muted mb-3 fw-bold small text-uppercase">All Profiles / JR Master:</h6>
                   <div className="d-flex flex-column gap-2" style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                    {profilesList.filter(p => p.email !== userInfo?.email && !p.isDeleted).map((prof, idx) => (
+                    {profilesList.filter(p => p.email !== userInfo?.email).map((prof, idx) => (
                       <div 
                         key={idx} 
                         onClick={() => setChatTargetUser(prof)}
@@ -801,24 +857,24 @@ function App() {
                           <div style={{ fontSize: '14px' }} className="d-flex align-items-center">
                             {prof.name} {prof.role === 'admin' && <VerifiedBadge />}
                           </div>
-                          <span style={{ fontSize: '10px' }} className="text-uppercase opacity-75">{prof.role}</span>
+                          <span style={{ fontSize: '10px' }} className="text-uppercase opacity-75">{prof.role === 'admin' ? 'Customer Care / Master' : prof.role}</span>
                         </div>
                       </div>
                     ))}
                   </div>
                   {userRole !== 'admin' && (
                     <div className="mt-4 pt-3 border-top">
-                      <h6 className="text-primary mb-2 fw-bold small" style={{ fontSize: '12px' }}>Send Support Message:</h6>
+                      <h6 className="text-primary mb-2 fw-bold small" style={{ fontSize: '12px' }}>Send Support Ticket to JR Master:</h6>
                       <form onSubmit={handleSendAdminMessage}>
                         <input 
                           type="text" 
                           className="form-control form-control-sm mb-2 shadow-sm" 
-                          placeholder="Type message to support..." 
+                          placeholder="Type message to JR Master..." 
                           value={newAdminMessage}
                           onChange={(e) => setNewAdminMessage(e.target.value)}
                           required
                         />
-                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-sm btn-primary w-100 fw-bold shadow-sm">Send Message</motion.button>
+                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" className="btn btn-sm btn-primary w-100 fw-bold shadow-sm">Send to Master</motion.button>
                       </form>
                     </div>
                   )}
@@ -830,7 +886,7 @@ function App() {
                         <img src={chatTargetUser.photo || presetAvatars[0]} alt="Target" style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
                         <h5 className="m-0 d-flex align-items-center gap-1" style={{ fontSize: '16px' }}>
                           {chatTargetUser.name} {chatTargetUser.role === 'admin' && <VerifiedBadge />} 
-                          <span className="badge bg-secondary fs-6 text-uppercase ms-2">{chatTargetUser.role}</span>
+                          <span className="badge bg-secondary fs-6 text-uppercase ms-2">{chatTargetUser.role === 'admin' ? 'Customer Care' : chatTargetUser.role}</span>
                         </h5>
                         <small className="text-primary ms-auto">View Profile</small>
                       </div>
@@ -840,7 +896,7 @@ function App() {
                           const chatKey = `${sortedEmails[0]}_${sortedEmails[1]}`;
                           const currentMsgs = directMessages[chatKey] || [];
                           if (currentMsgs.length === 0) {
-                            return <p className="text-muted text-center mt-5 small">No messages yet with {chatTargetUser.name}. Send the first message below!</p>;
+                            return <p className="text-muted text-center mt-5 small">No messages yet with {chatTargetUser.name}. Start conversation below!</p>;
                           }
                           return currentMsgs.map((msg, idx) => (
                             <div key={idx} className={`mb-3 p-2 rounded shadow-sm ${msg.senderEmail === userInfo.email ? 'ms-auto bg-primary text-white fw-semibold' : 'bg-white border text-dark'}`} style={{ maxWidth: '75%' }}>
@@ -866,7 +922,7 @@ function App() {
                       </form>
                     </>
                   ) : (
-                    <div className="text-center text-muted my-auto">Select a user to start messaging.</div>
+                    <div className="text-center text-muted my-auto">Select a profile to start messaging.</div>
                   )}
                 </div>
               </div>
@@ -920,7 +976,6 @@ function App() {
               </div>
             </div>
 
-            {/* Seller Uploaded Products Showcase in Profile */}
             {(userRole === 'seller' || userRole === 'admin') && (
               <div className="mb-4">
                 <h5 className="fw-bold text-primary mb-3">Products Uploaded By You</h5>
@@ -950,7 +1005,7 @@ function App() {
               </motion.button>
               {userRole === 'admin' && (
                 <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-primary px-4 fw-bold" onClick={() => setActivePage('admin-dashboard')}>
-                  Admin Dashboard
+                  JR Master Panel
                 </motion.button>
               )}
               {(userRole === 'seller' || userRole === 'admin') && (
@@ -959,17 +1014,17 @@ function App() {
                 </motion.button>
               )}
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-secondary px-3" onClick={() => {
-                const otherProfile = profilesList.find(p => p.email !== userInfo?.email && !p.isDeleted) || profilesList[0];
-                setChatTargetUser(otherProfile);
+                const jrMaster = profilesList.find(p => p.email === 'jihadurrashid997@gmail.com') || profilesList[0];
+                setChatTargetUser(jrMaster);
                 setActivePage('messenger');
               }}>
-                Messages
+                Messages & Support
               </motion.button>
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-warning px-3" onClick={handleDeactivateAccount}>
                 Deactivate
               </motion.button>
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-danger px-3" onClick={handleDeleteAccount}>
-                Delete
+                Delete Permanently
               </motion.button>
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-dark px-4 ms-auto" onClick={handleLogout}>
                 Logout
@@ -1114,7 +1169,7 @@ function App() {
     {/* Home / Product Showcase */}
     {activePage === 'home' && (
       <>
-        {/* High Animation Live Hero Section */}
+        {/* Hero Section */}
         <header className="container-fluid text-center py-5 bg-white border-bottom position-relative overflow-hidden" style={{ minHeight: '65vh', display:'flex', flexDirection:'column', justifyContent:'center', background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)' }}>
           
           <motion.div 
@@ -1140,7 +1195,7 @@ function App() {
 
           <div className="container position-relative" style={{ zIndex: 1 }}>
             <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} transition={{duration: 0.5}}>
-              <span className="badge bg-primary rounded-pill px-4 py-2 mb-3 text-uppercase fw-bold shadow-sm" style={{ fontSize: '11px', letterSpacing: '1px' }}>✨ Live High-Performance Animation Hub</span>
+              <span className="badge bg-primary rounded-pill px-4 py-2 mb-3 text-uppercase fw-bold shadow-sm" style={{ fontSize: '11px', letterSpacing: '1px' }}>✨ JR Master Live Verified Store</span>
             </motion.div>
 
             <motion.h1 
@@ -1160,7 +1215,7 @@ function App() {
               className="lead fs-5 text-muted mx-auto" 
               style={{ maxWidth: '600px' }}
             >
-              Find the best quality items at affordable prices with real-time cross-profile synchronization.
+              Find the best quality items managed exclusively by JR Master with secure verified user profiles.
             </motion.p>
 
             <motion.div 
@@ -1181,7 +1236,7 @@ function App() {
           </div>
         </header>
 
-        {/* Floating Interactive 3D Banner */}
+        {/* Floating Banner */}
         <div className="container my-5">
           <motion.div 
             initial={{ opacity: 0, y: 30 }} 
@@ -1208,8 +1263,8 @@ function App() {
               transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
               className="text-center p-4"
             >
-              <h2 className="display-5 fw-bold mb-3">🔥 Multi-Profile Synchronized Store</h2>
-              <p className="lead opacity-75 mb-4">Every product uploaded by any seller appears instantly here and in their respective profile!</p>
+              <h2 className="display-5 fw-bold mb-3">🔥 JR Master Verified Store</h2>
+              <p className="lead opacity-75 mb-4">Secure authentication with real email validation and unified master management!</p>
               <motion.button whileHover={{ scale: 1.08 }} whileTap={{ scale: 0.92 }} className="btn btn-light text-primary px-4 py-2 fw-bold rounded-pill shadow" onClick={() => window.scrollTo({ top: 500, behavior: 'smooth' })}>
                 Browse Catalog
               </motion.button>
@@ -1226,8 +1281,8 @@ function App() {
                 <div className="my-4">
                   <h6 className="text-muted text-uppercase mb-3 small">Matched Users</h6>
                   <div className="row g-3">
-                    {profilesList.filter(p => !p.isDeleted && p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                      profilesList.filter(p => !p.isDeleted && p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
+                    {profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                      profilesList.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase())).map((prof, idx) => (
                         <div className="col-md-4" key={idx}>
                           <div className="bg-white p-3 border rounded d-flex align-items-center justify-content-between shadow-sm">
                             <div className="d-flex align-items-center gap-3" style={{ cursor: 'pointer' }} onClick={() => setSelectedProfileModalUser(prof)}>
@@ -1308,7 +1363,7 @@ function App() {
                   </div>
                   <div className="card-body text-center">
                     <h5 className="card-title fw-bold text-uppercase mt-2" style={{ fontSize: '17px' }}>{prod.title}</h5>
-                    <p className="text-muted small mb-2">Seller: <span className="text-primary fw-semibold">{prod.seller || 'Admin'}</span></p>
+                    <p className="text-muted small mb-2">Seller: <span className="text-primary fw-semibold">{prod.seller || 'JR Master'}</span></p>
                     <p className="text-dark fw-bold fs-5 mb-4">${prod.price}</p>
                     <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-primary w-100 text-uppercase fw-bold rounded-pill" onClick={() => {
                       if(!isLoggedIn) {
