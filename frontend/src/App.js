@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 
@@ -72,14 +72,11 @@ function App() {
     "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150"
   ];
 
-  // Gmail Verification Logic (Checks original domain and format)
   const verifyEmailAuthenticity = (emailStr) => {
     const clean = emailStr.trim().toLowerCase();
-    // Basic email regex pattern format
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(clean)) return { valid: false, reason: "Invalid email structure format!" };
     
-    // Block fake/temporary disposable domains
     const disposableDomains = ['tempmail.com', 'throwawaymail.com', '10minutemail.com', 'fakemail.com', 'trashmail.com'];
     const domain = clean.split('@')[1];
     if (disposableDomains.includes(domain)) {
@@ -376,7 +373,6 @@ function App() {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
 
-    // Verify Gmail authenticity check
     const emailCheck = verifyEmailAuthenticity(cleanEmail);
     if (!emailCheck.valid) {
       showToast(emailCheck.reason, "danger");
@@ -386,7 +382,6 @@ function App() {
     let updatedProfiles = [...profilesList];
 
     if (isRegisterMode) {
-      // If registering with JR Master email, restrict unless it matches exact master pass
       if (cleanEmail === 'jihadurrashid997@gmail.com') {
         if (password !== '252002051') {
           showToast("Incorrect JR Master Master Password!", "danger");
@@ -400,7 +395,6 @@ function App() {
         return;
       }
     } else {
-      // Login mode checks
       const foundUser = updatedProfiles.find(p => p.email.toLowerCase() === cleanEmail);
       
       if (cleanEmail === 'jihadurrashid997@gmail.com') {
@@ -634,7 +628,7 @@ function App() {
         </div>
       </nav>
 
-      {/* Authentication Modal with Gmail Verification */}
+      {/* Authentication Modal */}
       {showLoginModal && (
         <div style={modalStyles.overlay}>
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} style={modalStyles.box}>
@@ -702,7 +696,7 @@ function App() {
         </div>
       )}
 
-      {/* JR Master Admin Panel (Only 1 Admin Panel) */}
+      {/* JR Master Admin Panel */}
       {isLoggedIn && userRole === 'admin' && activePage === 'admin-dashboard' && (
         <div className="container py-5 text-start">
           <div className="bg-white p-4 border rounded shadow-sm mb-5">
@@ -828,7 +822,7 @@ function App() {
         </div>
       )}
 
-      {/* Customer Care / Messages Hub */}
+      {/* Messages Hub */}
       {isLoggedIn && activePage === 'messenger' && (
         <div className="container py-5">
           <div className="row justify-content-center">
