@@ -75,6 +75,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('all'); 
   const [isScrolled, setIsScrolled] = useState(false);
+  const [showReveal, setShowReveal] = useState(true);
   
   // Exclusive JR Master Super Admin Info
   const jrMasterAdmin = { 
@@ -195,6 +196,34 @@ function App() {
     const onScroll = () => setIsScrolled(window.scrollY > 12);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Cinematic "curtain" reveal: once the splash screen hands off to the
+  // main app, hold a full-screen overlay for a beat, then let it wipe
+  // away — gives the entrance a distinct, video-like feel.
+  useEffect(() => {
+    if (!showWelcome && showReveal) {
+      const t = setTimeout(() => setShowReveal(false), 150);
+      return () => clearTimeout(t);
+    }
+  }, [showWelcome, showReveal]);
+
+  // Keep multiple browser tabs of the same site in sync — without this,
+  // switching accounts or adding a product in one tab won't be reflected
+  // in another tab's already-loaded state until a manual refresh.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (!e.key) return;
+      try {
+        if (e.key === 'profilesList' && e.newValue) setProfilesList(JSON.parse(e.newValue));
+        if (e.key === 'allProductsList' && e.newValue) setAllProductsList(JSON.parse(e.newValue));
+        if (e.key === 'directMessages' && e.newValue) setDirectMessages(JSON.parse(e.newValue));
+        if (e.key === 'adminMessages' && e.newValue) setAdminMessages(JSON.parse(e.newValue));
+        if (e.key === 'userInfo' && e.newValue) setUserInfo(JSON.parse(e.newValue));
+      } catch (err) {}
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const handleLogout = () => {
@@ -396,6 +425,20 @@ function App() {
     setActivePage('home');
   };
 
+  // Opens a chat with a product's actual seller. Matches strictly by
+  // sellerEmail (the seller's real identity) — never falls back to
+  // matching by display name, and never silently redirects to a
+  // different profile (e.g. Admin) if the real seller can't be found.
+  const openSellerChat = (prod) => {
+    const sellerProf = profilesList.find(p => p.email === prod.sellerEmail);
+    if (!sellerProf) {
+      showToast("This seller's account is no longer available.", "danger");
+      return;
+    }
+    setChatTargetUser(sellerProf);
+    setActivePage('messenger');
+  };
+
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     const cleanEmail = email.trim().toLowerCase();
@@ -531,6 +574,39 @@ function App() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} style={{ backgroundColor: '#f8f9fa', minHeight: '100vh', color: '#212529', position: 'relative' }}>
+
+      <AnimatePresence>
+        {showReveal && (
+          <motion.div
+            key="curtain-reveal"
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            style={{ position: 'fixed', inset: 0, zIndex: 3000, pointerEvents: 'none', overflow: 'hidden' }}
+          >
+            <motion.div
+              initial={{ y: 0 }}
+              exit={{ y: '-100%' }}
+              transition={{ duration: 0.65, ease: [0.76, 0, 0.24, 1] }}
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '52%', background: 'linear-gradient(135deg, #0d6efd, #0a58ca)' }}
+            />
+            <motion.div
+              initial={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ duration: 0.65, ease: [0.76, 0, 0.24, 1] }}
+              style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '48%', background: 'linear-gradient(135deg, #0a58ca, #073c8c)' }}
+            />
+            <motion.div
+              initial={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.3 }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+              style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <span style={{ fontSize: '38px', fontWeight: 900, color: '#fff', letterSpacing: '3px' }}>JR STORE</span>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       <AnimatePresence>
         {toast.show && (
@@ -1077,10 +1153,10 @@ function App() {
               <div className="mb-4">
                 <h5 className="fw-bold text-primary mb-3">Products Uploaded By You</h5>
                 <div className="row g-3">
-                  {allProductsList.filter(p => p.sellerEmail === userInfo?.email || p.seller === userInfo?.name).length === 0 ? (
+                  {allProductsList.filter(p => p.sellerEmail === userInfo?.email).length === 0 ? (
                     <p className="text-muted small">You haven't uploaded any products yet.</p>
                   ) : (
-                    allProductsList.filter(p => p.sellerEmail === userInfo?.email || p.seller === userInfo?.name).map(prod => (
+                    allProductsList.filter(p => p.sellerEmail === userInfo?.email).map(prod => (
                       <div className="col-md-6" key={prod.id}>
                         <div className="p-3 border rounded bg-light shadow-sm d-flex gap-3 align-items-center">
                           <img src={prod.image} alt="Prod" style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '6px' }} />
@@ -1472,11 +1548,7 @@ function App() {
                               <p className="text-muted mb-3">${prod.price}</p>
                               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="btn btn-outline-primary w-100 text-uppercase fw-bold" onClick={() => {
                                 if(!isLoggedIn) setShowLoginModal(true);
-                                else {
-                                  const sellerProf = profilesList.find(p => p.email === prod.sellerEmail || p.name === prod.seller) || profilesList[0];
-                                  setChatTargetUser(sellerProf);
-                                  setActivePage('messenger');
-                                }
+                                else openSellerChat(prod);
                               }}>View Product</motion.button>
                             </div>
                           </motion.div>
@@ -1531,9 +1603,7 @@ function App() {
                       if(!isLoggedIn) {
                         setShowLoginModal(true);
                       } else {
-                        const sellerProf = profilesList.find(p => p.email === prod.sellerEmail || p.name === prod.seller) || profilesList[0];
-                        setChatTargetUser(sellerProf);
-                        setActivePage('messenger');
+                        openSellerChat(prod);
                       }
                     }}>View Product</motion.button>
                   </div>
