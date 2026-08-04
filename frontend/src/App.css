@@ -1,71 +1,328 @@
-/* Google Fonts Import */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* ===========================
+   GOOGLE FONT
+=========================== */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* ===========================
+   RESET
+=========================== */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
 }
 
-.App {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  text-align: center;
-  background-color: #0f172a;
-  color: #f8fafc;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  overflow-x: hidden;
-  letter-spacing: -0.011em;
-  -webkit-font-smoothing: antialiased;
+html{
+    scroll-behavior:smooth;
 }
 
-.App-logo {
-  height: 30vmin;
-  pointer-events: none;
-  filter: drop-shadow(0 10px 20px rgba(56, 189, 248, 0.3));
+body{
+    font-family:'Inter',sans-serif;
+    background:#020617;
+    color:#fff;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 15s cubic-bezier(0.4, 0, 0.2, 1);
-  }
+/* ===========================
+   SCROLLBAR
+=========================== */
+
+::-webkit-scrollbar{
+    width:8px;
 }
 
-.App-header {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
-  width: 100%;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
-  padding: 2rem;
+::-webkit-scrollbar-track{
+    background:#0f172a;
 }
 
-.App-link {
-  color: #38bdf8;
-  text-decoration: none;
-  font-weight: 500;
-  transition: color 0.3s ease;
+::-webkit-scrollbar-thumb{
+    background:#38bdf8;
+    border-radius:50px;
 }
 
-.App-link:hover {
-  color: #818cf8;
+::-webkit-scrollbar-thumb:hover{
+    background:#0ea5e9;
 }
 
-@keyframes App-logo-spin {
-  0% {
-    transform: rotate(0deg) scale(1);
-  }
-  50% {
-    transform: rotate(180deg) scale(1.05);
-  }
-  100% {
-    transform: rotate(360deg) scale(1);
-  }
+/* ===========================
+   SELECTION
+=========================== */
+
+::selection{
+    background:#38bdf8;
+    color:white;
+}
+
+/* ===========================
+   APP
+=========================== */
+
+.App{
+
+    min-height:100vh;
+
+    background:
+    radial-gradient(circle at top left,#2563eb22,transparent 35%),
+    radial-gradient(circle at bottom right,#9333ea22,transparent 35%),
+    linear-gradient(135deg,#020617,#0f172a,#1e293b);
+
+    color:white;
+
+    overflow-x:hidden;
+
+}
+
+/* ===========================
+   CONTAINER
+=========================== */
+
+.container{
+
+    width:90%;
+
+    max-width:1400px;
+
+    margin:auto;
+
+}
+
+/* ===========================
+   GLASS CARD
+=========================== */
+
+.glass{
+
+    background:rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    backdrop-filter:blur(18px);
+
+    border-radius:20px;
+
+    box-shadow:
+    0 8px 32px rgba(0,0,0,.25);
+
+}
+
+/* ===========================
+   BUTTON
+=========================== */
+
+button{
+
+    cursor:pointer;
+
+    border:none;
+
+    outline:none;
+
+    transition:.3s;
+
+}
+
+.btn{
+
+    padding:13px 30px;
+
+    border-radius:15px;
+
+    background:#2563eb;
+
+    color:white;
+
+    font-size:15px;
+
+    font-weight:600;
+
+}
+
+.btn:hover{
+
+    transform:translateY(-3px);
+
+    box-shadow:0 15px 40px rgba(37,99,235,.35);
+
+}
+
+/* ===========================
+   INPUT
+=========================== */
+
+input,
+textarea,
+select{
+
+    width:100%;
+
+    padding:14px;
+
+    border-radius:14px;
+
+    border:1px solid rgba(255,255,255,.12);
+
+    background:rgba(255,255,255,.05);
+
+    color:white;
+
+    outline:none;
+
+    transition:.3s;
+
+}
+
+input:focus,
+textarea:focus,
+select:focus{
+
+    border-color:#38bdf8;
+
+    box-shadow:0 0 20px rgba(56,189,248,.25);
+
+}
+
+/* ===========================
+   LINKS
+=========================== */
+
+a{
+
+    color:white;
+
+    text-decoration:none;
+
+    transition:.3s;
+
+}
+
+a:hover{
+
+    color:#38bdf8;
+
+}
+
+/* ===========================
+   CARD
+=========================== */
+
+.card{
+
+    background:rgba(255,255,255,.05);
+
+    border-radius:20px;
+
+    padding:20px;
+
+    transition:.35s;
+
+    border:1px solid rgba(255,255,255,.08);
+
+}
+
+.card:hover{
+
+    transform:translateY(-8px);
+
+    box-shadow:0 25px 60px rgba(0,0,0,.3);
+
+}
+
+/* ===========================
+   TITLE
+=========================== */
+
+.title{
+
+    font-size:42px;
+
+    font-weight:700;
+
+    margin-bottom:15px;
+
+}
+
+.subtitle{
+
+    font-size:18px;
+
+    color:#cbd5e1;
+
+}
+
+/* ===========================
+   IMAGE
+=========================== */
+
+img{
+
+    max-width:100%;
+
+    display:block;
+
+}
+
+/* ===========================
+   LOADER
+=========================== */
+
+.loader{
+
+    width:55px;
+
+    height:55px;
+
+    border-radius:50%;
+
+    border:5px solid rgba(255,255,255,.1);
+
+    border-top:5px solid #38bdf8;
+
+    animation:spin 1s linear infinite;
+
+}
+
+/* ===========================
+   KEYFRAMES
+=========================== */
+
+@keyframes spin{
+
+    to{
+
+        transform:rotate(360deg);
+
+    }
+
+}
+
+@keyframes float{
+
+    50%{
+
+        transform:translateY(-12px);
+
+    }
+
+}
+
+@keyframes fadeUp{
+
+    from{
+
+        opacity:0;
+
+        transform:translateY(40px);
+
+    }
+
+    to{
+
+        opacity:1;
+
+        transform:translateY(0);
+
+    }
+
 }
