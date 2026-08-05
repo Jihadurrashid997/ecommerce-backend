@@ -95,6 +95,13 @@ function NotFound(){
     )
 
 }
+const { loading } = useApp();
+
+if (loading) {
+    return (
+        <div className="loader"></div>
+    );
+}
 
 function App(){
 
@@ -213,4 +220,5 @@ element={<NotFound/>}
 }
 
 export default App;
+  import { useApp } from "./context/AppContext";
   
