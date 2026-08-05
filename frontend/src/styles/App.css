@@ -326,3 +326,56 @@ img{
     }
 
 }
+.footer{
+
+padding:40px;
+
+text-align:center;
+
+background:#020617;
+
+margin-top:80px;
+
+border-top:1px solid rgba(255,255,255,.08);
+
+}
+
+.footer h3{
+
+margin-bottom:10px;
+
+font-size:28px;
+
+}
+
+.footer p{
+
+color:#94a3b8;
+
+}
+
+.not-found{
+
+min-height:80vh;
+
+display:flex;
+
+justify-content:center;
+
+align-items:center;
+
+flex-direction:column;
+
+}
+
+.not-found h1{
+
+font-size:120px;
+
+}
+
+.not-found h2{
+
+font-size:35px;
+
+}
