@@ -37,7 +37,29 @@ function PrivateRoute({ children }) {
     return children;
 
 }
+<button
 
+className="theme-btn"
+
+onClick={()=>setDarkMode(!darkMode)}
+
+>
+
+{
+
+darkMode
+
+?
+
+"☀ Light"
+
+:
+
+"🌙 Dark"
+
+}
+
+</button>
 function Footer() {
 
     return (
@@ -104,11 +126,17 @@ if (loading) {
 }
 
 function App(){
+const [darkMode,setDarkMode]=useState(true);
 
+useEffect(()=>{
+
+document.body.className=darkMode?"dark":"light";
+
+},[darkMode]);
 return(
 
 <BrowserRouter>
-
+<ScrollToTop/>
 <Navbar/>
 
 <Routes>
@@ -195,6 +223,25 @@ element={
 
 <Messenger/>
 
+  function ScrollToTop() {
+
+    const { pathname } = useLocation();
+
+    useEffect(() => {
+
+        window.scrollTo({
+
+            top:0,
+
+            behavior:"smooth"
+
+        });
+
+    },[pathname]);
+
+    return null;
+
+}
 </PrivateRoute>
 
 }
@@ -221,4 +268,6 @@ element={<NotFound/>}
 
 export default App;
   import { useApp } from "./context/AppContext";
+  import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
   
