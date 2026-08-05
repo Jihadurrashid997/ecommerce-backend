@@ -1,177 +1,159 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
+import api from "../services/api";
 import "./Messenger.css";
-import {
-  FaPaperPlane,
-  FaCircle,
-  FaSearch
-} from "react-icons/fa";
 
 const Messenger = () => {
 
-  const [users] = useState([
-    {
-      id: 1,
-      name: "Rahim",
-      online: true
-    },
-    {
-      id: 2,
-      name: "Karim",
-      online: false
-    },
-    {
-      id: 3,
-      name: "Seller",
-      online: true
-    }
-  ]);
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [text, setText] = useState("");
 
-  const [messages, setMessages] = useState([
-    {
-      sender: "Rahim",
-      text: "Hello 👋"
-    }
-  ]);
+    useEffect(() => {
 
-  const [text, setText] = useState("");
+        loadUsers();
 
-  const bottomRef = useRef();
+    }, []);
 
-  useEffect(() => {
+    const loadUsers = async () => {
 
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth"
-    });
+        try {
 
-  }, [messages]);
+            const res = await api.get("/admin/users");
 
-  const sendMessage = () => {
+            setUsers(res.data);
 
-    if (!text.trim()) return;
+        } catch (err) {
 
-    setMessages([
-      ...messages,
-      {
-        sender: "Me",
-        text
-      }
-    ]);
+            console.log(err);
 
-    setText("");
+        }
 
-  };
+    };
 
-  return (
+    const sendMessage = () => {
 
-    <div className="messenger">
+        if (!text.trim()) return;
 
-      <div className="chat-users">
+        setMessages((prev) => [
+            ...prev,
+            {
+                text,
+                sender: "me",
+                time: new Date().toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                }),
+            },
+        ]);
 
-        <div className="chat-search">
+        setText("");
 
-          <FaSearch />
+    };
 
-          <input
-            placeholder="Search user..."
-          />
+    return (
 
-        </div>
+        <div className="messenger">
 
-        {users.map((user) => (
+            <div className="chat-list">
 
-          <div
-            className="chat-user"
-            key={user.id}
-          >
+                <h2>Chats</h2>
 
-            <div className="avatar">
+                {users.map((user) => (
 
-              {user.name.charAt(0)}
+                    <div
+                        key={user._id}
+                        className={`chat-user ${
+                            selectedUser?._id === user._id ? "active" : ""
+                        }`}
+                        onClick={() => setSelectedUser(user)}
+                    >
+                        <div className="avatar">
+                            {user.name?.charAt(0).toUpperCase()}
+                        </div>
 
-            </div>
+                        <div>
 
-            <div>
+                            <h4>{user.name}</h4>
 
-              <h4>{user.name}</h4>
+                            <small>{user.email}</small>
 
-              <span>
+                        </div>
 
-                <FaCircle
-                  color={
-                    user.online
-                      ? "#22c55e"
-                      : "#64748b"
-                  }
-                />
+                    </div>
 
-                {user.online
-                  ? " Online"
-                  : " Offline"}
-
-              </span>
+                ))}
 
             </div>
 
-          </div>
+            <div className="chat-box">
 
-        ))}
+                {selectedUser ? (
 
-      </div>
+                    <>
 
-      <div className="chat-box">
+                        <div className="chat-header">
 
-        <div className="chat-header">
+                            <h3>{selectedUser.name}</h3>
 
-          <h2>Messenger</h2>
+                        </div>
 
-        </div>
+                        <div className="chat-body">
 
-        <div className="chat-body">
+                            {messages.map((msg, index) => (
 
-          {messages.map((msg, index) => (
+                                <div
+                                    key={index}
+                                    className={`message ${msg.sender}`}
+                                >
 
-            <div
-              key={index}
-              className={
-                msg.sender === "Me"
-                  ? "my-message"
-                  : "other-message"
-              }
-            >
+                                    <p>{msg.text}</p>
 
-              <p>{msg.text}</p>
+                                    <span>{msg.time}</span>
+
+                                </div>
+
+                            ))}
+
+                        </div>
+
+                        <div className="chat-input">
+
+                            <input
+                                type="text"
+                                placeholder="Type a message..."
+                                value={text}
+                                onChange={(e) => setText(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                        sendMessage();
+                                    }
+                                }}
+                            />
+
+                            <button onClick={sendMessage}>
+                                Send
+                            </button>
+
+                        </div>
+
+                    </>
+
+                ) : (
+
+                    <div className="empty-chat">
+
+                        <h2>Select a chat</h2>
+
+                    </div>
+
+                )}
 
             </div>
 
-          ))}
-
-          <div ref={bottomRef}></div>
-
         </div>
 
-        <div className="chat-input">
-
-          <input
-            value={text}
-            onChange={(e) =>
-              setText(e.target.value)
-            }
-            placeholder="Write message..."
-          />
-
-          <button onClick={sendMessage}>
-
-            <FaPaperPlane />
-
-          </button>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  );
+    );
 
 };
 
