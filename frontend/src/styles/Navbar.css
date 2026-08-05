@@ -1,329 +1,165 @@
-/* ===========================
-   NAVBAR
-=========================== */
-
 .navbar{
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:75px;
 
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
+position:fixed;
 
-    padding:0 40px;
+top:0;
 
-    background:rgba(15,23,42,.72);
+left:0;
 
-    backdrop-filter:blur(20px);
+width:100%;
 
-    border-bottom:1px solid rgba(255,255,255,.08);
+height:80px;
 
-    z-index:9999;
+display:flex;
 
-    transition:.35s;
-}
+justify-content:space-between;
 
-.navbar.scrolled{
+align-items:center;
 
-    background:rgba(2,6,23,.95);
+padding:0 40px;
 
-    box-shadow:0 15px 40px rgba(0,0,0,.25);
+background:rgba(2,6,23,.85);
+
+backdrop-filter:blur(15px);
+
+z-index:1000;
+
+border-bottom:1px solid rgba(255,255,255,.08);
 
 }
 
-/* ===========================
-LOGO
-=========================== */
+.logo a{
 
-.logo{
+font-size:28px;
 
-    font-size:28px;
+font-weight:700;
 
-    font-weight:800;
-
-    color:white;
-
-    letter-spacing:.5px;
+color:#38bdf8;
 
 }
-
-.logo span{
-
-    color:#38bdf8;
-
-}
-
-/* ===========================
-MENU
-=========================== */
-
-.nav-links{
-
-    display:flex;
-
-    gap:28px;
-
-    align-items:center;
-
-}
-
-.nav-links a{
-
-    position:relative;
-
-    color:#fff;
-
-    font-weight:500;
-
-    font-size:15px;
-
-}
-
-.nav-links a::after{
-
-    content:"";
-
-    position:absolute;
-
-    bottom:-6px;
-
-    left:0;
-
-    width:0;
-
-    height:2px;
-
-    background:#38bdf8;
-
-    transition:.3s;
-
-}
-
-.nav-links a:hover::after{
-
-    width:100%;
-
-}
-
-.nav-links a:hover{
-
-    color:#38bdf8;
-
-}
-
-/* ===========================
-SEARCH
-=========================== */
 
 .search-box{
 
-    width:340px;
+display:flex;
 
-    height:46px;
+align-items:center;
 
-    display:flex;
+background:#111827;
 
-    align-items:center;
+padding:10px 15px;
 
-    background:rgba(255,255,255,.05);
+border-radius:50px;
 
-    border:1px solid rgba(255,255,255,.08);
-
-    border-radius:30px;
-
-    padding:0 18px;
+width:350px;
 
 }
 
 .search-box input{
 
-    background:none;
+background:transparent;
 
-    border:none;
+border:none;
 
-    color:white;
+outline:none;
 
-    width:100%;
+color:white;
 
-    font-size:15px;
+margin-left:10px;
 
-}
-
-.search-box input::placeholder{
-
-    color:#94a3b8;
+width:100%;
 
 }
 
-.search-box:focus-within{
+.search-icon{
 
-    border-color:#38bdf8;
-
-    box-shadow:0 0 20px rgba(56,189,248,.25);
+color:#94a3b8;
 
 }
 
-/* ===========================
-RIGHT
-=========================== */
+.nav-links{
 
-.nav-right{
+display:flex;
 
-    display:flex;
+list-style:none;
 
-    align-items:center;
+gap:25px;
 
-    gap:20px;
+align-items:center;
 
 }
 
-/* ===========================
-ICON
-=========================== */
+.nav-links a{
 
-.nav-icon{
+color:white;
 
-    width:46px;
+font-size:18px;
 
-    height:46px;
-
-    display:flex;
-
-    align-items:center;
-
-    justify-content:center;
-
-    border-radius:50%;
-
-    background:rgba(255,255,255,.05);
-
-    transition:.3s;
-
-    cursor:pointer;
+transition:.3s;
 
 }
 
-.nav-icon:hover{
+.nav-links a:hover{
 
-    transform:translateY(-4px);
-
-    background:#2563eb;
+color:#38bdf8;
 
 }
 
-/* ===========================
-PROFILE
-=========================== */
+.menu-btn{
 
-.profile{
+display:none;
 
-    display:flex;
+background:none;
 
-    align-items:center;
+border:none;
 
-    gap:10px;
+color:white;
 
-    cursor:pointer;
+font-size:24px;
 
-}
-
-.profile img{
-
-    width:42px;
-
-    height:42px;
-
-    border-radius:50%;
-
-    border:2px solid #38bdf8;
+cursor:pointer;
 
 }
 
-.profile-name{
+@media(max-width:768px){
 
-    font-size:14px;
+.search-box{
 
-    font-weight:600;
-
-}
-
-/* ===========================
-DROPDOWN
-=========================== */
-
-.dropdown{
-
-    position:absolute;
-
-    right:20px;
-
-    top:80px;
-
-    width:230px;
-
-    background:#0f172a;
-
-    border:1px solid rgba(255,255,255,.08);
-
-    border-radius:18px;
-
-    overflow:hidden;
-
-    display:none;
+display:none;
 
 }
 
-.profile:hover .dropdown{
+.menu-btn{
 
-    display:block;
-
-}
-
-.dropdown a{
-
-    display:block;
-
-    padding:15px 18px;
-
-    color:white;
-
-    transition:.3s;
+display:block;
 
 }
 
-.dropdown a:hover{
+.nav-links{
 
-    background:#1e293b;
+position:absolute;
 
-    color:#38bdf8;
+top:80px;
 
-}
+right:-100%;
 
-/* ===========================
-BUTTON
-=========================== */
+width:250px;
 
-.nav-btn{
+height:calc(100vh - 80px);
 
-    padding:12px 24px;
+background:#0f172a;
 
-    border-radius:30px;
+flex-direction:column;
 
-    background:#2563eb;
+padding-top:40px;
 
-    color:white;
-
-    font-weight:600;
+transition:.4s;
 
 }
 
-.nav-btn:hover{
+.nav-links.active{
 
-    transform:translateY(-3px);
+right:0;
 
-    box-shadow:0 10px 30px rgba(37,99,235,.4);
+}
 
 }
