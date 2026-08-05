@@ -1,56 +1,90 @@
 import React from "react";
-import "./ProductCard.css";
 import { FaHeart, FaShoppingCart, FaStar } from "react-icons/fa";
+import "./ProductCard.css";
 
 const ProductCard = ({ product }) => {
-  return (
-    <div className="product-card">
 
-      <div className="product-image">
-        <img
-          src={product?.image || "https://via.placeholder.com/300x250"}
-          alt={product?.name}
-        />
+    const addToCart = () => {
 
-        <button className="wishlist-btn">
-          <FaHeart />
-        </button>
-      </div>
+        alert(product.name + " added to cart.");
 
-      <div className="product-content">
+    };
 
-        <h3>{product?.name}</h3>
+    const addToWishlist = () => {
 
-        <p className="category">
-          {product?.category}
-        </p>
+        alert(product.name + " added to wishlist.");
 
-        <div className="rating">
+    };
 
-          <FaStar />
-          <FaStar />
-          <FaStar />
-          <FaStar />
-          <FaStar />
+    return (
+
+        <div className="product-card">
+
+            <div className="product-image">
+
+                <img
+                    src={product.image}
+                    alt={product.name}
+                />
+
+                <button
+                    className="wishlist-btn"
+                    onClick={addToWishlist}
+                >
+
+                    <FaHeart />
+
+                </button>
+
+            </div>
+
+            <div className="product-content">
+
+                <h3>
+
+                    {product.name}
+
+                </h3>
+
+                <p className="category">
+
+                    {product.category}
+
+                </p>
+
+                <div className="rating">
+
+                    <FaStar />
+                    <FaStar />
+                    <FaStar />
+                    <FaStar />
+                    <FaStar />
+
+                </div>
+
+                <h2>
+
+                    ৳ {product.price}
+
+                </h2>
+
+                <button
+                    className="cart-btn"
+                    onClick={addToCart}
+                >
+
+                    <FaShoppingCart />
+
+                    Add To Cart
+
+                </button>
+
+            </div>
 
         </div>
 
-        <h2 className="price">
-          ৳ {product?.price}
-        </h2>
+    );
 
-        <button className="cart-btn">
-
-          <FaShoppingCart />
-
-          Add To Cart
-
-        </button>
-
-      </div>
-
-    </div>
-  );
 };
 
 export default ProductCard;
