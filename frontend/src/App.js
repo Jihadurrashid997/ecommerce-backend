@@ -1,9 +1,9 @@
 import React from "react";
 import {
-BrowserRouter,
-Routes,
-Route,
-Navigate
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate
 } from "react-router-dom";
 
 import "./styles/App.css";
@@ -16,25 +16,89 @@ import "./styles/Animation.css";
 
 import Navbar from "./components/Navbar";
 import Messenger from "./components/Messenger";
+import Dashboard from "./components/Dashboard";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import SellerDashboard from "./pages/SellerDashboard";
-import Dashboard from "./components/Dashboard";
 
 function PrivateRoute({ children }) {
 
-const token = localStorage.getItem("token");
+    const token = localStorage.getItem("token");
 
-return token ? children : <Navigate to="/login" />;
+    if (!token) {
+
+        return <Navigate to="/login" replace />;
+
+    }
+
+    return children;
 
 }
 
-function App() {
+function Footer() {
 
-return (
+    return (
+
+        <footer className="footer">
+
+            <div className="container">
+
+                <h2>
+
+                    Marketplace
+
+                </h2>
+
+                <p>
+
+                    Buy • Sell • Chat • Secure Payment
+
+                </p>
+
+                <p>
+
+                    © 2026 Marketplace. All Rights Reserved.
+
+                </p>
+
+            </div>
+
+        </footer>
+
+    );
+
+}
+
+function NotFound(){
+
+    return(
+
+        <div className="not-found">
+
+            <h1>
+
+                404
+
+            </h1>
+
+            <h2>
+
+                Page Not Found
+
+            </h2>
+
+        </div>
+
+    )
+
+}
+
+function App(){
+
+return(
 
 <BrowserRouter>
 
@@ -63,22 +127,6 @@ element={<Login/>}
 path="/register"
 
 element={<Register/>}
-
-/>
-
-<Route
-
-path="/messenger"
-
-element={
-
-<PrivateRoute>
-
-<Messenger/>
-
-</PrivateRoute>
-
-}
 
 />
 
@@ -130,12 +178,39 @@ element={
 
 />
 
+<Route
+
+path="/messenger"
+
+element={
+
+<PrivateRoute>
+
+<Messenger/>
+
+</PrivateRoute>
+
+}
+
+/>
+
+<Route
+
+path="*"
+
+element={<NotFound/>}
+
+/>
+
 </Routes>
+
+<Footer/>
 
 </BrowserRouter>
 
-);
+)
 
 }
 
 export default App;
+  
