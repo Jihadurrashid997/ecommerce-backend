@@ -1,1 +1,196 @@
+/* ===========================
+FADE UP
+=========================== */
+
+.fade-up{
+
+animation:fadeUp .8s ease forwards;
+
+}
+
+/* ===========================
+ZOOM
+=========================== */
+
+.zoom{
+
+animation:zoom .6s ease;
+
+}
+
+/* ===========================
+FLOAT
+=========================== */
+
+.float{
+
+animation:float 3s ease-in-out infinite;
+
+}
+
+/* ===========================
+ROTATE
+=========================== */
+
+.rotate{
+
+animation:rotate 12s linear infinite;
+
+}
+
+/* ===========================
+PULSE
+=========================== */
+
+.pulse{
+
+animation:pulse 2s infinite;
+
+}
+
+/* ===========================
+SLIDE LEFT
+=========================== */
+
+.slide-left{
+
+animation:slideLeft .7s ease forwards;
+
+}
+
+/* ===========================
+SLIDE RIGHT
+=========================== */
+
+.slide-right{
+
+animation:slideRight .7s ease forwards;
+
+}
+
+/* ===========================
+KEYFRAMES
+=========================== */
+
+@keyframes fadeUp{
+
+0%{
+
+opacity:0;
+
+transform:translateY(50px);
+
+}
+
+100%{
+
+opacity:1;
+
+transform:translateY(0);
+
+}
+
+}
+
+@keyframes zoom{
+
+0%{
+
+opacity:0;
+
+transform:scale(.8);
+
+}
+
+100%{
+
+opacity:1;
+
+transform:scale(1);
+
+}
+
+}
+
+@keyframes float{
+
+0%{
+
+transform:translateY(0px);
+
+}
+
+50%{
+
+transform:translateY(-12px);
+
+}
+
+100%{
+
+transform:translateY(0);
+
+}
+
+}
+
+@keyframes rotate{
+
+100%{
+
+transform:rotate(360deg);
+
+}
+
+}
+
+@keyframes pulse{
+
+50%{
+
+transform:scale(1.06);
+
+}
+
+}
+
+@keyframes slideLeft{
+
+0%{
+
+opacity:0;
+
+transform:translateX(-60px);
+
+}
+
+100%{
+
+opacity:1;
+
+transform:translateX(0);
+
+}
+
+}
+
+@keyframes slideRight{
+
+0%{
+
+opacity:0;
+
+transform:translateX(60px);
+
+}
+
+100%{
+
+opacity:1;
+
+transform:translateX(0);
+
+}
+
+}
 
