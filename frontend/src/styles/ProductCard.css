@@ -1,86 +1,141 @@
 .product-card{
-    width:320px;
-    background:rgba(255,255,255,.05);
-    border-radius:20px;
-    overflow:hidden;
-    border:1px solid rgba(255,255,255,.08);
-    backdrop-filter:blur(15px);
-    transition:.35s;
+
+background:rgba(255,255,255,.05);
+
+border-radius:20px;
+
+overflow:hidden;
+
+transition:.35s;
+
+border:1px solid rgba(255,255,255,.08);
+
 }
 
 .product-card:hover{
-    transform:translateY(-10px);
-    box-shadow:0 25px 60px rgba(0,0,0,.35);
+
+transform:translateY(-8px);
+
+box-shadow:0 25px 60px rgba(0,0,0,.35);
+
 }
 
 .product-image{
-    position:relative;
-    height:250px;
-    overflow:hidden;
+
+position:relative;
+
+height:260px;
+
+overflow:hidden;
+
 }
 
 .product-image img{
-    width:100%;
-    height:100%;
-    object-fit:cover;
-    transition:.4s;
+
+width:100%;
+
+height:100%;
+
+object-fit:cover;
+
+transition:.4s;
+
 }
 
 .product-card:hover img{
-    transform:scale(1.08);
+
+transform:scale(1.08);
+
 }
 
 .wishlist-btn{
-    position:absolute;
-    right:15px;
-    top:15px;
-    width:45px;
-    height:45px;
-    border-radius:50%;
-    border:none;
-    background:white;
-    color:red;
-    cursor:pointer;
+
+position:absolute;
+
+top:15px;
+
+right:15px;
+
+width:45px;
+
+height:45px;
+
+border:none;
+
+border-radius:50%;
+
+background:white;
+
+cursor:pointer;
+
+font-size:18px;
+
 }
 
 .product-content{
-    padding:20px;
+
+padding:20px;
+
 }
 
 .product-content h3{
-    font-size:22px;
-    margin-bottom:10px;
+
+margin-bottom:10px;
+
 }
 
 .category{
-    color:#94a3b8;
-    margin-bottom:12px;
+
+color:#94a3b8;
+
+margin-bottom:10px;
+
 }
 
 .rating{
-    display:flex;
-    gap:4px;
-    color:#FFD700;
-    margin-bottom:15px;
+
+display:flex;
+
+gap:5px;
+
+color:#fbbf24;
+
+margin-bottom:15px;
+
 }
 
-.price{
-    color:#38bdf8;
-    margin-bottom:18px;
+.product-content h2{
+
+color:#38bdf8;
+
+margin-bottom:20px;
+
 }
 
 .cart-btn{
-    width:100%;
-    padding:14px;
-    border:none;
-    border-radius:15px;
-    background:#2563eb;
-    color:white;
-    font-size:16px;
-    cursor:pointer;
-    transition:.3s;
+
+width:100%;
+
+padding:14px;
+
+border:none;
+
+border-radius:12px;
+
+background:#2563eb;
+
+color:white;
+
+font-size:15px;
+
+cursor:pointer;
+
+transition:.3s;
+
 }
 
 .cart-btn:hover{
-    background:#1d4ed8;
+
+background:#1d4ed8;
+
 }
