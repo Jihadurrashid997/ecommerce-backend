@@ -1,1 +1,132 @@
+.seller-dashboard{
 
+padding:110px 40px;
+
+min-height:100vh;
+
+}
+
+.seller-dashboard h1{
+
+margin-bottom:30px;
+
+}
+
+.product-form{
+
+display:grid;
+
+grid-template-columns:repeat(2,1fr);
+
+gap:20px;
+
+margin-bottom:50px;
+
+}
+
+.product-form input,
+.product-form textarea{
+
+padding:15px;
+
+border:none;
+
+border-radius:15px;
+
+background:#111827;
+
+color:white;
+
+}
+
+.product-form textarea{
+
+grid-column:1/3;
+
+height:120px;
+
+resize:none;
+
+}
+
+.product-form button{
+
+grid-column:1/3;
+
+padding:16px;
+
+border:none;
+
+border-radius:15px;
+
+background:#2563eb;
+
+color:white;
+
+cursor:pointer;
+
+font-size:16px;
+
+}
+
+.seller-products{
+
+display:grid;
+
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+
+gap:25px;
+
+}
+
+.seller-card{
+
+background:rgba(255,255,255,.05);
+
+border-radius:20px;
+
+overflow:hidden;
+
+padding-bottom:20px;
+
+transition:.3s;
+
+}
+
+.seller-card:hover{
+
+transform:translateY(-8px);
+
+}
+
+.seller-card img{
+
+width:100%;
+
+height:220px;
+
+object-fit:cover;
+
+}
+
+.seller-card h3{
+
+padding:15px;
+
+}
+
+.seller-card p{
+
+padding:0 15px;
+
+color:#94a3b8;
+
+}
+
+.seller-card h2{
+
+padding:15px;
+
+color:#38bdf8;
+
+}
