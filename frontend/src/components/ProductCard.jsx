@@ -1,14 +1,11 @@
 import React from "react";
 import { FaHeart, FaShoppingCart, FaStar } from "react-icons/fa";
+import { useCart } from "../context/CartContext";
 import "./ProductCard.css";
 
 const ProductCard = ({ product }) => {
 
-    const addToCart = () => {
-
-        alert(product.name + " added to cart.");
-
-    };
+    const { addToCart } = useCart();
 
     const addToWishlist = () => {
 
@@ -31,52 +28,37 @@ const ProductCard = ({ product }) => {
                     className="wishlist-btn"
                     onClick={addToWishlist}
                 >
-
                     <FaHeart />
-
                 </button>
 
             </div>
 
             <div className="product-content">
 
-                <h3>
-
-                    {product.name}
-
-                </h3>
+                <h3>{product.name}</h3>
 
                 <p className="category">
-
                     {product.category}
-
                 </p>
 
                 <div className="rating">
-
                     <FaStar />
                     <FaStar />
                     <FaStar />
                     <FaStar />
                     <FaStar />
-
                 </div>
 
-                <h2>
-
-                    ৳ {product.price}
-
-                </h2>
+                <h2>৳ {product.price}</h2>
 
                 <button
                     className="cart-btn"
-                    onClick={addToCart}
+                    onClick={() => addToCart(product)}
                 >
-
                     <FaShoppingCart />
-
-                    Add To Cart
-
+                    <span style={{ marginLeft: "8px" }}>
+                        Add To Cart
+                    </span>
                 </button>
 
             </div>
