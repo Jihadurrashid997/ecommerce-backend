@@ -1,17 +1,46 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const ProductSchema = new mongoose.Schema({
-    seller: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: 'User', 
-        required: false // যদি সেলার আইডি ছাড়া টেস্ট করতে চান সাময়িকভাবে false রাখতে পারেন
-    }, 
-    title: { type: String, required: true },
-    price: { type: Number, required: true },
-    category: { type: String, required: true },
-    description: { type: String, required: true },
-    image: { type: String, required: true },
-    isApproved: { type: Boolean, default: false }
-}, { timestamps: true });
+const productSchema = new mongoose.Schema(
+{
+    name:{
+        type:String,
+        required:true
+    },
 
-module.exports = mongoose.model('Product', ProductSchema);
+    description:{
+        type:String,
+        required:true
+    },
+
+    price:{
+        type:Number,
+        required:true
+    },
+
+    category:{
+        type:String,
+        required:true
+    },
+
+    image:{
+        type:String,
+        default:""
+    },
+
+    stock:{
+        type:Number,
+        default:1
+    },
+
+    seller:{
+        type:mongoose.Schema.Types.ObjectId,
+        ref:"User"
+    }
+
+},
+{
+    timestamps:true
+}
+);
+
+module.exports = mongoose.model("Product",productSchema);
