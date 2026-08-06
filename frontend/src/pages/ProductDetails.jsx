@@ -1,48 +1,129 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import api from "../services/api";
 import "../styles/ProductDetails.css";
 
 const ProductDetails = () => {
 
-  const { id } = useParams();
+    const { id } = useParams();
 
-  return (
-    <div className="product-details">
+    const [product, setProduct] = useState(null);
 
-      <div className="product-left">
-        <img
-          src="https://via.placeholder.com/500"
-          alt="product"
-        />
-      </div>
+    const [loading, setLoading] = useState(true);
 
-      <div className="product-right">
+    useEffect(() => {
 
-        <h1>Sample Product #{id}</h1>
+        fetchProduct();
 
-        <h2>$199</h2>
+    }, []);
 
-        <p>
-          This is a professional marketplace product page.
-          Product description will come from backend API.
-        </p>
+    const fetchProduct = async () => {
 
-        <button className="buy-btn">
-          Buy Now
-        </button>
+        try{
 
-        <button className="cart-btn">
-          Add To Cart
-        </button>
+            const res = await api.get(`/products/${id}`);
 
-        <button className="wish-btn">
-          Add To Wishlist
-        </button>
+            setProduct(res.data);
 
-      </div>
+        }
 
-    </div>
-  );
+        catch(err){
+
+            console.log(err);
+
+        }
+
+        finally{
+
+            setLoading(false);
+
+        }
+
+    };
+
+    if(loading){
+
+        return(
+
+            <div className="loader"></div>
+
+        );
+
+    }
+
+    if(!product){
+
+        return(
+
+            <h2 style={{textAlign:"center"}}>
+
+                Product Not Found
+
+            </h2>
+
+        );
+
+    }
+
+    return(
+
+        <div className="product-details">
+
+            <div className="product-left">
+
+                <img
+
+                src={product.image}
+
+                alt={product.name}
+
+                />
+
+            </div>
+
+            <div className="product-right">
+
+                <h1>
+
+                    {product.name}
+
+                </h1>
+
+                <h2>
+
+                    ৳ {product.price}
+
+                </h2>
+
+                <p>
+
+                    {product.description}
+
+                </p>
+
+                <button className="buy-btn">
+
+                    Buy Now
+
+                </button>
+
+                <button className="cart-btn">
+
+                    Add To Cart
+
+                </button>
+
+                <button className="wish-btn">
+
+                    Add To Wishlist
+
+                </button>
+
+            </div>
+
+        </div>
+
+    );
 
 };
 
