@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../services/api";
-import "./SellerDashboard.css";
+import "../styles/SellerDashboard.css";
 
 const SellerDashboard = () => {
 
