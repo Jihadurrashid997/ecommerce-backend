@@ -1,7 +1,7 @@
 import React from "react";
 import { FaHeart, FaShoppingCart, FaStar } from "react-icons/fa";
 import { useCart } from "../context/CartContext";
-import "./ProductCard.css";
+import "../styles/ProductCard.css";
 
 const ProductCard = ({ product }) => {
 
