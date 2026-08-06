@@ -7,10 +7,10 @@ import {
   FaUserCircle,
   FaBars,
   FaTimes,
-  FaSearch
+  FaSearch,
 } from "react-icons/fa";
 
-import "./Navbar.css";
+import "../styles/Navbar.css";
 
 const Navbar = () => {
 
@@ -24,14 +24,12 @@ const Navbar = () => {
       </div>
 
       <div className="search-box">
-
         <FaSearch className="search-icon" />
 
         <input
           type="text"
           placeholder="Search products..."
         />
-
       </div>
 
       <ul className={menuOpen ? "nav-links active" : "nav-links"}>
@@ -49,6 +47,18 @@ const Navbar = () => {
         </li>
 
         <li>
+          <Link to="/wishlist">
+            <FaHeart />
+          </Link>
+        </li>
+
+        <li>
+          <Link to="/cart">
+            <FaShoppingCart />
+          </Link>
+        </li>
+
+        <li>
           <Link to="/messenger">
             <FaComments />
           </Link>
@@ -57,18 +67,6 @@ const Navbar = () => {
         <li>
           <Link to="/profile">
             <FaUserCircle />
-          </Link>
-        </li>
-
-        <li>
-          <Link to="#">
-            <FaHeart />
-          </Link>
-        </li>
-
-        <li>
-          <Link to="#">
-            <FaShoppingCart />
           </Link>
         </li>
 
