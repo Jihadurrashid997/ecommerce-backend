@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { FaBoxOpen, FaShoppingBag, FaMoneyBillWave, FaUsers } from "react-icons/fa";
 import api from "../services/api";
-import "./Dashboard.css";
+import "../styles/Dashboard.css";
 
 const Dashboard = () => {
 
