@@ -25,6 +25,7 @@ import Profile from "./pages/Profile";
 import SellerDashboard from "./pages/SellerDashboard";
 import Cart from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
+import ProductDetails from "./pages/ProductDetails";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -120,6 +121,10 @@ function App() {
             </PrivateRoute>
           }
         />
+          <Route
+path="/product/:id"
+element={<ProductDetails/>}
+/>
 
         <Route path="*" element={<NotFound />} />
 
