@@ -1,91 +1,38 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
 
-    const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    const [cart, setCart] = useState([]);
+  useEffect(() => {
 
-    const [wishlist, setWishlist] = useState([]);
+    const savedUser = localStorage.getItem("user");
 
-    const [notifications, setNotifications] = useState([]);
+    if (savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
 
-    const [loading, setLoading] = useState(true);
+    setLoading(false);
 
-    useEffect(() => {
+  }, []);
 
-        const savedUser = localStorage.getItem("user");
+  return (
+    <AppContext.Provider
+      value={{
+        user,
+        setUser,
+        notifications,
+        setNotifications,
+        loading,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
+};
 
-        const savedCart = localStorage.getItem("cart");
-
-        const savedWishlist = localStorage.getItem("wishlist");
-
-        if(savedUser){
-
-            setUser(JSON.parse(savedUser));
-
-        }
-
-        if(savedCart){
-
-            setCart(JSON.parse(savedCart));
-
-        }
-
-        if(savedWishlist){
-
-            setWishlist(JSON.parse(savedWishlist));
-
-        }
-
-        setLoading(false);
-
-    },[]);
-
-    useEffect(()=>{
-
-        localStorage.setItem("cart",JSON.stringify(cart));
-
-    },[cart]);
-
-    useEffect(()=>{
-
-        localStorage.setItem("wishlist",JSON.stringify(wishlist));
-
-    },[wishlist]);
-
-    return(
-
-        <AppContext.Provider
-
-        value={{
-
-            user,
-            setUser,
-
-            cart,
-            setCart,
-
-            wishlist,
-            setWishlist,
-
-            notifications,
-            setNotifications,
-
-            loading
-
-        }}
-
-        >
-
-            {children}
-
-        </AppContext.Provider>
-
-    );
-
-}
-
-export const useApp = ()=>useContext(AppContext);
+export const useApp = () => useContext(AppContext);
