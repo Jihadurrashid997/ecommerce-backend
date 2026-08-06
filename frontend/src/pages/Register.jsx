@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import api from "../services/api";
 import { motion } from "framer-motion";
-import "./Register.css";
+import "../styles/Register.css";
 
 const Register = () => {
 
