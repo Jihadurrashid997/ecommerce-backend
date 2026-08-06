@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import api from "../services/api";
 import { motion } from "framer-motion";
-import "./Login.css";
+import "../styles/Login.css";
 
 const Login = () => {
 
