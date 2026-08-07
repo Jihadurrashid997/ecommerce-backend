@@ -1,37 +1,103 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const OrderSchema = new mongoose.Schema({
-    user: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: 'User', 
-        required: true 
+const orderSchema = new mongoose.Schema(
+
+{
+
+    customer:{
+
+        type:mongoose.Schema.Types.ObjectId,
+
+        ref:"User",
+
+        required:true
+
     },
-    items: [
+
+    products:[
+
         {
-            product: { 
-                type: mongoose.Schema.Types.ObjectId, 
-                ref: 'Product', 
-                required: true 
-            },
-            quantity: { 
-                type: Number, 
-                required: true 
-            }
-        }
-    ],
-    totalAmount: { 
-        type: Number, 
-        required: true 
-    },
-    status: { 
-        type: String, 
-        enum: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'], 
-        default: 'Pending' 
-    },
-    shippingAddress: { 
-        type: String, 
-        required: true 
-    }
-}, { timestamps: true });
 
-module.exports = mongoose.model('Order', OrderSchema);
+            product:{
+
+                type:mongoose.Schema.Types.ObjectId,
+
+                ref:"Product",
+
+                required:true
+
+            },
+
+            quantity:{
+
+                type:Number,
+
+                default:1
+
+            }
+
+        }
+
+    ],
+
+    totalPrice:{
+
+        type:Number,
+
+        required:true
+
+    },
+
+    paymentMethod:{
+
+        type:String,
+
+        default:"SSLCommerz"
+
+    },
+
+    paymentStatus:{
+
+        type:String,
+
+        enum:["Pending","Paid","Failed"],
+
+        default:"Pending"
+
+    },
+
+    orderStatus:{
+
+        type:String,
+
+        enum:[
+            "Pending",
+            "Processing",
+            "Shipped",
+            "Delivered",
+            "Cancelled"
+        ],
+
+        default:"Pending"
+
+    },
+
+    shippingAddress:{
+
+        type:String,
+
+        required:true
+
+    }
+
+},
+
+{
+
+    timestamps:true
+
+}
+
+);
+
+module.exports=mongoose.model("Order",orderSchema);
