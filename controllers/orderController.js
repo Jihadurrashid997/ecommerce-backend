@@ -1,118 +1,95 @@
-const mongoose = require('mongoose');
-const Cart = require('../models/Cart');
-const Product = require('../models/Product');
-const Order = require('../models/Order'); // 👈 অর্ডার মডেল ইমপোর্ট করা হলো
+const Order=require("../models/Order");
 
-// ==========================================
-// ১. কার্টে প্রোডাক্ট যোগ করার ফাংশন
-// ==========================================
-exports.addToCart = async (req, res) => {
-    try {
-        const { productId, quantity } = req.body;
-        const userId = req.user.id;
+// Get All Orders
 
-        // সেফ চেক: টোকেনের ভেতরের ইউজার আইডি মঙ্গুজের সঠিক ObjectId কি না যাচাই করবে
-        if (!mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({ message: 'Invalid User ID inside token. Please login again!' });
-        }
+exports.getOrders=async(req,res)=>{
 
-        // সেফ চেক: পাঠানো প্রোডাক্ট আইডি মঙ্গুজের সঠিক ObjectId কি না যাচাই করবে
-        if (!mongoose.Types.ObjectId.isValid(productId)) {
-            return res.status(400).json({ message: 'Invalid Product ID format!' });
-        }
+try{
 
-        const product = await Product.findById(productId);
-        if (!product) return res.status(404).json({ message: 'Product not found' });
+const orders=await Order.find()
 
-        let cart = await Cart.findOne({ user: userId });
+.populate("customer","name email")
 
-        if (!cart) {
-            cart = new Cart({ user: userId, items: [{ product: productId, quantity: quantity || 1 }] });
-        } else {
-            const itemIndex = cart.items.findIndex(item => item.product.toString() === productId);
-            if (itemIndex > -1) {
-                cart.items[itemIndex].quantity += (quantity || 1);
-            } else {
-                cart.items.push({ product: productId, quantity: quantity || 1 });
-            }
-        }
+.populate("products.product","name price image");
 
-        await cart.save();
-        res.status(200).json({ message: 'Product added to cart! 🛒', cart });
-    } catch (error) {
-        res.status(500).json({ message: 'Server Error', error: error.message });
-    }
+res.json(orders);
+
+}
+
+catch(err){
+
+res.status(500).json({
+
+message:err.message
+
+});
+
+}
+
 };
 
-// ==========================================
-// ২. ইউজারের কার্ট দেখার ফাংশন
-// ==========================================
-exports.getCart = async (req, res) => {
-    try {
-        const userId = req.user.id;
+// Create Order
 
-        // সেফ চেক: ইউজার আইডি ভ্যালিডেশন
-        if (!mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({ message: 'Invalid User ID inside token!' });
-        }
+exports.createOrder=async(req,res)=>{
 
-        const cart = await Cart.findOne({ user: userId }).populate('items.product');
-        if (!cart) return res.status(200).json({ items: [] });
-        res.status(200).json(cart);
-    } catch (error) {
-        res.status(500).json({ message: 'Server Error', error: error.message });
-    }
+try{
+
+const order=await Order.create({
+
+customer:req.user.id,
+
+products:req.body.products,
+
+totalPrice:req.body.totalPrice,
+
+shippingAddress:req.body.shippingAddress,
+
+paymentMethod:req.body.paymentMethod
+
+});
+
+res.status(201).json(order);
+
+}
+
+catch(err){
+
+res.status(500).json({
+
+message:err.message
+
+});
+
+}
+
 };
 
-// ==========================================
-// ৩. কার্ট থেকে অর্ডার প্লেস করার ফাংশন (Checkout) 🚀
-// ==========================================
-exports.placeOrder = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const { shippingAddress } = req.body;
+// Get My Orders
 
-        if (!shippingAddress) {
-            return res.status(400).json({ message: 'Shipping address is required!' });
-        }
+exports.getMyOrders=async(req,res)=>{
 
-        // ইউজারের কার্ট খুঁজে বের করা
-        const cart = await Cart.findOne({ user: userId }).populate('items.product');
-        if (!cart || cart.items.length === 0) {
-            return res.status(400).json({ message: 'Your cart is empty! Cannot place order.' });
-        }
+try{
 
-        // মোট অর্ডারের দাম (Total Amount) হিসাব করা
-        let totalAmount = 0;
-        const orderItems = cart.items.map(item => {
-            if (item.product) {
-                totalAmount += item.product.price * item.quantity;
-                return {
-                    product: item.product._id,
-                    quantity: item.quantity
-                };
-            }
-        }).filter(Boolean); // কোনো কারণে প্রোডাক্ট ডিলেট হয়ে থাকলে সেটা ফিল্টার করবে
+const orders=await Order.find({
 
-        // নতুন অর্ডার তৈরি করা
-        const newOrder = new Order({
-            user: userId,
-            items: orderItems,
-            totalAmount,
-            shippingAddress
-        });
+customer:req.user.id
 
-        await newOrder.save();
+})
 
-        // অর্ডার সফল হওয়ার পর ইউজারের কার্টটি ডিলিট/খালি করে দেওয়া
-        await Cart.findOneAndDelete({ user: userId });
+.populate("products.product");
 
-        res.status(201).json({ 
-            message: 'Order placed successfully! 📦✈️', 
-            order: newOrder 
-        });
+res.json(orders);
 
-    } catch (error) {
-        res.status(500).json({ message: 'Server Error', error: error.message });
-    }
+}
+
+catch(err){
+
+res.status(500).json({
+
+message:err.message
+
+});
+
+}
+
 };
