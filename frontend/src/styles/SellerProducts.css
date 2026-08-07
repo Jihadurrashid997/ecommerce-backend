@@ -1,0 +1,60 @@
+.seller-products{
+
+padding:40px;
+
+}
+
+.seller-products table{
+
+width:100%;
+
+border-collapse:collapse;
+
+margin-top:30px;
+
+}
+
+.seller-products th,
+.seller-products td{
+
+padding:15px;
+
+border:1px solid rgba(255,255,255,.1);
+
+text-align:center;
+
+}
+
+.edit-btn{
+
+background:#2563eb;
+
+color:white;
+
+padding:8px 18px;
+
+border:none;
+
+border-radius:8px;
+
+margin-right:10px;
+
+cursor:pointer;
+
+}
+
+.delete-btn{
+
+background:#dc2626;
+
+color:white;
+
+padding:8px 18px;
+
+border:none;
+
+border-radius:8px;
+
+cursor:pointer;
+
+}
