@@ -28,6 +28,7 @@ import Cart from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
 import ProductDetails from "./pages/ProductDetails";
 import EditProduct from "./pages/EditProduct";
+import AdminDashboard from "./pages/AdminDashboard";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -96,6 +97,14 @@ function App() {
             </PrivateRoute>
           }
         />
+          <Route
+path="/admin"
+element={
+<PrivateRoute>
+<AdminDashboard/>
+</PrivateRoute>
+}
+/>
 
         <Route
           path="/cart"
