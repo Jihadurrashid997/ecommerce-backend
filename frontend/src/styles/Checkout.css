@@ -1,0 +1,56 @@
+.checkout-page{
+
+max-width:700px;
+
+margin:50px auto;
+
+padding:30px;
+
+}
+
+.checkout-page h1{
+
+text-align:center;
+
+margin-bottom:30px;
+
+}
+
+.checkout-form{
+
+display:flex;
+
+flex-direction:column;
+
+gap:18px;
+
+}
+
+.checkout-form input,
+.checkout-form textarea{
+
+padding:14px;
+
+border-radius:10px;
+
+border:none;
+
+}
+
+.checkout-form button{
+
+padding:15px;
+
+background:#2563eb;
+
+color:white;
+
+border:none;
+
+border-radius:10px;
+
+cursor:pointer;
+
+font-size:16px;
+
+}
