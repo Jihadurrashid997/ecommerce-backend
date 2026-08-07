@@ -29,6 +29,7 @@ import Wishlist from "./pages/Wishlist";
 import ProductDetails from "./pages/ProductDetails";
 import EditProduct from "./pages/EditProduct";
 import AdminDashboard from "./pages/AdminDashboard";
+import Checkout from "./pages/Checkout";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -130,6 +131,14 @@ element={
             </PrivateRoute>
           }
         />
+          <Route
+  path="/checkout"
+  element={
+    <PrivateRoute>
+      <Checkout />
+    </PrivateRoute>
+  }
+/>
 
         <Route
           path="/messenger"
