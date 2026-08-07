@@ -1,153 +1,78 @@
 import React, { useEffect, useState } from "react";
 import api from "../services/api";
 import ProductCard from "../components/ProductCard";
-import "../styles/Home.css";
 
 const Home = () => {
 
-    const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState([]);
 
-    const [filteredProducts, setFilteredProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-    const [loading, setLoading] = useState(true);
+  useEffect(() => {
 
-    const [search, setSearch] = useState("");
+    fetchProducts();
 
-    useEffect(() => {
+  }, []);
 
-        fetchProducts();
+  const fetchProducts = async () => {
 
-    }, []);
+    try {
 
-    useEffect(() => {
+      const res = await api.get("/products");
 
-        const result = products.filter(product =>
+      setProducts(res.data);
 
-            product.name.toLowerCase().includes(search.toLowerCase())
+    } catch (err) {
 
-        );
+      console.log(err);
 
-        setFilteredProducts(result);
+    } finally {
 
-    }, [search, products]);
-
-    const fetchProducts = async () => {
-
-        try {
-
-            const res = await api.get("/products");
-
-            setProducts(res.data);
-
-            setFilteredProducts(res.data);
-
-        } catch (err) {
-
-            console.log(err);
-
-        } finally {
-
-            setLoading(false);
-
-        }
-
-    };
-
-    if (loading) {
-
-        return (
-
-            <div className="loader-container">
-
-                <div className="loader"></div>
-
-            </div>
-
-        );
+      setLoading(false);
 
     }
 
-    return (
+  };
 
-        <div className="home">
+  if (loading) {
 
-            <div className="hero">
+    return <div className="loader"></div>;
 
-                <h1>
+  }
 
-                    Welcome To Marketplace
+  return (
 
-                </h1>
+    <div className="container">
 
-                <p>
+      <h1 className="title">
 
-                    Buy • Sell • Chat Securely
+        Latest Products
 
-                </p>
+      </h1>
 
-            </div>
+      <div className="product-grid">
 
-            <div className="search-section">
+        {
 
-                <input
+          products.map((product) => (
 
-                    type="text"
+            <ProductCard
 
-                    placeholder="Search Products..."
+              key={product._id}
 
-                    value={search}
+              product={product}
 
-                    onChange={(e)=>setSearch(e.target.value)}
+            />
 
-                />
+          ))
 
-            </div>
+        }
 
-            {
+      </div>
 
-                filteredProducts.length===0 ?
+    </div>
 
-                (
-
-                    <div className="no-product">
-
-                        No Product Found
-
-                    </div>
-
-                )
-
-                :
-
-                (
-
-                    <div className="product-grid">
-
-                        {
-
-                            filteredProducts.map(product=>(
-
-                                <ProductCard
-
-                                key={product._id}
-
-                                product={product}
-
-                                />
-
-                            ))
-
-                        }
-
-                    </div>
-
-                )
-
-            }
-
-        </div>
-
-    );
+  );
 
 };
 
