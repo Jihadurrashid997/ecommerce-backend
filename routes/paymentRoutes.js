@@ -1,27 +1,16 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { 
-    initiatePayment, 
-    dummyCheckoutPage, 
-    paymentSuccess, 
-    paymentFail, 
-    paymentCancel, 
-    paymentIPN 
-} = require('../controllers/paymentController');
-const auth = require('../middleware/auth'); 
 
-// ১. পেমেন্ট ইনিশিয়েট রাউট (টোকেন লাগবে)
-router.post('/initiate', auth(), initiatePayment);
+const auth = require("../middleware/auth");
 
-// ২. ডামি গেটওয়ে পেজ দেখার রাউট
-router.get('/dummy-checkout/:tranId', dummyCheckoutPage);
+const {
+    initPayment
+} = require("../controllers/paymentController");
 
-// ৩. পেমেন্ট রেসপন্স হ্যান্ডলারস (SSLCommerz বা ডামি ফর্ম থেকে POST আসবে)
-router.post('/success/:tranId', paymentSuccess);
-router.post('/fail/:tranId', paymentFail);
-router.post('/cancel/:tranId', paymentCancel);
-
-// ৪. IPN রাউট
-router.post('/ipn', paymentIPN);
+router.post(
+    "/sslcommerz",
+    auth(),
+    initPayment
+);
 
 module.exports = router;
