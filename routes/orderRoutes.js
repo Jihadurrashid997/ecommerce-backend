@@ -1,17 +1,23 @@
-const express = require('express');
-const router = express.Router();
-const auth = require('../middleware/auth');
-const { addToCart, getCart, placeOrder } = require('../controllers/orderController'); // 👈 এখানে placeOrder ইমপোর্ট যোগ করা হয়েছে
+const express=require("express");
 
-// ==========================================
-// ১. কার্ট রাউটস
-// ==========================================
-router.post('/cart/add', auth(), addToCart);
-router.get('/cart', auth(), getCart);
+const router=express.Router();
 
-// ==========================================
-// ২. অর্ডার রাউটস 🚀
-// ==========================================
-router.post('/checkout', auth(), placeOrder); // 👈 আপনার মিডলওয়্যার 'auth()' দিয়ে নতুন রাউট যোগ করা হলো
+const auth=require("../middleware/auth");
 
-module.exports = router;
+const{
+
+getOrders,
+
+createOrder,
+
+getMyOrders
+
+}=require("../controllers/orderController");
+
+router.get("/",auth(["admin"]),getOrders);
+
+router.get("/my",auth(),getMyOrders);
+
+router.post("/",auth(),createOrder);
+
+module.exports=router;
