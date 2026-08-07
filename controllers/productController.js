@@ -65,7 +65,9 @@ exports.createProduct = async(req,res)=>{
 
             category:req.body.category,
 
-            image:req.body.image,
+            image: req.file
+  ? `/uploads/${req.file.filename}`
+  : "",
 
             stock:req.body.stock,
 
