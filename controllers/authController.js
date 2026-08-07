@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 // ১. রেজিস্ট্রেশন কন্ট্রোলার (ডাটাবেজে ডেটা সেভ হবে)
 exports.register = async (req, res) => {
     try {
-        const { name, email, password, role } = req.body;
+        const { name, email, password } = req.body;
 
         // পাসওয়ার্ড কমপক্ষে ৮ ডিজিটের হতে হবে কি না চেক করা
         if (!password || password.length < 8) {
@@ -26,7 +26,7 @@ exports.register = async (req, res) => {
             name,
             email,
             password: hashedPassword,
-            role: role || 'customer'
+            role: "customer"
         });
 
         await newUser.save();
@@ -46,7 +46,9 @@ exports.login = async (req, res) => {
         const { email, password } = req.body;
 
         // ডাটাবেজ থেকে ইউজার খুঁজে বের করা (রেজিস্ট্রেশন করা না থাকলে এখানে ধরা পড়বে)
-        const user = await User.findOne({ email });
+        const user = await User.findOne({
+    email
+}).select("+password");
         if (!user) {
             return res.status(400).json({ message: 'Account not found! Please register first.' });
         }
@@ -60,7 +62,7 @@ exports.login = async (req, res) => {
         // JWT টোকেন তৈরি করা
         const token = jwt.sign(
             { id: user._id, role: user.role }, 
-            process.env.JWT_SECRET || 'fallback_secret_key', 
+             process.env.JWT_SECRET
             { expiresIn: '1d' }
         );
 
