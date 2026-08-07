@@ -18,6 +18,7 @@ import Navbar from "./components/Navbar";
 import Messenger from "./components/Messenger";
 import Dashboard from "./components/Dashboard";
 
+
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -26,6 +27,7 @@ import SellerDashboard from "./pages/SellerDashboard";
 import Cart from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
 import ProductDetails from "./pages/ProductDetails";
+import EditProduct from "./pages/EditProduct";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
@@ -103,7 +105,14 @@ function App() {
             </PrivateRoute>
           }
         />
-
+<Route
+path="/edit-product/:id"
+element={
+<PrivateRoute>
+<EditProduct/>
+</PrivateRoute>
+}
+/>
         <Route
           path="/wishlist"
           element={
