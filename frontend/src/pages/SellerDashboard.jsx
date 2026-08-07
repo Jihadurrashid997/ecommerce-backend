@@ -1,80 +1,99 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import api from "../services/api";
-import "../styles/SellerDashboard.css";
+import "../styles/Dashboard.css";
 
 const SellerDashboard = () => {
 
-  const [products, setProducts] = useState([]);
   const [form, setForm] = useState({
     name: "",
+    description: "",
     price: "",
     category: "",
     image: "",
-    description: "",
+    stock: ""
   });
-
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
-  const loadProducts = async () => {
-    try {
-      const res = await api.get("/products");
-      setProducts(res.data);
-    } catch (err) {
-      console.log(err);
-    }
-  };
 
   const handleChange = (e) => {
     setForm({
       ...form,
-      [e.target.name]: e.target.value,
+      [e.target.name]: e.target.value
     });
   };
 
-  const addProduct = async (e) => {
+  const handleSubmit = async (e) => {
+
     e.preventDefault();
 
     try {
-      await api.post("/products/add", form);
+
+      const token = localStorage.getItem("token");
+
+      await api.post(
+        "/products",
+        form,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
 
       alert("Product Added Successfully");
 
       setForm({
         name: "",
+        description: "",
         price: "",
         category: "",
         image: "",
-        description: "",
+        stock: ""
       });
 
-      loadProducts();
-
     } catch (err) {
-      alert(err.response?.data?.message || "Failed");
+
+      alert(
+        err.response?.data?.message ||
+        "Failed to add product"
+      );
+
     }
+
   };
 
   return (
-    <div className="seller-dashboard">
+
+    <div className="dashboard">
 
       <h1>Seller Dashboard</h1>
 
-      <form className="product-form" onSubmit={addProduct}>
+      <form
+        className="dashboard-form"
+        onSubmit={handleSubmit}
+      >
 
         <input
           name="name"
           placeholder="Product Name"
           value={form.name}
           onChange={handleChange}
+          required
+        />
+
+        <textarea
+          name="description"
+          placeholder="Description"
+          value={form.description}
+          onChange={handleChange}
+          required
         />
 
         <input
+          type="number"
           name="price"
           placeholder="Price"
           value={form.price}
           onChange={handleChange}
+          required
         />
 
         <input
@@ -82,6 +101,7 @@ const SellerDashboard = () => {
           placeholder="Category"
           value={form.category}
           onChange={handleChange}
+          required
         />
 
         <input
@@ -91,11 +111,13 @@ const SellerDashboard = () => {
           onChange={handleChange}
         />
 
-        <textarea
-          name="description"
-          placeholder="Description"
-          value={form.description}
+        <input
+          type="number"
+          name="stock"
+          placeholder="Stock"
+          value={form.stock}
           onChange={handleChange}
+          required
         />
 
         <button type="submit">
@@ -104,31 +126,10 @@ const SellerDashboard = () => {
 
       </form>
 
-      <div className="seller-products">
-
-        {products.map((item) => (
-
-          <div className="seller-card" key={item._id}>
-
-            <img
-              src={item.image}
-              alt={item.name}
-            />
-
-            <h3>{item.name}</h3>
-
-            <p>{item.category}</p>
-
-            <h2>৳ {item.price}</h2>
-
-          </div>
-
-        ))}
-
-      </div>
-
     </div>
+
   );
+
 };
 
 export default SellerDashboard;
