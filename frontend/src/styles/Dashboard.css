@@ -1,77 +1,33 @@
 .dashboard{
-
-padding:120px 40px;
-
-min-height:100vh;
-
+    max-width:700px;
+    margin:50px auto;
+    padding:30px;
 }
 
 .dashboard h1{
-
-margin-bottom:40px;
-
-font-size:40px;
-
+    text-align:center;
+    margin-bottom:30px;
 }
 
-.dashboard-grid{
-
-display:grid;
-
-grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
-
-gap:30px;
-
+.dashboard-form{
+    display:flex;
+    flex-direction:column;
+    gap:15px;
 }
 
-.dashboard-card{
-
-background:rgba(255,255,255,.05);
-
-border:1px solid rgba(255,255,255,.08);
-
-border-radius:20px;
-
-padding:30px;
-
-text-align:center;
-
-transition:.35s;
-
-backdrop-filter:blur(12px);
-
+.dashboard-form input,
+.dashboard-form textarea{
+    padding:15px;
+    border-radius:10px;
+    border:none;
 }
 
-.dashboard-card:hover{
-
-transform:translateY(-8px);
-
-box-shadow:0 20px 40px rgba(0,0,0,.25);
-
-}
-
-.dash-icon{
-
-font-size:45px;
-
-margin-bottom:20px;
-
-color:#38bdf8;
-
-}
-
-.dashboard-card h2{
-
-font-size:32px;
-
-margin-bottom:10px;
-
-}
-
-.dashboard-card p{
-
-color:#94a3b8;
-
-font-size:16px;
-
+.dashboard-form button{
+    padding:15px;
+    background:#2563eb;
+    color:white;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:16px;
 }
