@@ -1,122 +1,179 @@
 import React, { useState } from "react";
-import api from "../services/api";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import api from "../services/api";
+import { useApp } from "../context/AppContext";
 import "../styles/Login.css";
 
 const Login = () => {
 
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
+    const navigate = useNavigate();
+    const { setUser } = useApp();
+
+    const [form, setForm] = useState({
+        email: "",
+        password: ""
+    });
+
     const [loading, setLoading] = useState(false);
+
+    const handleChange = (e) => {
+
+        setForm({
+            ...form,
+            [e.target.name]: e.target.value
+        });
+
+    };
 
     const handleLogin = async (e) => {
 
         e.preventDefault();
 
+        if (!form.email || !form.password) {
+
+            alert("Please enter email and password.");
+
+            return;
+
+        }
+
         try {
 
             setLoading(true);
 
-            const res = await api.post("/auth/login", {
+            const res = await api.post(
+                "/auth/login",
+                form
+            );
 
-                email,
-                password
+            localStorage.setItem(
+                "token",
+                res.data.token
+            );
 
-            });
+            localStorage.setItem(
+                "user",
+                JSON.stringify(res.data.user)
+            );
 
-            localStorage.setItem("token", res.data.token);
+            setUser(res.data.user);
 
-            localStorage.setItem("user", JSON.stringify(res.data.user));
+            alert("Login Successful!");
 
-            alert("Login Successful");
+            navigate("/");
 
-            window.location.href="/";
-
-        } catch(err){
+        } catch (err) {
 
             alert(
                 err.response?.data?.message ||
                 "Login Failed"
             );
 
-        } finally{
+        } finally {
 
             setLoading(false);
 
         }
 
-    }
+    };
 
-    return(
+    return (
 
         <div className="login-page">
 
             <motion.form
 
-            initial={{opacity:0,y:50}}
+                className="login-box"
 
-            animate={{opacity:1,y:0}}
+                onSubmit={handleLogin}
 
-            transition={{duration:.6}}
+                initial={{
+                    opacity: 0,
+                    y: 40
+                }}
 
-            className="login-box"
+                animate={{
+                    opacity: 1,
+                    y: 0
+                }}
 
-            onSubmit={handleLogin}
+                transition={{
+                    duration: 0.5
+                }}
 
             >
 
                 <h1>
-
                     Welcome Back 👋
-
                 </h1>
 
+                <p>
+                    Login to your Marketplace account
+                </p>
+
                 <input
 
-                type="email"
+                    type="email"
 
-                placeholder="Email"
+                    name="email"
 
-                value={email}
+                    placeholder="Email Address"
 
-                onChange={(e)=>setEmail(e.target.value)}
+                    value={form.email}
+
+                    onChange={handleChange}
+
+                    required
 
                 />
 
                 <input
 
-                type="password"
+                    type="password"
 
-                placeholder="Password"
+                    name="password"
 
-                value={password}
+                    placeholder="Password"
 
-                onChange={(e)=>setPassword(e.target.value)}
+                    value={form.password}
+
+                    onChange={handleChange}
+
+                    required
 
                 />
 
-                <button>
+                <button
+                    type="submit"
+                    disabled={loading}
+                >
 
-                    {
-
-                        loading ?
-
-                        "Signing In..."
-
-                        :
-
-                        "Login"
-
+                    {loading
+                        ? "Signing In..."
+                        : "Login"
                     }
 
                 </button>
+
+                <p className="auth-link">
+
+                    Don't have an account?
+
+                    {" "}
+
+                    <Link to="/register">
+                        Register
+                    </Link>
+
+                </p>
 
             </motion.form>
 
         </div>
 
-    )
+    );
 
-}
+};
 
 export default Login;
