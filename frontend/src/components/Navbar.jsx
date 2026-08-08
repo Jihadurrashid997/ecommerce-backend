@@ -1,86 +1,294 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
-  FaShoppingCart,
-  FaHeart,
-  FaComments,
-  FaUserCircle,
-  FaBars,
-  FaTimes,
-  FaSearch,
+    FaShoppingCart,
+    FaHeart,
+    FaComments,
+    FaUserCircle,
+    FaBars,
+    FaTimes,
+    FaSearch,
+    FaSignOutAlt
 } from "react-icons/fa";
 
-import "../styles/Navbar.css";
+import { useApp } from "../context/AppContext";
+import "./Navbar.css";
 
 const Navbar = () => {
 
-  const [menuOpen, setMenuOpen] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
 
-  return (
-    <nav className="navbar">
+    const {
+        user,
+        logout,
+        cart
+    } = useApp();
 
-      <div className="logo">
-        <Link to="/">Marketplace</Link>
-      </div>
+    const navigate = useNavigate();
 
-      <div className="search-box">
-        <FaSearch className="search-icon" />
+    const cartCount = cart.reduce(
+        (total, item) =>
+            total + (item.quantity || 1),
+        0
+    );
 
-        <input
-          type="text"
-          placeholder="Search products..."
-        />
-      </div>
+    const handleLogout = () => {
 
-      <ul className={menuOpen ? "nav-links active" : "nav-links"}>
+        logout();
 
-        <li>
-          <Link to="/">Home</Link>
-        </li>
+        setMenuOpen(false);
 
-        <li>
-          <Link to="/dashboard">Dashboard</Link>
-        </li>
+        navigate("/login");
 
-        <li>
-          <Link to="/seller">Seller</Link>
-        </li>
+    };
 
-        <li>
-          <Link to="/wishlist">
-            <FaHeart />
-          </Link>
-        </li>
+    const closeMenu = () => {
 
-        <li>
-          <Link to="/cart">
-            <FaShoppingCart />
-          </Link>
-        </li>
+        setMenuOpen(false);
 
-        <li>
-          <Link to="/messenger">
-            <FaComments />
-          </Link>
-        </li>
+    };
 
-        <li>
-          <Link to="/profile">
-            <FaUserCircle />
-          </Link>
-        </li>
+    return (
 
-      </ul>
+        <nav className="navbar">
 
-      <button
-        className="menu-btn"
-        onClick={() => setMenuOpen(!menuOpen)}
-      >
-        {menuOpen ? <FaTimes /> : <FaBars />}
-      </button>
+            <div className="logo">
 
-    </nav>
-  );
+                <Link
+                    to="/"
+                    onClick={closeMenu}
+                >
+                    Marketplace
+                </Link>
+
+            </div>
+
+            <div className="search-box">
+
+                <FaSearch className="search-icon" />
+
+                <input
+                    type="text"
+                    placeholder="Search products..."
+                />
+
+            </div>
+
+            <ul
+                className={
+                    menuOpen
+                        ? "nav-links active"
+                        : "nav-links"
+                }
+            >
+
+                <li>
+
+                    <Link
+                        to="/"
+                        onClick={closeMenu}
+                    >
+                        Home
+                    </Link>
+
+                </li>
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/dashboard"
+                            onClick={closeMenu}
+                        >
+                            Dashboard
+                        </Link>
+
+                    </li>
+
+                )}
+
+                {user?.role === "seller" && (
+
+                    <li>
+
+                        <Link
+                            to="/seller"
+                            onClick={closeMenu}
+                        >
+                            Seller
+                        </Link>
+
+                    </li>
+
+                )}
+
+                {user?.role === "admin" && (
+
+                    <li>
+
+                        <Link
+                            to="/admin"
+                            onClick={closeMenu}
+                        >
+                            Admin
+                        </Link>
+
+                    </li>
+
+                )}
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/messenger"
+                            onClick={closeMenu}
+                        >
+                            <FaComments />
+                        </Link>
+
+                    </li>
+
+                )}
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/profile"
+                            onClick={closeMenu}
+                        >
+                            <FaUserCircle />
+
+                            <span className="user-name">
+
+                                {user.name}
+
+                            </span>
+
+                        </Link>
+
+                    </li>
+
+                )}
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/wishlist"
+                            onClick={closeMenu}
+                        >
+                            <FaHeart />
+                        </Link>
+
+                    </li>
+
+                )}
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/cart"
+                            onClick={closeMenu}
+                            className="cart-link"
+                        >
+
+                            <FaShoppingCart />
+
+                            {cartCount > 0 && (
+
+                                <span className="cart-count">
+
+                                    {cartCount}
+
+                                </span>
+
+                            )}
+
+                        </Link>
+
+                    </li>
+
+                )}
+
+                {!user && (
+
+                    <>
+
+                        <li>
+
+                            <Link
+                                to="/login"
+                                onClick={closeMenu}
+                            >
+                                Login
+                            </Link>
+
+                        </li>
+
+                        <li>
+
+                            <Link
+                                to="/register"
+                                onClick={closeMenu}
+                            >
+                                Register
+                            </Link>
+
+                        </li>
+
+                    </>
+
+                )}
+
+                {user && (
+
+                    <li>
+
+                        <button
+                            className="logout-btn"
+                            onClick={handleLogout}
+                        >
+
+                            <FaSignOutAlt />
+
+                            <span>
+                                Logout
+                            </span>
+
+                        </button>
+
+                    </li>
+
+                )}
+
+            </ul>
+
+            <button
+                className="menu-btn"
+                onClick={() =>
+                    setMenuOpen(!menuOpen)
+                }
+            >
+
+                {menuOpen
+                    ? <FaTimes />
+                    : <FaBars />
+                }
+
+            </button>
+
+        </nav>
+
+    );
+
 };
 
 export default Navbar;
