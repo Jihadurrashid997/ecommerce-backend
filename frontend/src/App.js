@@ -1,4 +1,5 @@
 import React from "react";
+
 import {
     BrowserRouter,
     Routes,
@@ -89,9 +90,7 @@ function App() {
 
             <Routes>
 
-                {/* =========================
-                    PUBLIC ROUTES
-                ========================= */}
+                {/* Public */}
 
                 <Route
                     path="/"
@@ -114,9 +113,7 @@ function App() {
                 />
 
 
-                {/* =========================
-                    PROTECTED ROUTES
-                ========================= */}
+                {/* Protected */}
 
                 <Route
                     path="/profile"
@@ -182,6 +179,15 @@ function App() {
                 />
 
                 <Route
+                    path="/orders"
+                    element={
+                        <PrivateRoute>
+                            <OrderHistory />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
                     path="/edit-product/:id"
                     element={
                         <PrivateRoute>
@@ -189,14 +195,6 @@ function App() {
                         </PrivateRoute>
                     }
                 />
-                    <Route
-    path="/orders"
-    element={
-        <PrivateRoute>
-            <OrderHistory />
-        </PrivateRoute>
-    }
-/>
 
                 <Route
                     path="/messenger"
@@ -208,10 +206,7 @@ function App() {
                 />
 
 
-
-                {/* =========================
-                    404 ROUTE
-                ========================= */}
+                {/* 404 */}
 
                 <Route
                     path="*"
