@@ -17,6 +17,7 @@ import "./styles/Animation.css";
 import Navbar from "./components/Navbar";
 import Messenger from "./components/Messenger";
 import Dashboard from "./components/Dashboard";
+import PrivateRoute from "./components/PrivateRoute";
 
 
 import Home from "./pages/Home";
@@ -31,11 +32,6 @@ import EditProduct from "./pages/EditProduct";
 import AdminDashboard from "./pages/AdminDashboard";
 import Checkout from "./pages/Checkout";
 
-function PrivateRoute({ children }) {
-  const token = localStorage.getItem("token");
-
-  return token ? children : <Navigate to="/login" replace />;
-}
 
 function Footer() {
   return (
