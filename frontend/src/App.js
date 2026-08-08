@@ -24,6 +24,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Profile from "./pages/Profile";
 import SellerDashboard from "./pages/SellerDashboard";
+import SellerOrders from "./pages/SellerOrders";
 import Cart from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
 import ProductDetails from "./pages/ProductDetails";
@@ -32,10 +33,10 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Checkout from "./pages/Checkout";
 import OrderHistory from "./pages/OrderHistory";
 
+
 function Footer() {
 
     return (
-
         <footer className="footer">
 
             <div className="container">
@@ -55,15 +56,14 @@ function Footer() {
             </div>
 
         </footer>
-
     );
 
 }
 
+
 function NotFound() {
 
     return (
-
         <div className="not-found">
 
             <h1>
@@ -75,10 +75,10 @@ function NotFound() {
             </h2>
 
         </div>
-
     );
 
 }
+
 
 function App() {
 
@@ -90,7 +90,9 @@ function App() {
 
             <Routes>
 
-                {/* Public */}
+                {/* =========================
+                    PUBLIC ROUTES
+                ========================== */}
 
                 <Route
                     path="/"
@@ -113,7 +115,9 @@ function App() {
                 />
 
 
-                {/* Protected */}
+                {/* =========================
+                    USER ROUTES
+                ========================== */}
 
                 <Route
                     path="/profile"
@@ -129,24 +133,6 @@ function App() {
                     element={
                         <PrivateRoute>
                             <Dashboard />
-                        </PrivateRoute>
-                    }
-                />
-
-                <Route
-                    path="/seller"
-                    element={
-                        <PrivateRoute>
-                            <SellerDashboard />
-                        </PrivateRoute>
-                    }
-                />
-
-                <Route
-                    path="/admin"
-                    element={
-                        <PrivateRoute>
-                            <AdminDashboard />
                         </PrivateRoute>
                     }
                 />
@@ -206,7 +192,46 @@ function App() {
                 />
 
 
-                {/* 404 */}
+                {/* =========================
+                    SELLER ROUTES
+                ========================== */}
+
+                <Route
+                    path="/seller"
+                    element={
+                        <PrivateRoute>
+                            <SellerDashboard />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
+                    path="/seller/orders"
+                    element={
+                        <PrivateRoute>
+                            <SellerOrders />
+                        </PrivateRoute>
+                    }
+                />
+
+
+                {/* =========================
+                    ADMIN ROUTES
+                ========================== */}
+
+                <Route
+                    path="/admin"
+                    element={
+                        <PrivateRoute>
+                            <AdminDashboard />
+                        </PrivateRoute>
+                    }
+                />
+
+
+                {/* =========================
+                    404
+                ========================== */}
 
                 <Route
                     path="*"
@@ -222,5 +247,6 @@ function App() {
     );
 
 }
+
 
 export default App;
