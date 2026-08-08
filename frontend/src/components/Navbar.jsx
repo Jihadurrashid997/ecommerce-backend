@@ -12,7 +12,7 @@ import {
 } from "react-icons/fa";
 
 import { useApp } from "../context/AppContext";
-import "./Navbar.css";
+import "../styles/Navbar.css";
 
 const Navbar = () => {
 
