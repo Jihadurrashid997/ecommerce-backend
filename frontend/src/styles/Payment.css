@@ -1,0 +1,89 @@
+.payment-page {
+    min-height: 70vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 40px 20px;
+}
+
+.payment-card {
+    width: 100%;
+    max-width: 550px;
+    padding: 45px 30px;
+    text-align: center;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+}
+
+.payment-icon {
+    width: 75px;
+    height: 75px;
+    margin: 0 auto 20px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    font-size: 42px;
+    font-weight: bold;
+}
+
+.success-card .payment-icon {
+    background: #16a34a;
+    color: white;
+}
+
+.failed-card .payment-icon {
+    background: #dc2626;
+    color: white;
+}
+
+.payment-card h1 {
+    margin-bottom: 15px;
+}
+
+.payment-card p {
+    margin-bottom: 12px;
+}
+
+.transaction-id {
+    margin-top: 20px;
+}
+
+.payment-error {
+    margin-top: 20px;
+}
+
+.payment-actions {
+    margin-top: 30px;
+
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+
+    flex-wrap: wrap;
+}
+
+.payment-btn {
+    display: inline-block;
+
+    padding: 12px 20px;
+
+    border-radius: 8px;
+
+    text-decoration: none;
+
+    background: #2563eb;
+    color: white;
+
+    font-weight: 600;
+}
+
+.secondary-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
