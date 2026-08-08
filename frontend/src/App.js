@@ -29,6 +29,7 @@ import ProductDetails from "./pages/ProductDetails";
 import EditProduct from "./pages/EditProduct";
 import AdminDashboard from "./pages/AdminDashboard";
 import Checkout from "./pages/Checkout";
+import OrderHistory from "./pages/OrderHistory";
 
 function Footer() {
 
@@ -188,6 +189,14 @@ function App() {
                         </PrivateRoute>
                     }
                 />
+                    <Route
+    path="/orders"
+    element={
+        <PrivateRoute>
+            <OrderHistory />
+        </PrivateRoute>
+    }
+/>
 
                 <Route
                     path="/messenger"
@@ -197,6 +206,7 @@ function App() {
                         </PrivateRoute>
                     }
                 />
+
 
 
                 {/* =========================
