@@ -1,38 +1,178 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+    createContext,
+    useContext,
+    useEffect,
+    useState
+} from "react";
 
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
 
-  const [user, setUser] = useState(null);
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState(null);
 
-  useEffect(() => {
+    const [cart, setCart] = useState([]);
 
-    const savedUser = localStorage.getItem("user");
+    const [wishlist, setWishlist] = useState([]);
 
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    const [notifications, setNotifications] = useState([]);
 
-    setLoading(false);
+    const [loading, setLoading] = useState(true);
 
-  }, []);
+    // ==========================
+    // Load Saved Data
+    // ==========================
 
-  return (
-    <AppContext.Provider
-      value={{
-        user,
-        setUser,
-        notifications,
-        setNotifications,
-        loading,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
-  );
+    useEffect(() => {
+
+        try {
+
+            const savedUser =
+                localStorage.getItem("user");
+
+            const savedCart =
+                localStorage.getItem("cart");
+
+            const savedWishlist =
+                localStorage.getItem("wishlist");
+
+            if (savedUser) {
+
+                setUser(
+                    JSON.parse(savedUser)
+                );
+
+            }
+
+            if (savedCart) {
+
+                setCart(
+                    JSON.parse(savedCart)
+                );
+
+            }
+
+            if (savedWishlist) {
+
+                setWishlist(
+                    JSON.parse(savedWishlist)
+                );
+
+            }
+
+        } catch (err) {
+
+            console.log(
+                "Local storage error:",
+                err
+            );
+
+        } finally {
+
+            setLoading(false);
+
+        }
+
+    }, []);
+
+    // ==========================
+    // Save User
+    // ==========================
+
+    useEffect(() => {
+
+        if (user) {
+
+            localStorage.setItem(
+                "user",
+                JSON.stringify(user)
+            );
+
+        } else {
+
+            localStorage.removeItem("user");
+
+        }
+
+    }, [user]);
+
+    // ==========================
+    // Save Cart
+    // ==========================
+
+    useEffect(() => {
+
+        localStorage.setItem(
+            "cart",
+            JSON.stringify(cart)
+        );
+
+    }, [cart]);
+
+    // ==========================
+    // Save Wishlist
+    // ==========================
+
+    useEffect(() => {
+
+        localStorage.setItem(
+            "wishlist",
+            JSON.stringify(wishlist)
+        );
+
+    }, [wishlist]);
+
+    // ==========================
+    // Logout
+    // ==========================
+
+    const logout = () => {
+
+        localStorage.removeItem("token");
+
+        localStorage.removeItem("user");
+
+        setUser(null);
+
+    };
+
+    return (
+
+        <AppContext.Provider
+
+            value={{
+
+                user,
+
+                setUser,
+
+                cart,
+
+                setCart,
+
+                wishlist,
+
+                setWishlist,
+
+                notifications,
+
+                setNotifications,
+
+                loading,
+
+                logout
+
+            }}
+
+        >
+
+            {children}
+
+        </AppContext.Provider>
+
+    );
+
 };
 
-export const useApp = () => useContext(AppContext);
+export const useApp = () =>
+    useContext(AppContext);
