@@ -110,13 +110,18 @@ function App() {
                     path="/register"
                     element={<Register />}
                 />
-                        <Route
-    path="/payment/success"
+                       <Route
+    path="/payment-success"
     element={<PaymentSuccess />}
 />
 
 <Route
-    path="/payment/failed"
+    path="/payment-fail"
+    element={<PaymentFailed />}
+/>
+
+<Route
+    path="/payment-cancel"
     element={<PaymentFailed />}
 />
 
