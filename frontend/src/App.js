@@ -32,6 +32,8 @@ import EditProduct from "./pages/EditProduct";
 import AdminDashboard from "./pages/AdminDashboard";
 import Checkout from "./pages/Checkout";
 import OrderHistory from "./pages/OrderHistory";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentFailed from "./pages/PaymentFailed";
 
 
 function Footer() {
@@ -108,6 +110,15 @@ function App() {
                     path="/register"
                     element={<Register />}
                 />
+                        <Route
+    path="/payment/success"
+    element={<PaymentSuccess />}
+/>
+
+<Route
+    path="/payment/failed"
+    element={<PaymentFailed />}
+/>
 
                 <Route
                     path="/product/:id"
