@@ -7,14 +7,17 @@ const {
     getMyOrders,
     getOrder,
     cancelOrder,
+    getSellerOrders,
+    updateSellerOrderStatus,
     getAllOrders,
     updateOrderStatus
 } = require("../controllers/orderController");
 
 const auth = require("../middleware/auth");
 
+
 // ========================================
-// CUSTOMER ROUTES
+// CUSTOMER
 // ========================================
 
 router.post(
@@ -43,7 +46,24 @@ router.put(
 
 
 // ========================================
-// ADMIN ROUTES
+// SELLER
+// ========================================
+
+router.get(
+    "/seller/orders",
+    auth(["seller"]),
+    getSellerOrders
+);
+
+router.put(
+    "/seller/:id/status",
+    auth(["seller"]),
+    updateSellerOrderStatus
+);
+
+
+// ========================================
+// ADMIN
 // ========================================
 
 router.get(
@@ -57,5 +77,6 @@ router.put(
     auth(["admin"]),
     updateOrderStatus
 );
+
 
 module.exports = router;
