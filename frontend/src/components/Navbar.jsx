@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
 import {
     FaShoppingCart,
     FaHeart,
@@ -8,7 +9,8 @@ import {
     FaBars,
     FaTimes,
     FaSearch,
-    FaSignOutAlt
+    FaSignOutAlt,
+    FaBoxOpen
 } from "react-icons/fa";
 
 import { useApp } from "../context/AppContext";
@@ -43,14 +45,14 @@ const Navbar = () => {
     };
 
     const closeMenu = () => {
-
         setMenuOpen(false);
-
     };
 
     return (
 
         <nav className="navbar">
+
+            {/* Logo */}
 
             <div className="logo">
 
@@ -63,6 +65,9 @@ const Navbar = () => {
 
             </div>
 
+
+            {/* Search */}
+
             <div className="search-box">
 
                 <FaSearch className="search-icon" />
@@ -74,6 +79,9 @@ const Navbar = () => {
 
             </div>
 
+
+            {/* Navigation */}
+
             <ul
                 className={
                     menuOpen
@@ -81,6 +89,8 @@ const Navbar = () => {
                         : "nav-links"
                 }
             >
+
+                {/* Home */}
 
                 <li>
 
@@ -92,6 +102,9 @@ const Navbar = () => {
                     </Link>
 
                 </li>
+
+
+                {/* Dashboard */}
 
                 {user && (
 
@@ -108,6 +121,9 @@ const Navbar = () => {
 
                 )}
 
+
+                {/* Seller */}
+
                 {user?.role === "seller" && (
 
                     <li>
@@ -122,6 +138,9 @@ const Navbar = () => {
                     </li>
 
                 )}
+
+
+                {/* Admin */}
 
                 {user?.role === "admin" && (
 
@@ -138,6 +157,9 @@ const Navbar = () => {
 
                 )}
 
+
+                {/* Messenger */}
+
                 {user && (
 
                     <li>
@@ -153,6 +175,9 @@ const Navbar = () => {
 
                 )}
 
+
+                {/* Profile */}
+
                 {user && (
 
                     <li>
@@ -161,12 +186,11 @@ const Navbar = () => {
                             to="/profile"
                             onClick={closeMenu}
                         >
+
                             <FaUserCircle />
 
                             <span className="user-name">
-
                                 {user.name}
-
                             </span>
 
                         </Link>
@@ -174,6 +198,9 @@ const Navbar = () => {
                     </li>
 
                 )}
+
+
+                {/* Wishlist */}
 
                 {user && (
 
@@ -183,12 +210,41 @@ const Navbar = () => {
                             to="/wishlist"
                             onClick={closeMenu}
                         >
+
                             <FaHeart />
+
                         </Link>
 
                     </li>
 
                 )}
+
+
+                {/* Orders */}
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/orders"
+                            onClick={closeMenu}
+                        >
+
+                            <FaBoxOpen />
+
+                            <span>
+                                Orders
+                            </span>
+
+                        </Link>
+
+                    </li>
+
+                )}
+
+
+                {/* Cart */}
 
                 {user && (
 
@@ -217,6 +273,9 @@ const Navbar = () => {
                     </li>
 
                 )}
+
+
+                {/* Login / Register */}
 
                 {!user && (
 
@@ -248,6 +307,9 @@ const Navbar = () => {
 
                 )}
 
+
+                {/* Logout */}
+
                 {user && (
 
                     <li>
@@ -270,6 +332,9 @@ const Navbar = () => {
                 )}
 
             </ul>
+
+
+            {/* Mobile Menu */}
 
             <button
                 className="menu-btn"
