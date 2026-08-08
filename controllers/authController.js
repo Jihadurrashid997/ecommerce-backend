@@ -1,78 +1,183 @@
-const User = require('../models/User'); // আপনার প্রজেক্টের ইউজার মডেল
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const User = require("../models/User");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
-// ১. রেজিস্ট্রেশন কন্ট্রোলার (ডাটাবেজে ডেটা সেভ হবে)
+// ==============================
+// REGISTER
+// ==============================
 exports.register = async (req, res) => {
+
     try {
-        const { name, email, password } = req.body;
 
-        // পাসওয়ার্ড কমপক্ষে ৮ ডিজিটের হতে হবে কি না চেক করা
-        if (!password || password.length < 8) {
-            return res.status(400).json({ message: 'Password must be at least 8 characters long!' });
-        }
-
-        // ইমেইল অলরেডি ডাটাবেজে আছে কি না চেক করা
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'User already exists with this email!' });
-        }
-
-        // পাসওয়ার্ড সিকিউর করার জন্য হ্যাশ করা
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // নতুন ইউজার তৈরি করে মঙ্গোডিবি ডাটাবেজে সেভ করা
-        const newUser = new User({
+        const {
             name,
             email,
+            password
+        } = req.body;
+
+        if (!name || !email || !password) {
+
+            return res.status(400).json({
+                message: "Please provide name, email and password"
+            });
+
+        }
+
+        if (password.length < 8) {
+
+            return res.status(400).json({
+                message: "Password must be at least 8 characters"
+            });
+
+        }
+
+        const normalizedEmail =
+            email.trim().toLowerCase();
+
+        const existingUser = await User.findOne({
+            email: normalizedEmail
+        });
+
+        if (existingUser) {
+
+            return res.status(400).json({
+                message: "User already exists with this email"
+            });
+
+        }
+
+        const hashedPassword =
+            await bcrypt.hash(password, 10);
+
+        const user = await User.create({
+
+            name: name.trim(),
+
+            email: normalizedEmail,
+
             password: hashedPassword,
+
             role: "customer"
+
         });
 
-        await newUser.save();
+        res.status(201).json({
 
-        res.status(201).json({ 
-            message: 'Registration successful!',
-            user: { name: newUser.name, email: newUser.email, role: newUser.role }
+            message: "Registration successful",
+
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+
         });
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+
+        res.status(500).json({
+            message: err.message
+        });
+
     }
+
 };
 
-// ২. লগইন কন্ট্রোলার (ডাটাবেজ থেকে চেক করবে)
+
+// ==============================
+// LOGIN
+// ==============================
 exports.login = async (req, res) => {
+
     try {
-        const { email, password } = req.body;
 
-        // ডাটাবেজ থেকে ইউজার খুঁজে বের করা (রেজিস্ট্রেশন করা না থাকলে এখানে ধরা পড়বে)
+        const {
+            email,
+            password
+        } = req.body;
+
+        if (!email || !password) {
+
+            return res.status(400).json({
+                message: "Email and password are required"
+            });
+
+        }
+
+        const normalizedEmail =
+            email.trim().toLowerCase();
+
         const user = await User.findOne({
-    email
-}).select("+password");
+            email: normalizedEmail
+        }).select("+password");
+
         if (!user) {
-            return res.status(400).json({ message: 'Account not found! Please register first.' });
+
+            return res.status(401).json({
+                message: "Invalid email or password"
+            });
+
         }
 
-        // পাসওয়ার্ড মিলিয়ে দেখা (bcrypt দিয়ে চেক করা)
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch =
+            await bcrypt.compare(
+                password,
+                user.password
+            );
+
         if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid email or password!' });
+
+            return res.status(401).json({
+                message: "Invalid email or password"
+            });
+
         }
 
-        // JWT টোকেন তৈরি করা
+        if (!process.env.JWT_SECRET) {
+
+            return res.status(500).json({
+                message: "JWT_SECRET is not configured"
+            });
+
+        }
+
         const token = jwt.sign(
-            { id: user._id, role: user.role }, 
-             process.env.JWT_SECRET
-            { expiresIn: '1d' }
+
+            {
+                id: user._id,
+                role: user.role
+            },
+
+            process.env.JWT_SECRET,
+
+            {
+                expiresIn: "1d"
+            }
+
         );
 
-        res.status(200).json({ 
-            message: "Login successful!",
-            token, 
-            role: user.role,
-            user: { name: user.name, email: user.email }
+        res.status(200).json({
+
+            message: "Login successful",
+
+            token,
+
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+
         });
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+
+        res.status(500).json({
+            message: err.message
+        });
+
     }
+
 };
