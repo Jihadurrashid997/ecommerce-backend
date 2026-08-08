@@ -1,103 +1,111 @@
 const mongoose = require("mongoose");
 
-const orderSchema = new mongoose.Schema(
+const OrderItemSchema = new mongoose.Schema(
+    {
+        product: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Product",
+            required: true
+        },
 
-{
+        name: {
+            type: String,
+            required: true
+        },
 
-    customer:{
+        price: {
+            type: Number,
+            required: true
+        },
 
-        type:mongoose.Schema.Types.ObjectId,
+        quantity: {
+            type: Number,
+            required: true,
+            min: 1
+        },
 
-        ref:"User",
-
-        required:true
-
-    },
-
-    products:[
-
-        {
-
-            product:{
-
-                type:mongoose.Schema.Types.ObjectId,
-
-                ref:"Product",
-
-                required:true
-
-            },
-
-            quantity:{
-
-                type:Number,
-
-                default:1
-
-            }
-
+        image: {
+            type: String,
+            default: ""
         }
-
-    ],
-
-    totalPrice:{
-
-        type:Number,
-
-        required:true
-
     },
-
-    paymentMethod:{
-
-        type:String,
-
-        default:"SSLCommerz"
-
-    },
-
-    paymentStatus:{
-
-        type:String,
-
-        enum:["Pending","Paid","Failed"],
-
-        default:"Pending"
-
-    },
-
-    orderStatus:{
-
-        type:String,
-
-        enum:[
-            "Pending",
-            "Processing",
-            "Shipped",
-            "Delivered",
-            "Cancelled"
-        ],
-
-        default:"Pending"
-
-    },
-
-    shippingAddress:{
-
-        type:String,
-
-        required:true
-
+    {
+        _id: false
     }
-
-},
-
-{
-
-    timestamps:true
-
-}
-
 );
 
-module.exports=mongoose.model("Order",orderSchema);
+const OrderSchema = new mongoose.Schema(
+    {
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        },
+
+        items: {
+            type: [OrderItemSchema],
+            required: true
+        },
+
+        totalPrice: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+
+        shippingAddress: {
+            name: String,
+            phone: String,
+            address: String,
+            city: String,
+            postalCode: String
+        },
+
+        paymentMethod: {
+            type: String,
+            enum: [
+                "cod",
+                "sslcommerz",
+                "stripe",
+                "online"
+            ],
+            default: "cod"
+        },
+
+        paymentStatus: {
+            type: String,
+            enum: [
+                "pending",
+                "paid",
+                "failed",
+                "cancelled"
+            ],
+            default: "pending"
+        },
+
+        status: {
+            type: String,
+            enum: [
+                "Pending",
+                "Processing",
+                "Shipped",
+                "Delivered",
+                "Cancelled"
+            ],
+            default: "Pending"
+        },
+
+        transactionId: {
+            type: String,
+            default: ""
+        }
+    },
+    {
+        timestamps: true
+    }
+);
+
+module.exports = mongoose.model(
+    "Order",
+    OrderSchema
+);
