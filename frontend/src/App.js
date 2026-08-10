@@ -92,6 +92,7 @@ function App() {
 
             <Routes>
 
+
                 {/* =========================
                     PUBLIC ROUTES
                 ========================== */}
@@ -110,24 +111,30 @@ function App() {
                     path="/register"
                     element={<Register />}
                 />
-                       <Route
-    path="/payment-success"
-    element={<PaymentSuccess />}
-/>
-
-<Route
-    path="/payment-fail"
-    element={<PaymentFailed />}
-/>
-
-<Route
-    path="/payment-cancel"
-    element={<PaymentFailed />}
-/>
 
                 <Route
                     path="/product/:id"
                     element={<ProductDetails />}
+                />
+
+
+                {/* =========================
+                    PAYMENT ROUTES
+                ========================== */}
+
+                <Route
+                    path="/payment-success"
+                    element={<PaymentSuccess />}
+                />
+
+                <Route
+                    path="/payment-fail"
+                    element={<PaymentFailed />}
+                />
+
+                <Route
+                    path="/payment-cancel"
+                    element={<PaymentFailed />}
                 />
 
 
