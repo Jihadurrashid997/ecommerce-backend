@@ -10,7 +10,7 @@ const Checkout = () => {
 
     const navigate = useNavigate();
 
-    const { cartItems, clearCart } = useCart();
+    const { cartItems } = useCart();
 
     const [loading, setLoading] = useState(false);
 
@@ -20,6 +20,7 @@ const Checkout = () => {
         phone: "",
         address: ""
     });
+
 
     const totalAmount = (cartItems || []).reduce(
         (total, item) =>
@@ -53,22 +54,38 @@ const Checkout = () => {
 
         e.preventDefault();
 
-        if (!formData.name ||
+
+        if (
+            !formData.name ||
             !formData.email ||
             !formData.phone ||
-            !formData.address) {
+            !formData.address
+        ) {
 
             alert("Please fill in all information.");
+
             return;
+
         }
 
 
         if (!cartItems || cartItems.length === 0) {
 
             alert("Your cart is empty.");
+
             navigate("/cart");
 
             return;
+
+        }
+
+
+        if (totalAmount <= 0) {
+
+            alert("Invalid order amount.");
+
+            return;
+
         }
 
 
@@ -78,9 +95,9 @@ const Checkout = () => {
 
 
             const response = await api.post(
-                "/payment/initiate",
+                "/payment/sslcommerz",
                 {
-                    totalAmount: totalAmount,
+                    totalAmount,
                     name: formData.name,
                     email: formData.email,
                     phone: formData.phone,
@@ -102,9 +119,7 @@ const Checkout = () => {
             }
 
 
-            /*
-             * Redirect to SSLCommerz
-             */
+            // Redirect to SSLCommerz
 
             window.location.href = gatewayUrl;
 
@@ -116,11 +131,13 @@ const Checkout = () => {
                 err
             );
 
+
             alert(
                 err.response?.data?.message ||
                 err.message ||
                 "Payment initialization failed."
             );
+
 
         } finally {
 
@@ -138,15 +155,14 @@ const Checkout = () => {
             <div className="checkout-container">
 
 
-                {/* =========================
-                    CHECKOUT FORM
-                ========================== */}
+                {/* CHECKOUT FORM */}
 
                 <div className="checkout-form">
 
                     <h1>
                         Checkout
                     </h1>
+
 
                     <h2>
                         Customer Information
@@ -201,9 +217,9 @@ const Checkout = () => {
 
                         <div className="payment-selected">
 
-                            <span>
+                            <strong>
                                 SSLCommerz
-                            </span>
+                            </strong>
 
                             <small>
                                 Secure Online Payment
@@ -230,9 +246,7 @@ const Checkout = () => {
                 </div>
 
 
-                {/* =========================
-                    ORDER SUMMARY
-                ========================== */}
+                {/* ORDER SUMMARY */}
 
                 <div className="order-summary">
 
@@ -268,17 +282,11 @@ const Checkout = () => {
 
 
                                 <span>
-
                                     ৳
                                     {(
-                                        Number(
-                                            item.price || 0
-                                        ) *
-                                        Number(
-                                            item.quantity || 1
-                                        )
+                                        Number(item.price || 0) *
+                                        Number(item.quantity || 1)
                                     ).toFixed(2)}
-
                                 </span>
 
                             </div>
@@ -308,5 +316,6 @@ const Checkout = () => {
     );
 
 };
+
 
 export default Checkout;
