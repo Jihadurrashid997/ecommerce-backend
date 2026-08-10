@@ -1,16 +1,15 @@
 const SSLCommerzPayment = require("sslcommerz-lts");
+const Order = require("../models/Order");
 
 const store_id = process.env.SSLC_STORE_ID;
 const store_passwd = process.env.SSLC_STORE_PASSWORD;
 
-// false = sandbox
-// true = live
 const is_live = false;
 
 
 /*
 ====================================================
-INITIALIZE SSL COMMERZ PAYMENT
+INITIALIZE PAYMENT
 POST /api/payment/sslcommerz
 ====================================================
 */
@@ -27,8 +26,6 @@ exports.initPayment = async (req, res) => {
             address
         } = req.body;
 
-
-        // Basic validation
 
         if (
             !totalAmount ||
@@ -65,8 +62,38 @@ exports.initPayment = async (req, res) => {
 
 
         const transactionId =
-            "TXN_" +
-            Date.now();
+            "TXN_" + Date.now();
+
+
+        /*
+        Create pending order
+        */
+
+        const order = await Order.create({
+
+            user: req.user.id,
+
+            items: [],
+
+            totalPrice: Number(totalAmount),
+
+            shippingAddress: {
+                name,
+                phone,
+                address,
+                city: "Dhaka",
+                postalCode: ""
+            },
+
+            paymentMethod: "sslcommerz",
+
+            paymentStatus: "pending",
+
+            status: "Pending",
+
+            transactionId
+
+        });
 
 
         const data = {
@@ -79,22 +106,21 @@ exports.initPayment = async (req, res) => {
 
 
             /*
-            Frontend callback URLs
+            Frontend URLs
             */
 
             success_url:
-                `${process.env.CLIENT_URL}/payment-success`,
+                `${process.env.CLIENT_URL}/payment-success?transactionId=${transactionId}`,
 
             fail_url:
-                `${process.env.CLIENT_URL}/payment-fail`,
+                `${process.env.CLIENT_URL}/payment-fail?transactionId=${transactionId}`,
 
             cancel_url:
-                `${process.env.CLIENT_URL}/payment-cancel`,
+                `${process.env.CLIENT_URL}/payment-cancel?transactionId=${transactionId}`,
 
 
             /*
-            IPN must point to BACKEND,
-            not frontend.
+            Backend IPN URL
             */
 
             ipn_url:
@@ -109,10 +135,6 @@ exports.initPayment = async (req, res) => {
 
             product_profile: "general",
 
-
-            /*
-            Customer information
-            */
 
             cus_name: name,
 
@@ -141,22 +163,18 @@ exports.initPayment = async (req, res) => {
             await sslcz.init(data);
 
 
-        if (!apiResponse) {
+        if (!apiResponse?.GatewayPageURL) {
+
+            await Order.findByIdAndUpdate(
+                order._id,
+                {
+                    paymentStatus: "failed"
+                }
+            );
 
             return res.status(500).json({
                 message:
-                    "No response received from SSLCommerz."
-            });
-
-        }
-
-
-        if (!apiResponse.GatewayPageURL) {
-
-            return res.status(500).json({
-                message:
-                    "SSLCommerz gateway URL was not returned.",
-                response: apiResponse
+                    "SSLCommerz gateway URL was not returned."
             });
 
         }
@@ -169,7 +187,10 @@ exports.initPayment = async (req, res) => {
             gateway:
                 apiResponse.GatewayPageURL,
 
-            transactionId
+            transactionId,
+
+            orderId:
+                order._id
 
         });
 
@@ -183,8 +204,6 @@ exports.initPayment = async (req, res) => {
 
 
         res.status(500).json({
-
-            success: false,
 
             message:
                 err.message ||
@@ -201,7 +220,6 @@ exports.initPayment = async (req, res) => {
 /*
 ====================================================
 PAYMENT SUCCESS
-POST /api/payment/success
 ====================================================
 */
 
@@ -209,31 +227,39 @@ exports.paymentSuccess = async (req, res) => {
 
     try {
 
-        console.log(
-            "SSLCommerz SUCCESS:",
-            req.body
-        );
+        const transactionId =
+            req.body?.tran_id ||
+            req.query?.transactionId;
+
+
+        if (transactionId) {
+
+            await Order.findOneAndUpdate(
+
+                {
+                    transactionId
+                },
+
+                {
+                    paymentStatus: "paid"
+                }
+
+            );
+
+        }
 
 
         /*
-        SSLCommerz sends the user back to
-        the frontend success URL.
-
-        We return a simple response here
-        for backend testing.
+        Redirect user to frontend
         */
 
-        res.status(200).json({
+        const frontendUrl =
+            process.env.CLIENT_URL;
 
-            success: true,
 
-            message:
-                "Payment successful.",
-
-            transactionId:
-                req.body?.tran_id || null
-
-        });
+        res.redirect(
+            `${frontendUrl}/payment-success?transactionId=${transactionId || ""}`
+        );
 
 
     } catch (err) {
@@ -244,14 +270,9 @@ exports.paymentSuccess = async (req, res) => {
         );
 
 
-        res.status(500).json({
-
-            success: false,
-
-            message:
-                err.message
-
-        });
+        res.redirect(
+            `${process.env.CLIENT_URL}/payment-fail`
+        );
 
     }
 
@@ -262,7 +283,6 @@ exports.paymentSuccess = async (req, res) => {
 /*
 ====================================================
 PAYMENT FAILED
-POST /api/payment/fail
 ====================================================
 */
 
@@ -270,23 +290,31 @@ exports.paymentFail = async (req, res) => {
 
     try {
 
-        console.log(
-            "SSLCommerz FAILED:",
-            req.body
+        const transactionId =
+            req.body?.tran_id ||
+            req.query?.transactionId;
+
+
+        if (transactionId) {
+
+            await Order.findOneAndUpdate(
+
+                {
+                    transactionId
+                },
+
+                {
+                    paymentStatus: "failed"
+                }
+
+            );
+
+        }
+
+
+        res.redirect(
+            `${process.env.CLIENT_URL}/payment-fail?transactionId=${transactionId || ""}`
         );
-
-
-        res.status(200).json({
-
-            success: false,
-
-            message:
-                "Payment failed.",
-
-            transactionId:
-                req.body?.tran_id || null
-
-        });
 
 
     } catch (err) {
@@ -297,14 +325,9 @@ exports.paymentFail = async (req, res) => {
         );
 
 
-        res.status(500).json({
-
-            success: false,
-
-            message:
-                err.message
-
-        });
+        res.redirect(
+            `${process.env.CLIENT_URL}/payment-fail`
+        );
 
     }
 
@@ -315,7 +338,6 @@ exports.paymentFail = async (req, res) => {
 /*
 ====================================================
 PAYMENT CANCELLED
-POST /api/payment/cancel
 ====================================================
 */
 
@@ -323,23 +345,31 @@ exports.paymentCancel = async (req, res) => {
 
     try {
 
-        console.log(
-            "SSLCommerz CANCELLED:",
-            req.body
+        const transactionId =
+            req.body?.tran_id ||
+            req.query?.transactionId;
+
+
+        if (transactionId) {
+
+            await Order.findOneAndUpdate(
+
+                {
+                    transactionId
+                },
+
+                {
+                    paymentStatus: "cancelled"
+                }
+
+            );
+
+        }
+
+
+        res.redirect(
+            `${process.env.CLIENT_URL}/payment-cancel?transactionId=${transactionId || ""}`
         );
-
-
-        res.status(200).json({
-
-            success: false,
-
-            message:
-                "Payment was cancelled.",
-
-            transactionId:
-                req.body?.tran_id || null
-
-        });
 
 
     } catch (err) {
@@ -350,14 +380,9 @@ exports.paymentCancel = async (req, res) => {
         );
 
 
-        res.status(500).json({
-
-            success: false,
-
-            message:
-                err.message
-
-        });
+        res.redirect(
+            `${process.env.CLIENT_URL}/payment-cancel`
+        );
 
     }
 
@@ -367,8 +392,7 @@ exports.paymentCancel = async (req, res) => {
 
 /*
 ====================================================
-IPN - INSTANT PAYMENT NOTIFICATION
-POST /api/payment/ipn
+IPN
 ====================================================
 */
 
@@ -382,22 +406,101 @@ exports.paymentIPN = async (req, res) => {
         );
 
 
+        const transactionId =
+            req.body?.tran_id;
+
+
+        if (!transactionId) {
+
+            return res.status(400).json({
+                message:
+                    "Transaction ID is missing."
+            });
+
+        }
+
+
         /*
-        IMPORTANT:
-
-        এখানে পরে Order database update করা যাবে
-        যখন তোমার Order model-এর exact fields জানা যাবে.
-
-        এখন IPN receive হচ্ছে কিনা সেটা নিশ্চিত করছি.
+        Verify transaction with SSLCommerz
         */
 
+        const sslcz =
+            new SSLCommerzPayment(
+                store_id,
+                store_passwd,
+                is_live
+            );
 
-        res.status(200).json({
 
-            success: true,
+        const validationResponse =
+            await sslcz.validate(
+                req.body.val_id
+            );
+
+
+        console.log(
+            "SSLCommerz validation:",
+            validationResponse
+        );
+
+
+        /*
+        Check validation status
+        */
+
+        if (
+            validationResponse?.status === "VALID" ||
+            validationResponse?.status === "VALIDATED"
+        ) {
+
+            await Order.findOneAndUpdate(
+
+                {
+                    transactionId
+                },
+
+                {
+                    paymentStatus: "paid"
+                }
+
+            );
+
+
+            return res.status(200).json({
+
+                success: true,
+
+                message:
+                    "Payment verified and order updated."
+
+            });
+
+        }
+
+
+        /*
+        Invalid payment
+        */
+
+        await Order.findOneAndUpdate(
+
+            {
+                transactionId
+            },
+
+            {
+                paymentStatus: "failed"
+            }
+
+        );
+
+
+        res.status(400).json({
+
+            success: false,
 
             message:
-                "IPN received successfully."
+                "Payment validation failed."
 
         });
 
@@ -405,7 +508,7 @@ exports.paymentIPN = async (req, res) => {
     } catch (err) {
 
         console.error(
-            "IPN error:",
+            "IPN verification error:",
             err
         );
 
@@ -415,7 +518,8 @@ exports.paymentIPN = async (req, res) => {
             success: false,
 
             message:
-                err.message
+                err.message ||
+                "IPN verification failed."
 
         });
 
