@@ -11,6 +11,7 @@ const PaymentSuccess = () => {
         searchParams.get("transactionId") ||
         searchParams.get("tran_id");
 
+
     return (
 
         <div className="payment-page">
@@ -21,22 +22,31 @@ const PaymentSuccess = () => {
                     ✓
                 </div>
 
+
                 <h1>
                     Payment Successful!
                 </h1>
+
 
                 <p>
                     Your payment has been completed successfully.
                 </p>
 
+
                 {transactionId && (
+
                     <p className="transaction-id">
+
                         Transaction ID:{" "}
+
                         <strong>
                             {transactionId}
                         </strong>
+
                     </p>
+
                 )}
+
 
                 <div className="payment-actions">
 
@@ -46,6 +56,7 @@ const PaymentSuccess = () => {
                     >
                         View My Orders
                     </Link>
+
 
                     <Link
                         to="/"
@@ -63,5 +74,6 @@ const PaymentSuccess = () => {
     );
 
 };
+
 
 export default PaymentSuccess;
