@@ -7,8 +7,13 @@ const PaymentFailed = () => {
 
     const [searchParams] = useSearchParams();
 
+    const transactionId =
+        searchParams.get("transactionId") ||
+        searchParams.get("tran_id");
+
     const reason =
         searchParams.get("reason");
+
 
     return (
 
@@ -20,19 +25,42 @@ const PaymentFailed = () => {
                     ✕
                 </div>
 
+
                 <h1>
                     Payment Failed
                 </h1>
+
 
                 <p>
                     Unfortunately, your payment could not be completed.
                 </p>
 
-                {reason && (
-                    <p className="payment-error">
-                        {reason}
+
+                {transactionId && (
+
+                    <p className="transaction-id">
+
+                        Transaction ID:{" "}
+
+                        <strong>
+                            {transactionId}
+                        </strong>
+
                     </p>
+
                 )}
+
+
+                {reason && (
+
+                    <p className="payment-error">
+
+                        {reason}
+
+                    </p>
+
+                )}
+
 
                 <div className="payment-actions">
 
@@ -42,6 +70,7 @@ const PaymentFailed = () => {
                     >
                         Try Again
                     </Link>
+
 
                     <Link
                         to="/cart"
@@ -59,5 +88,6 @@ const PaymentFailed = () => {
     );
 
 };
+
 
 export default PaymentFailed;
