@@ -6,72 +6,145 @@ import { useCart } from "../context/CartContext";
 
 import "../styles/Checkout.css";
 
+
 const Checkout = () => {
 
     const navigate = useNavigate();
 
-    const { cartItems } = useCart();
+    const {
+        cartItems,
+        clearCart
+    } = useCart();
+
 
     const [loading, setLoading] = useState(false);
 
+
     const [formData, setFormData] = useState({
+
         name: "",
         email: "",
         phone: "",
-        address: ""
+        address: "",
+        city: "Dhaka",
+        postalCode: ""
+
     });
 
 
+    /*
+    ========================================
+    CALCULATE TOTAL
+    ========================================
+    */
+
     const totalAmount = (cartItems || []).reduce(
-        (total, item) =>
-            total +
-            Number(item.price || 0) *
-            Number(item.quantity || 1),
+
+        (total, item) => {
+
+            const price =
+                Number(item.price || 0);
+
+            const quantity =
+                Number(item.quantity || 1);
+
+            return total + (price * quantity);
+
+        },
+
         0
+
     );
 
 
+    /*
+    ========================================
+    EMPTY CART CHECK
+    ========================================
+    */
+
     useEffect(() => {
 
-        if (!cartItems || cartItems.length === 0) {
+        if (
+            !cartItems ||
+            cartItems.length === 0
+        ) {
+
             navigate("/cart");
+
         }
 
     }, [cartItems, navigate]);
 
 
+    /*
+    ========================================
+    HANDLE INPUT
+    ========================================
+    */
+
     const handleChange = (e) => {
 
+        const {
+            name,
+            value
+        } = e.target;
+
+
         setFormData({
+
             ...formData,
-            [e.target.name]: e.target.value
+
+            [name]: value
+
         });
 
     };
 
+
+    /*
+    ========================================
+    START PAYMENT
+    ========================================
+    */
 
     const handlePayment = async (e) => {
 
         e.preventDefault();
 
 
+        /*
+        Validate customer information
+        */
+
         if (
-            !formData.name ||
-            !formData.email ||
-            !formData.phone ||
-            !formData.address
+            !formData.name.trim() ||
+            !formData.email.trim() ||
+            !formData.phone.trim() ||
+            !formData.address.trim()
         ) {
 
-            alert("Please fill in all information.");
+            alert(
+                "Please fill in all required information."
+            );
 
             return;
 
         }
 
 
-        if (!cartItems || cartItems.length === 0) {
+        /*
+        Check cart
+        */
 
-            alert("Your cart is empty.");
+        if (
+            !cartItems ||
+            cartItems.length === 0
+        ) {
+
+            alert(
+                "Your cart is empty."
+            );
 
             navigate("/cart");
 
@@ -80,9 +153,15 @@ const Checkout = () => {
         }
 
 
+        /*
+        Check total
+        */
+
         if (totalAmount <= 0) {
 
-            alert("Invalid order amount.");
+            alert(
+                "Invalid order amount."
+            );
 
             return;
 
@@ -94,20 +173,152 @@ const Checkout = () => {
             setLoading(true);
 
 
-            const response = await api.post(
-                "/payment/sslcommerz",
-                {
-                    totalAmount,
-                    name: formData.name,
-                    email: formData.email,
-                    phone: formData.phone,
-                    address: formData.address
-                }
+            /*
+            ========================================
+            PREPARE ORDER ITEMS
+            ========================================
+            */
+
+            const items = cartItems.map(
+                (item) => ({
+
+                    product:
+                        item.product ||
+                        item._id ||
+                        item.id,
+
+                    quantity:
+                        Number(item.quantity || 1)
+
+                })
             );
 
 
+            /*
+            Check product IDs
+            */
+
+            const invalidItem =
+                items.some(
+                    (item) => !item.product
+                );
+
+
+            if (invalidItem) {
+
+                alert(
+                    "One or more products are invalid."
+                );
+
+                setLoading(false);
+
+                return;
+
+            }
+
+
+            /*
+            ========================================
+            SHIPPING ADDRESS
+            ========================================
+            */
+
+            const shippingAddress = {
+
+                name:
+                    formData.name,
+
+                phone:
+                    formData.phone,
+
+                address:
+                    formData.address,
+
+                city:
+                    formData.city || "Dhaka",
+
+                postalCode:
+                    formData.postalCode || ""
+
+            };
+
+
+            /*
+            ========================================
+            CREATE ORDER
+            ========================================
+            */
+
+            const orderResponse =
+                await api.post(
+                    "/orders",
+                    {
+
+                        items,
+
+                        shippingAddress,
+
+                        paymentMethod:
+                            "sslcommerz"
+
+                    }
+                );
+
+
+            const order =
+                orderResponse.data?.order;
+
+
+            if (!order) {
+
+                throw new Error(
+                    "Order could not be created."
+                );
+
+            }
+
+
+            /*
+            ========================================
+            INITIALIZE SSL COMMERZ
+            ========================================
+            */
+
+            const paymentResponse =
+                await api.post(
+                    "/payment/sslcommerz",
+                    {
+
+                        orderId:
+                            order._id,
+
+                        totalAmount:
+                            order.totalPrice,
+
+                        name:
+                            formData.name,
+
+                        email:
+                            formData.email,
+
+                        phone:
+                            formData.phone,
+
+                        address:
+                            formData.address,
+
+                        city:
+                            formData.city || "Dhaka",
+
+                        postalCode:
+                            formData.postalCode || ""
+
+                    }
+                );
+
+
             const gatewayUrl =
-                response.data?.gateway;
+                paymentResponse.data?.gateway;
 
 
             if (!gatewayUrl) {
@@ -119,25 +330,33 @@ const Checkout = () => {
             }
 
 
-            // Redirect to SSLCommerz
+            /*
+            ========================================
+            REDIRECT TO SSL COMMERZ
+            ========================================
+            */
 
-            window.location.href = gatewayUrl;
+            window.location.href =
+                gatewayUrl;
 
 
         } catch (err) {
 
             console.error(
-                "Payment initialization error:",
+                "Checkout error:",
                 err
             );
 
 
             alert(
-                err.response?.data?.message ||
-                err.message ||
-                "Payment initialization failed."
-            );
 
+                err.response?.data?.message ||
+
+                err.message ||
+
+                "Checkout failed. Please try again."
+
+            );
 
         } finally {
 
@@ -148,6 +367,12 @@ const Checkout = () => {
     };
 
 
+    /*
+    ========================================
+    PAGE
+    ========================================
+    */
+
     return (
 
         <div className="checkout-page">
@@ -155,7 +380,9 @@ const Checkout = () => {
             <div className="checkout-container">
 
 
-                {/* CHECKOUT FORM */}
+                {/* ========================================
+                    CHECKOUT FORM
+                ======================================== */}
 
                 <div className="checkout-form">
 
@@ -169,44 +396,101 @@ const Checkout = () => {
                     </h2>
 
 
-                    <form onSubmit={handlePayment}>
+                    <form
+                        onSubmit={handlePayment}
+                    >
+
+
+                        {/* Name */}
 
                         <input
                             type="text"
                             name="name"
                             placeholder="Full Name"
-                            value={formData.name}
-                            onChange={handleChange}
+                            value={
+                                formData.name
+                            }
+                            onChange={
+                                handleChange
+                            }
                             required
                         />
 
+
+                        {/* Email */}
 
                         <input
                             type="email"
                             name="email"
                             placeholder="Email Address"
-                            value={formData.email}
-                            onChange={handleChange}
+                            value={
+                                formData.email
+                            }
+                            onChange={
+                                handleChange
+                            }
                             required
                         />
 
+
+                        {/* Phone */}
 
                         <input
                             type="tel"
                             name="phone"
                             placeholder="Phone Number"
-                            value={formData.phone}
-                            onChange={handleChange}
+                            value={
+                                formData.phone
+                            }
+                            onChange={
+                                handleChange
+                            }
                             required
                         />
 
 
+                        {/* Address */}
+
                         <textarea
                             name="address"
                             placeholder="Full Address"
-                            value={formData.address}
-                            onChange={handleChange}
+                            value={
+                                formData.address
+                            }
+                            onChange={
+                                handleChange
+                            }
                             required
+                        />
+
+
+                        {/* City */}
+
+                        <input
+                            type="text"
+                            name="city"
+                            placeholder="City"
+                            value={
+                                formData.city
+                            }
+                            onChange={
+                                handleChange
+                            }
+                        />
+
+
+                        {/* Postal Code */}
+
+                        <input
+                            type="text"
+                            name="postalCode"
+                            placeholder="Postal Code"
+                            value={
+                                formData.postalCode
+                            }
+                            onChange={
+                                handleChange
+                            }
                         />
 
 
@@ -217,9 +501,9 @@ const Checkout = () => {
 
                         <div className="payment-selected">
 
-                            <strong>
+                            <span>
                                 SSLCommerz
-                            </strong>
+                            </span>
 
                             <small>
                                 Secure Online Payment
@@ -228,6 +512,8 @@ const Checkout = () => {
                         </div>
 
 
+                        {/* Pay Button */}
+
                         <button
                             type="submit"
                             className="checkout-btn"
@@ -235,18 +521,24 @@ const Checkout = () => {
                         >
 
                             {loading
+
                                 ? "Redirecting to Payment..."
-                                : "Pay Now"
+
+                                : `Pay ৳${totalAmount.toFixed(2)}`
+
                             }
 
                         </button>
+
 
                     </form>
 
                 </div>
 
 
-                {/* ORDER SUMMARY */}
+                {/* ========================================
+                    ORDER SUMMARY
+                ======================================== */}
 
                 <div className="order-summary">
 
@@ -282,11 +574,17 @@ const Checkout = () => {
 
 
                                 <span>
+
                                     ৳
                                     {(
-                                        Number(item.price || 0) *
-                                        Number(item.quantity || 1)
+                                        Number(
+                                            item.price || 0
+                                        ) *
+                                        Number(
+                                            item.quantity || 1
+                                        )
                                     ).toFixed(2)}
+
                                 </span>
 
                             </div>
@@ -302,12 +600,14 @@ const Checkout = () => {
                         </strong>
 
                         <strong>
-                            ৳{totalAmount.toFixed(2)}
+                            ৳
+                            {totalAmount.toFixed(2)}
                         </strong>
 
                     </div>
 
                 </div>
+
 
             </div>
 
