@@ -9,7 +9,7 @@ const is_live = false;
 
 /*
 ====================================================
-INITIALIZE PAYMENT
+INITIALIZE SSL COMMERZ PAYMENT
 POST /api/payment/sslcommerz
 ====================================================
 */
@@ -19,12 +19,28 @@ exports.initPayment = async (req, res) => {
     try {
 
         const {
+            orderId,
             totalAmount,
             name,
             email,
             phone,
-            address
+            address,
+            city,
+            postalCode
         } = req.body;
+
+
+        /*
+        Check required information
+        */
+
+        if (!orderId) {
+
+            return res.status(400).json({
+                message: "Order ID is required."
+            });
+
+        }
 
 
         if (
@@ -36,20 +52,16 @@ exports.initPayment = async (req, res) => {
         ) {
 
             return res.status(400).json({
-                message: "All payment information is required."
+                message:
+                    "All payment information is required."
             });
 
         }
 
 
-        if (Number(totalAmount) <= 0) {
-
-            return res.status(400).json({
-                message: "Invalid payment amount."
-            });
-
-        }
-
+        /*
+        Check SSLCommerz credentials
+        */
 
         if (!store_id || !store_passwd) {
 
@@ -61,52 +73,131 @@ exports.initPayment = async (req, res) => {
         }
 
 
-        const transactionId =
-            "TXN_" + Date.now();
+        /*
+        Find order
+        */
+
+        const order =
+            await Order.findById(orderId);
+
+
+        if (!order) {
+
+            return res.status(404).json({
+                message: "Order not found."
+            });
+
+        }
 
 
         /*
-        Create pending order
+        Make sure this order belongs
+        to the logged-in user
         */
 
-        const order = await Order.create({
+        if (
+            order.user.toString() !==
+            req.user.id.toString()
+        ) {
 
-            user: req.user.id,
+            return res.status(403).json({
+                message:
+                    "You are not authorized to pay for this order."
+            });
 
-            items: [],
+        }
 
-            totalPrice: Number(totalAmount),
 
-            shippingAddress: {
+        /*
+        Make sure order is SSLCommerz
+        */
+
+        order.paymentMethod =
+            "sslcommerz";
+
+
+        /*
+        Make sure amount matches
+        */
+
+        if (
+            Number(order.totalPrice) !==
+            Number(totalAmount)
+        ) {
+
+            return res.status(400).json({
+                message:
+                    "Payment amount does not match order total."
+            });
+
+        }
+
+
+        /*
+        Generate transaction ID
+        */
+
+        const transactionId =
+            "TXN_" +
+            Date.now();
+
+
+        /*
+        Save transaction ID
+        */
+
+        order.transactionId =
+            transactionId;
+
+        order.paymentStatus =
+            "pending";
+
+
+        /*
+        Update shipping address
+        */
+
+        order.shippingAddress = {
+
+            name:
                 name,
+
+            phone:
                 phone,
+
+            address:
                 address,
-                city: "Dhaka",
-                postalCode: ""
-            },
 
-            paymentMethod: "sslcommerz",
+            city:
+                city || "Dhaka",
 
-            paymentStatus: "pending",
+            postalCode:
+                postalCode || ""
 
-            status: "Pending",
+        };
 
-            transactionId
 
-        });
+        await order.save();
 
+
+        /*
+        SSLCommerz payment data
+        */
 
         const data = {
 
-            total_amount: Number(totalAmount),
+            total_amount:
+                Number(order.totalPrice),
 
-            currency: "BDT",
+            currency:
+                "BDT",
 
-            tran_id: transactionId,
+            tran_id:
+                transactionId,
 
 
             /*
-            Frontend URLs
+            Frontend callback URLs
             */
 
             success_url:
@@ -120,36 +211,57 @@ exports.initPayment = async (req, res) => {
 
 
             /*
-            Backend IPN URL
+            Backend IPN
             */
 
             ipn_url:
                 `${process.env.SERVER_URL}/api/payment/ipn`,
 
 
-            shipping_method: "Courier",
+            shipping_method:
+                "Courier",
 
-            product_name: "Marketplace Order",
+            product_name:
+                "Marketplace Order",
 
-            product_category: "Ecommerce",
+            product_category:
+                "Ecommerce",
 
-            product_profile: "general",
+            product_profile:
+                "general",
 
 
-            cus_name: name,
+            /*
+            Customer information
+            */
 
-            cus_email: email,
+            cus_name:
+                name,
 
-            cus_add1: address,
+            cus_email:
+                email,
 
-            cus_city: "Dhaka",
+            cus_add1:
+                address,
 
-            cus_country: "Bangladesh",
+            cus_city:
+                city || "Dhaka",
 
-            cus_phone: phone
+            cus_postcode:
+                postalCode || "",
+
+            cus_country:
+                "Bangladesh",
+
+            cus_phone:
+                phone
 
         };
 
+
+        /*
+        Create SSLCommerz instance
+        */
 
         const sslcz =
             new SSLCommerzPayment(
@@ -159,18 +271,28 @@ exports.initPayment = async (req, res) => {
             );
 
 
+        /*
+        Initialize payment
+        */
+
         const apiResponse =
             await sslcz.init(data);
 
 
-        if (!apiResponse?.GatewayPageURL) {
+        /*
+        Check gateway URL
+        */
 
-            await Order.findByIdAndUpdate(
-                order._id,
-                {
-                    paymentStatus: "failed"
-                }
-            );
+        if (
+            !apiResponse ||
+            !apiResponse.GatewayPageURL
+        ) {
+
+            order.paymentStatus =
+                "failed";
+
+            await order.save();
+
 
             return res.status(500).json({
                 message:
@@ -180,14 +302,20 @@ exports.initPayment = async (req, res) => {
         }
 
 
+        /*
+        Send gateway URL to frontend
+        */
+
         res.status(200).json({
 
-            success: true,
+            success:
+                true,
 
             gateway:
                 apiResponse.GatewayPageURL,
 
-            transactionId,
+            transactionId:
+                transactionId,
 
             orderId:
                 order._id
@@ -204,6 +332,9 @@ exports.initPayment = async (req, res) => {
 
 
         res.status(500).json({
+
+            success:
+                false,
 
             message:
                 err.message ||
@@ -234,31 +365,28 @@ exports.paymentSuccess = async (req, res) => {
 
         if (transactionId) {
 
-            await Order.findOneAndUpdate(
-
-                {
+            const order =
+                await Order.findOne({
                     transactionId
-                },
+                });
 
-                {
-                    paymentStatus: "paid"
-                }
 
-            );
+            if (order) {
+
+                order.paymentStatus =
+                    "paid";
+
+                await order.save();
+
+            }
 
         }
 
 
-        /*
-        Redirect user to frontend
-        */
-
-        const frontendUrl =
-            process.env.CLIENT_URL;
-
-
         res.redirect(
-            `${frontendUrl}/payment-success?transactionId=${transactionId || ""}`
+
+            `${process.env.CLIENT_URL}/payment-success?transactionId=${transactionId || ""}`
+
         );
 
 
@@ -297,23 +425,28 @@ exports.paymentFail = async (req, res) => {
 
         if (transactionId) {
 
-            await Order.findOneAndUpdate(
-
-                {
+            const order =
+                await Order.findOne({
                     transactionId
-                },
+                });
 
-                {
-                    paymentStatus: "failed"
-                }
 
-            );
+            if (order) {
+
+                order.paymentStatus =
+                    "failed";
+
+                await order.save();
+
+            }
 
         }
 
 
         res.redirect(
+
             `${process.env.CLIENT_URL}/payment-fail?transactionId=${transactionId || ""}`
+
         );
 
 
@@ -352,23 +485,28 @@ exports.paymentCancel = async (req, res) => {
 
         if (transactionId) {
 
-            await Order.findOneAndUpdate(
-
-                {
+            const order =
+                await Order.findOne({
                     transactionId
-                },
+                });
 
-                {
-                    paymentStatus: "cancelled"
-                }
 
-            );
+            if (order) {
+
+                order.paymentStatus =
+                    "cancelled";
+
+                await order.save();
+
+            }
 
         }
 
 
         res.redirect(
+
             `${process.env.CLIENT_URL}/payment-cancel?transactionId=${transactionId || ""}`
+
         );
 
 
@@ -392,7 +530,7 @@ exports.paymentCancel = async (req, res) => {
 
 /*
 ====================================================
-IPN
+IPN - PAYMENT VERIFICATION
 ====================================================
 */
 
@@ -409,69 +547,44 @@ exports.paymentIPN = async (req, res) => {
         const transactionId =
             req.body?.tran_id;
 
+        const valId =
+            req.body?.val_id;
+
 
         if (!transactionId) {
 
             return res.status(400).json({
+
+                success:
+                    false,
+
                 message:
                     "Transaction ID is missing."
+
             });
 
         }
 
 
         /*
-        Verify transaction with SSLCommerz
+        Find order
         */
 
-        const sslcz =
-            new SSLCommerzPayment(
-                store_id,
-                store_passwd,
-                is_live
-            );
+        const order =
+            await Order.findOne({
+                transactionId
+            });
 
 
-        const validationResponse =
-            await sslcz.validate(
-                req.body.val_id
-            );
+        if (!order) {
 
+            return res.status(404).json({
 
-        console.log(
-            "SSLCommerz validation:",
-            validationResponse
-        );
-
-
-        /*
-        Check validation status
-        */
-
-        if (
-            validationResponse?.status === "VALID" ||
-            validationResponse?.status === "VALIDATED"
-        ) {
-
-            await Order.findOneAndUpdate(
-
-                {
-                    transactionId
-                },
-
-                {
-                    paymentStatus: "paid"
-                }
-
-            );
-
-
-            return res.status(200).json({
-
-                success: true,
+                success:
+                    false,
 
                 message:
-                    "Payment verified and order updated."
+                    "Order not found."
 
             });
 
@@ -479,28 +592,89 @@ exports.paymentIPN = async (req, res) => {
 
 
         /*
-        Invalid payment
+        If validation ID exists,
+        verify payment with SSLCommerz.
         */
 
-        await Order.findOneAndUpdate(
+        if (valId) {
 
-            {
-                transactionId
-            },
+            const sslcz =
+                new SSLCommerzPayment(
+                    store_id,
+                    store_passwd,
+                    is_live
+                );
 
-            {
-                paymentStatus: "failed"
+
+            const validationResponse =
+                await sslcz.validate(
+                    valId
+                );
+
+
+            console.log(
+                "SSLCommerz validation:",
+                validationResponse
+            );
+
+
+            if (
+                validationResponse?.status ===
+                    "VALID" ||
+
+                validationResponse?.status ===
+                    "VALIDATED"
+            ) {
+
+                order.paymentStatus =
+                    "paid";
+
+                await order.save();
+
+
+                return res.status(200).json({
+
+                    success:
+                        true,
+
+                    message:
+                        "Payment verified successfully."
+
+                });
+
             }
 
-        );
+
+            order.paymentStatus =
+                "failed";
+
+            await order.save();
 
 
-        res.status(400).json({
+            return res.status(400).json({
 
-            success: false,
+                success:
+                    false,
+
+                message:
+                    "Payment validation failed."
+
+            });
+
+        }
+
+
+        /*
+        No validation ID
+        */
+
+        return res.status(400).json({
+
+            success:
+                false,
 
             message:
-                "Payment validation failed."
+                "Payment validation ID is missing."
 
         });
 
@@ -515,7 +689,8 @@ exports.paymentIPN = async (req, res) => {
 
         res.status(500).json({
 
-            success: false,
+            success:
+                false,
 
             message:
                 err.message ||
