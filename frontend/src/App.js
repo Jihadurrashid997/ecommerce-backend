@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 import {
     BrowserRouter,
@@ -18,6 +18,7 @@ import Navbar from "./components/Navbar";
 import Messenger from "./components/Messenger";
 import Dashboard from "./components/Dashboard";
 import PrivateRoute from "./components/PrivateRoute";
+import LoadingScreen from "./components/LoadingScreen";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -37,6 +38,11 @@ import PaymentFailed from "./pages/PaymentFailed";
 import EditProfile from "./pages/EditProfile";
 import SearchResults from "./pages/SearchResults";
 import UserProfile from "./pages/UserProfile";
+
+
+// ==========================
+// FOOTER
+// ==========================
 
 function Footer() {
 
@@ -65,6 +71,10 @@ function Footer() {
 }
 
 
+// ==========================
+// 404 PAGE
+// ==========================
+
 function NotFound() {
 
     return (
@@ -84,13 +94,49 @@ function NotFound() {
 }
 
 
+// ==========================
+// APP
+// ==========================
+
 function App() {
+
+    const [showLoading, setShowLoading] =
+        useState(true);
+
+
+    // ==========================
+    // INITIAL LOADING SCREEN
+    // ==========================
+
+    if (showLoading) {
+
+        return (
+
+            <LoadingScreen
+                onComplete={() =>
+                    setShowLoading(false)
+                }
+            />
+
+        );
+
+    }
+
 
     return (
 
         <BrowserRouter>
 
+            {/* ==========================
+                NAVBAR
+            =========================== */}
+
             <Navbar />
+
+
+            {/* ==========================
+                ROUTES
+            =========================== */}
 
             <Routes>
 
@@ -118,15 +164,17 @@ function App() {
                     path="/product/:id"
                     element={<ProductDetails />}
                 />
-                               <Route
-    path="/search"
-    element={<SearchResults />}
-/>
 
-<Route
-    path="/user/:id"
-    element={<UserProfile />}
-/>
+                <Route
+                    path="/search"
+                    element={<SearchResults />}
+                />
+
+                <Route
+                    path="/user/:id"
+                    element={<UserProfile />}
+                />
+
 
                 {/* =========================
                     PAYMENT ROUTES
@@ -157,6 +205,15 @@ function App() {
                     element={
                         <PrivateRoute>
                             <Profile />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
+                    path="/edit-profile"
+                    element={
+                        <PrivateRoute>
+                            <EditProfile />
                         </PrivateRoute>
                     }
                 />
@@ -246,14 +303,6 @@ function App() {
                         </PrivateRoute>
                     }
                 />
-                <Route
-    path="/edit-profile"
-    element={
-        <PrivateRoute>
-            <EditProfile />
-        </PrivateRoute>
-    }
-/>
 
 
                 {/* =========================
@@ -280,6 +329,11 @@ function App() {
                 />
 
             </Routes>
+
+
+            {/* ==========================
+                FOOTER
+            =========================== */}
 
             <Footer />
 
