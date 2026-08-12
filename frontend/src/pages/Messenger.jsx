@@ -2,55 +2,30 @@ import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
 import api from "../services/api";
-
 import "../styles/Messenger.css";
 
-
-// Render backend URL
 const SOCKET_URL =
     process.env.REACT_APP_API_URL
-        ? process.env.REACT_APP_API_URL.replace(
-            "/api",
-            ""
-        )
+        ? process.env.REACT_APP_API_URL.replace("/api", "")
         : window.location.origin;
-
 
 const Messenger = () => {
 
     const socketRef = useRef(null);
+    const messagesEndRef = useRef(null);
 
-    const messagesEndRef =
-        useRef(null);
-
-
-    const [user, setUser] =
-        useState(null);
-
-    const [users, setUsers] =
-        useState([]);
-
-    const [selectedUser, setSelectedUser] =
-        useState(null);
-
-    const [messages, setMessages] =
-        useState([]);
-
-    const [message, setMessage] =
-        useState("");
-
-    const [onlineUsers, setOnlineUsers] =
-        useState([]);
-
-    const [typing, setTyping] =
-        useState(false);
-
-    const [loading, setLoading] =
-        useState(true);
+    const [user, setUser] = useState(null);
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [message, setMessage] = useState("");
+    const [onlineUsers, setOnlineUsers] = useState([]);
+    const [typing, setTyping] = useState(false);
+    const [loading, setLoading] = useState(true);
 
 
     // ==========================
-    // GET CURRENT USER
+    // CURRENT USER
     // ==========================
 
     useEffect(() => {
@@ -61,15 +36,12 @@ const Messenger = () => {
         if (storedUser) {
 
             try {
-
-                setUser(
-                    JSON.parse(storedUser)
+                setUser(JSON.parse(storedUser));
+            } catch (error) {
+                console.error(
+                    "User data error:",
+                    error
                 );
-
-            } catch (err) {
-
-                console.error(err);
-
             }
 
         }
@@ -90,17 +62,23 @@ const Messenger = () => {
                 const response =
                     await api.get("/users");
 
-                setUsers(
+                const data =
                     response.data?.users ||
+                    response.data?.data ||
                     response.data ||
-                    []
+                    [];
+
+                setUsers(
+                    Array.isArray(data)
+                        ? data
+                        : []
                 );
 
-            } catch (err) {
+            } catch (error) {
 
                 console.error(
                     "Failed to load users:",
-                    err
+                    error
                 );
 
             } finally {
@@ -111,14 +89,13 @@ const Messenger = () => {
 
         };
 
-
         fetchUsers();
 
     }, []);
 
 
     // ==========================
-    // SOCKET CONNECTION
+    // SOCKET.IO
     // ==========================
 
     useEffect(() => {
@@ -126,7 +103,6 @@ const Messenger = () => {
         if (!user) {
             return;
         }
-
 
         const socket =
             io(SOCKET_URL, {
@@ -136,35 +112,30 @@ const Messenger = () => {
                 ]
             });
 
-
         socketRef.current = socket;
 
 
-        socket.on(
-            "connect",
-            () => {
+        socket.on("connect", () => {
 
-                console.log(
-                    "Socket connected:",
-                    socket.id
-                );
+            console.log(
+                "Socket connected:",
+                socket.id
+            );
 
+            socket.emit(
+                "user-online",
+                user._id || user.id
+            );
 
-                socket.emit(
-                    "user-online",
-                    user._id || user.id
-                );
-
-            }
-        );
+        });
 
 
         socket.on(
             "online-users",
-            (users) => {
+            (online) => {
 
                 setOnlineUsers(
-                    users || []
+                    online || []
                 );
 
             }
@@ -175,12 +146,72 @@ const Messenger = () => {
             "receive-message",
             (newMessage) => {
 
-                setMessages(
-                    previous => [
-                        ...previous,
-                        newMessage
-                    ]
-                );
+                const currentUserId =
+                    (
+                        user._id ||
+                        user.id
+                    )?.toString();
+
+                const selectedUserId =
+                    (
+                        selectedUser?._id ||
+                        selectedUser?.id
+                    )?.toString();
+
+                const senderId =
+                    (
+                        newMessage.sender?._id ||
+                        newMessage.sender
+                    )?.toString();
+
+                const receiverId =
+                    (
+                        newMessage.receiver?._id ||
+                        newMessage.receiver
+                    )?.toString();
+
+
+                const belongsToCurrentChat =
+                    selectedUserId &&
+                    (
+                        (
+                            senderId === selectedUserId &&
+                            receiverId === currentUserId
+                        ) ||
+                        (
+                            senderId === currentUserId &&
+                            receiverId === selectedUserId
+                        )
+                    );
+
+
+                if (belongsToCurrentChat) {
+
+                    setMessages(
+                        previous => {
+
+                            const alreadyExists =
+                                previous.some(
+                                    item =>
+                                        item._id &&
+                                        newMessage._id &&
+                                        item._id ===
+                                        newMessage._id
+                                );
+
+                            if (alreadyExists) {
+                                return previous;
+                            }
+
+                            return [
+                                ...previous,
+                                newMessage
+                            ];
+
+                        }
+                    );
+
+                }
 
             }
         );
@@ -209,12 +240,11 @@ const Messenger = () => {
         return () => {
 
             socket.disconnect();
-
             socketRef.current = null;
 
         };
 
-    }, [user]);
+    }, [user, selectedUser]);
 
 
     // ==========================
@@ -231,7 +261,7 @@ const Messenger = () => {
 
 
     // ==========================
-    // CREATE ROOM ID
+    // ROOM ID
     // ==========================
 
     const getRoomId = (
@@ -251,11 +281,9 @@ const Messenger = () => {
                 secondUser?.id
             )?.toString();
 
-
         if (!first || !second) {
             return null;
         }
-
 
         return [first, second]
             .sort()
@@ -272,12 +300,8 @@ const Messenger = () => {
         selected
     ) => {
 
-        setSelectedUser(
-            selected
-        );
-
+        setSelectedUser(selected);
         setMessages([]);
-
         setTyping(false);
 
 
@@ -286,12 +310,21 @@ const Messenger = () => {
         }
 
 
+        const currentUserId =
+            user._id || user.id;
+
+        const selectedUserId =
+            selected._id || selected.id;
+
+
         const roomId =
             getRoomId(
                 user,
                 selected
             );
 
+
+        // Join socket room
 
         if (
             roomId &&
@@ -306,42 +339,32 @@ const Messenger = () => {
         }
 
 
-        // Try loading saved messages
+        // Load conversation
+
         try {
-
-            const selectedId =
-                selected._id ||
-                selected.id;
-
 
             const response =
                 await api.get(
-                    `/messages/${selectedId}`
+                    `/messages/conversation/${selectedUserId}`
                 );
 
 
-            const loadedMessages =
-                response.data?.messages ||
-                response.data ||
-                [];
+            setMessages(
+                response.data?.data || []
+            );
 
 
-            if (
-                Array.isArray(
-                    loadedMessages
-                )
-            ) {
+            // Mark messages as seen
 
-                setMessages(
-                    loadedMessages
-                );
+            await api.put(
+                `/messages/seen/${selectedUserId}`
+            );
 
-            }
+        } catch (error) {
 
-        } catch (err) {
-
-            console.log(
-                "No previous messages loaded."
+            console.error(
+                "Failed to load conversation:",
+                error
             );
 
         }
@@ -363,10 +386,13 @@ const Messenger = () => {
             !selectedUser ||
             !user
         ) {
-
             return;
-
         }
+
+
+        const receiver =
+            selectedUser._id ||
+            selectedUser.id;
 
 
         const roomId =
@@ -376,83 +402,69 @@ const Messenger = () => {
             );
 
 
-        if (!roomId) {
-            return;
-        }
-
-
-        const newMessage = {
-
-            roomId,
-
-            sender:
-                user._id ||
-                user.id,
-
-            receiver:
-                selectedUser._id ||
-                selectedUser.id,
-
-            text:
-                message.trim(),
-
-            createdAt:
-                new Date().toISOString()
-
-        };
-
-
-        // Send through Socket.io
-
-        if (socketRef.current) {
-
-            socketRef.current.emit(
-                "send-message",
-                newMessage
-            );
-
-        }
-
-
-        // Save message in database
-
         try {
 
-            await api.post(
-                "/messages",
-                {
-                    receiver:
-                        selectedUser._id ||
-                        selectedUser.id,
+            // Save message in MongoDB
 
-                    text:
-                        message.trim()
+            const response =
+                await api.post(
+                    "/messages/send",
+                    {
+                        receiver,
+                        message:
+                            message.trim()
+                    }
+                );
+
+
+            const savedMessage =
+                response.data?.data;
+
+
+            // Send real-time message
+
+            if (
+                socketRef.current &&
+                roomId
+            ) {
+
+                socketRef.current.emit(
+                    "send-message",
+                    {
+                        ...savedMessage,
+                        roomId
+                    }
+                );
+
+            }
+
+
+            setMessage("");
+
+
+            socketRef.current?.emit(
+                "stop-typing",
+                {
+                    roomId,
+                    userId:
+                        user._id ||
+                        user.id
                 }
             );
 
-        } catch (err) {
+        } catch (error) {
 
             console.error(
-                "Failed to save message:",
-                err
+                "Failed to send message:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Failed to send message"
             );
 
         }
-
-
-        setMessage("");
-
-
-        socketRef.current?.emit(
-            "stop-typing",
-            {
-                roomId,
-
-                userId:
-                    user._id ||
-                    user.id
-            }
-        );
 
     };
 
@@ -463,9 +475,10 @@ const Messenger = () => {
 
     const handleTyping = (e) => {
 
-        setMessage(
-            e.target.value
-        );
+        const value =
+            e.target.value;
+
+        setMessage(value);
 
 
         if (
@@ -473,9 +486,7 @@ const Messenger = () => {
             !user ||
             !socketRef.current
         ) {
-
             return;
-
         }
 
 
@@ -491,13 +502,12 @@ const Messenger = () => {
         }
 
 
-        if (e.target.value.trim()) {
+        if (value.trim()) {
 
             socketRef.current.emit(
                 "typing",
                 {
                     roomId,
-
                     userId:
                         user._id ||
                         user.id
@@ -510,7 +520,6 @@ const Messenger = () => {
                 "stop-typing",
                 {
                     roomId,
-
                     userId:
                         user._id ||
                         user.id
@@ -523,7 +532,7 @@ const Messenger = () => {
 
 
     // ==========================
-    // USER ONLINE CHECK
+    // ONLINE CHECK
     // ==========================
 
     const isUserOnline = (
@@ -535,14 +544,16 @@ const Messenger = () => {
         }
 
 
-        const id = (
-            selected._id ||
-            selected.id
-        )?.toString();
+        const id =
+            (
+                selected._id ||
+                selected.id
+            )?.toString();
 
 
-        return onlineUsers.includes(
-            id
+        return onlineUsers.some(
+            onlineId =>
+                onlineId?.toString() === id
         );
 
     };
@@ -559,9 +570,7 @@ const Messenger = () => {
             <div className="messenger-page">
 
                 <div className="messenger-loading">
-
                     Loading Messenger...
-
                 </div>
 
             </div>
@@ -576,9 +585,9 @@ const Messenger = () => {
         <div className="messenger-page">
 
 
-            {/* =========================
-                USER LIST
-            ========================== */}
+            {/* ==========================
+                SIDEBAR
+            =========================== */}
 
             <aside className="messenger-sidebar">
 
@@ -594,96 +603,102 @@ const Messenger = () => {
                 <div className="user-list">
 
                     {users
-                        .filter(
-                            item =>
-                                (
-                                    item._id ||
-                                    item.id
-                                )?.toString() !==
+                        .filter(item => {
+
+                            const currentId =
                                 (
                                     user?._id ||
                                     user?.id
-                                )?.toString()
-                        )
-                        .map(
-                            item => {
+                                )?.toString();
 
-                                const id =
+                            const itemId =
+                                (
                                     item._id ||
-                                    item.id;
+                                    item.id
+                                )?.toString();
+
+                            return (
+                                itemId &&
+                                itemId !== currentId
+                            );
+
+                        })
+                        .map(item => {
+
+                            const id =
+                                item._id ||
+                                item.id;
 
 
-                                return (
+                            const active =
+                                selectedUser &&
+                                (
+                                    selectedUser._id ||
+                                    selectedUser.id
+                                )?.toString() ===
+                                id?.toString();
 
-                                    <button
-                                        key={id}
-                                        className={
-                                            selectedUser &&
-                                            (
-                                                selectedUser._id ||
-                                                selectedUser.id
-                                            )?.toString() ===
-                                            id?.toString()
-                                                ? "chat-user active"
-                                                : "chat-user"
+
+                            return (
+
+                                <button
+                                    key={id}
+                                    className={
+                                        active
+                                            ? "chat-user active"
+                                            : "chat-user"
+                                    }
+                                    onClick={() =>
+                                        selectUser(item)
+                                    }
+                                >
+
+                                    <div className="user-avatar">
+
+                                        {
+                                            item.name
+                                                ?.charAt(0)
+                                                ?.toUpperCase() ||
+                                            "U"
                                         }
-                                        onClick={() =>
-                                            selectUser(
-                                                item
-                                            )
-                                        }
-                                    >
 
-                                        <div className="user-avatar">
+                                    </div>
+
+
+                                    <div className="user-info">
+
+                                        <strong>
+                                            {
+                                                item.name ||
+                                                "User"
+                                            }
+                                        </strong>
+
+
+                                        <span>
 
                                             {
-                                                item.name
-                                                    ?.charAt(0)
-                                                    ?.toUpperCase() ||
-                                                "U"
-                                            }
-
-                                        </div>
-
-
-                                        <div className="user-info">
-
-                                            <strong>
-                                                {
-                                                    item.name ||
-                                                    "User"
-                                                }
-                                            </strong>
-
-
-                                            <span>
-
-                                                {isUserOnline(
-                                                    item
-                                                )
+                                                isUserOnline(item)
                                                     ? "🟢 Online"
                                                     : "Offline"
-                                                }
+                                            }
 
-                                            </span>
+                                        </span>
 
-                                        </div>
+                                    </div>
 
-                                    </button>
+                                </button>
 
-                                );
+                            );
 
-                            }
-                        )
+                        })
                     }
 
 
                     {users.length === 0 && (
 
                         <p className="no-users">
-
                             No users available.
-
                         </p>
 
                     )}
@@ -693,12 +708,11 @@ const Messenger = () => {
             </aside>
 
 
-            {/* =========================
+            {/* ==========================
                 CHAT AREA
-            ========================== */}
+            =========================== */}
 
             <main className="chat-area">
-
 
                 {!selectedUser ? (
 
@@ -711,8 +725,7 @@ const Messenger = () => {
                             </h2>
 
                             <p>
-                                Select a user to
-                                start chatting.
+                                Select a user to start chatting.
                             </p>
 
                         </div>
@@ -752,11 +765,12 @@ const Messenger = () => {
 
                                 <span>
 
-                                    {isUserOnline(
-                                        selectedUser
-                                    )
-                                        ? "🟢 Online"
-                                        : "Offline"
+                                    {
+                                        isUserOnline(
+                                            selectedUser
+                                        )
+                                            ? "🟢 Online"
+                                            : "Offline"
                                     }
 
                                 </span>
@@ -779,9 +793,8 @@ const Messenger = () => {
                                     </p>
 
                                     <small>
-                                        Send a message
-                                        to start the
-                                        conversation.
+                                        Send a message to start
+                                        the conversation.
                                     </small>
 
                                 </div>
@@ -837,7 +850,9 @@ const Messenger = () => {
 
                                                     <p>
                                                         {
-                                                            msg.text
+                                                            msg.message ||
+                                                            msg.text ||
+                                                            ""
                                                         }
                                                     </p>
 
@@ -853,7 +868,6 @@ const Messenger = () => {
                                                                     {
                                                                         hour:
                                                                             "2-digit",
-
                                                                         minute:
                                                                             "2-digit"
                                                                     }
@@ -889,21 +903,17 @@ const Messenger = () => {
 
 
                             <div
-                                ref={
-                                    messagesEndRef
-                                }
+                                ref={messagesEndRef}
                             />
 
                         </div>
 
 
-                        {/* MESSAGE FORM */}
+                        {/* MESSAGE INPUT */}
 
                         <form
                             className="message-form"
-                            onSubmit={
-                                sendMessage
-                            }
+                            onSubmit={sendMessage}
                         >
 
                             <input
@@ -938,6 +948,5 @@ const Messenger = () => {
     );
 
 };
-
 
 export default Messenger;
