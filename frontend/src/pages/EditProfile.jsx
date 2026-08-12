@@ -1,55 +1,49 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import {
-    FaUser,
-    FaMapMarkerAlt,
-    FaInfoCircle,
-    FaCamera,
-    FaSave,
-    FaArrowLeft
-} from "react-icons/fa";
+import { FaUserCircle, FaSave, FaArrowLeft } from "react-icons/fa";
 
-import api from "../services/api";
 import { useApp } from "../context/AppContext";
+import api from "../services/api";
 
 import "../styles/EditProfile.css";
 
 const EditProfile = () => {
 
+    const { user } = useApp();
+
     const navigate = useNavigate();
 
-    const {
-        user,
-        setUser
-    } = useApp();
+    const [formData, setFormData] = useState({
+        name: user?.name || "",
+        bio: user?.bio || "",
+        location: user?.location || "",
+        profileImage:
+            user?.profileImage ||
+            user?.avatar ||
+            user?.image ||
+            ""
+    });
 
     const [loading, setLoading] = useState(false);
 
-    const [formData, setFormData] = useState({
-        name: "",
-        bio: "",
-        location: "",
-        profileImage: ""
-    });
+
+    // ==========================
+    // AUTH CHECK
+    // ==========================
+
+    if (!user) {
+
+        navigate("/login");
+
+        return null;
+
+    }
 
 
-    useEffect(() => {
-
-        if (!user) {
-            navigate("/login");
-            return;
-        }
-
-        setFormData({
-            name: user.name || "",
-            bio: user.bio || "",
-            location: user.location || "",
-            profileImage: user.profileImage || ""
-        });
-
-    }, [user, navigate]);
-
+    // ==========================
+    // HANDLE INPUT
+    // ==========================
 
     const handleChange = (e) => {
 
@@ -58,53 +52,17 @@ const EditProfile = () => {
             value
         } = e.target;
 
-        setFormData((prev) => ({
-            ...prev,
+        setFormData({
+            ...formData,
             [name]: value
-        }));
+        });
 
     };
 
 
-    const handleImageChange = (e) => {
-
-        const file = e.target.files?.[0];
-
-        if (!file) {
-            return;
-        }
-
-        if (!file.type.startsWith("image/")) {
-
-            alert("Please select a valid image.");
-
-            return;
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-
-            alert(
-                "Image size must be less than 5MB."
-            );
-
-            return;
-        }
-
-        const reader = new FileReader();
-
-        reader.onloadend = () => {
-
-            setFormData((prev) => ({
-                ...prev,
-                profileImage: reader.result
-            }));
-
-        };
-
-        reader.readAsDataURL(file);
-
-    };
-
+    // ==========================
+    // UPDATE PROFILE
+    // ==========================
 
     const handleSubmit = async (e) => {
 
@@ -112,9 +70,10 @@ const EditProfile = () => {
 
         if (!formData.name.trim()) {
 
-            alert("Name cannot be empty.");
+            alert("Name is required.");
 
             return;
+
         }
 
         try {
@@ -123,41 +82,26 @@ const EditProfile = () => {
 
             const response = await api.put(
                 "/users/profile",
-                {
-                    name: formData.name,
-                    bio: formData.bio,
-                    location: formData.location,
-                    profileImage: formData.profileImage
-                }
+                formData
             );
 
-
             const updatedUser =
-                response.data?.user;
+                response.data?.user ||
+                response.data;
 
-
-            if (updatedUser) {
-
-                setUser(updatedUser);
-
-                /*
-                 * Keep localStorage in sync if
-                 * AppContext stores user there.
-                 */
-
-                localStorage.setItem(
-                    "user",
-                    JSON.stringify(updatedUser)
-                );
-
-            }
-
+            // Update localStorage user
+            localStorage.setItem(
+                "user",
+                JSON.stringify(updatedUser)
+            );
 
             alert(
                 "Profile updated successfully!"
             );
 
             navigate("/profile");
+
+            window.location.reload();
 
         } catch (err) {
 
@@ -180,11 +124,6 @@ const EditProfile = () => {
     };
 
 
-    if (!user) {
-        return null;
-    }
-
-
     return (
 
         <div className="edit-profile-page">
@@ -192,99 +131,71 @@ const EditProfile = () => {
             <div className="edit-profile-container">
 
 
-                {/* =========================
+                {/* ==========================
                     HEADER
-                ========================== */}
+                =========================== */}
 
                 <div className="edit-profile-header">
 
                     <button
-                        type="button"
                         className="back-profile-btn"
                         onClick={() =>
                             navigate("/profile")
                         }
                     >
+
                         <FaArrowLeft />
 
                         Back to Profile
+
                     </button>
 
 
-                    <div>
+                    <h1>
+                        Edit Profile
+                    </h1>
 
-                        <h1>
-                            Edit Profile
-                        </h1>
-
-                        <p>
-                            Update your personal
-                            information
-                        </p>
-
-                    </div>
+                    <p>
+                        Update your Marketplace profile information.
+                    </p>
 
                 </div>
 
 
-                {/* =========================
+                {/* ==========================
                     PROFILE PREVIEW
-                ========================== */}
+                =========================== */}
 
                 <div className="profile-preview">
 
-                    <div className="edit-avatar">
+                    {formData.profileImage ? (
 
-                        {formData.profileImage ? (
+                        <img
+                            src={formData.profileImage}
+                            alt="Profile"
+                            onError={(e) => {
+                                e.currentTarget.style.display =
+                                    "none";
+                            }}
+                        />
 
-                            <img
-                                src={
-                                    formData.profileImage
-                                }
-                                alt="Profile"
-                            />
+                    ) : (
 
-                        ) : (
+                        <FaUserCircle />
 
-                            <FaUser />
+                    )}
 
-                        )}
-
-                    </div>
-
-
-                    <label
-                        htmlFor="profileImage"
-                        className="change-photo-btn"
-                    >
-
-                        <FaCamera />
-
-                        Change Photo
-
-                    </label>
-
-
-                    <input
-                        id="profileImage"
-                        type="file"
-                        accept="image/*"
-                        onChange={
-                            handleImageChange
-                        }
-                        hidden
-                    />
-
-                    <small>
-                        JPG, PNG or WEBP • Max 5MB
-                    </small>
+                    <h2>
+                        {formData.name ||
+                            "Marketplace User"}
+                    </h2>
 
                 </div>
 
 
-                {/* =========================
+                {/* ==========================
                     FORM
-                ========================== */}
+                =========================== */}
 
                 <form
                     className="edit-profile-form"
@@ -292,121 +203,122 @@ const EditProfile = () => {
                 >
 
 
-                    {/* Name */}
+                    {/* NAME */}
 
                     <div className="form-group">
 
-                        <label htmlFor="name">
-
-                            <FaUser />
-
+                        <label>
                             Full Name
-
                         </label>
 
                         <input
-                            id="name"
                             type="text"
                             name="name"
                             value={formData.name}
                             onChange={handleChange}
                             placeholder="Enter your name"
-                            maxLength={100}
                             required
                         />
 
                     </div>
 
 
-                    {/* Bio */}
-
-                    <div className="form-group">
-
-                        <label htmlFor="bio">
-
-                            <FaInfoCircle />
-
-                            Bio
-
-                        </label>
-
-                        <textarea
-                            id="bio"
-                            name="bio"
-                            value={formData.bio}
-                            onChange={handleChange}
-                            placeholder="Tell people something about yourself..."
-                            maxLength={500}
-                            rows={5}
-                        />
-
-                        <span className="character-count">
-
-                            {formData.bio.length}/500
-
-                        </span>
-
-                    </div>
-
-
-                    {/* Location */}
-
-                    <div className="form-group">
-
-                        <label htmlFor="location">
-
-                            <FaMapMarkerAlt />
-
-                            Location
-
-                        </label>
-
-                        <input
-                            id="location"
-                            type="text"
-                            name="location"
-                            value={formData.location}
-                            onChange={handleChange}
-                            placeholder="e.g. Dhaka, Bangladesh"
-                            maxLength={100}
-                        />
-
-                    </div>
-
-
-                    {/* Email - Read Only */}
+                    {/* EMAIL */}
 
                     <div className="form-group">
 
                         <label>
-
-                            Email Address
-
+                            Email
                         </label>
 
                         <input
                             type="email"
-                            value={
-                                user.email || ""
-                            }
+                            value={user.email || ""}
                             disabled
                         />
 
                         <small>
-                            Email address cannot be
-                            changed here.
+                            Email cannot be changed.
                         </small>
 
                     </div>
 
 
-                    {/* Actions */}
+                    {/* BIO */}
+
+                    <div className="form-group">
+
+                        <label>
+                            Bio
+                        </label>
+
+                        <textarea
+                            name="bio"
+                            value={formData.bio}
+                            onChange={handleChange}
+                            placeholder="Tell something about yourself..."
+                            rows="4"
+                            maxLength="250"
+                        />
+
+                        <small>
+                            {formData.bio.length}/250
+                        </small>
+
+                    </div>
+
+
+                    {/* LOCATION */}
+
+                    <div className="form-group">
+
+                        <label>
+                            Location
+                        </label>
+
+                        <input
+                            type="text"
+                            name="location"
+                            value={formData.location}
+                            onChange={handleChange}
+                            placeholder="e.g. Dhaka, Bangladesh"
+                        />
+
+                    </div>
+
+
+                    {/* PROFILE IMAGE */}
+
+                    <div className="form-group">
+
+                        <label>
+                            Profile Image URL
+                        </label>
+
+                        <input
+                            type="url"
+                            name="profileImage"
+                            value={
+                                formData.profileImage
+                            }
+                            onChange={handleChange}
+                            placeholder="https://example.com/image.jpg"
+                        />
+
+                        <small>
+                            Paste a public image URL.
+                        </small>
+
+                    </div>
+
+
+                    {/* BUTTONS */}
 
                     <div className="edit-profile-actions">
 
                         <button
                             type="button"
-                            className="cancel-btn"
+                            className="cancel-profile-btn"
                             onClick={() =>
                                 navigate("/profile")
                             }
@@ -426,8 +338,7 @@ const EditProfile = () => {
 
                             {loading
                                 ? "Saving..."
-                                : "Save Changes"
-                            }
+                                : "Save Changes"}
 
                         </button>
 
