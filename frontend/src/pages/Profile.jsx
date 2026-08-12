@@ -18,7 +18,6 @@ import { useApp } from "../context/AppContext";
 
 import "../styles/Profile.css";
 
-
 const Profile = () => {
 
     const {
@@ -26,22 +25,16 @@ const Profile = () => {
         logout
     } = useApp();
 
-    const navigate =
-        useNavigate();
-
+    const navigate = useNavigate();
 
     // ==========================
     // AUTH CHECK
     // ==========================
 
     if (!user) {
-
         navigate("/login");
-
         return null;
-
     }
-
 
     // ==========================
     // USER DATA
@@ -56,23 +49,19 @@ const Profile = () => {
     const userRole =
         user.role || "customer";
 
-
     const avatar =
         user.avatar ||
         user.profileImage ||
         user.image ||
         null;
 
-
     const bio =
         user.bio ||
         "Welcome to my Marketplace profile.";
 
-
     const location =
         user.location ||
         "Location not added";
-
 
     // ==========================
     // LOGOUT
@@ -86,14 +75,34 @@ const Profile = () => {
 
     };
 
+    // ==========================
+    // EDIT PROFILE
+    // ==========================
+
+    const handleEditProfile = () => {
+
+        navigate("/edit-profile");
+
+    };
+
+    // ==========================
+    // SETTINGS
+    // ==========================
+
+    const handleSettings = () => {
+
+        alert(
+            "Account settings will be available soon."
+        );
+
+    };
 
     return (
 
         <div className="profile-page">
 
-
             {/* ==========================
-                COVER SECTION
+                COVER
             =========================== */}
 
             <div className="profile-cover">
@@ -126,7 +135,6 @@ const Profile = () => {
 
                 <section className="profile-header">
 
-
                     {/* PROFILE IMAGE */}
 
                     <div className="profile-avatar">
@@ -155,7 +163,6 @@ const Profile = () => {
                             {userName}
                         </h1>
 
-
                         <span className="profile-role">
 
                             <FaUserTag />
@@ -164,18 +171,12 @@ const Profile = () => {
 
                         </span>
 
-
                         <p className="profile-bio">
-
                             {bio}
-
                         </p>
 
-
                         <p className="profile-location">
-
                             📍 {location}
-
                         </p>
 
                     </div>
@@ -187,11 +188,7 @@ const Profile = () => {
 
                         <button
                             className="edit-profile-btn"
-                            onClick={() =>
-                                alert(
-                                    "Edit Profile will be available soon."
-                                )
-                            }
+                            onClick={handleEditProfile}
                         >
 
                             <FaEdit />
@@ -203,11 +200,8 @@ const Profile = () => {
 
                         <button
                             className="settings-btn"
-                            onClick={() =>
-                                alert(
-                                    "Settings will be available soon."
-                                )
-                            }
+                            onClick={handleSettings}
+                            title="Settings"
                         >
 
                             <FaCog />
@@ -215,7 +209,6 @@ const Profile = () => {
                         </button>
 
                     </div>
-
 
                 </section>
 
@@ -298,7 +291,7 @@ const Profile = () => {
 
 
                     {/* ==========================
-                        QUICK ACTIONS
+                        QUICK ACCESS
                     =========================== */}
 
                     <div className="profile-card">
@@ -309,7 +302,6 @@ const Profile = () => {
 
 
                         <div className="profile-actions-grid">
-
 
                             <Link
                                 to="/orders"
@@ -398,7 +390,6 @@ const Profile = () => {
 
                             </Link>
 
-
                         </div>
 
                     </div>
@@ -417,8 +408,7 @@ const Profile = () => {
                             </h2>
 
                             <p>
-                                Manage your Marketplace
-                                account.
+                                Manage your Marketplace account.
                             </p>
 
                         </div>
@@ -437,7 +427,6 @@ const Profile = () => {
 
                     </div>
 
-
                 </div>
 
             </div>
@@ -447,6 +436,5 @@ const Profile = () => {
     );
 
 };
-
 
 export default Profile;
