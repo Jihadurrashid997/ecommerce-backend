@@ -27,6 +27,7 @@ router.put(
 // ==========================
 
 // Get all users
+
 router.get(
     "/",
     auth(["admin"]),
@@ -35,6 +36,7 @@ router.get(
 
 
 // Delete user
+
 router.delete(
     "/:id",
     auth(["admin"]),
