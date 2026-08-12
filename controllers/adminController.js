@@ -1,57 +1,171 @@
-const Settings = require('../models/Settings');
-const Product = require('../models/Product');
-const User = require('../models/User'); // ইউজার মডেলটি ইম্পোর্ট করা হলো যাতে অ্যাডমিন প্যানেলে সব রেজিস্টার্ড অ্যাকাউন্ট দেখা যায়
+const User = require("../models/User");
+const Product = require("../models/Product");
+const Order = require("../models/Order");
 
-// Initialize settings if empty
-const getSettingsInstance = async () => {
-    let settings = await Settings.findOne();
-    if (!settings) {
-        settings = new Settings();
-        await settings.save();
-    }
-    return settings;
-};
+// ========================================
+// ADMIN ANALYTICS
+// GET /api/admin/analytics
+// ========================================
 
-// Update marketplace settings
-exports.updateMarketplaceSettings = async (req, res) => {
+exports.getAnalytics = async (req, res) => {
     try {
-        const { maxSellerImages, vatPercentage, activePaymentGateway } = req.body;
-        let settings = await getSettingsInstance();
 
-        if (maxSellerImages !== undefined) settings.maxSellerImages = maxSellerImages;
-        if (vatPercentage !== undefined) settings.vatPercentage = vatPercentage;
-        if (activePaymentGateway !== undefined) settings.activePaymentGateway = activePaymentGateway;
+        const totalUsers =
+            await User.countDocuments();
 
-        await settings.save();
-        res.status(200).json({ message: 'Settings updated successfully', settings });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
+        const totalProducts =
+            await Product.countDocuments();
 
-// Approve product
-exports.approveProduct = async (req, res) => {
-    try {
-        const { productId } = req.params;
-        const product = await Product.findByIdAndUpdate(productId, { isApproved: true }, { new: true });
-        if (!product) return res.status(404).json({ message: 'Product not found' });
-        res.status(200).json({ message: 'Product approved successfully', product });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
+        const totalOrders =
+            await Order.countDocuments();
 
-// View all registered accounts for the admin panel
-exports.getAllRegisteredUsers = async (req, res) => {
-    try {
-        // ডাটাবেজ থেকে সমস্ত ইউজারের তালিকা সংগ্রহ করা হচ্ছে (পাসওয়ার্ড বাদে)
-        const users = await User.find().select('-password').sort({ createdAt: -1 });
+
+        // Paid orders
+
+        const paidOrders =
+            await Order.find({
+                paymentStatus: "paid"
+            });
+
+
+        const totalRevenue =
+            paidOrders.reduce(
+                (total, order) =>
+                    total +
+                    Number(order.totalPrice || 0),
+                0
+            );
+
+
+        // Order statistics
+
+        const pendingOrders =
+            await Order.countDocuments({
+                status: "Pending"
+            });
+
+
+        const processingOrders =
+            await Order.countDocuments({
+                status: "Processing"
+            });
+
+
+        const shippedOrders =
+            await Order.countDocuments({
+                status: "Shipped"
+            });
+
+
+        const deliveredOrders =
+            await Order.countDocuments({
+                status: "Delivered"
+            });
+
+
+        const cancelledOrders =
+            await Order.countDocuments({
+                status: "Cancelled"
+            });
+
+
+        // Payment statistics
+
+        const paidCount =
+            await Order.countDocuments({
+                paymentStatus: "paid"
+            });
+
+
+        const pendingPaymentCount =
+            await Order.countDocuments({
+                paymentStatus: "pending"
+            });
+
+
+        const failedPaymentCount =
+            await Order.countDocuments({
+                paymentStatus: "failed"
+            });
+
+
+        const cancelledPaymentCount =
+            await Order.countDocuments({
+                paymentStatus: "cancelled"
+            });
+
+
         res.status(200).json({
+
             success: true,
-            totalUsers: users.length,
-            users
+
+            analytics: {
+
+                totalUsers,
+
+                totalProducts,
+
+                totalOrders,
+
+                totalRevenue,
+
+                orders: {
+
+                    pending:
+                        pendingOrders,
+
+                    processing:
+                        processingOrders,
+
+                    shipped:
+                        shippedOrders,
+
+                    delivered:
+                        deliveredOrders,
+
+                    cancelled:
+                        cancelledOrders
+
+                },
+
+                payments: {
+
+                    paid:
+                        paidCount,
+
+                    pending:
+                        pendingPaymentCount,
+
+                    failed:
+                        failedPaymentCount,
+
+                    cancelled:
+                        cancelledPaymentCount
+
+                }
+
+            }
+
         });
+
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+
+        console.error(
+            "Admin analytics error:",
+            err
+        );
+
+
+        res.status(500).json({
+
+            success: false,
+
+            message:
+                err.message ||
+                "Failed to load analytics."
+
+        });
+
     }
 };
