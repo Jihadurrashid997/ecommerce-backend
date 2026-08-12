@@ -1,16 +1,15 @@
 const User = require("../models/User");
 
 // ==========================
-// Get All Users
+// GET ALL USERS - ADMIN
 // ==========================
 
 exports.getUsers = async (req, res) => {
-
     try {
 
-        const users = await User
-            .find()
-            .select("-password");
+        const users = await User.find()
+            .select("-password")
+            .sort({ createdAt: -1 });
 
         res.json(users);
 
@@ -23,16 +22,47 @@ exports.getUsers = async (req, res) => {
         });
 
     }
-
 };
 
 
 // ==========================
-// Update My Profile
+// GET MY PROFILE
+// ==========================
+
+exports.getProfile = async (req, res) => {
+    try {
+
+        const user = await User.findById(req.user.id)
+            .select("-password");
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        res.json({
+            success: true,
+            user
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            message: err.message
+        });
+
+    }
+};
+
+
+// ==========================
+// UPDATE MY PROFILE
 // ==========================
 
 exports.updateProfile = async (req, res) => {
-
     try {
 
         const {
@@ -42,11 +72,97 @@ exports.updateProfile = async (req, res) => {
             profileImage
         } = req.body;
 
+        const user = await User.findById(req.user.id);
 
-        const user = await User.findById(
-            req.user.id
-        );
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
 
+
+        // ==========================
+        // UPDATE NAME
+        // ==========================
+
+        if (
+            typeof name === "string" &&
+            name.trim()
+        ) {
+            user.name = name.trim();
+        }
+
+
+        // ==========================
+        // UPDATE BIO
+        // ==========================
+
+        if (typeof bio === "string") {
+
+            user.bio = bio.trim();
+
+        }
+
+
+        // ==========================
+        // UPDATE LOCATION
+        // ==========================
+
+        if (typeof location === "string") {
+
+            user.location = location.trim();
+
+        }
+
+
+        // ==========================
+        // UPDATE PROFILE IMAGE
+        // ==========================
+
+        if (typeof profileImage === "string") {
+
+            user.profileImage =
+                profileImage.trim();
+
+        }
+
+
+        const updatedUser =
+            await user.save();
+
+
+        const safeUser =
+            await User.findById(updatedUser._id)
+                .select("-password");
+
+
+        res.json({
+            success: true,
+            message: "Profile updated successfully",
+            user: safeUser
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            message: err.message
+        });
+
+    }
+};
+
+
+// ==========================
+// DELETE USER - ADMIN
+// ==========================
+
+exports.deleteUser = async (req, res) => {
+    try {
+
+        const user =
+            await User.findById(req.params.id);
 
         if (!user) {
 
@@ -56,137 +172,22 @@ exports.updateProfile = async (req, res) => {
 
         }
 
-
-        // Update Name
-
-        if (name !== undefined) {
-
-            if (!name.trim()) {
-
-                return res.status(400).json({
-                    message: "Name cannot be empty"
-                });
-
-            }
-
-            user.name = name.trim();
-
-        }
-
-
-        // Update Bio
-
-        if (bio !== undefined) {
-
-            user.bio = bio.trim();
-
-        }
-
-
-        // Update Location
-
-        if (location !== undefined) {
-
-            user.location =
-                location.trim();
-
-        }
-
-
-        // Update Profile Image
-
-        if (profileImage !== undefined) {
-
-            user.profileImage =
-                profileImage;
-
-        }
-
-
-        await user.save();
-
-
-        const updatedUser =
-            await User
-                .findById(user._id)
-                .select("-password");
-
-
-        res.json({
-
-            message:
-                "Profile updated successfully",
-
-            user: updatedUser
-
-        });
-
-
-    } catch (err) {
-
-        console.error(err);
-
-        res.status(500).json({
-
-            message: err.message
-
-        });
-
-    }
-
-};
-
-
-// ==========================
-// Delete User
-// ==========================
-
-exports.deleteUser = async (req, res) => {
-
-    try {
-
-        const user =
-            await User.findById(
-                req.params.id
-            );
-
-
-        if (!user) {
-
-            return res.status(404).json({
-
-                message:
-                    "User not found"
-
-            });
-
-        }
-
-
         await User.findByIdAndDelete(
             req.params.id
         );
 
-
         res.json({
-
-            message:
-                "User deleted successfully"
-
+            success: true,
+            message: "User deleted successfully"
         });
-
 
     } catch (err) {
 
         console.error(err);
 
         res.status(500).json({
-
-            message:
-                err.message
-
+            message: err.message
         });
 
     }
-
 };
