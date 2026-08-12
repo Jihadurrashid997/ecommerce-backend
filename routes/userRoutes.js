@@ -4,8 +4,9 @@ const router = express.Router();
 
 const {
     getUsers,
-    deleteUser,
-    updateProfile
+    getProfile,
+    updateProfile,
+    deleteUser
 } = require("../controllers/userController");
 
 const auth = require("../middleware/auth");
@@ -13,6 +14,17 @@ const auth = require("../middleware/auth");
 
 // ==========================
 // MY PROFILE
+// ==========================
+
+router.get(
+    "/profile",
+    auth(),
+    getProfile
+);
+
+
+// ==========================
+// UPDATE MY PROFILE
 // ==========================
 
 router.put(
@@ -23,10 +35,8 @@ router.put(
 
 
 // ==========================
-// ADMIN
+// ADMIN - GET ALL USERS
 // ==========================
-
-// Get all users
 
 router.get(
     "/",
@@ -35,7 +45,9 @@ router.get(
 );
 
 
-// Delete user
+// ==========================
+// ADMIN - DELETE USER
+// ==========================
 
 router.delete(
     "/:id",
