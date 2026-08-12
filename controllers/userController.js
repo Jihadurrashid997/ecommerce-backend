@@ -80,11 +80,6 @@ exports.updateProfile = async (req, res) => {
             });
         }
 
-
-        // ==========================
-        // UPDATE NAME
-        // ==========================
-
         if (
             typeof name === "string" &&
             name.trim()
@@ -92,54 +87,113 @@ exports.updateProfile = async (req, res) => {
             user.name = name.trim();
         }
 
-
-        // ==========================
-        // UPDATE BIO
-        // ==========================
-
         if (typeof bio === "string") {
-
             user.bio = bio.trim();
-
         }
-
-
-        // ==========================
-        // UPDATE LOCATION
-        // ==========================
 
         if (typeof location === "string") {
-
             user.location = location.trim();
-
         }
-
-
-        // ==========================
-        // UPDATE PROFILE IMAGE
-        // ==========================
 
         if (typeof profileImage === "string") {
-
-            user.profileImage =
-                profileImage.trim();
-
+            user.profileImage = profileImage.trim();
         }
 
-
-        const updatedUser =
-            await user.save();
-
+        const updatedUser = await user.save();
 
         const safeUser =
             await User.findById(updatedUser._id)
                 .select("-password");
 
-
         res.json({
             success: true,
             message: "Profile updated successfully",
             user: safeUser
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            message: err.message
+        });
+
+    }
+};
+
+
+// ==========================
+// SEARCH USERS
+// ==========================
+
+exports.searchUsers = async (req, res) => {
+    try {
+
+        const keyword =
+            (req.query.q || "").trim();
+
+        if (!keyword) {
+            return res.json([]);
+        }
+
+        const users = await User.find({
+            $or: [
+                {
+                    name: {
+                        $regex: keyword,
+                        $options: "i"
+                    }
+                },
+                {
+                    email: {
+                        $regex: keyword,
+                        $options: "i"
+                    }
+                }
+            ]
+        })
+            .select(
+                "_id name email role bio location profileImage"
+            )
+            .limit(20);
+
+        res.json(users);
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            message: err.message
+        });
+
+    }
+};
+
+
+// ==========================
+// GET PUBLIC USER PROFILE
+// ==========================
+
+exports.getPublicProfile = async (req, res) => {
+    try {
+
+        const user = await User.findById(
+            req.params.id
+        ).select(
+            "_id name email role bio location profileImage createdAt"
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                message: "User not found"
+            });
+        }
+
+        res.json({
+            success: true,
+            user
         });
 
     } catch (err) {
