@@ -10,15 +10,26 @@ import {
     FaTimes,
     FaSearch,
     FaSignOutAlt,
-    FaBoxOpen
+    FaBoxOpen,
+    FaHome,
+    FaTachometerAlt,
+    FaStore,
+    FaUserShield
 } from "react-icons/fa";
 
 import { useApp } from "../context/AppContext";
+
 import "../styles/Navbar.css";
+
 
 const Navbar = () => {
 
-    const [menuOpen, setMenuOpen] = useState(false);
+    const [menuOpen, setMenuOpen] =
+        useState(false);
+
+    const [searchText, setSearchText] =
+        useState("");
+
 
     const {
         user,
@@ -26,33 +37,91 @@ const Navbar = () => {
         cart
     } = useApp();
 
+
     const navigate = useNavigate();
 
-    const cartCount = cart.reduce(
-        (total, item) =>
-            total + (item.quantity || 1),
-        0
-    );
+
+    // ==========================
+    // CART COUNT
+    // ==========================
+
+    const cartCount =
+        (cart || []).reduce(
+            (total, item) =>
+                total +
+                Number(item.quantity || 1),
+            0
+        );
+
+
+    // ==========================
+    // CLOSE MENU
+    // ==========================
+
+    const closeMenu = () => {
+
+        setMenuOpen(false);
+
+    };
+
+
+    // ==========================
+    // SEARCH
+    // ==========================
+
+    const handleSearch = (e) => {
+
+        e.preventDefault();
+
+
+        const query =
+            searchText.trim();
+
+
+        if (!query) {
+
+            navigate("/");
+
+            return;
+
+        }
+
+
+        navigate(
+            `/?search=${encodeURIComponent(query)}`
+        );
+
+
+        closeMenu();
+
+    };
+
+
+    // ==========================
+    // LOGOUT
+    // ==========================
 
     const handleLogout = () => {
 
         logout();
 
-        setMenuOpen(false);
+        setSearchText("");
+
+        closeMenu();
 
         navigate("/login");
 
     };
 
-    const closeMenu = () => {
-        setMenuOpen(false);
-    };
 
     return (
 
         <nav className="navbar">
 
-            {/* Logo */}
+
+            {/* ==========================
+                LOGO
+            =========================== */}
 
             <div className="logo">
 
@@ -60,27 +129,76 @@ const Navbar = () => {
                     to="/"
                     onClick={closeMenu}
                 >
-                    Marketplace
+
+                    <span className="logo-icon">
+                        M
+                    </span>
+
+                    <span>
+                        Marketplace
+                    </span>
+
                 </Link>
 
             </div>
 
 
-            {/* Search */}
+            {/* ==========================
+                SEARCH
+            =========================== */}
 
-            <div className="search-box">
+            <form
+                className="search-box"
+                onSubmit={handleSearch}
+            >
 
-                <FaSearch className="search-icon" />
-
-                <input
-                    type="text"
-                    placeholder="Search products..."
+                <FaSearch
+                    className="search-icon"
                 />
 
-            </div>
+
+                <input
+                    type="search"
+                    value={searchText}
+                    onChange={(e) =>
+                        setSearchText(
+                            e.target.value
+                        )
+                    }
+                    placeholder="Search products..."
+                    aria-label="Search products"
+                />
 
 
-            {/* Navigation */}
+                {searchText && (
+
+                    <button
+                        type="button"
+                        className="clear-search"
+                        onClick={() =>
+                            setSearchText("")
+                        }
+                        aria-label="Clear search"
+                    >
+                        ×
+                    </button>
+
+                )}
+
+
+                <button
+                    type="submit"
+                    className="search-btn"
+                >
+                    Search
+                </button>
+
+            </form>
+
+
+            {/* ==========================
+                NAVIGATION
+            =========================== */}
 
             <ul
                 className={
@@ -90,7 +208,8 @@ const Navbar = () => {
                 }
             >
 
-                {/* Home */}
+
+                {/* HOME */}
 
                 <li>
 
@@ -98,13 +217,19 @@ const Navbar = () => {
                         to="/"
                         onClick={closeMenu}
                     >
-                        Home
+
+                        <FaHome />
+
+                        <span>
+                            Home
+                        </span>
+
                     </Link>
 
                 </li>
 
 
-                {/* Dashboard */}
+                {/* DASHBOARD */}
 
                 {user && (
 
@@ -114,83 +239,11 @@ const Navbar = () => {
                             to="/dashboard"
                             onClick={closeMenu}
                         >
-                            Dashboard
-                        </Link>
 
-                    </li>
+                            <FaTachometerAlt />
 
-                )}
-
-
-                {/* Seller */}
-
-                {user?.role === "seller" && (
-
-                    <li>
-
-                        <Link
-                            to="/seller"
-                            onClick={closeMenu}
-                        >
-                            Seller
-                        </Link>
-
-                    </li>
-
-                )}
-
-
-                {/* Admin */}
-
-                {user?.role === "admin" && (
-
-                    <li>
-
-                        <Link
-                            to="/admin"
-                            onClick={closeMenu}
-                        >
-                            Admin
-                        </Link>
-
-                    </li>
-
-                )}
-
-
-                {/* Messenger */}
-
-                {user && (
-
-                    <li>
-
-                        <Link
-                            to="/messenger"
-                            onClick={closeMenu}
-                        >
-                            <FaComments />
-                        </Link>
-
-                    </li>
-
-                )}
-
-
-                {/* Profile */}
-
-                {user && (
-
-                    <li>
-
-                        <Link
-                            to="/profile"
-                            onClick={closeMenu}
-                        >
-
-                            <FaUserCircle />
-
-                            <span className="user-name">
-                                {user.name}
+                            <span>
+                                Dashboard
                             </span>
 
                         </Link>
@@ -200,18 +253,22 @@ const Navbar = () => {
                 )}
 
 
-                {/* Wishlist */}
+                {/* SELLER */}
 
-                {user && (
+                {user?.role === "seller" && (
 
                     <li>
 
                         <Link
-                            to="/wishlist"
+                            to="/seller"
                             onClick={closeMenu}
                         >
 
-                            <FaHeart />
+                            <FaStore />
+
+                            <span>
+                                Seller
+                            </span>
 
                         </Link>
 
@@ -220,7 +277,109 @@ const Navbar = () => {
                 )}
 
 
-                {/* Orders */}
+                {/* ADMIN */}
+
+                {user?.role === "admin" && (
+
+                    <li>
+
+                        <Link
+                            to="/admin"
+                            onClick={closeMenu}
+                        >
+
+                            <FaUserShield />
+
+                            <span>
+                                Admin
+                            </span>
+
+                        </Link>
+
+                    </li>
+
+                )}
+
+
+                {/* MESSENGER */}
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/messenger"
+                            onClick={closeMenu}
+                            title="Messenger"
+                        >
+
+                            <FaComments />
+
+                            <span>
+                                Messages
+                            </span>
+
+                        </Link>
+
+                    </li>
+
+                )}
+
+
+                {/* PROFILE */}
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/profile"
+                            onClick={closeMenu}
+                            className="profile-link"
+                        >
+
+                            <FaUserCircle />
+
+                            <span className="user-name">
+
+                                {user.name ||
+                                    "Profile"}
+
+                            </span>
+
+                        </Link>
+
+                    </li>
+
+                )}
+
+
+                {/* WISHLIST */}
+
+                {user && (
+
+                    <li>
+
+                        <Link
+                            to="/wishlist"
+                            onClick={closeMenu}
+                            title="Wishlist"
+                        >
+
+                            <FaHeart />
+
+                            <span>
+                                Wishlist
+                            </span>
+
+                        </Link>
+
+                    </li>
+
+                )}
+
+
+                {/* ORDERS */}
 
                 {user && (
 
@@ -244,7 +403,7 @@ const Navbar = () => {
                 )}
 
 
-                {/* Cart */}
+                {/* CART */}
 
                 {user && (
 
@@ -254,9 +413,16 @@ const Navbar = () => {
                             to="/cart"
                             onClick={closeMenu}
                             className="cart-link"
+                            title="Cart"
                         >
 
                             <FaShoppingCart />
+
+
+                            <span>
+                                Cart
+                            </span>
+
 
                             {cartCount > 0 && (
 
@@ -275,40 +441,45 @@ const Navbar = () => {
                 )}
 
 
-                {/* Login / Register */}
+                {/* LOGIN */}
 
                 {!user && (
 
-                    <>
+                    <li>
 
-                        <li>
+                        <Link
+                            to="/login"
+                            onClick={closeMenu}
+                            className="login-link"
+                        >
+                            Login
+                        </Link>
 
-                            <Link
-                                to="/login"
-                                onClick={closeMenu}
-                            >
-                                Login
-                            </Link>
-
-                        </li>
-
-                        <li>
-
-                            <Link
-                                to="/register"
-                                onClick={closeMenu}
-                            >
-                                Register
-                            </Link>
-
-                        </li>
-
-                    </>
+                    </li>
 
                 )}
 
 
-                {/* Logout */}
+                {/* REGISTER */}
+
+                {!user && (
+
+                    <li>
+
+                        <Link
+                            to="/register"
+                            onClick={closeMenu}
+                            className="register-link"
+                        >
+                            Register
+                        </Link>
+
+                    </li>
+
+                )}
+
+
+                {/* LOGOUT */}
 
                 {user && (
 
@@ -334,13 +505,19 @@ const Navbar = () => {
             </ul>
 
 
-            {/* Mobile Menu */}
+            {/* ==========================
+                MOBILE MENU
+            =========================== */}
 
             <button
+                type="button"
                 className="menu-btn"
                 onClick={() =>
-                    setMenuOpen(!menuOpen)
+                    setMenuOpen(
+                        !menuOpen
+                    )
                 }
+                aria-label="Toggle menu"
             >
 
                 {menuOpen
@@ -355,5 +532,6 @@ const Navbar = () => {
     );
 
 };
+
 
 export default Navbar;
