@@ -35,7 +35,8 @@ import OrderHistory from "./pages/OrderHistory";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailed from "./pages/PaymentFailed";
 import EditProfile from "./pages/EditProfile";
-
+import SearchResults from "./pages/SearchResults";
+import UserProfile from "./pages/UserProfile";
 
 function Footer() {
 
@@ -117,7 +118,15 @@ function App() {
                     path="/product/:id"
                     element={<ProductDetails />}
                 />
+                               <Route
+    path="/search"
+    element={<SearchResults />}
+/>
 
+<Route
+    path="/user/:id"
+    element={<UserProfile />}
+/>
 
                 {/* =========================
                     PAYMENT ROUTES
