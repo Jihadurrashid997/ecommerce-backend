@@ -12,7 +12,7 @@ const {
 } = require("../controllers/paymentController");
 
 
-// Start SSLCommerz Payment
+// Start payment
 router.post(
     "/sslcommerz",
     auth(),
@@ -20,28 +20,24 @@ router.post(
 );
 
 
-// SSLCommerz Success Callback
+// Customer redirect callbacks
 router.post(
     "/success",
     paymentSuccess
 );
 
-
-// SSLCommerz Failed Callback
 router.post(
     "/fail",
     paymentFail
 );
 
-
-// SSLCommerz Cancel Callback
 router.post(
     "/cancel",
     paymentCancel
 );
 
 
-// SSLCommerz IPN
+// Server-to-server IPN
 router.post(
     "/ipn",
     paymentIPN
