@@ -6,6 +6,8 @@ const {
     getUsers,
     getProfile,
     updateProfile,
+    searchUsers,
+    getPublicProfile,
     deleteUser
 } = require("../controllers/userController");
 
@@ -31,6 +33,26 @@ router.put(
     "/profile",
     auth(),
     updateProfile
+);
+
+
+// ==========================
+// SEARCH USERS
+// ==========================
+
+router.get(
+    "/search",
+    searchUsers
+);
+
+
+// ==========================
+// PUBLIC USER PROFILE
+// ==========================
+
+router.get(
+    "/public/:id",
+    getPublicProfile
 );
 
 
