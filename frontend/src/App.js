@@ -34,6 +34,7 @@ import Checkout from "./pages/Checkout";
 import OrderHistory from "./pages/OrderHistory";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailed from "./pages/PaymentFailed";
+import EditProfile from "./pages/EditProfile";
 
 
 function Footer() {
@@ -236,6 +237,14 @@ function App() {
                         </PrivateRoute>
                     }
                 />
+                <Route
+    path="/edit-profile"
+    element={
+        <PrivateRoute>
+            <EditProfile />
+        </PrivateRoute>
+    }
+/>
 
 
                 {/* =========================
