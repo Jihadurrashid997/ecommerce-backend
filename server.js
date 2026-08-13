@@ -15,7 +15,7 @@ const app = express();
 
 
 // ==========================
-// Middleware
+// MIDDLEWARE
 // ==========================
 
 app.use(cors());
@@ -24,7 +24,7 @@ app.use(express.json());
 
 
 // ==========================
-// Upload Folder
+// UPLOAD FOLDER
 // ==========================
 
 if (!fs.existsSync("./uploads")) {
@@ -40,14 +40,14 @@ app.use(
 
 
 // ==========================
-// Connect MongoDB
+// DATABASE
 // ==========================
 
 connectDB();
 
 
 // ==========================
-// API Routes
+// API ROUTES
 // ==========================
 
 app.use(
@@ -92,7 +92,7 @@ app.use(
 
 
 // ==========================
-// Home Route
+// HOME
 // ==========================
 
 app.get("/", (req, res) => {
@@ -119,24 +119,136 @@ const server =
 // SOCKET.IO
 // ==========================
 
-const io = new Server(server, {
+const io =
+    new Server(server, {
 
-    cors: {
-        origin: "*",
-        methods: [
-            "GET",
-            "POST"
-        ]
-    }
+        cors: {
+            origin: "*",
+            methods: [
+                "GET",
+                "POST",
+                "PUT",
+                "DELETE"
+            ]
+        }
 
-});
+    });
 
 
 // ==========================
 // ONLINE USERS
+// userId -> Set of socket IDs
 // ==========================
 
 const onlineUsers = new Map();
+
+
+// ==========================
+// ADD ONLINE USER
+// ==========================
+
+const addOnlineUser = (
+    userId,
+    socketId
+) => {
+
+    const id =
+        userId.toString();
+
+    if (!onlineUsers.has(id)) {
+
+        onlineUsers.set(
+            id,
+            new Set()
+        );
+
+    }
+
+    onlineUsers
+        .get(id)
+        .add(socketId);
+
+};
+
+
+// ==========================
+// REMOVE ONLINE USER
+// ==========================
+
+const removeOnlineUser = (
+    userId,
+    socketId
+) => {
+
+    const id =
+        userId.toString();
+
+    if (!onlineUsers.has(id)) {
+        return;
+    }
+
+    const sockets =
+        onlineUsers.get(id);
+
+    sockets.delete(socketId);
+
+    if (sockets.size === 0) {
+
+        onlineUsers.delete(id);
+
+    }
+
+};
+
+
+// ==========================
+// GET ONLINE USER IDS
+// ==========================
+
+const getOnlineUserIds = () => {
+
+    return Array.from(
+        onlineUsers.keys()
+    );
+
+};
+
+
+// ==========================
+// SEND TO SPECIFIC USER
+// ==========================
+
+const sendToUser = (
+    userId,
+    event,
+    data
+) => {
+
+    if (!userId) {
+        return;
+    }
+
+    const sockets =
+        onlineUsers.get(
+            userId.toString()
+        );
+
+    if (!sockets) {
+        return;
+    }
+
+    sockets.forEach(
+        socketId => {
+
+            io.to(socketId).emit(
+                event,
+                data
+            );
+
+        }
+    );
+
+};
 
 
 // ==========================
@@ -145,10 +257,10 @@ const onlineUsers = new Map();
 
 io.on(
     "connection",
-    (socket) => {
+    socket => {
 
         console.log(
-            "🟢 User connected:",
+            "🟢 Socket connected:",
             socket.id
         );
 
@@ -159,14 +271,17 @@ io.on(
 
         socket.on(
             "user-online",
-            (userId) => {
+            userId => {
 
                 if (!userId) {
                     return;
                 }
 
-                onlineUsers.set(
-                    userId.toString(),
+                socket.userId =
+                    userId.toString();
+
+                addOnlineUser(
+                    userId,
                     socket.id
                 );
 
@@ -175,12 +290,9 @@ io.on(
                     userId
                 );
 
-
                 io.emit(
                     "online-users",
-                    Array.from(
-                        onlineUsers.keys()
-                    )
+                    getOnlineUserIds()
                 );
 
             }
@@ -188,12 +300,12 @@ io.on(
 
 
         // ==========================
-        // JOIN PRIVATE ROOM
+        // JOIN CHAT ROOM
         // ==========================
 
         socket.on(
             "join-room",
-            (roomId) => {
+            roomId => {
 
                 if (!roomId) {
                     return;
@@ -212,20 +324,40 @@ io.on(
 
 
         // ==========================
-        // SEND MESSAGE
+        // LEAVE CHAT ROOM
+        // ==========================
+
+        socket.on(
+            "leave-room",
+            roomId => {
+
+                if (!roomId) {
+                    return;
+                }
+
+                socket.leave(
+                    roomId.toString()
+                );
+
+            }
+        );
+
+
+        // ==========================
+        // REAL-TIME MESSAGE
         // ==========================
 
         socket.on(
             "send-message",
-            (message) => {
+            message => {
 
                 if (!message) {
                     return;
                 }
 
-
                 const {
-                    roomId
+                    roomId,
+                    receiver
                 } = message;
 
 
@@ -234,12 +366,36 @@ io.on(
                 }
 
 
+                // Send to everyone inside
+                // current chat room
+
                 io.to(
                     roomId.toString()
                 ).emit(
                     "receive-message",
                     message
                 );
+
+
+                // Also send directly to receiver
+                // even if receiver has not joined
+                // the room yet.
+
+                const receiverId =
+                    receiver?._id ||
+                    receiver?.id ||
+                    receiver;
+
+
+                if (receiverId) {
+
+                    sendToUser(
+                        receiverId,
+                        "direct-message",
+                        message
+                    );
+
+                }
 
             }
         );
@@ -259,7 +415,6 @@ io.on(
                 if (!roomId) {
                     return;
                 }
-
 
                 socket
                     .to(roomId.toString())
@@ -289,7 +444,6 @@ io.on(
                     return;
                 }
 
-
                 socket
                     .to(roomId.toString())
                     .emit(
@@ -304,6 +458,51 @@ io.on(
 
 
         // ==========================
+        // MESSAGE SEEN
+        // ==========================
+
+        socket.on(
+            "message-seen",
+            ({
+                roomId,
+                senderId,
+                receiverId
+            }) => {
+
+                if (!roomId) {
+                    return;
+                }
+
+
+                io.to(
+                    roomId.toString()
+                ).emit(
+                    "messages-seen",
+                    {
+                        senderId,
+                        receiverId
+                    }
+                );
+
+
+                if (senderId) {
+
+                    sendToUser(
+                        senderId,
+                        "messages-seen",
+                        {
+                            senderId,
+                            receiverId
+                        }
+                    );
+
+                }
+
+            }
+        );
+
+
+        // ==========================
         // DISCONNECT
         // ==========================
 
@@ -312,39 +511,24 @@ io.on(
             () => {
 
                 console.log(
-                    "🔴 User disconnected:",
+                    "🔴 Socket disconnected:",
                     socket.id
                 );
 
 
-                for (
-                    const [
-                        userId,
-                        socketId
-                    ] of onlineUsers.entries()
-                ) {
+                if (socket.userId) {
 
-                    if (
-                        socketId ===
+                    removeOnlineUser(
+                        socket.userId,
                         socket.id
-                    ) {
-
-                        onlineUsers.delete(
-                            userId
-                        );
-
-                        break;
-
-                    }
+                    );
 
                 }
 
 
                 io.emit(
                     "online-users",
-                    Array.from(
-                        onlineUsers.keys()
-                    )
+                    getOnlineUserIds()
                 );
 
             }
