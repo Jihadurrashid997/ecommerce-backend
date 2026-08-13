@@ -47,12 +47,13 @@ import UserProfile from "./pages/UserProfile";
 function Footer() {
 
     return (
+
         <footer className="footer">
 
             <div className="container">
 
                 <h2>
-                    Marketplace
+                    JR Store
                 </h2>
 
                 <p>
@@ -60,14 +61,14 @@ function Footer() {
                 </p>
 
                 <p>
-                    © 2026 Marketplace. All Rights Reserved.
+                    © 2026 JR Store. All Rights Reserved.
                 </p>
 
             </div>
 
         </footer>
-    );
 
+    );
 }
 
 
@@ -78,6 +79,7 @@ function Footer() {
 function NotFound() {
 
     return (
+
         <div className="not-found">
 
             <h1>
@@ -89,8 +91,8 @@ function NotFound() {
             </h2>
 
         </div>
-    );
 
+    );
 }
 
 
@@ -105,7 +107,7 @@ function App() {
 
 
     // ==========================
-    // INITIAL LOADING SCREEN
+    // INITIAL LOADING
     // ==========================
 
     if (showLoading) {
@@ -141,14 +143,9 @@ function App() {
             <Routes>
 
 
-                {/* =========================
+                {/* =================================
                     PUBLIC ROUTES
-                ========================== */}
-
-                <Route
-                    path="/"
-                    element={<Home />}
-                />
+                ================================= */}
 
                 <Route
                     path="/login"
@@ -160,45 +157,98 @@ function App() {
                     element={<Register />}
                 />
 
+
+                {/* =================================
+                    PROTECTED HOME
+                ================================= */}
+
+                <Route
+                    path="/"
+                    element={
+                        <PrivateRoute>
+                            <Home />
+                        </PrivateRoute>
+                    }
+                />
+
+
+                {/* =================================
+                    PROTECTED PRODUCT
+                ================================= */}
+
                 <Route
                     path="/product/:id"
-                    element={<ProductDetails />}
+                    element={
+                        <PrivateRoute>
+                            <ProductDetails />
+                        </PrivateRoute>
+                    }
                 />
+
+
+                {/* =================================
+                    PROTECTED SEARCH
+                ================================= */}
 
                 <Route
                     path="/search"
-                    element={<SearchResults />}
+                    element={
+                        <PrivateRoute>
+                            <SearchResults />
+                        </PrivateRoute>
+                    }
                 />
+
+
+                {/* =================================
+                    PROTECTED USER PROFILE
+                ================================= */}
 
                 <Route
                     path="/user/:id"
-                    element={<UserProfile />}
+                    element={
+                        <PrivateRoute>
+                            <UserProfile />
+                        </PrivateRoute>
+                    }
                 />
 
 
-                {/* =========================
+                {/* =================================
                     PAYMENT ROUTES
-                ========================== */}
+                ================================= */}
 
                 <Route
                     path="/payment-success"
-                    element={<PaymentSuccess />}
+                    element={
+                        <PrivateRoute>
+                            <PaymentSuccess />
+                        </PrivateRoute>
+                    }
                 />
 
                 <Route
                     path="/payment-fail"
-                    element={<PaymentFailed />}
+                    element={
+                        <PrivateRoute>
+                            <PaymentFailed />
+                        </PrivateRoute>
+                    }
                 />
 
                 <Route
                     path="/payment-cancel"
-                    element={<PaymentFailed />}
+                    element={
+                        <PrivateRoute>
+                            <PaymentFailed />
+                        </PrivateRoute>
+                    }
                 />
 
 
-                {/* =========================
+                {/* =================================
                     USER ROUTES
-                ========================== */}
+                ================================= */}
 
                 <Route
                     path="/profile"
@@ -282,9 +332,9 @@ function App() {
                 />
 
 
-                {/* =========================
+                {/* =================================
                     SELLER ROUTES
-                ========================== */}
+                ================================= */}
 
                 <Route
                     path="/seller"
@@ -305,9 +355,9 @@ function App() {
                 />
 
 
-                {/* =========================
+                {/* =================================
                     ADMIN ROUTES
-                ========================== */}
+                ================================= */}
 
                 <Route
                     path="/admin"
@@ -319,9 +369,9 @@ function App() {
                 />
 
 
-                {/* =========================
+                {/* =================================
                     404
-                ========================== */}
+                ================================= */}
 
                 <Route
                     path="*"
