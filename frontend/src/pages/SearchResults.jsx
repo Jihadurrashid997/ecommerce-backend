@@ -10,12 +10,11 @@ import {
     FaSearch,
     FaComments,
     FaBoxOpen,
-    FaArrowLeft
+    FaArrowLeft,
+    FaStore
 } from "react-icons/fa";
 
-import {
-    motion
-} from "framer-motion";
+import { motion } from "framer-motion";
 
 import api from "../services/api";
 
@@ -30,22 +29,17 @@ const SearchResults = () => {
         useSearchParams();
 
 
-    // ==========================================
-    // SEARCH KEYWORD
-    // ==========================================
+    // Supports both:
+    // /search?q=jisan
+    // /search?search=jisan
 
     const keyword =
         (
             searchParams.get("q") ||
             searchParams.get("search") ||
-            searchParams.get("keyword") ||
             ""
         ).trim();
 
-
-    // ==========================================
-    // STATES
-    // ==========================================
 
     const [products, setProducts] =
         useState([]);
@@ -60,14 +54,11 @@ const SearchResults = () => {
         useState("");
 
 
-    // ==========================================
+    // ==================================================
     // SEARCH
-    // ==========================================
+    // ==================================================
 
     useEffect(() => {
-
-        let cancelled = false;
-
 
         if (!keyword) {
 
@@ -79,190 +70,155 @@ const SearchResults = () => {
 
         }
 
-
-        const searchEverything =
-            async () => {
-
-                try {
-
-                    setLoading(true);
-                    setError("");
-
-
-                    const encodedKeyword =
-                        encodeURIComponent(
-                            keyword
-                        );
-
-
-                    // ==================================
-                    // PRODUCT SEARCH
-                    // ==================================
-
-                    const productRequest =
-                        api.get(
-                            `/products?keyword=${encodedKeyword}`
-                        );
-
-
-                    // ==================================
-                    // USER SEARCH
-                    // ==================================
-
-                    const userRequest =
-                        api.get(
-                            `/users/search?q=${encodedKeyword}`
-                        );
-
-
-                    const [
-                        productResponse,
-                        userResponse
-                    ] =
-                        await Promise.allSettled([
-                            productRequest,
-                            userRequest
-                        ]);
-
-
-                    if (cancelled) return;
-
-
-                    // ==================================
-                    // PRODUCTS
-                    // ==================================
-
-                    if (
-                        productResponse.status ===
-                        "fulfilled"
-                    ) {
-
-                        const data =
-                            productResponse.value.data;
-
-
-                        const productList =
-                            Array.isArray(data)
-                                ? data
-                                : Array.isArray(
-                                    data?.products
-                                )
-                                    ? data.products
-                                    : [];
-
-
-                        setProducts(
-                            productList
-                        );
-
-                    } else {
-
-                        console.error(
-                            "Product search failed:",
-                            productResponse.reason
-                        );
-
-                        setProducts([]);
-
-                    }
-
-
-                    // ==================================
-                    // USERS
-                    // ==================================
-
-                    if (
-                        userResponse.status ===
-                        "fulfilled"
-                    ) {
-
-                        const data =
-                            userResponse.value.data;
-
-
-                        const userList =
-                            Array.isArray(data)
-                                ? data
-                                : Array.isArray(
-                                    data?.users
-                                )
-                                    ? data.users
-                                    : [];
-
-
-                        setUsers(
-                            userList
-                        );
-
-                    } else {
-
-                        console.error(
-                            "User search failed:",
-                            userResponse.reason
-                        );
-
-                        setUsers([]);
-
-                    }
-
-
-                    // ==================================
-                    // BOTH FAILED
-                    // ==================================
-
-                    if (
-                        productResponse.status ===
-                        "rejected" &&
-                        userResponse.status ===
-                        "rejected"
-                    ) {
-
-                        setError(
-                            "Unable to search right now. Please try again."
-                        );
-
-                    }
-
-                } catch (err) {
-
-                    if (cancelled) return;
-
-
-                    console.error(
-                        "Search error:",
-                        err
-                    );
-
-
-                    setError(
-                        err.response?.data?.message ||
-                        "Something went wrong while searching."
-                    );
-
-                } finally {
-
-                    if (!cancelled) {
-                        setLoading(false);
-                    }
-
-                }
-
-            };
-
-
         searchEverything();
-
-
-        return () => {
-            cancelled = true;
-        };
 
     }, [keyword]);
 
 
-    // ==========================================
+    // ==================================================
+    // SEARCH PRODUCTS + USERS
+    // ==================================================
+
+    const searchEverything = async () => {
+
+        try {
+
+            setLoading(true);
+            setError("");
+
+
+            const encoded =
+                encodeURIComponent(
+                    keyword
+                );
+
+
+            const [
+                productResponse,
+                userResponse
+            ] = await Promise.allSettled([
+
+                api.get(
+                    `/products?keyword=${encoded}&search=${encoded}`
+                ),
+
+                api.get(
+                    `/users/search?q=${encoded}`
+                )
+
+            ]);
+
+
+            // ==================================================
+            // PRODUCTS
+            // ==================================================
+
+            if (
+                productResponse.status ===
+                "fulfilled"
+            ) {
+
+                const data =
+                    productResponse.value.data;
+
+
+                const productList =
+                    Array.isArray(data)
+                        ? data
+                        : data?.products || [];
+
+
+                setProducts(
+                    productList
+                );
+
+            } else {
+
+                console.error(
+                    "Product search failed:",
+                    productResponse.reason
+                );
+
+                setProducts([]);
+
+            }
+
+
+            // ==================================================
+            // USERS
+            // ==================================================
+
+            if (
+                userResponse.status ===
+                "fulfilled"
+            ) {
+
+                const data =
+                    userResponse.value.data;
+
+
+                const userList =
+                    Array.isArray(data)
+                        ? data
+                        : data?.users || [];
+
+
+                setUsers(
+                    userList
+                );
+
+            } else {
+
+                console.error(
+                    "User search failed:",
+                    userResponse.reason
+                );
+
+                setUsers([]);
+
+            }
+
+
+            // ==================================================
+            // BOTH FAILED
+            // ==================================================
+
+            if (
+                productResponse.status ===
+                "rejected" &&
+                userResponse.status ===
+                "rejected"
+            ) {
+
+                setError(
+                    "Unable to search right now. Please try again."
+                );
+
+            }
+
+        } catch (err) {
+
+            console.error(
+                "Search error:",
+                err
+            );
+
+            setError(
+                "Something went wrong while searching."
+            );
+
+        } finally {
+
+            setLoading(false);
+
+        }
+
+    };
+
+
+    // ==================================================
     // NO KEYWORD
-    // ==========================================
+    // ==================================================
 
     if (!keyword) {
 
@@ -285,16 +241,12 @@ const SearchResults = () => {
                             sellers and users.
                         </p>
 
-
                         <Link
                             to="/"
                             className="profile-result-btn"
                         >
-
                             <FaArrowLeft />
-
                             Back to Marketplace
-
                         </Link>
 
                     </div>
@@ -310,28 +262,47 @@ const SearchResults = () => {
 
     return (
 
-        <div className="search-results-page">
+        <motion.div
+            className="search-results-page"
+
+            initial={{
+                opacity: 0
+            }}
+
+            animate={{
+                opacity: 1
+            }}
+
+            transition={{
+                duration: 0.5
+            }}
+        >
 
             <div className="search-results-container">
 
 
-                {/* ==================================
+                {/* ==================================================
                     HEADER
-                =================================== */}
+                ================================================== */}
 
-                <motion.div
-                    className="search-results-header"
-                    initial={{
-                        opacity: 0,
-                        y: 20
-                    }}
-                    animate={{
-                        opacity: 1,
-                        y: 0
-                    }}
-                >
+                <div className="search-results-header">
 
-                    <FaSearch />
+                    <motion.div
+                        animate={{
+                            rotate: [0, 8, -8, 0]
+                        }}
+
+                        transition={{
+                            duration: 2,
+                            repeat: Infinity,
+                            repeatDelay: 4
+                        }}
+                    >
+
+                        <FaSearch />
+
+                    </motion.div>
+
 
                     <div>
 
@@ -351,31 +322,53 @@ const SearchResults = () => {
 
                     </div>
 
-                </motion.div>
+                </div>
 
 
-                {/* ==================================
+                {/* ==================================================
                     ERROR
-                =================================== */}
+                ================================================== */}
 
                 {error && (
 
                     <div className="search-error">
+
                         {error}
+
+                        <button
+                            onClick={
+                                searchEverything
+                            }
+                        >
+                            Try Again
+                        </button>
+
                     </div>
 
                 )}
 
 
-                {/* ==================================
+                {/* ==================================================
                     LOADING
-                =================================== */}
+                ================================================== */}
 
                 {loading ? (
 
                     <div className="search-loading">
 
-                        <div className="search-spinner" />
+                        <motion.div
+                            className="search-spinner"
+
+                            animate={{
+                                rotate: 360
+                            }}
+
+                            transition={{
+                                duration: 1,
+                                repeat: Infinity,
+                                ease: "linear"
+                            }}
+                        />
 
                         <p>
                             Searching Marketplace...
@@ -388,9 +381,9 @@ const SearchResults = () => {
                     <>
 
 
-                        {/* =================================
+                        {/* ==================================================
                             PEOPLE
-                        ================================= */}
+                        ================================================== */}
 
                         <section className="search-section">
 
@@ -433,37 +426,40 @@ const SearchResults = () => {
                                                 null;
 
 
-                                            const userId =
-                                                person._id ||
-                                                person.id;
-
-
                                             return (
 
                                                 <motion.div
+
                                                     className="user-search-card"
+
                                                     key={
-                                                        userId ||
-                                                        index
+                                                        person._id
                                                     }
+
                                                     initial={{
                                                         opacity: 0,
-                                                        y: 20
+                                                        y: 25
                                                     }}
+
                                                     animate={{
                                                         opacity: 1,
                                                         y: 0
                                                     }}
+
                                                     transition={{
                                                         delay:
-                                                            index * 0.05
+                                                            index *
+                                                            0.08
                                                     }}
                                                 >
 
 
                                                     {/* AVATAR */}
 
-                                                    <div className="user-search-avatar">
+                                                    <Link
+                                                        to={`/user/${person._id}`}
+                                                        className="user-search-avatar"
+                                                    >
 
                                                         {avatar ? (
 
@@ -471,16 +467,22 @@ const SearchResults = () => {
                                                                 src={
                                                                     avatar
                                                                 }
+
                                                                 alt={
                                                                     person.name ||
                                                                     "User"
                                                                 }
+
                                                                 onError={(
                                                                     e
                                                                 ) => {
 
                                                                     e.currentTarget.style.display =
                                                                         "none";
+
+                                                                    e.currentTarget.parentElement.classList.add(
+                                                                        "avatar-fallback"
+                                                                    );
 
                                                                 }}
                                                             />
@@ -491,35 +493,49 @@ const SearchResults = () => {
 
                                                         )}
 
-                                                    </div>
+                                                    </Link>
 
 
                                                     {/* INFO */}
 
                                                     <div className="user-search-info">
 
-                                                        <h3>
-                                                            {
-                                                                person.name ||
-                                                                "Marketplace User"
-                                                            }
-                                                        </h3>
+                                                        <Link
+                                                            to={`/user/${person._id}`}
+                                                        >
+
+                                                            <h3>
+
+                                                                {person.name ||
+                                                                    "Marketplace User"}
+
+                                                            </h3>
+
+                                                        </Link>
 
 
                                                         <span>
-                                                            {
-                                                                person.role ||
-                                                                "customer"
-                                                            }
+
+                                                            {person.role ||
+                                                                "customer"}
+
                                                         </span>
+
+
+                                                        {person.location && (
+
+                                                            <small>
+                                                                📍{" "}
+                                                                {person.location}
+                                                            </small>
+
+                                                        )}
 
 
                                                         {person.bio && (
 
                                                             <p>
-                                                                {
-                                                                    person.bio
-                                                                }
+                                                                {person.bio}
                                                             </p>
 
                                                         )}
@@ -531,32 +547,28 @@ const SearchResults = () => {
 
                                                     <div className="user-search-actions">
 
-                                                        {userId && (
+                                                        <Link
+                                                            to={`/user/${person._id}`}
+                                                            className="profile-result-btn"
+                                                        >
 
-                                                            <Link
-                                                                to={`/user/${userId}`}
-                                                                className="profile-result-btn"
-                                                            >
-                                                                Profile
-                                                            </Link>
+                                                            <FaUserCircle />
 
-                                                        )}
+                                                            Profile
+
+                                                        </Link>
 
 
-                                                        {userId && (
+                                                        <Link
+                                                            to={`/messenger?user=${person._id}`}
+                                                            className="message-result-btn"
+                                                        >
 
-                                                            <Link
-                                                                to={`/messenger?user=${userId}`}
-                                                                className="message-result-btn"
-                                                            >
+                                                            <FaComments />
 
-                                                                <FaComments />
+                                                            Message
 
-                                                                Message
-
-                                                            </Link>
-
-                                                        )}
+                                                        </Link>
 
                                                     </div>
 
@@ -574,9 +586,9 @@ const SearchResults = () => {
                         </section>
 
 
-                        {/* =================================
+                        {/* ==================================================
                             PRODUCTS
-                        ================================= */}
+                        ================================================== */}
 
                         <section className="search-section">
 
@@ -604,23 +616,15 @@ const SearchResults = () => {
                                     </h3>
 
                                     <p>
-                                        Try searching with
-                                        another keyword.
+                                        Try another product
+                                        name or keyword.
                                     </p>
 
                                 </div>
 
                             ) : (
 
-                                <motion.div
-                                    className="product-grid"
-                                    initial={{
-                                        opacity: 0
-                                    }}
-                                    animate={{
-                                        opacity: 1
-                                    }}
-                                >
+                                <div className="product-grid">
 
                                     {products.map(
                                         (
@@ -630,21 +634,23 @@ const SearchResults = () => {
 
                                             <motion.div
                                                 key={
-                                                    product._id ||
-                                                    product.id ||
-                                                    index
+                                                    product._id
                                                 }
+
                                                 initial={{
                                                     opacity: 0,
-                                                    y: 20
+                                                    y: 30
                                                 }}
+
                                                 animate={{
                                                     opacity: 1,
                                                     y: 0
                                                 }}
+
                                                 transition={{
                                                     delay:
-                                                        index * 0.05
+                                                        index *
+                                                        0.05
                                                 }}
                                             >
 
@@ -659,11 +665,12 @@ const SearchResults = () => {
                                         )
                                     )}
 
-                                </motion.div>
+                                </div>
 
                             )}
 
                         </section>
+
 
                     </>
 
@@ -671,7 +678,7 @@ const SearchResults = () => {
 
             </div>
 
-        </div>
+        </motion.div>
 
     );
 
