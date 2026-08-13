@@ -1,10 +1,12 @@
-const express = require("express");
+const express =
+    require("express");
 
 const router =
     express.Router();
 
 
 const {
+
     getUsers,
     getChatUsers,
     getProfile,
@@ -12,7 +14,9 @@ const {
     searchUsers,
     getPublicProfile,
     deleteUser
-} = require("../controllers/userController");
+
+} =
+    require("../controllers/userController");
 
 
 const auth =
@@ -31,7 +35,7 @@ router.get(
 
 
 // ==========================
-// UPDATE MY PROFILE
+// UPDATE PROFILE
 // ==========================
 
 router.put(
@@ -63,7 +67,7 @@ router.get(
 
 
 // ==========================
-// PUBLIC USER PROFILE
+// PUBLIC PROFILE
 // ==========================
 
 router.get(
@@ -73,7 +77,7 @@ router.get(
 
 
 // ==========================
-// ADMIN - GET ALL USERS
+// ADMIN GET USERS
 // ==========================
 
 router.get(
@@ -84,7 +88,7 @@ router.get(
 
 
 // ==========================
-// ADMIN - DELETE USER
+// ADMIN DELETE USER
 // ==========================
 
 router.delete(
@@ -94,4 +98,5 @@ router.delete(
 );
 
 
-module.exports = router;
+module.exports =
+    router;
