@@ -7,6 +7,11 @@ import {
     useLocation
 } from "react-router-dom";
 
+
+// ======================================================
+// STYLES
+// ======================================================
+
 import "./styles/App.css";
 import "./styles/Navbar.css";
 import "./styles/ProductCard.css";
@@ -15,11 +20,21 @@ import "./styles/Messenger.css";
 import "./styles/Responsive.css";
 import "./styles/Animation.css";
 
+
+// ======================================================
+// COMPONENTS
+// ======================================================
+
 import Navbar from "./components/Navbar";
 import Messenger from "./components/Messenger";
 import Dashboard from "./components/Dashboard";
 import PrivateRoute from "./components/PrivateRoute";
 import LoadingScreen from "./components/LoadingScreen";
+
+
+// ======================================================
+// PAGES
+// ======================================================
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -104,16 +119,19 @@ function NotFound() {
 
 
 // ======================================================
-// LAYOUT
+// APP LAYOUT
 // ======================================================
 
 function AppLayout() {
 
-    const location = useLocation();
+    const location =
+        useLocation();
 
-    /*
-     * Login/Register page-এ Navbar এবং Footer দেখাবো না।
-     */
+
+    // ==================================================
+    // AUTH PAGES
+    // Navbar/Footer login-register page এ থাকবে না
+    // ==================================================
 
     const authPage =
         location.pathname === "/login" ||
@@ -124,24 +142,31 @@ function AppLayout() {
 
         <>
 
-            {/* ==========================
+            {/* ==================================================
                 NAVBAR
-            =========================== */}
+            ================================================== */}
 
-            {!authPage && <Navbar />}
+            {!authPage && (
+                <Navbar />
+            )}
 
 
-            {/* ==========================
+            {/* ==================================================
                 ROUTES
-            =========================== */}
+            ================================================== */}
 
             <Routes>
 
 
                 {/* =================================================
-                    PUBLIC AUTH ROUTES
-                    শুধুমাত্র Login/Register public
-                ================================================= */}
+                    PUBLIC ROUTES
+                    Login এবং Register ছাড়া সব protected
+                ================================================== */}
+
+
+                {/* ==========================
+                    LOGIN
+                =========================== */}
 
                 <Route
                     path="/login"
@@ -149,6 +174,11 @@ function AppLayout() {
                         <Login />
                     }
                 />
+
+
+                {/* ==========================
+                    REGISTER
+                =========================== */}
 
                 <Route
                     path="/register"
@@ -158,269 +188,378 @@ function AppLayout() {
                 />
 
 
+
                 {/* =================================================
-                    JR STORE HOME
-                    LOGIN REQUIRED
-                ================================================= */}
+                    PROTECTED JR STORE ROUTES
+                ================================================== */}
+
+
+                {/* ==========================
+                    HOME
+                =========================== */}
 
                 <Route
                     path="/"
                     element={
+
                         <PrivateRoute>
+
                             <Home />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
-                    PRODUCT
-                    LOGIN REQUIRED
-                ================================================= */}
+                {/* ==========================
+                    PRODUCT DETAILS
+                =========================== */}
 
                 <Route
                     path="/product/:id"
                     element={
+
                         <PrivateRoute>
+
                             <ProductDetails />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     SEARCH
-                    LOGIN REQUIRED
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/search"
                     element={
+
                         <PrivateRoute>
+
                             <SearchResults />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     USER PROFILE
-                    LOGIN REQUIRED
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/user/:id"
                     element={
+
                         <PrivateRoute>
+
                             <UserProfile />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
+
                 {/* =================================================
-                    PAYMENT ROUTES
-                ================================================= */}
+                    PAYMENT
+                ================================================== */}
+
+
+                {/* ==========================
+                    PAYMENT SUCCESS
+                =========================== */}
 
                 <Route
                     path="/payment-success"
                     element={
+
                         <PrivateRoute>
+
                             <PaymentSuccess />
+
                         </PrivateRoute>
+
                     }
                 />
+
+
+                {/* ==========================
+                    PAYMENT FAILED
+                =========================== */}
 
                 <Route
                     path="/payment-fail"
                     element={
+
                         <PrivateRoute>
+
                             <PaymentFailed />
+
                         </PrivateRoute>
+
                     }
                 />
+
+
+                {/* ==========================
+                    PAYMENT CANCEL
+                =========================== */}
 
                 <Route
                     path="/payment-cancel"
                     element={
+
                         <PrivateRoute>
+
                             <PaymentFailed />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
+
                 {/* =================================================
+                    USER
+                ================================================== */}
+
+
+                {/* ==========================
                     PROFILE
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/profile"
                     element={
+
                         <PrivateRoute>
+
                             <Profile />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     EDIT PROFILE
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/edit-profile"
                     element={
+
                         <PrivateRoute>
+
                             <EditProfile />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     DASHBOARD
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/dashboard"
                     element={
+
                         <PrivateRoute>
+
                             <Dashboard />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     CART
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/cart"
                     element={
+
                         <PrivateRoute>
+
                             <Cart />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     WISHLIST
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/wishlist"
                     element={
+
                         <PrivateRoute>
+
                             <Wishlist />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     CHECKOUT
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/checkout"
                     element={
+
                         <PrivateRoute>
+
                             <Checkout />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
-                    ORDERS
-                ================================================= */}
+                {/* ==========================
+                    ORDER HISTORY
+                =========================== */}
 
                 <Route
                     path="/orders"
                     element={
+
                         <PrivateRoute>
+
                             <OrderHistory />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     EDIT PRODUCT
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/edit-product/:id"
                     element={
+
                         <PrivateRoute>
+
                             <EditProduct />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     MESSENGER
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/messenger"
                     element={
+
                         <PrivateRoute>
+
                             <Messenger />
+
                         </PrivateRoute>
+
                     }
                 />
+
 
 
                 {/* =================================================
                     SELLER
-                ================================================= */}
+                ================================================== */}
+
+
+                {/* ==========================
+                    SELLER DASHBOARD
+                =========================== */}
 
                 <Route
                     path="/seller"
                     element={
+
                         <PrivateRoute>
+
                             <SellerDashboard />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
-                {/* =================================================
+                {/* ==========================
                     SELLER ORDERS
-                ================================================= */}
+                =========================== */}
 
                 <Route
                     path="/seller/orders"
                     element={
+
                         <PrivateRoute>
+
                             <SellerOrders />
+
                         </PrivateRoute>
+
                     }
                 />
+
 
 
                 {/* =================================================
                     ADMIN
-                ================================================= */}
+                ================================================== */}
+
 
                 <Route
                     path="/admin"
                     element={
+
                         <PrivateRoute>
+
                             <AdminDashboard />
+
                         </PrivateRoute>
+
                     }
                 />
 
 
+
                 {/* =================================================
                     404
-                ================================================= */}
+                ================================================== */}
 
                 <Route
                     path="*"
@@ -432,11 +571,13 @@ function AppLayout() {
             </Routes>
 
 
-            {/* ==========================
+            {/* ==================================================
                 FOOTER
-            =========================== */}
+            ================================================== */}
 
-            {!authPage && <Footer />}
+            {!authPage && (
+                <Footer />
+            )}
 
         </>
 
@@ -451,12 +592,14 @@ function AppLayout() {
 
 function App() {
 
-    const [showLoading, setShowLoading] =
-        useState(true);
+    const [
+        showLoading,
+        setShowLoading
+    ] = useState(true);
 
 
     // ==================================================
-    // INITIAL LOADING
+    // INITIAL LOADING SCREEN
     // ==================================================
 
     if (showLoading) {
@@ -473,6 +616,10 @@ function App() {
 
     }
 
+
+    // ==================================================
+    // BROWSER ROUTER
+    // ==================================================
 
     return (
 
