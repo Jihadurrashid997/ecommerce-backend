@@ -1,59 +1,57 @@
-import React, {
-    useEffect,
-    useState
-} from "react";
-
-import {
-    Link,
-    useNavigate,
-    useParams
-} from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
     FaUserCircle,
-    FaComments,
-    FaArrowLeft,
     FaEnvelope,
-    FaUserTag
+    FaUserTag,
+    FaMapMarkerAlt,
+    FaComments,
+    FaBoxOpen,
+    FaHeart,
+    FaArrowLeft
 } from "react-icons/fa";
 
 import api from "../services/api";
 
 import "../styles/UserProfile.css";
 
+
 const UserProfile = () => {
 
-    const {
-        id
-    } = useParams();
+    const { id } = useParams();
 
-    const navigate =
-        useNavigate();
+    const navigate = useNavigate();
 
-    const [user, setUser] =
-        useState(null);
+    const [user, setUser] = useState(null);
 
-    const [loading, setLoading] =
-        useState(true);
+    const [loading, setLoading] = useState(true);
 
+    const [error, setError] = useState("");
+
+
+    // ==========================
+    // FETCH USER PROFILE
+    // ==========================
 
     useEffect(() => {
 
-        fetchUser();
+        fetchUserProfile();
 
     }, [id]);
 
 
-    const fetchUser = async () => {
+    const fetchUserProfile = async () => {
 
         try {
 
             setLoading(true);
 
-            const response =
-                await api.get(
-                    `/users/public/${id}`
-                );
+            setError("");
+
+            const response = await api.get(
+                `/users/public/${id}`
+            );
 
             setUser(
                 response.data?.user ||
@@ -62,9 +60,15 @@ const UserProfile = () => {
 
         } catch (err) {
 
-            console.error(err);
+            console.error(
+                "Profile loading error:",
+                err
+            );
 
-            setUser(null);
+            setError(
+                err.response?.data?.message ||
+                "Unable to load this profile."
+            );
 
         } finally {
 
@@ -75,33 +79,54 @@ const UserProfile = () => {
     };
 
 
+    // ==========================
+    // LOADING
+    // ==========================
+
     if (loading) {
 
         return (
+
             <div className="public-profile-loading">
-                Loading profile...
+
+                <div className="profile-spinner"></div>
+
+                <p>
+                    Loading profile...
+                </p>
+
             </div>
+
         );
 
     }
 
 
-    if (!user) {
+    // ==========================
+    // ERROR
+    // ==========================
+
+    if (error || !user) {
 
         return (
 
-            <div className="public-profile-not-found">
+            <div className="public-profile-error">
 
-                <h1>
-                    User Not Found
-                </h1>
+                <FaUserCircle />
+
+                <h2>
+                    Profile Not Found
+                </h2>
+
+                <p>
+                    {error ||
+                        "This user profile could not be found."}
+                </p>
 
                 <button
-                    onClick={() =>
-                        navigate("/search")
-                    }
+                    onClick={() => navigate(-1)}
                 >
-                    Back
+                    Go Back
                 </button>
 
             </div>
@@ -111,31 +136,79 @@ const UserProfile = () => {
     }
 
 
+    const userName =
+        user.name || "Marketplace User";
+
+    const userRole =
+        user.role || "customer";
+
+    const avatar =
+        user.profileImage ||
+        user.avatar ||
+        user.image ||
+        null;
+
+    const bio =
+        user.bio ||
+        "Welcome to my Marketplace profile.";
+
+    const location =
+        user.location ||
+        "Location not added";
+
+
     return (
 
         <div className="public-profile-page">
 
-            <div className="public-profile-card">
 
+            {/* ==========================
+                BACK BUTTON
+            =========================== */}
 
-                <Link
-                    to="/"
-                    className="public-profile-back"
+            <div className="public-profile-topbar">
+
+                <button
+                    className="back-profile-btn"
+                    onClick={() => navigate(-1)}
                 >
-                    <FaArrowLeft />
-                    Back to Marketplace
-                </Link>
 
+                    <FaArrowLeft />
+
+                    Back
+
+                </button>
+
+            </div>
+
+
+            {/* ==========================
+                COVER
+            =========================== */}
+
+            <section className="public-profile-cover">
+
+                <div className="cover-glow"></div>
+
+            </section>
+
+
+            {/* ==========================
+                PROFILE HEADER
+            =========================== */}
+
+            <section className="public-profile-header">
+
+
+                {/* AVATAR */}
 
                 <div className="public-profile-avatar">
 
-                    {user.profileImage ? (
+                    {avatar ? (
 
                         <img
-                            src={
-                                user.profileImage
-                            }
-                            alt={user.name}
+                            src={avatar}
+                            alt={userName}
                         />
 
                     ) : (
@@ -147,47 +220,36 @@ const UserProfile = () => {
                 </div>
 
 
-                <h1>
-                    {user.name}
-                </h1>
+                {/* USER INFO */}
 
+                <div className="public-profile-main">
 
-                <span className="public-profile-role">
+                    <h1>
+                        {userName}
+                    </h1>
 
-                    <FaUserTag />
+                    <div className="public-profile-role">
 
-                    {user.role ||
-                        "customer"}
-
-                </span>
-
-
-                {user.bio && (
-
-                    <p className="public-profile-bio">
-                        {user.bio}
-                    </p>
-
-                )}
-
-
-                {user.location && (
-
-                    <p className="public-profile-location">
-                        📍 {user.location}
-                    </p>
-
-                )}
-
-
-                <div className="public-profile-info">
-
-                    <div>
-
-                        <FaEnvelope />
+                        <FaUserTag />
 
                         <span>
-                            {user.email}
+                            {userRole}
+                        </span>
+
+                    </div>
+
+                    <p className="public-profile-bio">
+
+                        {bio}
+
+                    </p>
+
+                    <div className="public-profile-location">
+
+                        <FaMapMarkerAlt />
+
+                        <span>
+                            {location}
                         </span>
 
                     </div>
@@ -195,16 +257,186 @@ const UserProfile = () => {
                 </div>
 
 
-                <Link
-                    to={`/messenger?user=${user._id}`}
-                    className="public-profile-message"
-                >
+                {/* ACTIONS */}
 
-                    <FaComments />
+                <div className="public-profile-actions">
 
-                    Message
+                    <Link
+                        to={`/messenger?user=${user._id}`}
+                        className="profile-message-btn"
+                    >
 
-                </Link>
+                        <FaComments />
+
+                        Message
+
+                    </Link>
+
+                </div>
+
+            </section>
+
+
+            {/* ==========================
+                CONTENT
+            =========================== */}
+
+            <div className="public-profile-content">
+
+
+                {/* ABOUT */}
+
+                <section className="public-profile-card">
+
+                    <h2>
+                        About
+                    </h2>
+
+                    <div className="public-profile-details">
+
+
+                        <div className="public-profile-detail">
+
+                            <FaEnvelope />
+
+                            <div>
+
+                                <span>
+                                    Email
+                                </span>
+
+                                <strong>
+                                    {user.email ||
+                                        "Not available"}
+                                </strong>
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="public-profile-detail">
+
+                            <FaUserTag />
+
+                            <div>
+
+                                <span>
+                                    Account Type
+                                </span>
+
+                                <strong>
+                                    {userRole}
+                                </strong>
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="public-profile-detail">
+
+                            <FaMapMarkerAlt />
+
+                            <div>
+
+                                <span>
+                                    Location
+                                </span>
+
+                                <strong>
+                                    {location}
+                                </strong>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+
+                {/* QUICK ACTIONS */}
+
+                <section className="public-profile-card">
+
+                    <h2>
+                        Marketplace
+                    </h2>
+
+                    <div className="public-profile-actions-grid">
+
+
+                        <Link
+                            to={`/messenger?user=${user._id}`}
+                            className="public-action-card"
+                        >
+
+                            <FaComments />
+
+                            <div>
+
+                                <strong>
+                                    Message
+                                </strong>
+
+                                <span>
+                                    Start a conversation
+                                </span>
+
+                            </div>
+
+                        </Link>
+
+
+                        <Link
+                            to="/"
+                            className="public-action-card"
+                        >
+
+                            <FaBoxOpen />
+
+                            <div>
+
+                                <strong>
+                                    Products
+                                </strong>
+
+                                <span>
+                                    Explore marketplace
+                                </span>
+
+                            </div>
+
+                        </Link>
+
+
+                        <Link
+                            to="/wishlist"
+                            className="public-action-card"
+                        >
+
+                            <FaHeart />
+
+                            <div>
+
+                                <strong>
+                                    Wishlist
+                                </strong>
+
+                                <span>
+                                    Explore saved products
+                                </span>
+
+                            </div>
+
+                        </Link>
+
+                    </div>
+
+                </section>
+
 
             </div>
 
@@ -213,5 +445,6 @@ const UserProfile = () => {
     );
 
 };
+
 
 export default UserProfile;
