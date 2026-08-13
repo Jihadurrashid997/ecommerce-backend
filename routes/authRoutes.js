@@ -1,19 +1,87 @@
-const express = require('express');
-const router = express.Router();
-const { register, login } = require('../controllers/authController');
-const auth = require('../middleware/auth'); // 🛡️ মিডলওয়্যারটি ইম্পোর্ট করলাম
+const express = require("express");
 
-// পাবলিক রাউটস (টোকেন লাগবে না)
-router.post('/register', register);
-router.post('/login', login);
+const router =
+    express.Router();
 
-// প্রোটেক্টেড রাউট (এই রাউট অ্যাক্সেস করতে অবশ্যই টোকেন লাগবে)
-router.get('/profile', auth(), (req, res) => {
-    // মিডলওয়্যার টোকেন ভেরিফাই করে req.user এর ভেতর ডেটা দিয়ে দেয়
-    res.status(200).json({
-        message: "Welcome to your profile!",
-        user: req.user // এখানে আপনার ডিকোড হওয়া টোকেনের ভেতরের ডেটা (id, role) দেখাবে
-    });
-});
+
+const {
+    register,
+    login,
+    me
+} = require("../controllers/authController");
+
+
+const auth =
+    require("../middleware/auth");
+
+
+
+// ==================================================
+// PUBLIC ROUTES
+// ==================================================
+
+
+// ==============================
+// REGISTER
+// ==============================
+
+router.post(
+    "/register",
+    register
+);
+
+
+// ==============================
+// LOGIN
+// ==============================
+
+router.post(
+    "/login",
+    login
+);
+
+
+
+// ==================================================
+// PROTECTED ROUTES
+// ==================================================
+
+
+// ==============================
+// VERIFY CURRENT USER
+// ==============================
+
+router.get(
+    "/me",
+    auth(),
+    me
+);
+
+
+// ==============================
+// PROFILE
+// ==============================
+
+router.get(
+    "/profile",
+    auth(),
+    (req, res) => {
+
+        res.status(200).json({
+
+            success: true,
+
+            message:
+                "Welcome to your profile!",
+
+            user:
+                req.user
+
+        });
+
+    }
+);
+
+
 
 module.exports = router;
