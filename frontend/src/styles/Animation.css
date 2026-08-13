@@ -1,196 +1,401 @@
-/* ===========================
-FADE UP
-=========================== */
+/* =========================================================
+   JR STORE — GLOBAL ANIMATION SYSTEM
+   Company / Brand: JR
+========================================================= */
 
-.fade-up{
 
-animation:fadeUp .8s ease forwards;
+/* =========================================================
+   FADE UP
+========================================================= */
+
+.fade-up {
+    animation: jrFadeUp 0.8s ease forwards;
+}
+
+
+/* =========================================================
+   FADE DOWN
+========================================================= */
+
+.fade-down {
+    animation: jrFadeDown 0.8s ease forwards;
+}
+
+
+/* =========================================================
+   FADE IN
+========================================================= */
+
+.fade-in {
+    animation: jrFadeIn 0.6s ease forwards;
+}
+
+
+/* =========================================================
+   ZOOM IN
+========================================================= */
+
+.zoom {
+    animation: jrZoom 0.6s ease forwards;
+}
+
+
+/* =========================================================
+   FLOAT
+========================================================= */
+
+.float {
+    animation: jrFloat 3s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   ROTATE
+========================================================= */
+
+.rotate {
+    animation: jrRotate 12s linear infinite;
+}
+
+
+/* =========================================================
+   PULSE
+========================================================= */
+
+.pulse {
+    animation: jrPulse 2s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   SLIDE LEFT
+========================================================= */
+
+.slide-left {
+    animation: jrSlideLeft 0.7s ease forwards;
+}
+
+
+/* =========================================================
+   SLIDE RIGHT
+========================================================= */
+
+.slide-right {
+    animation: jrSlideRight 0.7s ease forwards;
+}
+
+
+/* =========================================================
+   SLIDE UP
+========================================================= */
+
+.slide-up {
+    animation: jrSlideUp 0.7s ease forwards;
+}
+
+
+/* =========================================================
+   SLIDE DOWN
+========================================================= */
+
+.slide-down {
+    animation: jrSlideDown 0.7s ease forwards;
+}
+
+
+/* =========================================================
+   HOVER LIFT
+========================================================= */
+
+.hover-lift {
+    transition:
+        transform 0.3s ease,
+        box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-6px);
+}
+
+
+/* =========================================================
+   HOVER SCALE
+========================================================= */
+
+.hover-scale {
+    transition:
+        transform 0.3s ease;
+}
+
+.hover-scale:hover {
+    transform: scale(1.04);
+}
+
+
+/* =========================================================
+   BUTTON PRESS
+========================================================= */
+
+.button-press {
+    transition:
+        transform 0.15s ease;
+}
+
+.button-press:active {
+    transform: scale(0.95);
+}
+
+
+/* =========================================================
+   SHIMMER
+========================================================= */
+
+.shimmer {
+    position: relative;
+    overflow: hidden;
+}
+
+.shimmer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 80%;
+    height: 100%;
+
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.25),
+        transparent
+    );
+
+    animation: jrShimmer 1.8s infinite;
+}
+
+
+/* =========================================================
+   KEYFRAMES
+========================================================= */
+
+
+/* FADE UP */
+
+@keyframes jrFadeUp {
+
+    0% {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 
 }
 
-/* ===========================
-ZOOM
-=========================== */
 
-.zoom{
+/* FADE DOWN */
 
-animation:zoom .6s ease;
+@keyframes jrFadeDown {
 
-}
+    0% {
+        opacity: 0;
+        transform: translateY(-40px);
+    }
 
-/* ===========================
-FLOAT
-=========================== */
-
-.float{
-
-animation:float 3s ease-in-out infinite;
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 
 }
 
-/* ===========================
-ROTATE
-=========================== */
 
-.rotate{
+/* FADE IN */
 
-animation:rotate 12s linear infinite;
+@keyframes jrFadeIn {
 
-}
+    0% {
+        opacity: 0;
+    }
 
-/* ===========================
-PULSE
-=========================== */
-
-.pulse{
-
-animation:pulse 2s infinite;
+    100% {
+        opacity: 1;
+    }
 
 }
 
-/* ===========================
-SLIDE LEFT
-=========================== */
 
-.slide-left{
+/* ZOOM */
 
-animation:slideLeft .7s ease forwards;
+@keyframes jrZoom {
 
-}
+    0% {
+        opacity: 0;
+        transform: scale(0.85);
+    }
 
-/* ===========================
-SLIDE RIGHT
-=========================== */
-
-.slide-right{
-
-animation:slideRight .7s ease forwards;
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
 
 }
 
-/* ===========================
-KEYFRAMES
-=========================== */
 
-@keyframes fadeUp{
+/* FLOAT */
 
-0%{
+@keyframes jrFloat {
 
-opacity:0;
+    0% {
+        transform: translateY(0);
+    }
 
-transform:translateY(50px);
+    50% {
+        transform: translateY(-10px);
+    }
 
-}
-
-100%{
-
-opacity:1;
-
-transform:translateY(0);
+    100% {
+        transform: translateY(0);
+    }
 
 }
 
-}
 
-@keyframes zoom{
+/* ROTATE */
 
-0%{
+@keyframes jrRotate {
 
-opacity:0;
+    from {
+        transform: rotate(0deg);
+    }
 
-transform:scale(.8);
-
-}
-
-100%{
-
-opacity:1;
-
-transform:scale(1);
+    to {
+        transform: rotate(360deg);
+    }
 
 }
 
-}
 
-@keyframes float{
+/* PULSE */
 
-0%{
+@keyframes jrPulse {
 
-transform:translateY(0px);
+    0% {
+        transform: scale(1);
+    }
 
-}
+    50% {
+        transform: scale(1.06);
+    }
 
-50%{
-
-transform:translateY(-12px);
-
-}
-
-100%{
-
-transform:translateY(0);
+    100% {
+        transform: scale(1);
+    }
 
 }
 
-}
 
-@keyframes rotate{
+/* SLIDE LEFT */
 
-100%{
+@keyframes jrSlideLeft {
 
-transform:rotate(360deg);
+    0% {
+        opacity: 0;
+        transform: translateX(-60px);
+    }
 
-}
-
-}
-
-@keyframes pulse{
-
-50%{
-
-transform:scale(1.06);
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
 
 }
 
-}
 
-@keyframes slideLeft{
+/* SLIDE RIGHT */
 
-0%{
+@keyframes jrSlideRight {
 
-opacity:0;
+    0% {
+        opacity: 0;
+        transform: translateX(60px);
+    }
 
-transform:translateX(-60px);
-
-}
-
-100%{
-
-opacity:1;
-
-transform:translateX(0);
+    100% {
+        opacity: 1;
+        transform: translateX(0);
+    }
 
 }
 
-}
 
-@keyframes slideRight{
+/* SLIDE UP */
 
-0%{
+@keyframes jrSlideUp {
 
-opacity:0;
+    0% {
+        opacity: 0;
+        transform: translateY(60px);
+    }
 
-transform:translateX(60px);
-
-}
-
-100%{
-
-opacity:1;
-
-transform:translateX(0);
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 
 }
 
+
+/* SLIDE DOWN */
+
+@keyframes jrSlideDown {
+
+    0% {
+        opacity: 0;
+        transform: translateY(-60px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
 }
 
+
+/* SHIMMER */
+
+@keyframes jrShimmer {
+
+    0% {
+        left: -120%;
+    }
+
+    100% {
+        left: 140%;
+    }
+
+}
+
+
+/* =========================================================
+   ACCESSIBILITY
+   Respect users who prefer reduced motion
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+
+    }
+
+}
