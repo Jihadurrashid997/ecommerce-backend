@@ -1,51 +1,91 @@
 /* =========================================================
-   JR STORE — GLOBAL ANIMATION SYSTEM
-   Company / Brand: JR
+   JR STORE — PREMIUM ANIMATION SYSTEM
 ========================================================= */
 
 
 /* =========================================================
-   FADE UP
+   GLOBAL
 ========================================================= */
+
+* {
+    scroll-behavior: smooth;
+}
 
 .fade-up {
-    animation: jrFadeUp 0.8s ease forwards;
+    opacity: 0;
+    animation: jrFadeUp 0.8s cubic-bezier(.22, 1, .36, 1) forwards;
 }
-
-
-/* =========================================================
-   FADE DOWN
-========================================================= */
-
-.fade-down {
-    animation: jrFadeDown 0.8s ease forwards;
-}
-
-
-/* =========================================================
-   FADE IN
-========================================================= */
-
-.fade-in {
-    animation: jrFadeIn 0.6s ease forwards;
-}
-
-
-/* =========================================================
-   ZOOM IN
-========================================================= */
 
 .zoom {
-    animation: jrZoom 0.6s ease forwards;
+    opacity: 0;
+    animation: jrZoom 0.7s cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+.slide-left {
+    opacity: 0;
+    animation: jrSlideLeft 0.8s cubic-bezier(.22, 1, .36, 1) forwards;
+}
+
+.slide-right {
+    opacity: 0;
+    animation: jrSlideRight 0.8s cubic-bezier(.22, 1, .36, 1) forwards;
 }
 
 
 /* =========================================================
-   FLOAT
+   DELAY SYSTEM
+========================================================= */
+
+.delay-1 {
+    animation-delay: 0.1s;
+}
+
+.delay-2 {
+    animation-delay: 0.2s;
+}
+
+.delay-3 {
+    animation-delay: 0.3s;
+}
+
+.delay-4 {
+    animation-delay: 0.4s;
+}
+
+.delay-5 {
+    animation-delay: 0.5s;
+}
+
+.delay-6 {
+    animation-delay: 0.6s;
+}
+
+.delay-7 {
+    animation-delay: 0.7s;
+}
+
+.delay-8 {
+    animation-delay: 0.8s;
+}
+
+
+/* =========================================================
+   FLOATING
 ========================================================= */
 
 .float {
-    animation: jrFloat 3s ease-in-out infinite;
+    animation:
+        jrFloat 4s ease-in-out infinite;
+}
+
+
+/* =========================================================
+   GENTLE FLOAT
+========================================================= */
+
+.float-slow {
+    animation:
+        jrFloatSlow 6s ease-in-out infinite;
 }
 
 
@@ -54,7 +94,8 @@
 ========================================================= */
 
 .rotate {
-    animation: jrRotate 12s linear infinite;
+    animation:
+        jrRotate 12s linear infinite;
 }
 
 
@@ -63,86 +104,18 @@
 ========================================================= */
 
 .pulse {
-    animation: jrPulse 2s ease-in-out infinite;
+    animation:
+        jrPulse 2s ease-in-out infinite;
 }
 
 
 /* =========================================================
-   SLIDE LEFT
+   GLOW
 ========================================================= */
 
-.slide-left {
-    animation: jrSlideLeft 0.7s ease forwards;
-}
-
-
-/* =========================================================
-   SLIDE RIGHT
-========================================================= */
-
-.slide-right {
-    animation: jrSlideRight 0.7s ease forwards;
-}
-
-
-/* =========================================================
-   SLIDE UP
-========================================================= */
-
-.slide-up {
-    animation: jrSlideUp 0.7s ease forwards;
-}
-
-
-/* =========================================================
-   SLIDE DOWN
-========================================================= */
-
-.slide-down {
-    animation: jrSlideDown 0.7s ease forwards;
-}
-
-
-/* =========================================================
-   HOVER LIFT
-========================================================= */
-
-.hover-lift {
-    transition:
-        transform 0.3s ease,
-        box-shadow 0.3s ease;
-}
-
-.hover-lift:hover {
-    transform: translateY(-6px);
-}
-
-
-/* =========================================================
-   HOVER SCALE
-========================================================= */
-
-.hover-scale {
-    transition:
-        transform 0.3s ease;
-}
-
-.hover-scale:hover {
-    transform: scale(1.04);
-}
-
-
-/* =========================================================
-   BUTTON PRESS
-========================================================= */
-
-.button-press {
-    transition:
-        transform 0.15s ease;
-}
-
-.button-press:active {
-    transform: scale(0.95);
+.glow {
+    animation:
+        jrGlow 2.5s ease-in-out infinite;
 }
 
 
@@ -160,17 +133,246 @@
     position: absolute;
     top: 0;
     left: -120%;
-    width: 80%;
+    width: 70%;
     height: 100%;
 
     background: linear-gradient(
         90deg,
         transparent,
-        rgba(255, 255, 255, 0.25),
+        rgba(255, 255, 255, 0.35),
         transparent
     );
 
-    animation: jrShimmer 1.8s infinite;
+    transform: skewX(-20deg);
+
+    animation:
+        jrShimmer 2.8s infinite;
+}
+
+
+/* =========================================================
+   BUTTON PRESS
+========================================================= */
+
+.btn-animate {
+    transition:
+        transform 0.25s ease,
+        box-shadow 0.25s ease;
+}
+
+.btn-animate:hover {
+    transform:
+        translateY(-3px)
+        scale(1.02);
+}
+
+.btn-animate:active {
+    transform:
+        translateY(1px)
+        scale(0.97);
+}
+
+
+/* =========================================================
+   CARD HOVER
+========================================================= */
+
+.card-animate {
+    transition:
+        transform 0.35s cubic-bezier(.22, 1, .36, 1),
+        box-shadow 0.35s ease;
+}
+
+.card-animate:hover {
+    transform:
+        translateY(-10px)
+        scale(1.015);
+
+    box-shadow:
+        0 20px 45px rgba(0, 0, 0, 0.14);
+}
+
+
+/* =========================================================
+   IMAGE ZOOM
+========================================================= */
+
+.image-zoom {
+    overflow: hidden;
+}
+
+.image-zoom img {
+    transition:
+        transform 0.6s cubic-bezier(.22, 1, .36, 1);
+}
+
+.image-zoom:hover img {
+    transform:
+        scale(1.08);
+}
+
+
+/* =========================================================
+   NAVBAR ENTRANCE
+========================================================= */
+
+.navbar {
+    animation:
+        jrNavbarEnter 0.8s cubic-bezier(.22, 1, .36, 1);
+}
+
+
+/* =========================================================
+   NAVBAR LINK HOVER
+========================================================= */
+
+.nav-links li {
+    animation:
+        jrNavItem 0.6s ease both;
+}
+
+.nav-links li:nth-child(1) {
+    animation-delay: 0.05s;
+}
+
+.nav-links li:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.nav-links li:nth-child(3) {
+    animation-delay: 0.15s;
+}
+
+.nav-links li:nth-child(4) {
+    animation-delay: 0.2s;
+}
+
+.nav-links li:nth-child(5) {
+    animation-delay: 0.25s;
+}
+
+.nav-links li:nth-child(6) {
+    animation-delay: 0.3s;
+}
+
+.nav-links li:nth-child(7) {
+    animation-delay: 0.35s;
+}
+
+.nav-links li:nth-child(8) {
+    animation-delay: 0.4s;
+}
+
+
+/* =========================================================
+   LOGO
+========================================================= */
+
+.logo {
+    animation:
+        jrLogoEnter 0.9s cubic-bezier(.22, 1, .36, 1);
+}
+
+.logo-icon {
+    transition:
+        transform 0.4s ease,
+        box-shadow 0.4s ease;
+}
+
+.logo:hover .logo-icon {
+    transform:
+        rotate(-8deg)
+        scale(1.1);
+
+    box-shadow:
+        0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+
+/* =========================================================
+   SEARCH BOX
+========================================================= */
+
+.search-box {
+    transition:
+        transform 0.3s ease,
+        box-shadow 0.3s ease;
+}
+
+.search-box:focus-within {
+    transform:
+        scale(1.015);
+
+    box-shadow:
+        0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+
+/* =========================================================
+   SEARCH BUTTON
+========================================================= */
+
+.search-btn {
+    transition:
+        all 0.3s ease;
+}
+
+.search-btn:hover {
+    transform:
+        translateX(2px);
+
+    filter:
+        brightness(1.08);
+}
+
+
+/* =========================================================
+   CART BADGE
+========================================================= */
+
+.cart-count {
+    animation:
+        jrCartPop 0.5s cubic-bezier(.22, 1, .36, 1);
+}
+
+
+/* =========================================================
+   MESSAGE NOTIFICATION
+========================================================= */
+
+.notification {
+    animation:
+        jrNotification 0.6s cubic-bezier(.22, 1, .36, 1);
+}
+
+
+/* =========================================================
+   PAGE ENTER
+========================================================= */
+
+.page-enter {
+    animation:
+        jrPageEnter 0.8s cubic-bezier(.22, 1, .36, 1);
+}
+
+
+/* =========================================================
+   MODAL
+========================================================= */
+
+.modal-animation {
+    animation:
+        jrModal 0.4s cubic-bezier(.22, 1, .36, 1);
+}
+
+
+/* =========================================================
+   LOADING
+========================================================= */
+
+.loading-animation {
+    animation:
+        jrLoading 1.2s ease-in-out infinite;
 }
 
 
@@ -185,44 +387,14 @@
 
     0% {
         opacity: 0;
-        transform: translateY(40px);
+        transform:
+            translateY(55px);
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0);
-    }
-
-}
-
-
-/* FADE DOWN */
-
-@keyframes jrFadeDown {
-
-    0% {
-        opacity: 0;
-        transform: translateY(-40px);
-    }
-
-    100% {
-        opacity: 1;
-        transform: translateY(0);
-    }
-
-}
-
-
-/* FADE IN */
-
-@keyframes jrFadeIn {
-
-    0% {
-        opacity: 0;
-    }
-
-    100% {
-        opacity: 1;
+        transform:
+            translateY(0);
     }
 
 }
@@ -234,65 +406,19 @@
 
     0% {
         opacity: 0;
-        transform: scale(0.85);
+        transform:
+            scale(0.82);
+    }
+
+    70% {
+        transform:
+            scale(1.03);
     }
 
     100% {
         opacity: 1;
-        transform: scale(1);
-    }
-
-}
-
-
-/* FLOAT */
-
-@keyframes jrFloat {
-
-    0% {
-        transform: translateY(0);
-    }
-
-    50% {
-        transform: translateY(-10px);
-    }
-
-    100% {
-        transform: translateY(0);
-    }
-
-}
-
-
-/* ROTATE */
-
-@keyframes jrRotate {
-
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
-    }
-
-}
-
-
-/* PULSE */
-
-@keyframes jrPulse {
-
-    0% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.06);
-    }
-
-    100% {
-        transform: scale(1);
+        transform:
+            scale(1);
     }
 
 }
@@ -304,12 +430,14 @@
 
     0% {
         opacity: 0;
-        transform: translateX(-60px);
+        transform:
+            translateX(-70px);
     }
 
     100% {
         opacity: 1;
-        transform: translateX(0);
+        transform:
+            translateX(0);
     }
 
 }
@@ -321,46 +449,109 @@
 
     0% {
         opacity: 0;
-        transform: translateX(60px);
+        transform:
+            translateX(70px);
     }
 
     100% {
         opacity: 1;
-        transform: translateX(0);
+        transform:
+            translateX(0);
     }
 
 }
 
 
-/* SLIDE UP */
+/* FLOAT */
 
-@keyframes jrSlideUp {
+@keyframes jrFloat {
 
-    0% {
-        opacity: 0;
-        transform: translateY(60px);
+    0%,
+    100% {
+        transform:
+            translateY(0);
     }
 
-    100% {
-        opacity: 1;
-        transform: translateY(0);
+    50% {
+        transform:
+            translateY(-14px);
     }
 
 }
 
 
-/* SLIDE DOWN */
+/* FLOAT SLOW */
 
-@keyframes jrSlideDown {
+@keyframes jrFloatSlow {
 
-    0% {
-        opacity: 0;
-        transform: translateY(-60px);
+    0%,
+    100% {
+        transform:
+            translateY(0)
+            rotate(0deg);
     }
 
+    50% {
+        transform:
+            translateY(-18px)
+            rotate(2deg);
+    }
+
+}
+
+
+/* ROTATE */
+
+@keyframes jrRotate {
+
+    from {
+        transform:
+            rotate(0deg);
+    }
+
+    to {
+        transform:
+            rotate(360deg);
+    }
+
+}
+
+
+/* PULSE */
+
+@keyframes jrPulse {
+
+    0%,
     100% {
-        opacity: 1;
-        transform: translateY(0);
+        transform:
+            scale(1);
+    }
+
+    50% {
+        transform:
+            scale(1.07);
+    }
+
+}
+
+
+/* GLOW */
+
+@keyframes jrGlow {
+
+    0%,
+    100% {
+        filter:
+            drop-shadow(
+                0 0 0 transparent
+            );
+    }
+
+    50% {
+        filter:
+            drop-shadow(
+                0 0 12px rgba(255, 255, 255, 0.5)
+            );
     }
 
 }
@@ -374,27 +565,199 @@
         left: -120%;
     }
 
+    45%,
     100% {
-        left: 140%;
+        left: 150%;
+    }
+
+}
+
+
+/* NAVBAR */
+
+@keyframes jrNavbarEnter {
+
+    0% {
+        opacity: 0;
+        transform:
+            translateY(-35px);
+    }
+
+    100% {
+        opacity: 1;
+        transform:
+            translateY(0);
+    }
+
+}
+
+
+/* NAV ITEMS */
+
+@keyframes jrNavItem {
+
+    0% {
+        opacity: 0;
+        transform:
+            translateY(-15px);
+    }
+
+    100% {
+        opacity: 1;
+        transform:
+            translateY(0);
+    }
+
+}
+
+
+/* LOGO */
+
+@keyframes jrLogoEnter {
+
+    0% {
+        opacity: 0;
+        transform:
+            translateX(-30px)
+            scale(0.9);
+    }
+
+    100% {
+        opacity: 1;
+        transform:
+            translateX(0)
+            scale(1);
+    }
+
+}
+
+
+/* CART POP */
+
+@keyframes jrCartPop {
+
+    0% {
+        transform:
+            scale(0);
+    }
+
+    70% {
+        transform:
+            scale(1.25);
+    }
+
+    100% {
+        transform:
+            scale(1);
+    }
+
+}
+
+
+/* NOTIFICATION */
+
+@keyframes jrNotification {
+
+    0% {
+        opacity: 0;
+        transform:
+            translateY(-15px)
+            scale(0.95);
+    }
+
+    100% {
+        opacity: 1;
+        transform:
+            translateY(0)
+            scale(1);
+    }
+
+}
+
+
+/* PAGE */
+
+@keyframes jrPageEnter {
+
+    0% {
+        opacity: 0;
+        transform:
+            translateY(25px);
+    }
+
+    100% {
+        opacity: 1;
+        transform:
+            translateY(0);
+    }
+
+}
+
+
+/* MODAL */
+
+@keyframes jrModal {
+
+    0% {
+        opacity: 0;
+        transform:
+            translateY(30px)
+            scale(0.94);
+    }
+
+    100% {
+        opacity: 1;
+        transform:
+            translateY(0)
+            scale(1);
+    }
+
+}
+
+
+/* LOADING */
+
+@keyframes jrLoading {
+
+    0%,
+    100% {
+        opacity: 0.45;
+        transform:
+            scale(0.9);
+    }
+
+    50% {
+        opacity: 1;
+        transform:
+            scale(1.08);
     }
 
 }
 
 
 /* =========================================================
-   ACCESSIBILITY
-   Respect users who prefer reduced motion
+   REDUCED MOTION ACCESSIBILITY
 ========================================================= */
 
-@media (prefers-reduced-motion: reduce) {
+@media (
+    prefers-reduced-motion: reduce
+) {
 
     *,
     *::before,
     *::after {
 
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
+        animation-duration:
+            0.01ms !important;
+
+        animation-iteration-count:
+            1 !important;
+
+        scroll-behavior:
+            auto !important;
+
+        transition-duration:
+            0.01ms !important;
 
     }
 
