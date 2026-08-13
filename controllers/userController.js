@@ -279,105 +279,93 @@ exports.updateProfile =
 // SEARCH USERS
 // ==========================
 
-exports.searchUsers =
-    async (req, res) => {
+exports.searchUsers = async (req, res) => {
 
-        try {
+    try {
 
-            const keyword =
-                (
-                    req.query.q ||
-                    ""
-                ).trim();
+        const keyword =
+            String(req.query.q || "").trim();
 
 
-            if (!keyword) {
+        // Empty search
+        if (!keyword) {
 
-                return res.json({
-
-                    success:
-                        true,
-
-                    users: []
-
-                });
-
-            }
-
-
-            const users =
-                await User.find({
-
-                    $or: [
-
-                        {
-                            name: {
-                                $regex:
-                                    keyword,
-                                $options:
-                                    "i"
-                            }
-                        },
-
-                        {
-                            email: {
-                                $regex:
-                                    keyword,
-                                $options:
-                                    "i"
-                            }
-                        },
-
-                        {
-                            username: {
-                                $regex:
-                                    keyword,
-                                $options:
-                                    "i"
-                            }
-                        }
-
-                    ]
-
-                })
-                    .select(
-                        "_id name email username role bio location profileImage avatar image createdAt"
-                    )
-                    .limit(20);
-
-
-            res.json({
-
-                success:
-                    true,
-
-                users
-
-            });
-
-
-        } catch (err) {
-
-            console.error(
-                "Search users error:",
-                err
-            );
-
-
-            res.status(500).json({
-
-                success:
-                    false,
-
-                message:
-                    err.message
-
+            return res.json({
+                success: true,
+                users: []
             });
 
         }
 
-    };
 
+        // Escape regex special characters
+        const escapedKeyword =
+            keyword.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+
+
+        const users =
+            await User.find({
+
+                $or: [
+
+                    {
+                        name: {
+                            $regex: escapedKeyword,
+                            $options: "i"
+                        }
+                    },
+
+                    {
+                        email: {
+                            $regex: escapedKeyword,
+                            $options: "i"
+                        }
+                    }
+
+                ]
+
+            })
+            .select(
+                "_id name email role bio location profileImage avatar image createdAt"
+            )
+            .sort({
+                name: 1
+            })
+            .limit(20);
+
+
+        return res.json({
+
+            success: true,
+
+            users
+
+        });
+
+
+    } catch (err) {
+
+        console.error(
+            "Search users error:",
+            err
+        );
+
+
+        return res.status(500).json({
+
+            success: false,
+
+            message:
+                "Failed to search users"
+
+        });
+
+    }
+
+};
 
 // ==========================
 // GET PUBLIC PROFILE
