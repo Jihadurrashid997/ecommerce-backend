@@ -1,9 +1,12 @@
 const express = require("express");
 
-const router = express.Router();
+const router =
+    express.Router();
+
 
 const {
     getUsers,
+    getChatUsers,
     getProfile,
     updateProfile,
     searchUsers,
@@ -11,7 +14,9 @@ const {
     deleteUser
 } = require("../controllers/userController");
 
-const auth = require("../middleware/auth");
+
+const auth =
+    require("../middleware/auth");
 
 
 // ==========================
@@ -33,6 +38,17 @@ router.put(
     "/profile",
     auth(),
     updateProfile
+);
+
+
+// ==========================
+// CHAT USERS
+// ==========================
+
+router.get(
+    "/chat-users",
+    auth(),
+    getChatUsers
 );
 
 
