@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
+
 import {
     Link,
-    useNavigate
+    useNavigate,
+    useLocation
 } from "react-router-dom";
 
 import {
@@ -29,6 +31,7 @@ import "../styles/Login.css";
 const Login = () => {
 
     const navigate = useNavigate();
+    const location = useLocation();
 
     const {
         user,
@@ -121,6 +124,10 @@ const Login = () => {
             form.password;
 
 
+        // ==========================
+        // VALIDATION
+        // ==========================
+
         if (!email || !password) {
 
             setError(
@@ -139,6 +146,10 @@ const Login = () => {
             setError("");
 
 
+            // ==========================
+            // API LOGIN
+            // ==========================
+
             const response =
                 await api.post(
                     "/auth/login",
@@ -155,6 +166,10 @@ const Login = () => {
             const loggedInUser =
                 response.data?.user;
 
+
+            // ==========================
+            // CHECK RESPONSE
+            // ==========================
 
             if (
                 !token ||
@@ -191,7 +206,7 @@ const Login = () => {
 
 
             // ==========================
-            // UPDATE APP CONTEXT
+            // UPDATE CONTEXT
             // ==========================
 
             setUser(
@@ -200,12 +215,32 @@ const Login = () => {
 
 
             // ==========================
-            // GO TO JR STORE
+            // REDIRECT
             // ==========================
 
-            navigate("/", {
-                replace: true
-            });
+            /*
+             * PrivateRoute থেকে যদি কোনো
+             * নির্দিষ্ট page-এর জন্য Login-এ
+             * পাঠানো হয়ে থাকে, তাহলে Login-এর
+             * পরে সেই page-এ ফেরত যাবে।
+             *
+             * না হলে সরাসরি JR Store Home.
+             */
+
+            const requestedPage =
+                location.state?.from;
+
+
+            const destination =
+                requestedPage || "/";
+
+
+            navigate(
+                destination,
+                {
+                    replace: true
+                }
+            );
 
 
         } catch (err) {
@@ -232,7 +267,7 @@ const Login = () => {
 
 
     // ==========================
-    // ANIMATION
+    // PAGE ANIMATION
     // ==========================
 
     const pageVariants = {
@@ -254,6 +289,10 @@ const Login = () => {
     };
 
 
+    // ==========================
+    // CARD ANIMATION
+    // ==========================
+
     const cardVariants = {
 
         hidden: {
@@ -270,6 +309,7 @@ const Login = () => {
 
             transition: {
                 duration: 0.8,
+
                 ease: [
                     0.22,
                     1,
@@ -441,7 +481,9 @@ const Login = () => {
                 >
 
 
-                    {/* EMAIL */}
+                    {/* ==========================
+                        EMAIL
+                    =========================== */}
 
                     <div className="login-input-group">
 
@@ -459,17 +501,25 @@ const Login = () => {
 
                             <input
                                 id="email"
+
                                 type="email"
+
                                 name="email"
+
                                 placeholder="Enter your email"
+
                                 value={
                                     form.email
                                 }
+
                                 onChange={
                                     handleChange
                                 }
+
                                 autoComplete="email"
+
                                 disabled={loading}
+
                                 required
                             />
 
@@ -478,7 +528,9 @@ const Login = () => {
                     </div>
 
 
-                    {/* PASSWORD */}
+                    {/* ==========================
+                        PASSWORD
+                    =========================== */}
 
                     <div className="login-input-group">
 
@@ -496,27 +548,36 @@ const Login = () => {
 
                             <input
                                 id="password"
+
                                 type={
                                     showPassword
                                         ? "text"
                                         : "password"
                                 }
+
                                 name="password"
+
                                 placeholder="Enter your password"
+
                                 value={
                                     form.password
                                 }
+
                                 onChange={
                                     handleChange
                                 }
+
                                 autoComplete="current-password"
+
                                 disabled={loading}
+
                                 required
                             />
 
 
                             <button
                                 type="button"
+
                                 className="password-toggle"
 
                                 onClick={() =>
@@ -555,11 +616,10 @@ const Login = () => {
 
                     <motion.button
                         type="submit"
+
                         className="jr-login-button"
 
-                        disabled={
-                            loading
-                        }
+                        disabled={loading}
 
                         whileHover={
                             !loading
@@ -617,9 +677,7 @@ const Login = () => {
                     </span>
 
 
-                    <Link
-                        to="/register"
-                    >
+                    <Link to="/register">
 
                         Create Account
 
