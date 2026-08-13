@@ -1,358 +1,499 @@
-const User = require("../models/User");
+const User =
+    require("../models/User");
 
 
 // ==========================
 // GET ALL USERS - ADMIN
 // ==========================
 
-exports.getUsers = async (req, res) => {
-    try {
+exports.getUsers =
+    async (req, res) => {
 
-        const users = await User.find()
-            .select("-password")
-            .sort({ createdAt: -1 });
+        try {
 
-        res.json(users);
+            const users =
+                await User.find()
+                    .select("-password")
+                    .sort({
+                        createdAt: -1
+                    });
 
-    } catch (err) {
 
-        console.error(err);
+            res.json(users);
 
-        res.status(500).json({
-            message: err.message
-        });
 
-    }
-};
+        } catch (err) {
+
+            console.error(err);
+
+
+            res.status(500).json({
+
+                message:
+                    err.message
+
+            });
+
+        }
+
+    };
 
 
 // ==========================
 // GET CHAT USERS
 // ==========================
 
-exports.getChatUsers = async (req, res) => {
-    try {
+exports.getChatUsers =
+    async (req, res) => {
 
-        const currentUserId = req.user.id;
+        try {
 
-        const users = await User.find({
-            _id: {
-                $ne: currentUserId
-            }
-        })
-            .select(
-                "_id name email role bio location profileImage avatar image"
-            )
-            .sort({
-                name: 1
+            const currentUserId =
+                req.user.id;
+
+
+            const users =
+                await User.find({
+
+                    _id: {
+                        $ne:
+                            currentUserId
+                    }
+
+                })
+                    .select(
+                        "_id name email role bio location profileImage avatar image createdAt"
+                    )
+                    .sort({
+                        name: 1
+                    });
+
+
+            res.json({
+
+                success:
+                    true,
+
+                users
+
             });
 
-        res.json({
-            success: true,
-            users
-        });
 
-    } catch (err) {
+        } catch (err) {
 
-        console.error(
-            "Get chat users error:",
-            err
-        );
+            console.error(
+                "Get chat users error:",
+                err
+            );
 
-        res.status(500).json({
-            success: false,
-            message: err.message
-        });
 
-    }
-};
+            res.status(500).json({
+
+                success:
+                    false,
+
+                message:
+                    err.message
+
+            });
+
+        }
+
+    };
 
 
 // ==========================
 // GET MY PROFILE
 // ==========================
 
-exports.getProfile = async (req, res) => {
-    try {
+exports.getProfile =
+    async (req, res) => {
 
-        const user =
-            await User.findById(
-                req.user.id
-            ).select("-password");
+        try {
 
-        if (!user) {
+            const user =
+                await User.findById(
+                    req.user.id
+                )
+                    .select("-password");
 
-            return res.status(404).json({
-                message: "User not found"
+
+            if (!user) {
+
+                return res.status(404).json({
+
+                    message:
+                        "User not found"
+
+                });
+
+            }
+
+
+            res.json({
+
+                success:
+                    true,
+
+                user
+
+            });
+
+
+        } catch (err) {
+
+            console.error(err);
+
+
+            res.status(500).json({
+
+                message:
+                    err.message
+
             });
 
         }
 
-        res.json({
-            success: true,
-            user
-        });
-
-    } catch (err) {
-
-        console.error(err);
-
-        res.status(500).json({
-            message: err.message
-        });
-
-    }
-};
+    };
 
 
 // ==========================
 // UPDATE MY PROFILE
 // ==========================
 
-exports.updateProfile = async (req, res) => {
-    try {
+exports.updateProfile =
+    async (req, res) => {
 
-        const {
-            name,
-            bio,
-            location,
-            profileImage
-        } = req.body;
+        try {
 
-
-        const user =
-            await User.findById(
-                req.user.id
-            );
+            const {
+                name,
+                bio,
+                location,
+                profileImage
+            } = req.body;
 
 
-        if (!user) {
+            const user =
+                await User.findById(
+                    req.user.id
+                );
 
-            return res.status(404).json({
-                message: "User not found"
+
+            if (!user) {
+
+                return res.status(404).json({
+
+                    message:
+                        "User not found"
+
+                });
+
+            }
+
+
+            if (
+                typeof name === "string" &&
+                name.trim()
+            ) {
+
+                user.name =
+                    name.trim();
+
+            }
+
+
+            if (
+                typeof bio === "string"
+            ) {
+
+                user.bio =
+                    bio.trim();
+
+            }
+
+
+            if (
+                typeof location === "string"
+            ) {
+
+                user.location =
+                    location.trim();
+
+            }
+
+
+            if (
+                typeof profileImage === "string"
+            ) {
+
+                user.profileImage =
+                    profileImage.trim();
+
+            }
+
+
+            const updatedUser =
+                await user.save();
+
+
+            const safeUser =
+                await User.findById(
+                    updatedUser._id
+                )
+                    .select("-password");
+
+
+            res.json({
+
+                success:
+                    true,
+
+                message:
+                    "Profile updated successfully",
+
+                user:
+                    safeUser
+
+            });
+
+
+        } catch (err) {
+
+            console.error(err);
+
+
+            res.status(500).json({
+
+                message:
+                    err.message
+
             });
 
         }
 
-
-        if (
-            typeof name === "string" &&
-            name.trim()
-        ) {
-
-            user.name =
-                name.trim();
-
-        }
-
-
-        if (
-            typeof bio === "string"
-        ) {
-
-            user.bio =
-                bio.trim();
-
-        }
-
-
-        if (
-            typeof location === "string"
-        ) {
-
-            user.location =
-                location.trim();
-
-        }
-
-
-        if (
-            typeof profileImage === "string"
-        ) {
-
-            user.profileImage =
-                profileImage.trim();
-
-        }
-
-
-        const updatedUser =
-            await user.save();
-
-
-        const safeUser =
-            await User.findById(
-                updatedUser._id
-            ).select("-password");
-
-
-        res.json({
-            success: true,
-            message:
-                "Profile updated successfully",
-            user: safeUser
-        });
-
-
-    } catch (err) {
-
-        console.error(err);
-
-        res.status(500).json({
-            message: err.message
-        });
-
-    }
-};
+    };
 
 
 // ==========================
 // SEARCH USERS
 // ==========================
 
-exports.searchUsers = async (req, res) => {
-    try {
+exports.searchUsers =
+    async (req, res) => {
 
-        const keyword =
-            (
-                req.query.q ||
-                ""
-            ).trim();
+        try {
 
-
-        if (!keyword) {
-
-            return res.json([]);
-
-        }
+            const keyword =
+                (
+                    req.query.q ||
+                    ""
+                ).trim();
 
 
-        const users =
-            await User.find({
+            if (!keyword) {
 
-                $or: [
+                return res.json({
 
-                    {
-                        name: {
-                            $regex: keyword,
-                            $options: "i"
+                    success:
+                        true,
+
+                    users: []
+
+                });
+
+            }
+
+
+            const users =
+                await User.find({
+
+                    $or: [
+
+                        {
+                            name: {
+                                $regex:
+                                    keyword,
+                                $options:
+                                    "i"
+                            }
+                        },
+
+                        {
+                            email: {
+                                $regex:
+                                    keyword,
+                                $options:
+                                    "i"
+                            }
+                        },
+
+                        {
+                            username: {
+                                $regex:
+                                    keyword,
+                                $options:
+                                    "i"
+                            }
                         }
-                    },
 
-                    {
-                        email: {
-                            $regex: keyword,
-                            $options: "i"
-                        }
-                    }
+                    ]
 
-                ]
-
-            })
-                .select(
-                    "_id name email role bio location profileImage"
-                )
-                .limit(20);
+                })
+                    .select(
+                        "_id name email username role bio location profileImage avatar image createdAt"
+                    )
+                    .limit(20);
 
 
-        res.json(users);
+            res.json({
+
+                success:
+                    true,
+
+                users
+
+            });
 
 
-    } catch (err) {
+        } catch (err) {
 
-        console.error(err);
-
-        res.status(500).json({
-            message: err.message
-        });
-
-    }
-};
-
-
-// ==========================
-// GET PUBLIC USER PROFILE
-// ==========================
-
-exports.getPublicProfile = async (req, res) => {
-    try {
-
-        const user =
-            await User.findById(
-                req.params.id
-            ).select(
-                "_id name email role bio location profileImage createdAt"
+            console.error(
+                "Search users error:",
+                err
             );
 
 
-        if (!user) {
+            res.status(500).json({
 
-            return res.status(404).json({
-                message: "User not found"
+                success:
+                    false,
+
+                message:
+                    err.message
+
             });
 
         }
 
-
-        res.json({
-            success: true,
-            user
-        });
+    };
 
 
-    } catch (err) {
+// ==========================
+// GET PUBLIC PROFILE
+// ==========================
 
-        console.error(err);
+exports.getPublicProfile =
+    async (req, res) => {
 
-        res.status(500).json({
-            message: err.message
-        });
+        try {
 
-    }
-};
+            const user =
+                await User.findById(
+                    req.params.id
+                )
+                    .select(
+                        "_id name email username role bio location profileImage avatar image createdAt"
+                    );
+
+
+            if (!user) {
+
+                return res.status(404).json({
+
+                    message:
+                        "User not found"
+
+                });
+
+            }
+
+
+            res.json({
+
+                success:
+                    true,
+
+                user
+
+            });
+
+
+        } catch (err) {
+
+            console.error(
+                "Get public profile error:",
+                err
+            );
+
+
+            res.status(500).json({
+
+                message:
+                    err.message
+
+            });
+
+        }
+
+    };
 
 
 // ==========================
 // DELETE USER - ADMIN
 // ==========================
 
-exports.deleteUser = async (req, res) => {
-    try {
+exports.deleteUser =
+    async (req, res) => {
 
-        const user =
-            await User.findById(
+        try {
+
+            const user =
+                await User.findById(
+                    req.params.id
+                );
+
+
+            if (!user) {
+
+                return res.status(404).json({
+
+                    message:
+                        "User not found"
+
+                });
+
+            }
+
+
+            await User.findByIdAndDelete(
                 req.params.id
             );
 
 
-        if (!user) {
+            res.json({
 
-            return res.status(404).json({
-                message: "User not found"
+                success:
+                    true,
+
+                message:
+                    "User deleted successfully"
+
+            });
+
+
+        } catch (err) {
+
+            console.error(err);
+
+
+            res.status(500).json({
+
+                message:
+                    err.message
+
             });
 
         }
 
-
-        await User.findByIdAndDelete(
-            req.params.id
-        );
-
-
-        res.json({
-            success: true,
-            message:
-                "User deleted successfully"
-        });
-
-
-    } catch (err) {
-
-        console.error(err);
-
-        res.status(500).json({
-            message: err.message
-        });
-
-    }
-};
+    };
