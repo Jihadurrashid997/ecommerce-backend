@@ -284,7 +284,11 @@ exports.searchUsers = async (req, res) => {
     try {
 
         const keyword =
-            String(req.query.q || "").trim();
+            String(
+                req.query.q ||
+                req.query.search ||
+                ""
+            ).trim();
 
 
         // Empty search
@@ -298,7 +302,7 @@ exports.searchUsers = async (req, res) => {
         }
 
 
-        // Escape regex special characters
+        // Escape regex characters
         const escapedKeyword =
             keyword.replace(
                 /[.*+?^${}()|[\]\\]/g,
@@ -306,38 +310,73 @@ exports.searchUsers = async (req, res) => {
             );
 
 
+        // ==========================================
+        // FIND ALL STRING FIELDS FROM USER SCHEMA
+        // ==========================================
+
+        const searchableFields =
+            Object.keys(User.schema.paths)
+                .filter(field => {
+
+                    const schemaType =
+                        User.schema.paths[field];
+
+                    return (
+                        schemaType.instance === "String" &&
+                        field !== "password" &&
+                        field !== "__v"
+                    );
+
+                });
+
+
+        console.log(
+            "Search fields:",
+            searchableFields
+        );
+
+
+        // ==========================================
+        // BUILD SEARCH QUERY
+        // ==========================================
+
+        const searchConditions =
+            searchableFields.map(field => ({
+
+                [field]: {
+                    $regex: escapedKeyword,
+                    $options: "i"
+                }
+
+            }));
+
+
+        // ==========================================
+        // SEARCH
+        // ==========================================
+
         const users =
             await User.find({
 
-                $or: [
-
-                    {
-                        name: {
-                            $regex: escapedKeyword,
-                            $options: "i"
-                        }
-                    },
-
-                    {
-                        email: {
-                            $regex: escapedKeyword,
-                            $options: "i"
-                        }
-                    }
-
-                ]
+                $or: searchConditions
 
             })
             .select(
-                "_id name email role bio location profileImage avatar image createdAt"
+                "_id name username email role bio location profileImage avatar image firstName lastName createdAt"
             )
-            .sort({
-                name: 1
-            })
-            .limit(20);
+            .limit(30);
 
 
-        return res.json({
+        console.log(
+            `User search "${keyword}" → ${users.length} users`
+        );
+
+
+        // ==========================================
+        // RESPONSE
+        // ==========================================
+
+        return res.status(200).json({
 
             success: true,
 
@@ -349,7 +388,7 @@ exports.searchUsers = async (req, res) => {
     } catch (err) {
 
         console.error(
-            "Search users error:",
+            "SEARCH USERS ERROR:",
             err
         );
 
@@ -359,7 +398,10 @@ exports.searchUsers = async (req, res) => {
             success: false,
 
             message:
-                "Failed to search users"
+                "Failed to search users",
+
+            error:
+                err.message
 
         });
 
