@@ -1,233 +1,215 @@
 import React, { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
 
 import api from "../services/api";
 import ProductCard from "../components/ProductCard";
 
 import "../styles/Home.css";
 
-
 const Home = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
 
-    const [searchParams, setSearchParams] =
-        useSearchParams();
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
+    const [keyword, setKeyword] = useState(
+        searchParams.get("search") ||
+        searchParams.get("q") ||
+        ""
+    );
 
-    const [products, setProducts] =
-        useState([]);
+    const [category, setCategory] = useState(
+        searchParams.get("category") || ""
+    );
 
-    const [loading, setLoading] =
-        useState(true);
-
-    const [error, setError] =
-        useState("");
-
-
-    const [keyword, setKeyword] =
-        useState(
-            searchParams.get("search") || ""
-        );
-
-    const [category, setCategory] =
-        useState(
-            searchParams.get("category") || ""
-        );
-
-
-    const [page, setPage] =
-        useState(1);
-
+    const [page, setPage] = useState(1);
 
     const productsPerPage = 8;
 
-
-    // ==========================
+    // ==========================================
     // FETCH PRODUCTS
-    // ==========================
+    // ==========================================
 
     useEffect(() => {
+        let cancelled = false;
+
+        const fetchProducts = async () => {
+            try {
+                setLoading(true);
+                setError("");
+
+                const params = new URLSearchParams();
+
+                if (keyword.trim()) {
+                    params.set(
+                        "keyword",
+                        keyword.trim()
+                    );
+                }
+
+                if (category) {
+                    params.set(
+                        "category",
+                        category
+                    );
+                }
+
+                const query = params.toString();
+
+                const response = await api.get(
+                    query
+                        ? `/products?${query}`
+                        : "/products"
+                );
+
+                if (cancelled) return;
+
+                const data = response.data;
+
+                const productList =
+                    Array.isArray(data)
+                        ? data
+                        : Array.isArray(data?.products)
+                            ? data.products
+                            : [];
+
+                setProducts(productList);
+                setPage(1);
+
+            } catch (err) {
+                if (cancelled) return;
+
+                console.error(
+                    "Failed to load products:",
+                    err
+                );
+
+                setProducts([]);
+
+                setError(
+                    err.response?.data?.message ||
+                    "Failed to load products. Please try again."
+                );
+
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
 
         fetchProducts();
+
+        return () => {
+            cancelled = true;
+        };
 
     }, [keyword, category]);
 
 
-    const fetchProducts = async () => {
+    // ==========================================
+    // UPDATE URL
+    // ==========================================
 
-        try {
+    const updateSearchParams = (
+        searchValue,
+        categoryValue
+    ) => {
 
-            setLoading(true);
-            setError("");
+        const params = {};
 
-
-            const params = new URLSearchParams();
-
-
-            if (keyword.trim()) {
-
-                params.append(
-                    "keyword",
-                    keyword.trim()
-                );
-
-            }
-
-
-            if (category) {
-
-                params.append(
-                    "category",
-                    category
-                );
-
-            }
-
-
-            const query =
-                params.toString();
-
-
-            const res = await api.get(
-                query
-                    ? `/products?${query}`
-                    : "/products"
-            );
-
-
-            const data =
-                Array.isArray(res.data)
-                    ? res.data
-                    : res.data?.products || [];
-
-
-            setProducts(data);
-
-
-        } catch (err) {
-
-            console.error(
-                "Failed to load products:",
-                err
-            );
-
-
-            setProducts([]);
-
-
-            setError(
-                err.response?.data?.message ||
-                "Failed to load products."
-            );
-
-
-        } finally {
-
-            setLoading(false);
-
+        if (searchValue.trim()) {
+            params.search =
+                searchValue.trim();
         }
 
+        if (categoryValue) {
+            params.category =
+                categoryValue;
+        }
+
+        setSearchParams(params);
     };
 
 
-    // ==========================
+    // ==========================================
     // SEARCH
-    // ==========================
+    // ==========================================
 
     const handleSearchChange = (e) => {
 
-        const value =
-            e.target.value;
-
+        const value = e.target.value;
 
         setKeyword(value);
         setPage(1);
 
-
-        const params = {};
-
-
-        if (value.trim()) {
-
-            params.search =
-                value.trim();
-
-        }
-
-
-        if (category) {
-
-            params.category =
-                category;
-
-        }
-
-
-        setSearchParams(params);
-
+        updateSearchParams(
+            value,
+            category
+        );
     };
 
 
-    // ==========================
+    // ==========================================
     // CATEGORY
-    // ==========================
+    // ==========================================
 
     const handleCategoryChange = (e) => {
 
-        const value =
-            e.target.value;
-
+        const value = e.target.value;
 
         setCategory(value);
         setPage(1);
 
-
-        const params = {};
-
-
-        if (keyword.trim()) {
-
-            params.search =
-                keyword.trim();
-
-        }
-
-
-        if (value) {
-
-            params.category =
-                value;
-
-        }
-
-
-        setSearchParams(params);
-
+        updateSearchParams(
+            keyword,
+            value
+        );
     };
 
 
-    // ==========================
+    // ==========================================
+    // CLEAR FILTERS
+    // ==========================================
+
+    const clearFilters = () => {
+
+        setKeyword("");
+        setCategory("");
+        setPage(1);
+
+        setSearchParams({});
+    };
+
+
+    // ==========================================
     // PAGINATION
-    // ==========================
+    // ==========================================
 
     const totalPages =
-        Math.ceil(
-            products.length /
-            productsPerPage
+        Math.max(
+            1,
+            Math.ceil(
+                products.length /
+                productsPerPage
+            )
         );
 
-
-    const safeTotalPages =
-        totalPages || 1;
-
-
-    const lastIndex =
-        page * productsPerPage;
-
+    const safePage =
+        Math.min(
+            page,
+            totalPages
+        );
 
     const firstIndex =
-        lastIndex -
+        (safePage - 1) *
         productsPerPage;
 
+    const lastIndex =
+        firstIndex +
+        productsPerPage;
 
     const currentProducts =
         products.slice(
@@ -236,26 +218,33 @@ const Home = () => {
         );
 
 
-    // ==========================
+    // ==========================================
     // LOADING
-    // ==========================
+    // ==========================================
 
     if (loading) {
 
         return (
-
             <div className="home-loading">
 
-                <div className="loader"></div>
+                <motion.div
+                    className="loader"
+                    animate={{
+                        rotate: 360
+                    }}
+                    transition={{
+                        duration: 1,
+                        repeat: Infinity,
+                        ease: "linear"
+                    }}
+                />
 
                 <p>
                     Loading products...
                 </p>
 
             </div>
-
         );
-
     }
 
 
@@ -263,98 +252,115 @@ const Home = () => {
 
         <div className="home-page">
 
-
-            {/* ==========================
-                HERO SECTION
-            =========================== */}
+            {/* =====================================
+                HERO
+            ====================================== */}
 
             <section className="hero-section">
 
                 <div className="hero-content">
 
-                    <span className="hero-badge">
+                    <motion.span
+                        className="hero-badge"
+                        initial={{
+                            opacity: 0,
+                            y: 20
+                        }}
+                        animate={{
+                            opacity: 1,
+                            y: 0
+                        }}
+                    >
                         ✨ Your Trusted Marketplace
-                    </span>
+                    </motion.span>
 
 
-                    <h1>
+                    <motion.h1
+                        initial={{
+                            opacity: 0,
+                            y: 30
+                        }}
+                        animate={{
+                            opacity: 1,
+                            y: 0
+                        }}
+                        transition={{
+                            delay: 0.1
+                        }}
+                    >
 
                         Buy.
                         <span> Sell. </span>
                         Connect.
 
-                    </h1>
+                    </motion.h1>
 
 
-                    <p>
+                    <motion.p
+                        initial={{
+                            opacity: 0,
+                            y: 20
+                        }}
+                        animate={{
+                            opacity: 1,
+                            y: 0
+                        }}
+                        transition={{
+                            delay: 0.2
+                        }}
+                    >
 
                         Discover amazing products,
                         connect with sellers,
                         and enjoy a secure
                         marketplace experience.
 
-                    </p>
-
+                    </motion.p>
 
                 </div>
 
             </section>
 
 
-            {/* ==========================
-                PRODUCTS SECTION
-            =========================== */}
+            {/* =====================================
+                PRODUCTS
+            ====================================== */}
 
             <div className="container">
-
 
                 <div className="marketplace-header">
 
                     <div>
 
                         <h2 className="title">
-
                             Explore Products
-
                         </h2>
 
-
                         <p className="subtitle">
-
                             Find exactly what
                             you're looking for.
-
                         </p>
 
                     </div>
 
-
                     <span className="product-count">
-
-                        {products.length}
-                        {" "}
-                        Products
-
+                        {products.length} Products
                     </span>
 
                 </div>
 
 
-                {/* ==========================
+                {/* =====================================
                     FILTER BAR
-                =========================== */}
+                ====================================== */}
 
                 <div className="filter-bar">
-
-
-                    {/* SEARCH */}
 
                     <div className="home-search">
 
                         <span>
                             🔍
                         </span>
-
 
                         <input
                             type="search"
@@ -365,10 +371,21 @@ const Home = () => {
                             }
                         />
 
+                        {keyword && (
+
+                            <button
+                                type="button"
+                                onClick={clearFilters}
+                                aria-label="Clear search"
+                                className="search-clear"
+                            >
+                                ×
+                            </button>
+
+                        )}
+
                     </div>
 
-
-                    {/* CATEGORY */}
 
                     <select
                         value={category}
@@ -403,28 +420,37 @@ const Home = () => {
 
                     </select>
 
-
                 </div>
 
 
-                {/* ==========================
+                {/* =====================================
                     ERROR
-                =========================== */}
+                ====================================== */}
 
                 {error && (
 
                     <div className="error-message">
 
-                        {error}
+                        <p>
+                            {error}
+                        </p>
+
+                        <button
+                            onClick={() =>
+                                window.location.reload()
+                            }
+                        >
+                            Try Again
+                        </button>
 
                     </div>
 
                 )}
 
 
-                {/* ==========================
+                {/* =====================================
                     NO PRODUCTS
-                =========================== */}
+                ====================================== */}
 
                 {!error &&
                     currentProducts.length === 0 && (
@@ -435,35 +461,22 @@ const Home = () => {
                                 🔍
                             </div>
 
-
                             <h2>
                                 No Products Found
                             </h2>
 
-
                             <p>
-
                                 We couldn't find
                                 any products matching
                                 your search.
-
                             </p>
 
-
                             <button
-                                onClick={() => {
-
-                                    setKeyword("");
-                                    setCategory("");
-                                    setPage(1);
-
-                                    setSearchParams({});
-
-                                }}
+                                onClick={
+                                    clearFilters
+                                }
                             >
-
                                 Clear Filters
-
                             </button>
 
                         </div>
@@ -471,50 +484,82 @@ const Home = () => {
                     )}
 
 
-                {/* ==========================
+                {/* =====================================
                     PRODUCT GRID
-                =========================== */}
+                ====================================== */}
 
                 {currentProducts.length > 0 && (
 
-                    <div className="product-grid">
+                    <motion.div
+                        className="product-grid"
+                        initial={{
+                            opacity: 0
+                        }}
+                        animate={{
+                            opacity: 1
+                        }}
+                    >
 
                         {currentProducts.map(
-                            (product) => (
+                            (product, index) => (
 
-                                <ProductCard
-                                    key={product._id}
-                                    product={product}
-                                />
+                                <motion.div
+                                    key={
+                                        product._id ||
+                                        product.id ||
+                                        index
+                                    }
+                                    initial={{
+                                        opacity: 0,
+                                        y: 20
+                                    }}
+                                    animate={{
+                                        opacity: 1,
+                                        y: 0
+                                    }}
+                                    transition={{
+                                        delay:
+                                            index * 0.05
+                                    }}
+                                >
+
+                                    <ProductCard
+                                        product={product}
+                                    />
+
+                                </motion.div>
 
                             )
                         )}
 
-                    </div>
+                    </motion.div>
 
                 )}
 
 
-                {/* ==========================
+                {/* =====================================
                     PAGINATION
-                =========================== */}
+                ====================================== */}
 
                 {products.length > 0 && (
 
                     <div className="pagination">
 
-
                         <button
-                            disabled={page === 1}
+                            disabled={
+                                safePage === 1
+                            }
                             onClick={() =>
                                 setPage(
-                                    page - 1
+                                    previous =>
+                                        Math.max(
+                                            1,
+                                            previous - 1
+                                        )
                                 )
                             }
                         >
-
                             ← Previous
-
                         </button>
 
 
@@ -522,11 +567,13 @@ const Home = () => {
 
                             Page{" "}
                             <strong>
-                                {page}
+                                {safePage}
                             </strong>
+
                             {" "}of{" "}
+
                             <strong>
-                                {safeTotalPages}
+                                {totalPages}
                             </strong>
 
                         </div>
@@ -534,33 +581,30 @@ const Home = () => {
 
                         <button
                             disabled={
-                                page ===
-                                safeTotalPages
+                                safePage ===
+                                totalPages
                             }
                             onClick={() =>
                                 setPage(
-                                    page + 1
+                                    previous =>
+                                        Math.min(
+                                            totalPages,
+                                            previous + 1
+                                        )
                                 )
                             }
                         >
-
                             Next →
-
                         </button>
-
 
                     </div>
 
                 )}
 
-
             </div>
 
         </div>
-
     );
-
 };
-
 
 export default Home;
