@@ -1,187 +1,1462 @@
-.messenger{
+import React, {
+    useEffect,
+    useRef,
+    useState
+} from "react";
 
-display:flex;
+import {
+    useSearchParams
+} from "react-router-dom";
 
-height:calc(100vh - 80px);
+import {
+    FaSearch,
+    FaEllipsisH,
+    FaPhone,
+    FaVideo,
+    FaInfoCircle,
+    FaSmile,
+    FaPaperclip,
+    FaImage,
+    FaPaperPlane,
+    FaCheck,
+    FaCheckDouble,
+    FaArrowLeft
+} from "react-icons/fa";
 
-margin-top:80px;
+import { io } from "socket.io-client";
 
-}
+import api from "../services/api";
 
-.chat-list{
+import "../styles/Messenger.css";
 
-width:320px;
 
-background:#0f172a;
+const SOCKET_URL =
+    process.env.REACT_APP_API_URL
+        ? process.env.REACT_APP_API_URL.replace("/api", "")
+        : window.location.origin;
 
-border-right:1px solid rgba(255,255,255,.08);
 
-overflow-y:auto;
+const Messenger = () => {
 
-}
+    const [searchParams] =
+        useSearchParams();
 
-.chat-list h2{
 
-padding:20px;
+    const socketRef =
+        useRef(null);
 
-}
+    const messagesEndRef =
+        useRef(null);
 
-.chat-user{
 
-display:flex;
+    const [user, setUser] =
+        useState(null);
 
-gap:15px;
+    const [users, setUsers] =
+        useState([]);
 
-padding:15px 20px;
+    const [selectedUser, setSelectedUser] =
+        useState(null);
 
-cursor:pointer;
+    const [messages, setMessages] =
+        useState([]);
 
-transition:.3s;
+    const [message, setMessage] =
+        useState("");
 
-}
+    const [searchText, setSearchText] =
+        useState("");
 
-.chat-user:hover{
+    const [onlineUsers, setOnlineUsers] =
+        useState([]);
 
-background:#1e293b;
+    const [typing, setTyping] =
+        useState(false);
 
-}
+    const [loading, setLoading] =
+        useState(true);
 
-.chat-user.active{
+    const [sending, setSending] =
+        useState(false);
 
-background:#2563eb;
 
-}
+    // =========================================
+    // CURRENT USER
+    // =========================================
 
-.avatar{
+    useEffect(() => {
 
-width:50px;
+        const storedUser =
+            localStorage.getItem("user");
 
-height:50px;
+        if (!storedUser) {
+            return;
+        }
 
-border-radius:50%;
+        try {
 
-background:#38bdf8;
+            const parsedUser =
+                JSON.parse(storedUser);
 
-display:flex;
+            setUser(parsedUser);
 
-justify-content:center;
+        } catch (error) {
 
-align-items:center;
+            console.error(
+                "User loading error:",
+                error
+            );
 
-font-weight:bold;
+        }
 
-font-size:20px;
+    }, []);
 
-}
 
-.chat-box{
+    // =========================================
+    // LOAD CHAT USERS
+    // =========================================
 
-flex:1;
+    useEffect(() => {
 
-display:flex;
+        if (!user) {
+            return;
+        }
 
-flex-direction:column;
+        const loadUsers =
+            async () => {
 
-}
+                try {
 
-.chat-header{
+                    setLoading(true);
 
-padding:20px;
+                    const response =
+                        await api.get(
+                            "/users/chat-users"
+                        );
 
-border-bottom:1px solid rgba(255,255,255,.08);
+                    const data =
+                        response.data?.users ||
+                        response.data?.data ||
+                        response.data ||
+                        [];
 
-}
+                    setUsers(
+                        Array.isArray(data)
+                            ? data
+                            : []
+                    );
 
-.chat-body{
+                } catch (error) {
 
-flex:1;
+                    console.error(
+                        "Failed to load chat users:",
+                        error
+                    );
 
-padding:20px;
+                } finally {
 
-overflow-y:auto;
+                    setLoading(false);
 
-}
+                }
 
-.message{
+            };
 
-max-width:320px;
 
-padding:15px;
+        loadUsers();
 
-margin-bottom:15px;
+    }, [user]);
 
-border-radius:15px;
 
-}
+    // =========================================
+    // URL USER
+    // /messenger?user=USER_ID
+    // =========================================
 
-.message.me{
+    useEffect(() => {
 
-background:#2563eb;
+        const targetUserId =
+            searchParams.get("user");
 
-margin-left:auto;
+        if (
+            targetUserId &&
+            users.length > 0
+        ) {
 
-}
+            const targetUser =
+                users.find(
+                    item =>
+                        (
+                            item._id ||
+                            item.id
+                        )?.toString() ===
+                        targetUserId.toString()
+                );
 
-.message.other{
+            if (targetUser) {
 
-background:#1e293b;
+                selectUser(targetUser);
 
-}
+            }
 
-.message span{
+        }
 
-display:block;
+    }, [users, searchParams]);
 
-margin-top:8px;
 
-font-size:12px;
+    // =========================================
+    // SOCKET.IO
+    // =========================================
 
-opacity:.7;
+    useEffect(() => {
 
-}
+        if (!user) {
+            return;
+        }
 
-.chat-input{
+        const socket =
+            io(SOCKET_URL, {
+                transports: [
+                    "websocket",
+                    "polling"
+                ]
+            });
 
-display:flex;
 
-padding:20px;
+        socketRef.current =
+            socket;
 
-gap:15px;
 
-border-top:1px solid rgba(255,255,255,.08);
+        socket.on(
+            "connect",
+            () => {
 
-}
+                console.log(
+                    "Messenger socket connected"
+                );
 
-.chat-input input{
 
-flex:1;
+                socket.emit(
+                    "user-online",
+                    user._id || user.id
+                );
 
-}
+            }
+        );
 
-.chat-input button{
 
-padding:0 25px;
+        socket.on(
+            "online-users",
+            online => {
 
-border:none;
+                setOnlineUsers(
+                    online || []
+                );
 
-border-radius:12px;
+            }
+        );
 
-background:#2563eb;
 
-color:white;
+        socket.on(
+            "receive-message",
+            newMessage => {
 
-cursor:pointer;
+                const currentUserId =
+                    (
+                        user._id ||
+                        user.id
+                    )?.toString();
 
-}
 
-.empty-chat{
+                const selectedUserId =
+                    (
+                        selectedUser?._id ||
+                        selectedUser?.id
+                    )?.toString();
 
-flex:1;
 
-display:flex;
+                const senderId =
+                    (
+                        newMessage.sender?._id ||
+                        newMessage.sender
+                    )?.toString();
 
-justify-content:center;
 
-align-items:center;
+                const receiverId =
+                    (
+                        newMessage.receiver?._id ||
+                        newMessage.receiver
+                    )?.toString();
 
-}
+
+                const belongsToChat =
+                    selectedUserId &&
+                    (
+                        (
+                            senderId === selectedUserId &&
+                            receiverId === currentUserId
+                        ) ||
+                        (
+                            senderId === currentUserId &&
+                            receiverId === selectedUserId
+                        )
+                    );
+
+
+                if (belongsToChat) {
+
+                    setMessages(
+                        previous => {
+
+                            const exists =
+                                previous.some(
+                                    item =>
+                                        item._id &&
+                                        newMessage._id &&
+                                        item._id ===
+                                        newMessage._id
+                                );
+
+
+                            if (exists) {
+                                return previous;
+                            }
+
+
+                            return [
+                                ...previous,
+                                newMessage
+                            ];
+
+                        }
+                    );
+
+                }
+
+            }
+        );
+
+
+        socket.on(
+            "user-typing",
+            () => {
+
+                setTyping(true);
+
+            }
+        );
+
+
+        socket.on(
+            "user-stop-typing",
+            () => {
+
+                setTyping(false);
+
+            }
+        );
+
+
+        return () => {
+
+            socket.disconnect();
+
+            socketRef.current =
+                null;
+
+        };
+
+    }, [user, selectedUser]);
+
+
+    // =========================================
+    // AUTO SCROLL
+    // =========================================
+
+    useEffect(() => {
+
+        messagesEndRef.current?.scrollIntoView({
+            behavior: "smooth"
+        });
+
+    }, [messages, typing]);
+
+
+    // =========================================
+    // ROOM ID
+    // =========================================
+
+    const getRoomId = (
+        firstUser,
+        secondUser
+    ) => {
+
+        const first =
+            (
+                firstUser?._id ||
+                firstUser?.id
+            )?.toString();
+
+
+        const second =
+            (
+                secondUser?._id ||
+                secondUser?.id
+            )?.toString();
+
+
+        if (!first || !second) {
+            return null;
+        }
+
+
+        return [
+            first,
+            second
+        ]
+            .sort()
+            .join("_");
+
+    };
+
+
+    // =========================================
+    // SELECT USER
+    // =========================================
+
+    const selectUser =
+        async selected => {
+
+            setSelectedUser(
+                selected
+            );
+
+            setMessages([]);
+
+            setTyping(false);
+
+
+            if (!user || !selected) {
+                return;
+            }
+
+
+            const selectedUserId =
+                selected._id ||
+                selected.id;
+
+
+            const roomId =
+                getRoomId(
+                    user,
+                    selected
+                );
+
+
+            if (
+                roomId &&
+                socketRef.current
+            ) {
+
+                socketRef.current.emit(
+                    "join-room",
+                    roomId
+                );
+
+            }
+
+
+            try {
+
+                const response =
+                    await api.get(
+                        `/messages/conversation/${selectedUserId}`
+                    );
+
+
+                setMessages(
+                    response.data?.data ||
+                    response.data?.messages ||
+                    response.data ||
+                    []
+                );
+
+
+                await api.put(
+                    `/messages/seen/${selectedUserId}`
+                );
+
+
+            } catch (error) {
+
+                console.error(
+                    "Conversation error:",
+                    error
+                );
+
+            }
+
+        };
+
+
+    // =========================================
+    // SEND MESSAGE
+    // =========================================
+
+    const sendMessage =
+        async e => {
+
+            e.preventDefault();
+
+
+            const text =
+                message.trim();
+
+
+            if (
+                !text ||
+                !selectedUser ||
+                !user ||
+                sending
+            ) {
+                return;
+            }
+
+
+            const receiver =
+                selectedUser._id ||
+                selectedUser.id;
+
+
+            const roomId =
+                getRoomId(
+                    user,
+                    selectedUser
+                );
+
+
+            try {
+
+                setSending(true);
+
+
+                const response =
+                    await api.post(
+                        "/messages/send",
+                        {
+                            receiver,
+                            message: text
+                        }
+                    );
+
+
+                const savedMessage =
+                    response.data?.data;
+
+
+                if (savedMessage) {
+
+                    setMessages(
+                        previous => {
+
+                            const exists =
+                                previous.some(
+                                    item =>
+                                        item._id ===
+                                        savedMessage._id
+                                );
+
+
+                            if (exists) {
+                                return previous;
+                            }
+
+
+                            return [
+                                ...previous,
+                                savedMessage
+                            ];
+
+                        }
+                    );
+
+
+                    if (
+                        socketRef.current &&
+                        roomId
+                    ) {
+
+                        socketRef.current.emit(
+                            "send-message",
+                            {
+                                ...savedMessage,
+                                roomId
+                            }
+                        );
+
+                    }
+
+                }
+
+
+                setMessage("");
+
+
+                socketRef.current?.emit(
+                    "stop-typing",
+                    {
+                        roomId,
+                        userId:
+                            user._id ||
+                            user.id
+                    }
+                );
+
+
+            } catch (error) {
+
+                console.error(
+                    "Send message error:",
+                    error
+                );
+
+
+                alert(
+                    error.response?.data?.message ||
+                    "Message could not be sent."
+                );
+
+            } finally {
+
+                setSending(false);
+
+            }
+
+        };
+
+
+    // =========================================
+    // TYPING
+    // =========================================
+
+    const handleTyping =
+        e => {
+
+            const value =
+                e.target.value;
+
+
+            setMessage(value);
+
+
+            if (
+                !selectedUser ||
+                !user ||
+                !socketRef.current
+            ) {
+                return;
+            }
+
+
+            const roomId =
+                getRoomId(
+                    user,
+                    selectedUser
+                );
+
+
+            if (!roomId) {
+                return;
+            }
+
+
+            if (value.trim()) {
+
+                socketRef.current.emit(
+                    "typing",
+                    {
+                        roomId,
+                        userId:
+                            user._id ||
+                            user.id
+                    }
+                );
+
+            } else {
+
+                socketRef.current.emit(
+                    "stop-typing",
+                    {
+                        roomId,
+                        userId:
+                            user._id ||
+                            user.id
+                    }
+                );
+
+            }
+
+        };
+
+
+    // =========================================
+    // ONLINE CHECK
+    // =========================================
+
+    const isUserOnline =
+        selected => {
+
+            if (!selected) {
+                return false;
+            }
+
+
+            const id =
+                (
+                    selected._id ||
+                    selected.id
+                )?.toString();
+
+
+            return onlineUsers.some(
+                onlineId =>
+                    onlineId?.toString() ===
+                    id
+            );
+
+        };
+
+
+    // =========================================
+    // FILTER USERS
+    // =========================================
+
+    const filteredUsers =
+        users.filter(item => {
+
+            const currentId =
+                (
+                    user?._id ||
+                    user?.id
+                )?.toString();
+
+
+            const itemId =
+                (
+                    item._id ||
+                    item.id
+                )?.toString();
+
+
+            if (
+                !itemId ||
+                itemId === currentId
+            ) {
+                return false;
+            }
+
+
+            return (
+                item.name
+                    ?.toLowerCase()
+                    .includes(
+                        searchText
+                            .toLowerCase()
+                    ) ||
+                item.email
+                    ?.toLowerCase()
+                    .includes(
+                        searchText
+                            .toLowerCase()
+                    )
+            );
+
+        });
+
+
+    // =========================================
+    // AVATAR
+    // =========================================
+
+    const getAvatar =
+        person => {
+
+            return (
+                person?.profileImage ||
+                person?.avatar ||
+                person?.image ||
+                null
+            );
+
+        };
+
+
+    // =========================================
+    // MESSAGE TIME
+    // =========================================
+
+    const formatTime =
+        date => {
+
+            if (!date) {
+                return "";
+            }
+
+
+            return new Date(
+                date
+            ).toLocaleTimeString(
+                [],
+                {
+                    hour: "2-digit",
+                    minute: "2-digit"
+                }
+            );
+
+        };
+
+
+    // =========================================
+    // LOADING
+    // =========================================
+
+    if (loading) {
+
+        return (
+
+            <div className="messenger-page">
+
+                <div className="messenger-loading">
+
+                    <div className="messenger-loader"></div>
+
+                    <p>
+                        Loading Messenger...
+                    </p>
+
+                </div>
+
+            </div>
+
+        );
+
+    }
+
+
+    return (
+
+        <div className="messenger-page">
+
+
+            {/* =================================
+                LEFT SIDEBAR
+            ================================= */}
+
+            <aside className="messenger-sidebar">
+
+
+                <div className="messenger-topbar">
+
+                    <div>
+
+                        <h1>
+                            Chats
+                        </h1>
+
+                        <span>
+                            Messenger
+                        </span>
+
+                    </div>
+
+
+                    <button
+                        className="icon-btn"
+                        title="More"
+                    >
+
+                        <FaEllipsisH />
+
+                    </button>
+
+                </div>
+
+
+                {/* SEARCH */}
+
+                <div className="messenger-search">
+
+                    <FaSearch />
+
+                    <input
+                        type="text"
+                        placeholder="Search Messenger"
+                        value={searchText}
+                        onChange={
+                            e =>
+                                setSearchText(
+                                    e.target.value
+                                )
+                        }
+                    />
+
+                </div>
+
+
+                {/* USER LIST */}
+
+                <div className="messenger-user-list">
+
+                    {filteredUsers.length === 0 ? (
+
+                        <div className="no-chat-users">
+
+                            <FaSearch />
+
+                            <p>
+                                No people found
+                            </p>
+
+                        </div>
+
+                    ) : (
+
+                        filteredUsers.map(
+                            person => {
+
+                                const id =
+                                    person._id ||
+                                    person.id;
+
+
+                                const active =
+                                    selectedUser &&
+                                    (
+                                        selectedUser._id ||
+                                        selectedUser.id
+                                    )?.toString() ===
+                                    id?.toString();
+
+
+                                const avatar =
+                                    getAvatar(
+                                        person
+                                    );
+
+
+                                return (
+
+                                    <button
+                                        key={id}
+                                        className={
+                                            active
+                                                ? "messenger-user active"
+                                                : "messenger-user"
+                                        }
+                                        onClick={() =>
+                                            selectUser(
+                                                person
+                                            )
+                                        }
+                                    >
+
+
+                                        <div className="messenger-avatar">
+
+                                            {avatar ? (
+
+                                                <img
+                                                    src={
+                                                        avatar
+                                                    }
+                                                    alt={
+                                                        person.name
+                                                    }
+                                                />
+
+                                            ) : (
+
+                                                <span>
+                                                    {
+                                                        person.name
+                                                            ?.charAt(0)
+                                                            ?.toUpperCase() ||
+                                                        "U"
+                                                    }
+                                                </span>
+
+                                            )}
+
+
+                                            {isUserOnline(
+                                                person
+                                            ) && (
+
+                                                <i className="online-dot"></i>
+
+                                            )}
+
+                                        </div>
+
+
+                                        <div className="messenger-user-content">
+
+                                            <strong>
+                                                {
+                                                    person.name ||
+                                                    "User"
+                                                }
+                                            </strong>
+
+                                            <span>
+                                                {
+                                                    isUserOnline(
+                                                        person
+                                                    )
+                                                        ? "Active now"
+                                                        : "Offline"
+                                                }
+                                            </span>
+
+                                        </div>
+
+                                    </button>
+
+                                );
+
+                            }
+                        )
+
+                    )}
+
+                </div>
+
+            </aside>
+
+
+            {/* =================================
+                CHAT WINDOW
+            ================================= */}
+
+            <main className="messenger-chat">
+
+
+                {!selectedUser ? (
+
+                    <div className="messenger-empty">
+
+                        <div className="empty-icon">
+                            💬
+                        </div>
+
+                        <h2>
+                            Your Messages
+                        </h2>
+
+                        <p>
+                            Select a conversation
+                            to start chatting.
+                        </p>
+
+                    </div>
+
+                ) : (
+
+                    <>
+
+
+                        {/* CHAT HEADER */}
+
+                        <header className="messenger-chat-header">
+
+
+                            <button
+                                className="mobile-back-btn"
+                                onClick={() =>
+                                    setSelectedUser(
+                                        null
+                                    )
+                                }
+                            >
+
+                                <FaArrowLeft />
+
+                            </button>
+
+
+                            <div className="chat-header-avatar">
+
+                                {getAvatar(
+                                    selectedUser
+                                ) ? (
+
+                                    <img
+                                        src={
+                                            getAvatar(
+                                                selectedUser
+                                            )
+                                        }
+                                        alt={
+                                            selectedUser.name
+                                        }
+                                    />
+
+                                ) : (
+
+                                    <span>
+                                        {
+                                            selectedUser.name
+                                                ?.charAt(0)
+                                                ?.toUpperCase() ||
+                                            "U"
+                                        }
+                                    </span>
+
+                                )}
+
+
+                                {isUserOnline(
+                                    selectedUser
+                                ) && (
+
+                                    <i className="online-dot"></i>
+
+                                )}
+
+                            </div>
+
+
+                            <div className="chat-header-info">
+
+                                <h2>
+                                    {
+                                        selectedUser.name ||
+                                        "User"
+                                    }
+                                </h2>
+
+                                <span>
+
+                                    {
+                                        typing
+                                            ? "Typing..."
+                                            : isUserOnline(
+                                                selectedUser
+                                            )
+                                                ? "Active now"
+                                                : "Offline"
+                                    }
+
+                                </span>
+
+                            </div>
+
+
+                            <div className="chat-header-actions">
+
+                                <button
+                                    title="Voice call"
+                                >
+                                    <FaPhone />
+                                </button>
+
+                                <button
+                                    title="Video call"
+                                >
+                                    <FaVideo />
+                                </button>
+
+                                <button
+                                    title="Chat information"
+                                >
+                                    <FaInfoCircle />
+                                </button>
+
+                            </div>
+
+                        </header>
+
+
+                        {/* MESSAGES */}
+
+                        <div className="messages-container">
+
+
+                            {messages.length === 0 ? (
+
+                                <div className="conversation-start">
+
+                                    <div className="conversation-avatar">
+
+                                        {getAvatar(
+                                            selectedUser
+                                        ) ? (
+
+                                            <img
+                                                src={
+                                                    getAvatar(
+                                                        selectedUser
+                                                    )
+                                                }
+                                                alt=""
+                                            />
+
+                                        ) : (
+
+                                            <span>
+                                                {
+                                                    selectedUser.name
+                                                        ?.charAt(0)
+                                                        ?.toUpperCase() ||
+                                                    "U"
+                                                }
+                                            </span>
+
+                                        )}
+
+                                    </div>
+
+
+                                    <h3>
+                                        {
+                                            selectedUser.name
+                                        }
+                                    </h3>
+
+                                    <p>
+                                        You're now connected
+                                        on Messenger.
+                                    </p>
+
+                                </div>
+
+                            ) : (
+
+                                messages.map(
+                                    (
+                                        msg,
+                                        index
+                                    ) => {
+
+                                        const senderId =
+                                            (
+                                                msg.sender?._id ||
+                                                msg.sender
+                                            )?.toString();
+
+
+                                        const currentId =
+                                            (
+                                                user?._id ||
+                                                user?.id
+                                            )?.toString();
+
+
+                                        const own =
+                                            senderId ===
+                                            currentId;
+
+
+                                        return (
+
+                                            <div
+                                                key={
+                                                    msg._id ||
+                                                    index
+                                                }
+                                                className={
+                                                    own
+                                                        ? "message-row own"
+                                                        : "message-row"
+                                                }
+                                            >
+
+                                                {!own && (
+
+                                                    <div className="message-small-avatar">
+
+                                                        {getAvatar(
+                                                            selectedUser
+                                                        ) ? (
+
+                                                            <img
+                                                                src={
+                                                                    getAvatar(
+                                                                        selectedUser
+                                                                    )
+                                                                }
+                                                                alt=""
+                                                            />
+
+                                                        ) : (
+
+                                                            <span>
+                                                                {
+                                                                    selectedUser.name
+                                                                        ?.charAt(0)
+                                                                        ?.toUpperCase() ||
+                                                                    "U"
+                                                                }
+                                                            </span>
+
+                                                        )}
+
+                                                    </div>
+
+                                                )}
+
+
+                                                <div
+                                                    className={
+                                                        own
+                                                            ? "message-bubble own"
+                                                            : "message-bubble"
+                                                    }
+                                                >
+
+                                                    <p>
+                                                        {
+                                                            msg.message ||
+                                                            msg.text ||
+                                                            ""
+                                                        }
+                                                    </p>
+
+
+                                                    <div className="message-meta">
+
+                                                        <span>
+                                                            {
+                                                                formatTime(
+                                                                    msg.createdAt
+                                                                )
+                                                            }
+                                                        </span>
+
+
+                                                        {own && (
+
+                                                            <FaCheckDouble />
+
+                                                        )}
+
+                                                    </div>
+
+                                                </div>
+
+                                            </div>
+
+                                        );
+
+                                    }
+                                )
+
+                            )}
+
+
+                            {typing && (
+
+                                <div className="typing-bubble">
+
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+
+                                </div>
+
+                            )}
+
+
+                            <div
+                                ref={
+                                    messagesEndRef
+                                }
+                            />
+
+                        </div>
+
+
+                        {/* MESSAGE INPUT */}
+
+                        <form
+                            className="messenger-input-area"
+                            onSubmit={
+                                sendMessage
+                            }
+                        >
+
+                            <button
+                                type="button"
+                                title="Emoji"
+                            >
+
+                                <FaSmile />
+
+                            </button>
+
+
+                            <button
+                                type="button"
+                                title="Attach file"
+                            >
+
+                                <FaPaperclip />
+
+                            </button>
+
+
+                            <button
+                                type="button"
+                                title="Send image"
+                            >
+
+                                <FaImage />
+
+                            </button>
+
+
+                            <input
+                                type="text"
+                                placeholder={
+                                    `Message ${
+                                        selectedUser.name ||
+                                        "User"
+                                    }...`
+                                }
+                                value={
+                                    message
+                                }
+                                onChange={
+                                    handleTyping
+                                }
+                            />
+
+
+                            <button
+                                type="submit"
+                                className="send-button"
+                                disabled={
+                                    !message.trim() ||
+                                    sending
+                                }
+                            >
+
+                                <FaPaperPlane />
+
+                            </button>
+
+                        </form>
+
+                    </>
+
+                )}
+
+            </main>
+
+        </div>
+
+    );
+
+};
+
+
+export default Messenger;
