@@ -26,11 +26,8 @@ import "../styles/Navbar.css";
 
 const Navbar = () => {
 
-    const [menuOpen, setMenuOpen] =
-        useState(false);
-
-    const [searchText, setSearchText] =
-        useState("");
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [searchText, setSearchText] = useState("");
 
     const {
         user,
@@ -49,8 +46,7 @@ const Navbar = () => {
     const cartCount =
         (cart || []).reduce(
             (total, item) =>
-                total +
-                Number(item.quantity || 1),
+                total + Number(item.quantity || 1),
             0
         );
 
@@ -72,11 +68,9 @@ const Navbar = () => {
 
         e.preventDefault();
 
-        const query =
-            searchText.trim();
+        const query = searchText.trim();
 
         if (!query) {
-            navigate("/");
             return;
         }
 
@@ -96,7 +90,9 @@ const Navbar = () => {
 
         setSearchText("");
 
-        navigate("/");
+        if (user) {
+            navigate("/");
+        }
 
         closeMenu();
     };
@@ -111,7 +107,6 @@ const Navbar = () => {
         logout();
 
         setSearchText("");
-
         closeMenu();
 
         navigate("/login");
@@ -133,14 +128,14 @@ const Navbar = () => {
 
 
     // ==========================
-    // ANIMATION
+    // PREMIUM ANIMATION
     // ==========================
 
     const navContainer = {
 
         hidden: {
             opacity: 0,
-            y: -25
+            y: -30
         },
 
         visible: {
@@ -149,11 +144,10 @@ const Navbar = () => {
             y: 0,
 
             transition: {
-                duration: 0.7,
+                duration: 0.8,
                 ease: [0.22, 1, 0.36, 1],
-                staggerChildren: 0.055
+                staggerChildren: 0.06
             }
-
         }
     };
 
@@ -162,19 +156,20 @@ const Navbar = () => {
 
         hidden: {
             opacity: 0,
-            y: -12
+            y: -15,
+            scale: 0.96
         },
 
         visible: {
 
             opacity: 1,
             y: 0,
+            scale: 1,
 
             transition: {
-                duration: 0.45,
+                duration: 0.5,
                 ease: [0.22, 1, 0.36, 1]
             }
-
         }
     };
 
@@ -188,18 +183,42 @@ const Navbar = () => {
             variants={navContainer}
         >
 
+            {/* ==========================
+                PREMIUM GLOW
+            ========================== */}
 
-            {/* =================================================
-                PREMIUM BACKGROUND GLOW
-            ================================================= */}
+            <motion.div
+                className="navbar-glow navbar-glow-one"
+                animate={{
+                    x: [0, 40, 0],
+                    y: [0, 20, 0],
+                    opacity: [0.35, 0.6, 0.35]
+                }}
+                transition={{
+                    duration: 7,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                }}
+            />
 
-            <div className="navbar-glow navbar-glow-one" />
-            <div className="navbar-glow navbar-glow-two" />
+            <motion.div
+                className="navbar-glow navbar-glow-two"
+                animate={{
+                    x: [0, -35, 0],
+                    y: [0, -15, 0],
+                    opacity: [0.25, 0.5, 0.25]
+                }}
+                transition={{
+                    duration: 8,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                }}
+            />
 
 
-            {/* =================================================
+            {/* ==========================
                 LOGO
-            ================================================= */}
+            ========================== */}
 
             <motion.div
                 className="logo jr-logo"
@@ -216,138 +235,140 @@ const Navbar = () => {
                         className="logo-icon jr-logo-icon"
                         whileHover={{
                             rotate: -8,
-                            scale: 1.08
+                            scale: 1.12
                         }}
                         whileTap={{
-                            scale: 0.92
+                            scale: 0.9
                         }}
                         transition={{
                             type: "spring",
-                            stiffness: 400,
-                            damping: 18
+                            stiffness: 450,
+                            damping: 16
                         }}
                     >
                         JR
                     </motion.span>
 
 
-                    <span className="jr-brand-name">
+                    <motion.span
+                        className="jr-brand-name"
+                        whileHover={{
+                            letterSpacing: "1px"
+                        }}
+                    >
                         <strong>JR</strong>
                         <span>Store</span>
-                    </span>
+                    </motion.span>
 
                 </Link>
 
             </motion.div>
 
 
-            {/* =================================================
+            {/* ==========================
                 SEARCH
-            ================================================= */}
+            ========================== */}
 
-            <motion.form
-                className="search-box jr-search"
-                onSubmit={handleSearch}
-                variants={navItem}
+            {user && (
 
-                whileFocus={{
-                    scale: 1.015
-                }}
-            >
-
-                <motion.div
-                    className="search-icon-wrapper"
-                    animate={{
-                        scale: searchText ? 1.05 : 1
+                <motion.form
+                    className="search-box jr-search"
+                    onSubmit={handleSearch}
+                    variants={navItem}
+                    whileFocus={{
+                        scale: 1.015
                     }}
                 >
 
-                    <FaSearch
-                        className="search-icon"
+                    <motion.div
+                        className="search-icon-wrapper"
+                        animate={{
+                            rotate: searchText ? 8 : 0,
+                            scale: searchText ? 1.08 : 1
+                        }}
+                    >
+                        <FaSearch className="search-icon" />
+                    </motion.div>
+
+
+                    <input
+                        type="search"
+                        value={searchText}
+                        onChange={(e) =>
+                            setSearchText(e.target.value)
+                        }
+                        placeholder="Search products or people..."
+                        aria-label="Search products or people"
                     />
 
-                </motion.div>
+
+                    <AnimatePresence>
+
+                        {searchText && (
+
+                            <motion.button
+                                type="button"
+                                className="clear-search"
+                                onClick={handleClearSearch}
+
+                                initial={{
+                                    opacity: 0,
+                                    scale: 0.5
+                                }}
+
+                                animate={{
+                                    opacity: 1,
+                                    scale: 1
+                                }}
+
+                                exit={{
+                                    opacity: 0,
+                                    scale: 0.5
+                                }}
+
+                                whileHover={{
+                                    rotate: 90,
+                                    scale: 1.15
+                                }}
+                            >
+                                <FaTimes />
+                            </motion.button>
+
+                        )}
+
+                    </AnimatePresence>
 
 
-                <input
-                    type="search"
-                    value={searchText}
-                    onChange={(e) =>
-                        setSearchText(
-                            e.target.value
-                        )
-                    }
-                    placeholder="Search products or people..."
-                    aria-label="Search products or people"
-                />
+                    <motion.button
+                        type="submit"
+                        className="search-btn"
+
+                        whileHover={{
+                            scale: 1.04,
+                            y: -1
+                        }}
+
+                        whileTap={{
+                            scale: 0.94
+                        }}
+                    >
+
+                        <FaSearch />
+
+                        <span>
+                            Search
+                        </span>
+
+                    </motion.button>
+
+                </motion.form>
+
+            )}
 
 
-                <AnimatePresence>
-
-                    {searchText && (
-
-                        <motion.button
-                            type="button"
-                            className="clear-search"
-                            onClick={
-                                handleClearSearch
-                            }
-
-                            initial={{
-                                opacity: 0,
-                                scale: 0.5
-                            }}
-
-                            animate={{
-                                opacity: 1,
-                                scale: 1
-                            }}
-
-                            exit={{
-                                opacity: 0,
-                                scale: 0.5
-                            }}
-
-                            whileHover={{
-                                rotate: 90,
-                                scale: 1.1
-                            }}
-                        >
-
-                            <FaTimes />
-
-                        </motion.button>
-
-                    )}
-
-                </AnimatePresence>
-
-
-                <motion.button
-                    type="submit"
-                    className="search-btn"
-                    whileHover={{
-                        scale: 1.035
-                    }}
-                    whileTap={{
-                        scale: 0.95
-                    }}
-                >
-
-                    <FaSearch />
-
-                    <span>
-                        Search
-                    </span>
-
-                </motion.button>
-
-            </motion.form>
-
-
-            {/* =================================================
+            {/* ==========================
                 NAVIGATION
-            ================================================= */}
+            ========================== */}
 
             <motion.ul
                 className={
@@ -355,24 +376,26 @@ const Navbar = () => {
                         ? "nav-links active jr-nav-links"
                         : "nav-links jr-nav-links"
                 }
-
                 variants={navContainer}
             >
 
-
                 {/* HOME */}
 
-                <motion.li variants={navItem}>
+                {user && (
 
-                    <NavItem
-                        to="/"
-                        icon={<FaHome />}
-                        label="Home"
-                        active={isActive("/")}
-                        onClick={closeMenu}
-                    />
+                    <motion.li variants={navItem}>
 
-                </motion.li>
+                        <NavItem
+                            to="/"
+                            icon={<FaHome />}
+                            label="Home"
+                            active={isActive("/")}
+                            onClick={closeMenu}
+                        />
+
+                    </motion.li>
+
+                )}
 
 
                 {/* DASHBOARD */}
@@ -385,11 +408,7 @@ const Navbar = () => {
                             to="/dashboard"
                             icon={<FaTachometerAlt />}
                             label="Dashboard"
-                            active={
-                                isActive(
-                                    "/dashboard"
-                                )
-                            }
+                            active={isActive("/dashboard")}
                             onClick={closeMenu}
                         />
 
@@ -408,11 +427,7 @@ const Navbar = () => {
                             to="/seller"
                             icon={<FaStore />}
                             label="Seller"
-                            active={
-                                isActive(
-                                    "/seller"
-                                )
-                            }
+                            active={isActive("/seller")}
                             onClick={closeMenu}
                         />
 
@@ -431,11 +446,7 @@ const Navbar = () => {
                             to="/admin"
                             icon={<FaUserShield />}
                             label="Admin"
-                            active={
-                                isActive(
-                                    "/admin"
-                                )
-                            }
+                            active={isActive("/admin")}
                             onClick={closeMenu}
                         />
 
@@ -454,11 +465,7 @@ const Navbar = () => {
                             to="/messenger"
                             icon={<FaComments />}
                             label="Messages"
-                            active={
-                                isActive(
-                                    "/messenger"
-                                )
-                            }
+                            active={isActive("/messenger")}
                             onClick={closeMenu}
                         />
 
@@ -476,15 +483,8 @@ const Navbar = () => {
                         <NavItem
                             to="/profile"
                             icon={<FaUserCircle />}
-                            label={
-                                user.name ||
-                                "Profile"
-                            }
-                            active={
-                                isActive(
-                                    "/profile"
-                                )
-                            }
+                            label={user.name || "Profile"}
+                            active={isActive("/profile")}
                             onClick={closeMenu}
                             profile
                         />
@@ -504,11 +504,7 @@ const Navbar = () => {
                             to="/wishlist"
                             icon={<FaHeart />}
                             label="Wishlist"
-                            active={
-                                isActive(
-                                    "/wishlist"
-                                )
-                            }
+                            active={isActive("/wishlist")}
                             onClick={closeMenu}
                         />
 
@@ -527,11 +523,7 @@ const Navbar = () => {
                             to="/orders"
                             icon={<FaBoxOpen />}
                             label="Orders"
-                            active={
-                                isActive(
-                                    "/orders"
-                                )
-                            }
+                            active={isActive("/orders")}
                             onClick={closeMenu}
                         />
 
@@ -558,6 +550,7 @@ const Navbar = () => {
 
                             <motion.span
                                 className="nav-icon"
+
                                 whileHover={{
                                     y: -2,
                                     scale: 1.12
@@ -572,27 +565,29 @@ const Navbar = () => {
 
                                         <motion.span
                                             className="cart-count"
+
                                             initial={{
                                                 scale: 0,
                                                 opacity: 0
                                             }}
+
                                             animate={{
                                                 scale: 1,
                                                 opacity: 1
                                             }}
+
                                             exit={{
                                                 scale: 0,
                                                 opacity: 0
                                             }}
+
                                             transition={{
                                                 type: "spring",
                                                 stiffness: 500,
                                                 damping: 18
                                             }}
                                         >
-
                                             {cartCount}
-
                                         </motion.span>
 
                                     )}
@@ -620,7 +615,8 @@ const Navbar = () => {
 
                         <motion.div
                             whileHover={{
-                                y: -2
+                                y: -2,
+                                scale: 1.02
                             }}
                             whileTap={{
                                 scale: 0.96
@@ -650,7 +646,8 @@ const Navbar = () => {
 
                         <motion.div
                             whileHover={{
-                                y: -2
+                                y: -2,
+                                scale: 1.02
                             }}
                             whileTap={{
                                 scale: 0.96
@@ -685,11 +682,11 @@ const Navbar = () => {
 
                             whileHover={{
                                 y: -2,
-                                scale: 1.02
+                                scale: 1.03
                             }}
 
                             whileTap={{
-                                scale: 0.96
+                                scale: 0.95
                             }}
                         >
 
@@ -708,30 +705,27 @@ const Navbar = () => {
             </motion.ul>
 
 
-            {/* =================================================
+            {/* ==========================
                 MOBILE MENU
-            ================================================= */}
+            ========================== */}
 
             <motion.button
                 type="button"
                 className="menu-btn jr-menu-btn"
 
                 onClick={() =>
-                    setMenuOpen(
-                        !menuOpen
-                    )
+                    setMenuOpen(!menuOpen)
                 }
 
                 aria-label="Toggle menu"
 
                 whileTap={{
-                    scale: 0.85
+                    scale: 0.85,
+                    rotate: 5
                 }}
             >
 
-                <AnimatePresence
-                    mode="wait"
-                >
+                <AnimatePresence mode="wait">
 
                     {menuOpen ? (
 
@@ -782,12 +776,11 @@ const Navbar = () => {
         </motion.nav>
 
     );
-
 };
 
 
 /* =========================================================
-   NAV ITEM COMPONENT
+   NAV ITEM
 ========================================================= */
 
 const NavItem = ({
@@ -844,7 +837,6 @@ const NavItem = ({
 
                 <motion.span
                     className="active-indicator"
-
                     layoutId="navbar-active"
 
                     transition={{
@@ -857,9 +849,7 @@ const NavItem = ({
             )}
 
         </Link>
-
     );
-
 };
 
 
