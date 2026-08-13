@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 import {
     FaShoppingCart,
@@ -17,6 +17,8 @@ import {
     FaUserShield
 } from "react-icons/fa";
 
+import { motion, AnimatePresence } from "framer-motion";
+
 import { useApp } from "../context/AppContext";
 
 import "../styles/Navbar.css";
@@ -24,8 +26,11 @@ import "../styles/Navbar.css";
 
 const Navbar = () => {
 
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [searchText, setSearchText] = useState("");
+    const [menuOpen, setMenuOpen] =
+        useState(false);
+
+    const [searchText, setSearchText] =
+        useState("");
 
     const {
         user,
@@ -34,6 +39,7 @@ const Navbar = () => {
     } = useApp();
 
     const navigate = useNavigate();
+    const location = useLocation();
 
 
     // ==========================
@@ -43,7 +49,8 @@ const Navbar = () => {
     const cartCount =
         (cart || []).reduce(
             (total, item) =>
-                total + Number(item.quantity || 1),
+                total +
+                Number(item.quantity || 1),
             0
         );
 
@@ -65,20 +72,19 @@ const Navbar = () => {
 
         e.preventDefault();
 
-        const query = searchText.trim();
+        const query =
+            searchText.trim();
 
         if (!query) {
             navigate("/");
             return;
         }
 
-        // SearchResults.jsx uses ?q=
         navigate(
             `/search?q=${encodeURIComponent(query)}`
         );
 
         closeMenu();
-
     };
 
 
@@ -93,7 +99,6 @@ const Navbar = () => {
         navigate("/");
 
         closeMenu();
-
     };
 
 
@@ -110,136 +115,285 @@ const Navbar = () => {
         closeMenu();
 
         navigate("/login");
+    };
 
+
+    // ==========================
+    // ACTIVE ROUTE
+    // ==========================
+
+    const isActive = (path) => {
+
+        if (path === "/") {
+            return location.pathname === "/";
+        }
+
+        return location.pathname.startsWith(path);
+    };
+
+
+    // ==========================
+    // ANIMATION
+    // ==========================
+
+    const navContainer = {
+
+        hidden: {
+            opacity: 0,
+            y: -25
+        },
+
+        visible: {
+
+            opacity: 1,
+            y: 0,
+
+            transition: {
+                duration: 0.7,
+                ease: [0.22, 1, 0.36, 1],
+                staggerChildren: 0.055
+            }
+
+        }
+    };
+
+
+    const navItem = {
+
+        hidden: {
+            opacity: 0,
+            y: -12
+        },
+
+        visible: {
+
+            opacity: 1,
+            y: 0,
+
+            transition: {
+                duration: 0.45,
+                ease: [0.22, 1, 0.36, 1]
+            }
+
+        }
     };
 
 
     return (
 
-        <nav className="navbar">
+        <motion.nav
+            className="navbar jr-navbar"
+            initial="hidden"
+            animate="visible"
+            variants={navContainer}
+        >
 
 
-            {/* ==========================
+            {/* =================================================
+                PREMIUM BACKGROUND GLOW
+            ================================================= */}
+
+            <div className="navbar-glow navbar-glow-one" />
+            <div className="navbar-glow navbar-glow-two" />
+
+
+            {/* =================================================
                 LOGO
-            =========================== */}
+            ================================================= */}
 
-            <div className="logo">
+            <motion.div
+                className="logo jr-logo"
+                variants={navItem}
+            >
 
                 <Link
                     to="/"
                     onClick={closeMenu}
+                    className="jr-logo-link"
                 >
 
-                    <span className="logo-icon">
-                        M
-                    </span>
+                    <motion.span
+                        className="logo-icon jr-logo-icon"
+                        whileHover={{
+                            rotate: -8,
+                            scale: 1.08
+                        }}
+                        whileTap={{
+                            scale: 0.92
+                        }}
+                        transition={{
+                            type: "spring",
+                            stiffness: 400,
+                            damping: 18
+                        }}
+                    >
+                        JR
+                    </motion.span>
 
-                    <span>
-                        Marketplace
+
+                    <span className="jr-brand-name">
+                        <strong>JR</strong>
+                        <span>Store</span>
                     </span>
 
                 </Link>
 
-            </div>
+            </motion.div>
 
 
-            {/* ==========================
+            {/* =================================================
                 SEARCH
-            =========================== */}
+            ================================================= */}
 
-            <form
-                className="search-box"
+            <motion.form
+                className="search-box jr-search"
                 onSubmit={handleSearch}
+                variants={navItem}
+
+                whileFocus={{
+                    scale: 1.015
+                }}
             >
 
-                <FaSearch className="search-icon" />
+                <motion.div
+                    className="search-icon-wrapper"
+                    animate={{
+                        scale: searchText ? 1.05 : 1
+                    }}
+                >
+
+                    <FaSearch
+                        className="search-icon"
+                    />
+
+                </motion.div>
+
 
                 <input
                     type="search"
                     value={searchText}
                     onChange={(e) =>
-                        setSearchText(e.target.value)
+                        setSearchText(
+                            e.target.value
+                        )
                     }
                     placeholder="Search products or people..."
                     aria-label="Search products or people"
                 />
 
-                {searchText && (
 
-                    <button
-                        type="button"
-                        className="clear-search"
-                        onClick={handleClearSearch}
-                        aria-label="Clear search"
-                    >
-                        <FaTimes />
-                    </button>
+                <AnimatePresence>
 
-                )}
+                    {searchText && (
 
-                <button
+                        <motion.button
+                            type="button"
+                            className="clear-search"
+                            onClick={
+                                handleClearSearch
+                            }
+
+                            initial={{
+                                opacity: 0,
+                                scale: 0.5
+                            }}
+
+                            animate={{
+                                opacity: 1,
+                                scale: 1
+                            }}
+
+                            exit={{
+                                opacity: 0,
+                                scale: 0.5
+                            }}
+
+                            whileHover={{
+                                rotate: 90,
+                                scale: 1.1
+                            }}
+                        >
+
+                            <FaTimes />
+
+                        </motion.button>
+
+                    )}
+
+                </AnimatePresence>
+
+
+                <motion.button
                     type="submit"
                     className="search-btn"
+                    whileHover={{
+                        scale: 1.035
+                    }}
+                    whileTap={{
+                        scale: 0.95
+                    }}
                 >
-                    Search
-                </button>
 
-            </form>
+                    <FaSearch />
+
+                    <span>
+                        Search
+                    </span>
+
+                </motion.button>
+
+            </motion.form>
 
 
-            {/* ==========================
+            {/* =================================================
                 NAVIGATION
-            =========================== */}
+            ================================================= */}
 
-            <ul
+            <motion.ul
                 className={
                     menuOpen
-                        ? "nav-links active"
-                        : "nav-links"
+                        ? "nav-links active jr-nav-links"
+                        : "nav-links jr-nav-links"
                 }
+
+                variants={navContainer}
             >
 
 
                 {/* HOME */}
 
-                <li>
+                <motion.li variants={navItem}>
 
-                    <Link
+                    <NavItem
                         to="/"
+                        icon={<FaHome />}
+                        label="Home"
+                        active={isActive("/")}
                         onClick={closeMenu}
-                    >
+                    />
 
-                        <FaHome />
-
-                        <span>
-                            Home
-                        </span>
-
-                    </Link>
-
-                </li>
+                </motion.li>
 
 
                 {/* DASHBOARD */}
 
                 {user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
+                        <NavItem
                             to="/dashboard"
+                            icon={<FaTachometerAlt />}
+                            label="Dashboard"
+                            active={
+                                isActive(
+                                    "/dashboard"
+                                )
+                            }
                             onClick={closeMenu}
-                        >
+                        />
 
-                            <FaTachometerAlt />
-
-                            <span>
-                                Dashboard
-                            </span>
-
-                        </Link>
-
-                    </li>
+                    </motion.li>
 
                 )}
 
@@ -248,22 +402,21 @@ const Navbar = () => {
 
                 {user?.role === "seller" && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
+                        <NavItem
                             to="/seller"
+                            icon={<FaStore />}
+                            label="Seller"
+                            active={
+                                isActive(
+                                    "/seller"
+                                )
+                            }
                             onClick={closeMenu}
-                        >
+                        />
 
-                            <FaStore />
-
-                            <span>
-                                Seller
-                            </span>
-
-                        </Link>
-
-                    </li>
+                    </motion.li>
 
                 )}
 
@@ -272,22 +425,21 @@ const Navbar = () => {
 
                 {user?.role === "admin" && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
+                        <NavItem
                             to="/admin"
+                            icon={<FaUserShield />}
+                            label="Admin"
+                            active={
+                                isActive(
+                                    "/admin"
+                                )
+                            }
                             onClick={closeMenu}
-                        >
+                        />
 
-                            <FaUserShield />
-
-                            <span>
-                                Admin
-                            </span>
-
-                        </Link>
-
-                    </li>
+                    </motion.li>
 
                 )}
 
@@ -296,23 +448,21 @@ const Navbar = () => {
 
                 {user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
+                        <NavItem
                             to="/messenger"
+                            icon={<FaComments />}
+                            label="Messages"
+                            active={
+                                isActive(
+                                    "/messenger"
+                                )
+                            }
                             onClick={closeMenu}
-                            title="Messenger"
-                        >
+                        />
 
-                            <FaComments />
-
-                            <span>
-                                Messages
-                            </span>
-
-                        </Link>
-
-                    </li>
+                    </motion.li>
 
                 )}
 
@@ -321,25 +471,25 @@ const Navbar = () => {
 
                 {user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
+                        <NavItem
                             to="/profile"
+                            icon={<FaUserCircle />}
+                            label={
+                                user.name ||
+                                "Profile"
+                            }
+                            active={
+                                isActive(
+                                    "/profile"
+                                )
+                            }
                             onClick={closeMenu}
-                            className="profile-link"
-                        >
+                            profile
+                        />
 
-                            <FaUserCircle />
-
-                            <span className="user-name">
-
-                                {user.name || "Profile"}
-
-                            </span>
-
-                        </Link>
-
-                    </li>
+                    </motion.li>
 
                 )}
 
@@ -348,23 +498,21 @@ const Navbar = () => {
 
                 {user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
+                        <NavItem
                             to="/wishlist"
+                            icon={<FaHeart />}
+                            label="Wishlist"
+                            active={
+                                isActive(
+                                    "/wishlist"
+                                )
+                            }
                             onClick={closeMenu}
-                            title="Wishlist"
-                        >
+                        />
 
-                            <FaHeart />
-
-                            <span>
-                                Wishlist
-                            </span>
-
-                        </Link>
-
-                    </li>
+                    </motion.li>
 
                 )}
 
@@ -373,22 +521,21 @@ const Navbar = () => {
 
                 {user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
+                        <NavItem
                             to="/orders"
+                            icon={<FaBoxOpen />}
+                            label="Orders"
+                            active={
+                                isActive(
+                                    "/orders"
+                                )
+                            }
                             onClick={closeMenu}
-                        >
+                        />
 
-                            <FaBoxOpen />
-
-                            <span>
-                                Orders
-                            </span>
-
-                        </Link>
-
-                    </li>
+                    </motion.li>
 
                 )}
 
@@ -397,32 +544,70 @@ const Navbar = () => {
 
                 {user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
                         <Link
                             to="/cart"
                             onClick={closeMenu}
-                            className="cart-link"
-                            title="Cart"
+                            className={
+                                isActive("/cart")
+                                    ? "jr-nav-item active"
+                                    : "jr-nav-item"
+                            }
                         >
 
-                            <FaShoppingCart />
+                            <motion.span
+                                className="nav-icon"
+                                whileHover={{
+                                    y: -2,
+                                    scale: 1.12
+                                }}
+                            >
+
+                                <FaShoppingCart />
+
+                                <AnimatePresence>
+
+                                    {cartCount > 0 && (
+
+                                        <motion.span
+                                            className="cart-count"
+                                            initial={{
+                                                scale: 0,
+                                                opacity: 0
+                                            }}
+                                            animate={{
+                                                scale: 1,
+                                                opacity: 1
+                                            }}
+                                            exit={{
+                                                scale: 0,
+                                                opacity: 0
+                                            }}
+                                            transition={{
+                                                type: "spring",
+                                                stiffness: 500,
+                                                damping: 18
+                                            }}
+                                        >
+
+                                            {cartCount}
+
+                                        </motion.span>
+
+                                    )}
+
+                                </AnimatePresence>
+
+                            </motion.span>
 
                             <span>
                                 Cart
                             </span>
 
-                            {cartCount > 0 && (
-
-                                <span className="cart-count">
-                                    {cartCount}
-                                </span>
-
-                            )}
-
                         </Link>
 
-                    </li>
+                    </motion.li>
 
                 )}
 
@@ -431,17 +616,28 @@ const Navbar = () => {
 
                 {!user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
-                            to="/login"
-                            onClick={closeMenu}
-                            className="login-link"
+                        <motion.div
+                            whileHover={{
+                                y: -2
+                            }}
+                            whileTap={{
+                                scale: 0.96
+                            }}
                         >
-                            Login
-                        </Link>
 
-                    </li>
+                            <Link
+                                to="/login"
+                                onClick={closeMenu}
+                                className="login-link jr-login"
+                            >
+                                Login
+                            </Link>
+
+                        </motion.div>
+
+                    </motion.li>
 
                 )}
 
@@ -450,17 +646,28 @@ const Navbar = () => {
 
                 {!user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <Link
-                            to="/register"
-                            onClick={closeMenu}
-                            className="register-link"
+                        <motion.div
+                            whileHover={{
+                                y: -2
+                            }}
+                            whileTap={{
+                                scale: 0.96
+                            }}
                         >
-                            Register
-                        </Link>
 
-                    </li>
+                            <Link
+                                to="/register"
+                                onClick={closeMenu}
+                                className="register-link jr-register"
+                            >
+                                Register
+                            </Link>
+
+                        </motion.div>
+
+                    </motion.li>
 
                 )}
 
@@ -469,12 +676,21 @@ const Navbar = () => {
 
                 {user && (
 
-                    <li>
+                    <motion.li variants={navItem}>
 
-                        <button
+                        <motion.button
                             type="button"
-                            className="logout-btn"
+                            className="logout-btn jr-logout"
                             onClick={handleLogout}
+
+                            whileHover={{
+                                y: -2,
+                                scale: 1.02
+                            }}
+
+                            whileTap={{
+                                scale: 0.96
+                            }}
                         >
 
                             <FaSignOutAlt />
@@ -483,36 +699,164 @@ const Navbar = () => {
                                 Logout
                             </span>
 
-                        </button>
+                        </motion.button>
 
-                    </li>
+                    </motion.li>
 
                 )}
 
-            </ul>
+            </motion.ul>
 
 
-            {/* ==========================
+            {/* =================================================
                 MOBILE MENU
-            =========================== */}
+            ================================================= */}
 
-            <button
+            <motion.button
                 type="button"
-                className="menu-btn"
+                className="menu-btn jr-menu-btn"
+
                 onClick={() =>
-                    setMenuOpen(!menuOpen)
+                    setMenuOpen(
+                        !menuOpen
+                    )
                 }
+
                 aria-label="Toggle menu"
+
+                whileTap={{
+                    scale: 0.85
+                }}
             >
 
-                {menuOpen
-                    ? <FaTimes />
-                    : <FaBars />
+                <AnimatePresence
+                    mode="wait"
+                >
+
+                    {menuOpen ? (
+
+                        <motion.span
+                            key="close"
+                            initial={{
+                                rotate: -90,
+                                opacity: 0
+                            }}
+                            animate={{
+                                rotate: 0,
+                                opacity: 1
+                            }}
+                            exit={{
+                                rotate: 90,
+                                opacity: 0
+                            }}
+                        >
+                            <FaTimes />
+                        </motion.span>
+
+                    ) : (
+
+                        <motion.span
+                            key="menu"
+                            initial={{
+                                rotate: 90,
+                                opacity: 0
+                            }}
+                            animate={{
+                                rotate: 0,
+                                opacity: 1
+                            }}
+                            exit={{
+                                rotate: -90,
+                                opacity: 0
+                            }}
+                        >
+                            <FaBars />
+                        </motion.span>
+
+                    )}
+
+                </AnimatePresence>
+
+            </motion.button>
+
+        </motion.nav>
+
+    );
+
+};
+
+
+/* =========================================================
+   NAV ITEM COMPONENT
+========================================================= */
+
+const NavItem = ({
+    to,
+    icon,
+    label,
+    active,
+    onClick,
+    profile
+}) => {
+
+    return (
+
+        <Link
+            to={to}
+            onClick={onClick}
+            className={
+                active
+                    ? "jr-nav-item active"
+                    : "jr-nav-item"
+            }
+        >
+
+            <motion.span
+                className={
+                    profile
+                        ? "nav-icon profile-icon"
+                        : "nav-icon"
                 }
 
-            </button>
+                whileHover={{
+                    y: -2,
+                    scale: 1.12
+                }}
 
-        </nav>
+                transition={{
+                    type: "spring",
+                    stiffness: 400,
+                    damping: 15
+                }}
+            >
+
+                {icon}
+
+            </motion.span>
+
+
+            <span className="nav-label">
+                {label}
+            </span>
+
+
+            {active && (
+
+                <motion.span
+                    className="active-indicator"
+
+                    layoutId="navbar-active"
+
+                    transition={{
+                        type: "spring",
+                        stiffness: 500,
+                        damping: 35
+                    }}
+                />
+
+            )}
+
+        </Link>
 
     );
 
