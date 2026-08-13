@@ -1,213 +1,160 @@
-import React, {
-    useEffect,
-    useState
-} from "react";
-
-import {
-    useSearchParams,
-    Link
-} from "react-router-dom";
-
-import {
-    FaUser,
-    FaEnvelope,
-    FaMapMarkerAlt,
-    FaSearch
-} from "react-icons/fa";
+import React, { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import api from "../services/api";
 
-import "../styles/App.css";
+import "../styles/SearchResults.css";
 
 
 const SearchResults = () => {
 
-    const [
-        searchParams
-    ] = useSearchParams();
-
+    const [searchParams] = useSearchParams();
 
     const query =
-        searchParams.get("q") || "";
+        searchParams.get("q")?.trim() || "";
+
+    const [products, setProducts] = useState([]);
+    const [users, setUsers] = useState([]);
+
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
 
-    const [
-        users,
-        setUsers
-    ] = useState([]);
-
-
-    const [
-        products,
-        setProducts
-    ] = useState([]);
-
-
-    const [
-        loading,
-        setLoading
-    ] = useState(true);
-
-
-    const [
-        error,
-        setError
-    ] = useState("");
-
-
-    // ==========================
-    // SEARCH
-    // ==========================
+    // =====================================================
+    // SEARCH PRODUCTS + USERS
+    // =====================================================
 
     useEffect(() => {
 
-        const search =
-            async () => {
+        const searchEverything = async () => {
 
-                if (!query.trim()) {
+            if (!query) {
 
-                    setUsers([]);
-                    setProducts([]);
-                    setLoading(false);
+                setProducts([]);
+                setUsers([]);
+                setLoading(false);
 
-                    return;
+                return;
+            }
+
+
+            setLoading(true);
+            setError("");
+
+
+            try {
+
+                // ==========================================
+                // SEARCH PRODUCTS
+                // ==========================================
+
+                let productData = [];
+
+                try {
+
+                    const productResponse =
+                        await api.get(
+                            `/products?keyword=${encodeURIComponent(query)}`
+                        );
+
+                    productData =
+                        productResponse.data?.products ||
+                        productResponse.data?.data ||
+                        productResponse.data ||
+                        [];
+
+                    if (!Array.isArray(productData)) {
+                        productData = [];
+                    }
+
+                } catch (productError) {
+
+                    console.error(
+                        "Product search error:",
+                        productError
+                    );
+
+                    productData = [];
 
                 }
 
 
+                // ==========================================
+                // SEARCH USERS
+                // ==========================================
+
+                let userData = [];
+
                 try {
-
-                    setLoading(true);
-                    setError("");
-
-
-                    // ==========================
-                    // SEARCH USERS
-                    // ==========================
 
                     const userResponse =
                         await api.get(
-                            `/users/search?q=${encodeURIComponent(
-                                query.trim()
-                            )}`
+                            `/users/search?q=${encodeURIComponent(query)}`
                         );
 
 
-                    const userData =
+                    userData =
                         userResponse.data?.users ||
                         userResponse.data?.data ||
                         userResponse.data ||
                         [];
 
 
-                    setUsers(
-                        Array.isArray(userData)
-                            ? userData
-                            : []
-                    );
-
-
-                    // ==========================
-                    // SEARCH PRODUCTS
-                    // ==========================
-
-                    try {
-
-                        const productResponse =
-                            await api.get(
-                                `/products/search?q=${encodeURIComponent(
-                                    query.trim()
-                                )}`
-                            );
-
-
-                        const productData =
-                            productResponse.data?.products ||
-                            productResponse.data?.data ||
-                            productResponse.data ||
-                            [];
-
-
-                        setProducts(
-                            Array.isArray(productData)
-                                ? productData
-                                : []
-                        );
-
-                    } catch (productError) {
-
-                        // Product search route
-                        // না থাকলেও user search
-                        // কাজ করবে।
-
-                        console.log(
-                            "Product search unavailable:",
-                            productError
-                        );
-
-                        setProducts([]);
-
+                    if (!Array.isArray(userData)) {
+                        userData = [];
                     }
 
-
-                } catch (err) {
+                } catch (userError) {
 
                     console.error(
-                        "Search error:",
-                        err
+                        "User search error:",
+                        userError
                     );
 
-                    setError(
-                        err.response?.data?.message ||
-                        "Search failed"
-                    );
-
-                    setUsers([]);
-                    setProducts([]);
-
-                } finally {
-
-                    setLoading(false);
+                    userData = [];
 
                 }
 
-            };
+
+                setProducts(productData);
+                setUsers(userData);
 
 
-        search();
+            } catch (err) {
+
+                console.error(
+                    "Search error:",
+                    err
+                );
+
+                setError(
+                    "Something went wrong while searching."
+                );
+
+            } finally {
+
+                setLoading(false);
+
+            }
+
+        };
+
+
+        searchEverything();
 
     }, [query]);
 
 
-    // ==========================
-    // PROFILE IMAGE
-    // ==========================
-
-    const getProfileImage = (
-        item
-    ) => {
-
-        return (
-            item.profileImage ||
-            item.avatar ||
-            item.image ||
-            ""
-        );
-
-    };
-
-
-    // ==========================
+    // =====================================================
     // IMAGE URL
-    // ==========================
+    // =====================================================
 
-    const getImageUrl = (
-        image
-    ) => {
+    const getImageUrl = (image) => {
 
         if (!image) {
-            return "";
+            return null;
         }
+
 
         if (
             image.startsWith("http://") ||
@@ -220,12 +167,10 @@ const SearchResults = () => {
 
 
         const baseURL =
-            process.env.REACT_APP_API_URL
-                ? process.env.REACT_APP_API_URL.replace(
-                    "/api",
-                    ""
-                )
-                : window.location.origin;
+            api.defaults.baseURL?.replace(
+                "/api",
+                ""
+            ) || "";
 
 
         return `${baseURL}${image.startsWith("/") ? "" : "/"}${image}`;
@@ -233,438 +178,358 @@ const SearchResults = () => {
     };
 
 
+    // =====================================================
+    // LOADING
+    // =====================================================
+
+    if (loading) {
+
+        return (
+
+            <div className="search-results-page">
+
+                <div className="search-loading">
+
+                    <h2>
+                        Searching...
+                    </h2>
+
+                    <p>
+                        Finding products and people.
+                    </p>
+
+                </div>
+
+            </div>
+
+        );
+
+    }
+
+
+    // =====================================================
+    // ERROR
+    // =====================================================
+
+    if (error) {
+
+        return (
+
+            <div className="search-results-page">
+
+                <div className="search-empty">
+
+                    <h2>
+                        Search Error
+                    </h2>
+
+                    <p>
+                        {error}
+                    </p>
+
+                </div>
+
+            </div>
+
+        );
+
+    }
+
+
     return (
 
-        <div
-            className="container"
-            style={{
-                paddingTop: "120px",
-                paddingBottom: "60px",
-                minHeight: "70vh"
-            }}
-        >
+        <div className="search-results-page">
 
 
-            {/* ==========================
+            {/* =================================================
                 HEADER
-            ========================== */}
+            ================================================= */}
 
-            <div
-                style={{
-                    marginBottom: "30px"
-                }}
-            >
+            <div className="search-results-header">
 
                 <h1>
                     Search Results
                 </h1>
 
-
                 <p>
-
-                    Search for:
-
+                    Results for:
                     <strong>
                         {" "}
                         "{query}"
                     </strong>
-
                 </p>
 
             </div>
 
 
-            {/* ==========================
-                LOADING
-            ========================== */}
 
-            {loading && (
+            {/* =================================================
+                PEOPLE
+            ================================================= */}
 
-                <div>
+            {users.length > 0 && (
 
-                    <h3>
-                        Searching...
-                    </h3>
+                <section className="search-section">
 
-                </div>
+                    <div className="search-section-title">
 
-            )}
+                        <h2>
+                            👤 People
+                        </h2>
 
+                        <span>
+                            {users.length} found
+                        </span>
 
-            {/* ==========================
-                ERROR
-            ========================== */}
+                    </div>
 
-            {!loading && error && (
 
-                <div>
+                    <div className="people-search-grid">
 
-                    <h3>
-                        {error}
-                    </h3>
+                        {users.map((person) => {
 
-                </div>
+                            const personId =
+                                person._id ||
+                                person.id;
 
-            )}
 
+                            const image =
+                                person.profileImage ||
+                                person.avatar ||
+                                person.image;
 
-            {!loading &&
-                !error &&
-                query && (
 
-                <>
+                            return (
 
+                                <Link
+                                    key={personId}
+                                    to={`/user/${personId}`}
+                                    className="person-search-card"
+                                >
 
-                    {/* ==========================
-                        PEOPLE
-                    ========================== */}
+                                    <div className="person-search-avatar">
 
-                    <section
-                        style={{
-                            marginBottom: "45px"
-                        }}
-                    >
+                                        {image ? (
 
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "10px",
-                                marginBottom: "20px"
-                            }}
-                        >
+                                            <img
+                                                src={
+                                                    getImageUrl(
+                                                        image
+                                                    )
+                                                }
+                                                alt={
+                                                    person.name ||
+                                                    "User"
+                                                }
+                                            />
 
-                            <FaUser />
+                                        ) : (
 
-                            <h2>
-                                People
-                            </h2>
-
-                            <span>
-                                ({users.length})
-                            </span>
-
-                        </div>
+                                            <span>
+                                                {
+                                                    person.name
+                                                        ?.charAt(0)
+                                                        ?.toUpperCase() ||
+                                                    "U"
+                                                }
+                                            </span>
 
+                                        )}
 
-                        {users.length === 0 ? (
-
-                            <div
-                                style={{
-                                    padding: "25px",
-                                    borderRadius: "15px",
-                                    background:
-                                        "rgba(255,255,255,0.05)"
-                                }}
-                            >
-
-                                <p>
-                                    No people found for "{query}".
-                                </p>
-
-                            </div>
-
-                        ) : (
-
-                            <div
-                                style={{
-                                    display: "grid",
-                                    gridTemplateColumns:
-                                        "repeat(auto-fill, minmax(280px, 1fr))",
-                                    gap: "20px"
-                                }}
-                            >
-
-                                {users.map(
-                                    person => {
-
-                                        const id =
-                                            person._id ||
-                                            person.id;
-
-
-                                        const image =
-                                            getProfileImage(
-                                                person
-                                            );
-
-
-                                        return (
-
-                                            <Link
-                                                key={id}
-                                                to={`/user/${id}`}
-                                                style={{
-                                                    textDecoration:
-                                                        "none",
-                                                    color:
-                                                        "inherit"
-                                                }}
-                                            >
-
-                                                <div
-                                                    style={{
-                                                        padding: "20px",
-                                                        borderRadius:
-                                                            "18px",
-                                                        border:
-                                                            "1px solid rgba(255,255,255,0.1)",
-                                                        display:
-                                                            "flex",
-                                                        alignItems:
-                                                            "center",
-                                                        gap: "15px",
-                                                        cursor:
-                                                            "pointer"
-                                                    }}
-                                                >
-
-                                                    {/* AVATAR */}
-
-                                                    {image ? (
-
-                                                        <img
-                                                            src={getImageUrl(
-                                                                image
-                                                            )}
-                                                            alt={
-                                                                person.name
-                                                            }
-                                                            style={{
-                                                                width:
-                                                                    "60px",
-                                                                height:
-                                                                    "60px",
-                                                                borderRadius:
-                                                                    "50%",
-                                                                objectFit:
-                                                                    "cover"
-                                                            }}
-                                                        />
-
-                                                    ) : (
-
-                                                        <div
-                                                            style={{
-                                                                width:
-                                                                    "60px",
-                                                                height:
-                                                                    "60px",
-                                                                borderRadius:
-                                                                    "50%",
-                                                                display:
-                                                                    "flex",
-                                                                alignItems:
-                                                                    "center",
-                                                                justifyContent:
-                                                                    "center",
-                                                                fontSize:
-                                                                    "22px",
-                                                                fontWeight:
-                                                                    "700",
-                                                                background:
-                                                                    "#333"
-                                                            }}
-                                                        >
-
-                                                            {
-                                                                person.name
-                                                                    ?.charAt(
-                                                                        0
-                                                                    )
-                                                                    ?.toUpperCase() ||
-                                                                "U"
-                                                            }
-
-                                                        </div>
-
-                                                    )}
-
-
-                                                    {/* INFO */}
-
-                                                    <div>
-
-                                                        <h3
-                                                            style={{
-                                                                margin:
-                                                                    "0 0 6px"
-                                                            }}
-                                                        >
-
-                                                            {
-                                                                person.name ||
-                                                                "User"
-                                                            }
-
-                                                        </h3>
-
-
-                                                        {person.email && (
-
-                                                            <p
-                                                                style={{
-                                                                    margin:
-                                                                        "3px 0",
-                                                                    opacity:
-                                                                        0.75
-                                                                }}
-                                                            >
-
-                                                                <FaEnvelope />
-                                                                {" "}
-                                                                {
-                                                                    person.email
-                                                                }
-
-                                                            </p>
-
-                                                        )}
-
-
-                                                        {person.location && (
-
-                                                            <p
-                                                                style={{
-                                                                    margin:
-                                                                        "3px 0",
-                                                                    opacity:
-                                                                        0.75
-                                                                }}
-                                                            >
-
-                                                                <FaMapMarkerAlt />
-                                                                {" "}
-                                                                {
-                                                                    person.location
-                                                                }
-
-                                                            </p>
-
-                                                        )}
-
-                                                    </div>
-
-                                                </div>
-
-                                            </Link>
-
-                                        );
-
-                                    }
-                                )}
-
-                            </div>
-
-                        )}
-
-                    </section>
-
-
-                    {/* ==========================
-                        PRODUCTS
-                    ========================== */}
-
-                    <section>
-
-                        <div
-                            style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "10px",
-                                marginBottom: "20px"
-                            }}
-                        >
-
-                            <FaSearch />
-
-                            <h2>
-                                Products
-                            </h2>
-
-                            <span>
-                                ({products.length})
-                            </span>
-
-                        </div>
-
-
-                        {products.length === 0 ? (
-
-                            <p>
-                                No products found.
-                            </p>
-
-                        ) : (
-
-                            <div
-                                className="product-grid"
-                            >
-
-                                {products.map(
-                                    product => (
-
-                                        <Link
-                                            key={
-                                                product._id ||
-                                                product.id
+                                    </div>
+
+
+                                    <div className="person-search-info">
+
+                                        <h3>
+                                            {
+                                                person.name ||
+                                                "User"
                                             }
-                                            to={`/product/${
-                                                product._id ||
-                                                product.id
-                                            }`}
-                                        >
+                                        </h3>
 
-                                            <div
-                                                className="product-card"
-                                            >
 
-                                                <h3>
-                                                    {
-                                                        product.name
-                                                    }
-                                                </h3>
+                                        {person.email && (
 
-                                                {product.price && (
+                                            <p>
+                                                {
+                                                    person.email
+                                                }
+                                            </p>
 
-                                                    <p>
-                                                        ৳{
-                                                            product.price
-                                                        }
-                                                    </p>
+                                        )}
 
-                                                )}
 
+                                        {person.role && (
+
+                                            <span className="person-role">
+
+                                                {
+                                                    person.role
+                                                }
+
+                                            </span>
+
+                                        )}
+
+                                    </div>
+
+                                </Link>
+
+                            );
+
+                        })}
+
+                    </div>
+
+                </section>
+
+            )}
+
+
+
+            {/* =================================================
+                PRODUCTS
+            ================================================= */}
+
+            {products.length > 0 && (
+
+                <section className="search-section">
+
+                    <div className="search-section-title">
+
+                        <h2>
+                            🛍️ Products
+                        </h2>
+
+                        <span>
+                            {products.length} found
+                        </span>
+
+                    </div>
+
+
+                    <div className="search-products-grid">
+
+                        {products.map((product) => {
+
+                            const productId =
+                                product._id ||
+                                product.id;
+
+
+                            const image =
+                                product.image ||
+                                product.imageUrl ||
+                                product.productImage ||
+                                (
+                                    Array.isArray(
+                                        product.images
+                                    )
+                                        ? product.images[0]
+                                        : null
+                                );
+
+
+                            return (
+
+                                <Link
+                                    key={productId}
+                                    to={`/product/${productId}`}
+                                    className="search-product-card"
+                                >
+
+                                    <div className="search-product-image">
+
+                                        {image ? (
+
+                                            <img
+                                                src={
+                                                    getImageUrl(
+                                                        image
+                                                    )
+                                                }
+                                                alt={
+                                                    product.name ||
+                                                    "Product"
+                                                }
+                                            />
+
+                                        ) : (
+
+                                            <div>
+                                                No Image
                                             </div>
 
-                                        </Link>
+                                        )}
 
-                                    )
-                                )}
+                                    </div>
 
-                            </div>
 
-                        )}
+                                    <div className="search-product-info">
 
-                    </section>
+                                        <h3>
+                                            {
+                                                product.name ||
+                                                product.title ||
+                                                "Product"
+                                            }
+                                        </h3>
 
-                </>
+
+                                        {product.price !== undefined && (
+
+                                            <strong>
+                                                ৳
+                                                {
+                                                    product.price
+                                                }
+                                            </strong>
+
+                                        )}
+
+                                    </div>
+
+                                </Link>
+
+                            );
+
+                        })}
+
+                    </div>
+
+                </section>
 
             )}
 
 
-            {!loading &&
-                !query && (
 
-                <div>
+            {/* =================================================
+                NOTHING FOUND
+            ================================================= */}
 
-                    <h3>
-                        Type something to search.
-                    </h3>
+            {users.length === 0 &&
+                products.length === 0 && (
 
-                </div>
+                    <div className="search-empty">
 
-            )}
+                        <div className="search-empty-icon">
+                            🔍
+                        </div>
+
+                        <h2>
+                            No results found
+                        </h2>
+
+                        <p>
+                            We couldn't find any
+                            person or product matching
+                            "{query}".
+                        </p>
+
+                    </div>
+
+                )}
 
         </div>
 
