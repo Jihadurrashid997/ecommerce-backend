@@ -24,19 +24,14 @@ import "../styles/Navbar.css";
 
 const Navbar = () => {
 
-    const [menuOpen, setMenuOpen] =
-        useState(false);
-
-    const [searchText, setSearchText] =
-        useState("");
-
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [searchText, setSearchText] = useState("");
 
     const {
         user,
         logout,
         cart
     } = useApp();
-
 
     const navigate = useNavigate();
 
@@ -48,8 +43,7 @@ const Navbar = () => {
     const cartCount =
         (cart || []).reduce(
             (total, item) =>
-                total +
-                Number(item.quantity || 1),
+                total + Number(item.quantity || 1),
             0
         );
 
@@ -59,9 +53,7 @@ const Navbar = () => {
     // ==========================
 
     const closeMenu = () => {
-
         setMenuOpen(false);
-
     };
 
 
@@ -73,24 +65,32 @@ const Navbar = () => {
 
         e.preventDefault();
 
-
-        const query =
-            searchText.trim();
-
+        const query = searchText.trim();
 
         if (!query) {
-
             navigate("/");
-
             return;
-
         }
 
-
+        // SearchResults.jsx uses ?q=
         navigate(
-            `/?search=${encodeURIComponent(query)}`
+            `/search?q=${encodeURIComponent(query)}`
         );
 
+        closeMenu();
+
+    };
+
+
+    // ==========================
+    // CLEAR SEARCH
+    // ==========================
+
+    const handleClearSearch = () => {
+
+        setSearchText("");
+
+        navigate("/");
 
         closeMenu();
 
@@ -152,39 +152,30 @@ const Navbar = () => {
                 onSubmit={handleSearch}
             >
 
-                <FaSearch
-                    className="search-icon"
-                />
-
+                <FaSearch className="search-icon" />
 
                 <input
                     type="search"
                     value={searchText}
                     onChange={(e) =>
-                        setSearchText(
-                            e.target.value
-                        )
+                        setSearchText(e.target.value)
                     }
-                    placeholder="Search products..."
-                    aria-label="Search products"
+                    placeholder="Search products or people..."
+                    aria-label="Search products or people"
                 />
-
 
                 {searchText && (
 
                     <button
                         type="button"
                         className="clear-search"
-                        onClick={() =>
-                            setSearchText("")
-                        }
+                        onClick={handleClearSearch}
                         aria-label="Clear search"
                     >
-                        ×
+                        <FaTimes />
                     </button>
 
                 )}
-
 
                 <button
                     type="submit"
@@ -342,8 +333,7 @@ const Navbar = () => {
 
                             <span className="user-name">
 
-                                {user.name ||
-                                    "Profile"}
+                                {user.name || "Profile"}
 
                             </span>
 
@@ -418,18 +408,14 @@ const Navbar = () => {
 
                             <FaShoppingCart />
 
-
                             <span>
                                 Cart
                             </span>
 
-
                             {cartCount > 0 && (
 
                                 <span className="cart-count">
-
                                     {cartCount}
-
                                 </span>
 
                             )}
@@ -486,6 +472,7 @@ const Navbar = () => {
                     <li>
 
                         <button
+                            type="button"
                             className="logout-btn"
                             onClick={handleLogout}
                         >
@@ -513,9 +500,7 @@ const Navbar = () => {
                 type="button"
                 className="menu-btn"
                 onClick={() =>
-                    setMenuOpen(
-                        !menuOpen
-                    )
+                    setMenuOpen(!menuOpen)
                 }
                 aria-label="Toggle menu"
             >
