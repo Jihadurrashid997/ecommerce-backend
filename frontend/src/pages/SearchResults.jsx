@@ -1,684 +1,672 @@
-import React, { useEffect, useState } from "react";
+import React, {
+    useEffect,
+    useState
+} from "react";
 
 import {
-    Link,
-    useSearchParams
+    useSearchParams,
+    Link
 } from "react-router-dom";
 
 import {
-    FaUserCircle,
-    FaSearch,
-    FaComments,
-    FaBoxOpen,
-    FaArrowLeft,
-    FaStore
+    FaUser,
+    FaEnvelope,
+    FaMapMarkerAlt,
+    FaSearch
 } from "react-icons/fa";
-
-import { motion } from "framer-motion";
 
 import api from "../services/api";
 
-import ProductCard from "../components/ProductCard";
-
-import "../styles/SearchResults.css";
+import "../styles/App.css";
 
 
 const SearchResults = () => {
 
-    const [searchParams] =
-        useSearchParams();
+    const [
+        searchParams
+    ] = useSearchParams();
 
 
-    // Supports both:
-    // /search?q=jisan
-    // /search?search=jisan
-
-    const keyword =
-        (
-            searchParams.get("q") ||
-            searchParams.get("search") ||
-            ""
-        ).trim();
+    const query =
+        searchParams.get("q") || "";
 
 
-    const [products, setProducts] =
-        useState([]);
-
-    const [users, setUsers] =
-        useState([]);
-
-    const [loading, setLoading] =
-        useState(false);
-
-    const [error, setError] =
-        useState("");
+    const [
+        users,
+        setUsers
+    ] = useState([]);
 
 
-    // ==================================================
+    const [
+        products,
+        setProducts
+    ] = useState([]);
+
+
+    const [
+        loading,
+        setLoading
+    ] = useState(true);
+
+
+    const [
+        error,
+        setError
+    ] = useState("");
+
+
+    // ==========================
     // SEARCH
-    // ==================================================
+    // ==========================
 
     useEffect(() => {
 
-        if (!keyword) {
+        const search =
+            async () => {
 
-            setProducts([]);
-            setUsers([]);
-            setLoading(false);
+                if (!query.trim()) {
 
-            return;
+                    setUsers([]);
+                    setProducts([]);
+                    setLoading(false);
 
-        }
+                    return;
 
-        searchEverything();
-
-    }, [keyword]);
-
-
-    // ==================================================
-    // SEARCH PRODUCTS + USERS
-    // ==================================================
-
-    const searchEverything = async () => {
-
-        try {
-
-            setLoading(true);
-            setError("");
+                }
 
 
-            const encoded =
-                encodeURIComponent(
-                    keyword
-                );
+                try {
+
+                    setLoading(true);
+                    setError("");
 
 
-            const [
-                productResponse,
-                userResponse
-            ] = await Promise.allSettled([
+                    // ==========================
+                    // SEARCH USERS
+                    // ==========================
 
-                api.get(
-                    `/products?keyword=${encoded}&search=${encoded}`
-                ),
-
-                api.get(
-                    `/users/search?q=${encoded}`
-                )
-
-            ]);
+                    const userResponse =
+                        await api.get(
+                            `/users/search?q=${encodeURIComponent(
+                                query.trim()
+                            )}`
+                        );
 
 
-            // ==================================================
-            // PRODUCTS
-            // ==================================================
-
-            if (
-                productResponse.status ===
-                "fulfilled"
-            ) {
-
-                const data =
-                    productResponse.value.data;
+                    const userData =
+                        userResponse.data?.users ||
+                        userResponse.data?.data ||
+                        userResponse.data ||
+                        [];
 
 
-                const productList =
-                    Array.isArray(data)
-                        ? data
-                        : data?.products || [];
+                    setUsers(
+                        Array.isArray(userData)
+                            ? userData
+                            : []
+                    );
 
 
-                setProducts(
-                    productList
-                );
+                    // ==========================
+                    // SEARCH PRODUCTS
+                    // ==========================
 
-            } else {
+                    try {
 
-                console.error(
-                    "Product search failed:",
-                    productResponse.reason
-                );
-
-                setProducts([]);
-
-            }
+                        const productResponse =
+                            await api.get(
+                                `/products/search?q=${encodeURIComponent(
+                                    query.trim()
+                                )}`
+                            );
 
 
-            // ==================================================
-            // USERS
-            // ==================================================
-
-            if (
-                userResponse.status ===
-                "fulfilled"
-            ) {
-
-                const data =
-                    userResponse.value.data;
+                        const productData =
+                            productResponse.data?.products ||
+                            productResponse.data?.data ||
+                            productResponse.data ||
+                            [];
 
 
-                const userList =
-                    Array.isArray(data)
-                        ? data
-                        : data?.users || [];
+                        setProducts(
+                            Array.isArray(productData)
+                                ? productData
+                                : []
+                        );
+
+                    } catch (productError) {
+
+                        // Product search route
+                        // না থাকলেও user search
+                        // কাজ করবে।
+
+                        console.log(
+                            "Product search unavailable:",
+                            productError
+                        );
+
+                        setProducts([]);
+
+                    }
 
 
-                setUsers(
-                    userList
-                );
+                } catch (err) {
 
-            } else {
+                    console.error(
+                        "Search error:",
+                        err
+                    );
 
-                console.error(
-                    "User search failed:",
-                    userResponse.reason
-                );
+                    setError(
+                        err.response?.data?.message ||
+                        "Search failed"
+                    );
 
-                setUsers([]);
+                    setUsers([]);
+                    setProducts([]);
 
-            }
+                } finally {
+
+                    setLoading(false);
+
+                }
+
+            };
 
 
-            // ==================================================
-            // BOTH FAILED
-            // ==================================================
+        search();
 
-            if (
-                productResponse.status ===
-                "rejected" &&
-                userResponse.status ===
-                "rejected"
-            ) {
+    }, [query]);
 
-                setError(
-                    "Unable to search right now. Please try again."
-                );
 
-            }
+    // ==========================
+    // PROFILE IMAGE
+    // ==========================
 
-        } catch (err) {
+    const getProfileImage = (
+        item
+    ) => {
 
-            console.error(
-                "Search error:",
-                err
-            );
-
-            setError(
-                "Something went wrong while searching."
-            );
-
-        } finally {
-
-            setLoading(false);
-
-        }
+        return (
+            item.profileImage ||
+            item.avatar ||
+            item.image ||
+            ""
+        );
 
     };
 
 
-    // ==================================================
-    // NO KEYWORD
-    // ==================================================
+    // ==========================
+    // IMAGE URL
+    // ==========================
 
-    if (!keyword) {
+    const getImageUrl = (
+        image
+    ) => {
 
-        return (
+        if (!image) {
+            return "";
+        }
 
-            <div className="search-results-page">
+        if (
+            image.startsWith("http://") ||
+            image.startsWith("https://")
+        ) {
 
-                <div className="search-results-container">
+            return image;
 
-                    <div className="no-results">
+        }
 
-                        <FaSearch />
 
-                        <h2>
-                            Search Marketplace
-                        </h2>
+        const baseURL =
+            process.env.REACT_APP_API_URL
+                ? process.env.REACT_APP_API_URL.replace(
+                    "/api",
+                    ""
+                )
+                : window.location.origin;
 
-                        <p>
-                            Search for products,
-                            sellers and users.
-                        </p>
 
-                        <Link
-                            to="/"
-                            className="profile-result-btn"
-                        >
-                            <FaArrowLeft />
-                            Back to Marketplace
-                        </Link>
+        return `${baseURL}${image.startsWith("/") ? "" : "/"}${image}`;
 
-                    </div>
-
-                </div>
-
-            </div>
-
-        );
-
-    }
+    };
 
 
     return (
 
-        <motion.div
-            className="search-results-page"
-
-            initial={{
-                opacity: 0
-            }}
-
-            animate={{
-                opacity: 1
-            }}
-
-            transition={{
-                duration: 0.5
+        <div
+            className="container"
+            style={{
+                paddingTop: "120px",
+                paddingBottom: "60px",
+                minHeight: "70vh"
             }}
         >
 
-            <div className="search-results-container">
+
+            {/* ==========================
+                HEADER
+            ========================== */}
+
+            <div
+                style={{
+                    marginBottom: "30px"
+                }}
+            >
+
+                <h1>
+                    Search Results
+                </h1>
 
 
-                {/* ==================================================
-                    HEADER
-                ================================================== */}
+                <p>
 
-                <div className="search-results-header">
+                    Search for:
 
-                    <motion.div
-                        animate={{
-                            rotate: [0, 8, -8, 0]
-                        }}
+                    <strong>
+                        {" "}
+                        "{query}"
+                    </strong>
 
-                        transition={{
-                            duration: 2,
-                            repeat: Infinity,
-                            repeatDelay: 4
-                        }}
-                    >
+                </p>
 
-                        <FaSearch />
-
-                    </motion.div>
+            </div>
 
 
-                    <div>
+            {/* ==========================
+                LOADING
+            ========================== */}
 
-                        <h1>
-                            Search Results
-                        </h1>
+            {loading && (
 
-                        <p>
+                <div>
 
-                            Results for{" "}
-
-                            <strong>
-                                "{keyword}"
-                            </strong>
-
-                        </p>
-
-                    </div>
+                    <h3>
+                        Searching...
+                    </h3>
 
                 </div>
 
+            )}
 
-                {/* ==================================================
-                    ERROR
-                ================================================== */}
 
-                {error && (
+            {/* ==========================
+                ERROR
+            ========================== */}
 
-                    <div className="search-error">
+            {!loading && error && (
 
+                <div>
+
+                    <h3>
                         {error}
+                    </h3>
 
-                        <button
-                            onClick={
-                                searchEverything
-                            }
+                </div>
+
+            )}
+
+
+            {!loading &&
+                !error &&
+                query && (
+
+                <>
+
+
+                    {/* ==========================
+                        PEOPLE
+                    ========================== */}
+
+                    <section
+                        style={{
+                            marginBottom: "45px"
+                        }}
+                    >
+
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "10px",
+                                marginBottom: "20px"
+                            }}
                         >
-                            Try Again
-                        </button>
 
-                    </div>
+                            <FaUser />
 
-                )}
+                            <h2>
+                                People
+                            </h2>
 
+                            <span>
+                                ({users.length})
+                            </span>
 
-                {/* ==================================================
-                    LOADING
-                ================================================== */}
-
-                {loading ? (
-
-                    <div className="search-loading">
-
-                        <motion.div
-                            className="search-spinner"
-
-                            animate={{
-                                rotate: 360
-                            }}
-
-                            transition={{
-                                duration: 1,
-                                repeat: Infinity,
-                                ease: "linear"
-                            }}
-                        />
-
-                        <p>
-                            Searching Marketplace...
-                        </p>
-
-                    </div>
-
-                ) : (
-
-                    <>
+                        </div>
 
 
-                        {/* ==================================================
-                            PEOPLE
-                        ================================================== */}
+                        {users.length === 0 ? (
 
-                        <section className="search-section">
+                            <div
+                                style={{
+                                    padding: "25px",
+                                    borderRadius: "15px",
+                                    background:
+                                        "rgba(255,255,255,0.05)"
+                                }}
+                            >
 
-                            <div className="section-heading">
-
-                                <h2>
-                                    People
-                                </h2>
-
-                                <span>
-                                    {users.length}
-                                </span>
+                                <p>
+                                    No people found for "{query}".
+                                </p>
 
                             </div>
 
+                        ) : (
 
-                            {users.length === 0 ? (
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns:
+                                        "repeat(auto-fill, minmax(280px, 1fr))",
+                                    gap: "20px"
+                                }}
+                            >
 
-                                <div className="no-results-small">
+                                {users.map(
+                                    person => {
 
-                                    No users found for{" "}
-
-                                    <strong>
-                                        "{keyword}"
-                                    </strong>
-
-                                </div>
-
-                            ) : (
-
-                                <div className="user-search-grid">
-
-                                    {users.map(
-                                        (person, index) => {
-
-                                            const avatar =
-                                                person.profileImage ||
-                                                person.avatar ||
-                                                person.image ||
-                                                null;
+                                        const id =
+                                            person._id ||
+                                            person.id;
 
 
-                                            return (
+                                        const image =
+                                            getProfileImage(
+                                                person
+                                            );
 
-                                                <motion.div
 
-                                                    className="user-search-card"
+                                        return (
 
-                                                    key={
-                                                        person._id
-                                                    }
+                                            <Link
+                                                key={id}
+                                                to={`/user/${id}`}
+                                                style={{
+                                                    textDecoration:
+                                                        "none",
+                                                    color:
+                                                        "inherit"
+                                                }}
+                                            >
 
-                                                    initial={{
-                                                        opacity: 0,
-                                                        y: 25
-                                                    }}
-
-                                                    animate={{
-                                                        opacity: 1,
-                                                        y: 0
-                                                    }}
-
-                                                    transition={{
-                                                        delay:
-                                                            index *
-                                                            0.08
+                                                <div
+                                                    style={{
+                                                        padding: "20px",
+                                                        borderRadius:
+                                                            "18px",
+                                                        border:
+                                                            "1px solid rgba(255,255,255,0.1)",
+                                                        display:
+                                                            "flex",
+                                                        alignItems:
+                                                            "center",
+                                                        gap: "15px",
+                                                        cursor:
+                                                            "pointer"
                                                     }}
                                                 >
 
-
                                                     {/* AVATAR */}
 
-                                                    <Link
-                                                        to={`/user/${person._id}`}
-                                                        className="user-search-avatar"
-                                                    >
+                                                    {image ? (
 
-                                                        {avatar ? (
+                                                        <img
+                                                            src={getImageUrl(
+                                                                image
+                                                            )}
+                                                            alt={
+                                                                person.name
+                                                            }
+                                                            style={{
+                                                                width:
+                                                                    "60px",
+                                                                height:
+                                                                    "60px",
+                                                                borderRadius:
+                                                                    "50%",
+                                                                objectFit:
+                                                                    "cover"
+                                                            }}
+                                                        />
 
-                                                            <img
-                                                                src={
-                                                                    avatar
-                                                                }
+                                                    ) : (
 
-                                                                alt={
-                                                                    person.name ||
-                                                                    "User"
-                                                                }
+                                                        <div
+                                                            style={{
+                                                                width:
+                                                                    "60px",
+                                                                height:
+                                                                    "60px",
+                                                                borderRadius:
+                                                                    "50%",
+                                                                display:
+                                                                    "flex",
+                                                                alignItems:
+                                                                    "center",
+                                                                justifyContent:
+                                                                    "center",
+                                                                fontSize:
+                                                                    "22px",
+                                                                fontWeight:
+                                                                    "700",
+                                                                background:
+                                                                    "#333"
+                                                            }}
+                                                        >
 
-                                                                onError={(
-                                                                    e
-                                                                ) => {
+                                                            {
+                                                                person.name
+                                                                    ?.charAt(
+                                                                        0
+                                                                    )
+                                                                    ?.toUpperCase() ||
+                                                                "U"
+                                                            }
 
-                                                                    e.currentTarget.style.display =
-                                                                        "none";
+                                                        </div>
 
-                                                                    e.currentTarget.parentElement.classList.add(
-                                                                        "avatar-fallback"
-                                                                    );
-
-                                                                }}
-                                                            />
-
-                                                        ) : (
-
-                                                            <FaUserCircle />
-
-                                                        )}
-
-                                                    </Link>
+                                                    )}
 
 
                                                     {/* INFO */}
 
-                                                    <div className="user-search-info">
+                                                    <div>
 
-                                                        <Link
-                                                            to={`/user/${person._id}`}
+                                                        <h3
+                                                            style={{
+                                                                margin:
+                                                                    "0 0 6px"
+                                                            }}
                                                         >
 
-                                                            <h3>
+                                                            {
+                                                                person.name ||
+                                                                "User"
+                                                            }
 
-                                                                {person.name ||
-                                                                    "Marketplace User"}
-
-                                                            </h3>
-
-                                                        </Link>
+                                                        </h3>
 
 
-                                                        <span>
+                                                        {person.email && (
 
-                                                            {person.role ||
-                                                                "customer"}
+                                                            <p
+                                                                style={{
+                                                                    margin:
+                                                                        "3px 0",
+                                                                    opacity:
+                                                                        0.75
+                                                                }}
+                                                            >
 
-                                                        </span>
+                                                                <FaEnvelope />
+                                                                {" "}
+                                                                {
+                                                                    person.email
+                                                                }
 
-
-                                                        {person.location && (
-
-                                                            <small>
-                                                                📍{" "}
-                                                                {person.location}
-                                                            </small>
+                                                            </p>
 
                                                         )}
 
 
-                                                        {person.bio && (
+                                                        {person.location && (
 
-                                                            <p>
-                                                                {person.bio}
+                                                            <p
+                                                                style={{
+                                                                    margin:
+                                                                        "3px 0",
+                                                                    opacity:
+                                                                        0.75
+                                                                }}
+                                                            >
+
+                                                                <FaMapMarkerAlt />
+                                                                {" "}
+                                                                {
+                                                                    person.location
+                                                                }
+
                                                             </p>
 
                                                         )}
 
                                                     </div>
 
+                                                </div>
 
-                                                    {/* ACTIONS */}
+                                            </Link>
 
-                                                    <div className="user-search-actions">
+                                        );
 
-                                                        <Link
-                                                            to={`/user/${person._id}`}
-                                                            className="profile-result-btn"
-                                                        >
-
-                                                            <FaUserCircle />
-
-                                                            Profile
-
-                                                        </Link>
-
-
-                                                        <Link
-                                                            to={`/messenger?user=${person._id}`}
-                                                            className="message-result-btn"
-                                                        >
-
-                                                            <FaComments />
-
-                                                            Message
-
-                                                        </Link>
-
-                                                    </div>
-
-                                                </motion.div>
-
-                                            );
-
-                                        }
-                                    )}
-
-                                </div>
-
-                            )}
-
-                        </section>
-
-
-                        {/* ==================================================
-                            PRODUCTS
-                        ================================================== */}
-
-                        <section className="search-section">
-
-                            <div className="section-heading">
-
-                                <h2>
-                                    Products
-                                </h2>
-
-                                <span>
-                                    {products.length}
-                                </span>
+                                    }
+                                )}
 
                             </div>
 
+                        )}
 
-                            {products.length === 0 ? (
+                    </section>
 
-                                <div className="no-results">
 
-                                    <FaBoxOpen />
+                    {/* ==========================
+                        PRODUCTS
+                    ========================== */}
 
-                                    <h3>
-                                        No products found
-                                    </h3>
+                    <section>
 
-                                    <p>
-                                        Try another product
-                                        name or keyword.
-                                    </p>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "10px",
+                                marginBottom: "20px"
+                            }}
+                        >
 
-                                </div>
+                            <FaSearch />
 
-                            ) : (
+                            <h2>
+                                Products
+                            </h2>
 
-                                <div className="product-grid">
+                            <span>
+                                ({products.length})
+                            </span>
 
-                                    {products.map(
-                                        (
-                                            product,
-                                            index
-                                        ) => (
+                        </div>
 
-                                            <motion.div
-                                                key={
-                                                    product._id
-                                                }
 
-                                                initial={{
-                                                    opacity: 0,
-                                                    y: 30
-                                                }}
+                        {products.length === 0 ? (
 
-                                                animate={{
-                                                    opacity: 1,
-                                                    y: 0
-                                                }}
+                            <p>
+                                No products found.
+                            </p>
 
-                                                transition={{
-                                                    delay:
-                                                        index *
-                                                        0.05
-                                                }}
+                        ) : (
+
+                            <div
+                                className="product-grid"
+                            >
+
+                                {products.map(
+                                    product => (
+
+                                        <Link
+                                            key={
+                                                product._id ||
+                                                product.id
+                                            }
+                                            to={`/product/${
+                                                product._id ||
+                                                product.id
+                                            }`}
+                                        >
+
+                                            <div
+                                                className="product-card"
                                             >
 
-                                                <ProductCard
-                                                    product={
-                                                        product
+                                                <h3>
+                                                    {
+                                                        product.name
                                                     }
-                                                />
+                                                </h3>
 
-                                            </motion.div>
+                                                {product.price && (
 
-                                        )
-                                    )}
+                                                    <p>
+                                                        ৳{
+                                                            product.price
+                                                        }
+                                                    </p>
 
-                                </div>
+                                                )}
 
-                            )}
+                                            </div>
 
-                        </section>
+                                        </Link>
+
+                                    )
+                                )}
+
+                            </div>
+
+                        )}
+
+                    </section>
+
+                </>
+
+            )}
 
 
-                    </>
+            {!loading &&
+                !query && (
 
-                )}
+                <div>
 
-            </div>
+                    <h3>
+                        Type something to search.
+                    </h3>
 
-        </motion.div>
+                </div>
+
+            )}
+
+        </div>
 
     );
 
