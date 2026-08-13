@@ -1,23 +1,17 @@
 import axios from "axios";
 
 const api = axios.create({
-
-    baseURL:
-        "https://ecommerce-api-9wc9.onrender.com/api",
-
+    baseURL: "https://ecommerce-api-9wc9.onrender.com/api",
     headers: {
         "Content-Type": "application/json"
     }
-
 });
 
-
-// ======================================================
+// ==========================
 // REQUEST INTERCEPTOR
-// ======================================================
+// ==========================
 
 api.interceptors.request.use(
-
     (config) => {
 
         const token =
@@ -33,27 +27,21 @@ api.interceptors.request.use(
         return config;
 
     },
-
     (error) => {
 
         return Promise.reject(error);
 
     }
-
 );
 
 
-// ======================================================
+// ==========================
 // RESPONSE INTERCEPTOR
-// ======================================================
+// ==========================
 
 api.interceptors.response.use(
 
-    (response) => {
-
-        return response;
-
-    },
+    (response) => response,
 
     (error) => {
 
@@ -71,6 +59,5 @@ api.interceptors.response.use(
     }
 
 );
-
 
 export default api;
