@@ -9,18 +9,52 @@ const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
 
+    // ==========================
+    // USER
+    // ==========================
+
     const [user, setUser] = useState(null);
+
+
+    // ==========================
+    // CART
+    // ==========================
 
     const [cart, setCart] = useState([]);
 
+
+    // ==========================
+    // WISHLIST
+    // ==========================
+
     const [wishlist, setWishlist] = useState([]);
+
+
+    // ==========================
+    // NOTIFICATIONS
+    // ==========================
 
     const [notifications, setNotifications] = useState([]);
 
-    const [loading, setLoading] = useState(true);
 
     // ==========================
-    // Load Saved Data
+    // LOADING
+    // ==========================
+
+    const [loading, setLoading] = useState(true);
+
+
+    // ==========================
+    // APP THEME
+    // ==========================
+
+    const [theme, setTheme] = useState(
+        localStorage.getItem("theme") || "dark"
+    );
+
+
+    // ==========================
+    // LOAD SAVED DATA
     // ==========================
 
     useEffect(() => {
@@ -36,6 +70,10 @@ export const AppProvider = ({ children }) => {
             const savedWishlist =
                 localStorage.getItem("wishlist");
 
+            const savedNotifications =
+                localStorage.getItem("notifications");
+
+
             if (savedUser) {
 
                 setUser(
@@ -43,6 +81,7 @@ export const AppProvider = ({ children }) => {
                 );
 
             }
+
 
             if (savedCart) {
 
@@ -52,6 +91,7 @@ export const AppProvider = ({ children }) => {
 
             }
 
+
             if (savedWishlist) {
 
                 setWishlist(
@@ -60,9 +100,18 @@ export const AppProvider = ({ children }) => {
 
             }
 
+
+            if (savedNotifications) {
+
+                setNotifications(
+                    JSON.parse(savedNotifications)
+                );
+
+            }
+
         } catch (err) {
 
-            console.log(
+            console.error(
                 "Local storage error:",
                 err
             );
@@ -75,8 +124,9 @@ export const AppProvider = ({ children }) => {
 
     }, []);
 
+
     // ==========================
-    // Save User
+    // SAVE USER
     // ==========================
 
     useEffect(() => {
@@ -96,8 +146,9 @@ export const AppProvider = ({ children }) => {
 
     }, [user]);
 
+
     // ==========================
-    // Save Cart
+    // SAVE CART
     // ==========================
 
     useEffect(() => {
@@ -109,8 +160,9 @@ export const AppProvider = ({ children }) => {
 
     }, [cart]);
 
+
     // ==========================
-    // Save Wishlist
+    // SAVE WISHLIST
     // ==========================
 
     useEffect(() => {
@@ -122,8 +174,162 @@ export const AppProvider = ({ children }) => {
 
     }, [wishlist]);
 
+
     // ==========================
-    // Logout
+    // SAVE NOTIFICATIONS
+    // ==========================
+
+    useEffect(() => {
+
+        localStorage.setItem(
+            "notifications",
+            JSON.stringify(notifications)
+        );
+
+    }, [notifications]);
+
+
+    // ==========================
+    // THEME
+    // ==========================
+
+    useEffect(() => {
+
+        document.documentElement.setAttribute(
+            "data-theme",
+            theme
+        );
+
+        localStorage.setItem(
+            "theme",
+            theme
+        );
+
+    }, [theme]);
+
+
+    // ==========================
+    // TOGGLE THEME
+    // ==========================
+
+    const toggleTheme = () => {
+
+        setTheme((currentTheme) =>
+            currentTheme === "dark"
+                ? "light"
+                : "dark"
+        );
+
+    };
+
+
+    // ==========================
+    // ADD NOTIFICATION
+    // ==========================
+
+    const addNotification = (
+        message,
+        type = "info"
+    ) => {
+
+        const notification = {
+
+            id:
+                Date.now() +
+                Math.random(),
+
+            message,
+
+            type,
+
+            createdAt:
+                new Date().toISOString(),
+
+            read: false
+
+        };
+
+
+        setNotifications(
+            (previous) => [
+                notification,
+                ...previous
+            ]
+        );
+
+    };
+
+
+    // ==========================
+    // MARK NOTIFICATION READ
+    // ==========================
+
+    const markNotificationRead = (
+        notificationId
+    ) => {
+
+        setNotifications(
+            (previous) =>
+                previous.map(
+                    (notification) =>
+                        notification.id ===
+                        notificationId
+                            ? {
+                                ...notification,
+                                read: true
+                            }
+                            : notification
+                )
+        );
+
+    };
+
+
+    // ==========================
+    // CLEAR NOTIFICATIONS
+    // ==========================
+
+    const clearNotifications = () => {
+
+        setNotifications([]);
+
+    };
+
+
+    // ==========================
+    // CART COUNT
+    // ==========================
+
+    const cartCount =
+        cart.reduce(
+            (total, item) =>
+                total +
+                Number(item.quantity || 1),
+            0
+        );
+
+
+    // ==========================
+    // WISHLIST COUNT
+    // ==========================
+
+    const wishlistCount =
+        wishlist.length;
+
+
+    // ==========================
+    // UNREAD NOTIFICATION COUNT
+    // ==========================
+
+    const unreadNotificationCount =
+        notifications.filter(
+            (notification) =>
+                !notification.read
+        ).length;
+
+
+    // ==========================
+    // LOGOUT
     // ==========================
 
     const logout = () => {
@@ -134,36 +340,54 @@ export const AppProvider = ({ children }) => {
 
         setUser(null);
 
+        setNotifications([]);
+
     };
+
+
+    // ==========================
+    // CONTEXT
+    // ==========================
 
     return (
 
         <AppContext.Provider
-
             value={{
 
+                // User
                 user,
-
                 setUser,
 
+                // Cart
                 cart,
-
                 setCart,
+                cartCount,
 
+                // Wishlist
                 wishlist,
-
                 setWishlist,
+                wishlistCount,
 
+                // Notifications
                 notifications,
-
                 setNotifications,
+                addNotification,
+                markNotificationRead,
+                clearNotifications,
+                unreadNotificationCount,
 
+                // Theme
+                theme,
+                setTheme,
+                toggleTheme,
+
+                // App
                 loading,
 
+                // Auth
                 logout
 
             }}
-
         >
 
             {children}
@@ -173,6 +397,11 @@ export const AppProvider = ({ children }) => {
     );
 
 };
+
+
+// ==========================
+// CUSTOM HOOK
+// ==========================
 
 export const useApp = () =>
     useContext(AppContext);
