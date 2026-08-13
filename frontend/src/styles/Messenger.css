@@ -1,1462 +1,1028 @@
-import React, {
-    useEffect,
-    useRef,
-    useState
-} from "react";
-
-import {
-    useSearchParams
-} from "react-router-dom";
-
-import {
-    FaSearch,
-    FaEllipsisH,
-    FaPhone,
-    FaVideo,
-    FaInfoCircle,
-    FaSmile,
-    FaPaperclip,
-    FaImage,
-    FaPaperPlane,
-    FaCheck,
-    FaCheckDouble,
-    FaArrowLeft
-} from "react-icons/fa";
-
-import { io } from "socket.io-client";
-
-import api from "../services/api";
-
-import "../styles/Messenger.css";
-
-
-const SOCKET_URL =
-    process.env.REACT_APP_API_URL
-        ? process.env.REACT_APP_API_URL.replace("/api", "")
-        : window.location.origin;
-
-
-const Messenger = () => {
-
-    const [searchParams] =
-        useSearchParams();
-
-
-    const socketRef =
-        useRef(null);
-
-    const messagesEndRef =
-        useRef(null);
-
-
-    const [user, setUser] =
-        useState(null);
-
-    const [users, setUsers] =
-        useState([]);
-
-    const [selectedUser, setSelectedUser] =
-        useState(null);
-
-    const [messages, setMessages] =
-        useState([]);
-
-    const [message, setMessage] =
-        useState("");
-
-    const [searchText, setSearchText] =
-        useState("");
-
-    const [onlineUsers, setOnlineUsers] =
-        useState([]);
-
-    const [typing, setTyping] =
-        useState(false);
-
-    const [loading, setLoading] =
-        useState(true);
-
-    const [sending, setSending] =
-        useState(false);
-
-
-    // =========================================
-    // CURRENT USER
-    // =========================================
-
-    useEffect(() => {
-
-        const storedUser =
-            localStorage.getItem("user");
-
-        if (!storedUser) {
-            return;
-        }
-
-        try {
-
-            const parsedUser =
-                JSON.parse(storedUser);
-
-            setUser(parsedUser);
-
-        } catch (error) {
-
-            console.error(
-                "User loading error:",
-                error
-            );
-
-        }
-
-    }, []);
-
-
-    // =========================================
-    // LOAD CHAT USERS
-    // =========================================
-
-    useEffect(() => {
-
-        if (!user) {
-            return;
-        }
-
-        const loadUsers =
-            async () => {
-
-                try {
-
-                    setLoading(true);
-
-                    const response =
-                        await api.get(
-                            "/users/chat-users"
-                        );
-
-                    const data =
-                        response.data?.users ||
-                        response.data?.data ||
-                        response.data ||
-                        [];
-
-                    setUsers(
-                        Array.isArray(data)
-                            ? data
-                            : []
-                    );
-
-                } catch (error) {
-
-                    console.error(
-                        "Failed to load chat users:",
-                        error
-                    );
-
-                } finally {
-
-                    setLoading(false);
-
-                }
-
-            };
-
-
-        loadUsers();
-
-    }, [user]);
-
-
-    // =========================================
-    // URL USER
-    // /messenger?user=USER_ID
-    // =========================================
-
-    useEffect(() => {
-
-        const targetUserId =
-            searchParams.get("user");
-
-        if (
-            targetUserId &&
-            users.length > 0
-        ) {
-
-            const targetUser =
-                users.find(
-                    item =>
-                        (
-                            item._id ||
-                            item.id
-                        )?.toString() ===
-                        targetUserId.toString()
-                );
-
-            if (targetUser) {
-
-                selectUser(targetUser);
-
-            }
-
-        }
-
-    }, [users, searchParams]);
-
-
-    // =========================================
-    // SOCKET.IO
-    // =========================================
-
-    useEffect(() => {
-
-        if (!user) {
-            return;
-        }
-
-        const socket =
-            io(SOCKET_URL, {
-                transports: [
-                    "websocket",
-                    "polling"
-                ]
-            });
-
-
-        socketRef.current =
-            socket;
-
-
-        socket.on(
-            "connect",
-            () => {
-
-                console.log(
-                    "Messenger socket connected"
-                );
-
-
-                socket.emit(
-                    "user-online",
-                    user._id || user.id
-                );
-
-            }
-        );
-
-
-        socket.on(
-            "online-users",
-            online => {
-
-                setOnlineUsers(
-                    online || []
-                );
-
-            }
-        );
-
-
-        socket.on(
-            "receive-message",
-            newMessage => {
-
-                const currentUserId =
-                    (
-                        user._id ||
-                        user.id
-                    )?.toString();
-
-
-                const selectedUserId =
-                    (
-                        selectedUser?._id ||
-                        selectedUser?.id
-                    )?.toString();
-
-
-                const senderId =
-                    (
-                        newMessage.sender?._id ||
-                        newMessage.sender
-                    )?.toString();
-
-
-                const receiverId =
-                    (
-                        newMessage.receiver?._id ||
-                        newMessage.receiver
-                    )?.toString();
-
-
-                const belongsToChat =
-                    selectedUserId &&
-                    (
-                        (
-                            senderId === selectedUserId &&
-                            receiverId === currentUserId
-                        ) ||
-                        (
-                            senderId === currentUserId &&
-                            receiverId === selectedUserId
-                        )
-                    );
-
-
-                if (belongsToChat) {
-
-                    setMessages(
-                        previous => {
-
-                            const exists =
-                                previous.some(
-                                    item =>
-                                        item._id &&
-                                        newMessage._id &&
-                                        item._id ===
-                                        newMessage._id
-                                );
-
-
-                            if (exists) {
-                                return previous;
-                            }
-
-
-                            return [
-                                ...previous,
-                                newMessage
-                            ];
-
-                        }
-                    );
-
-                }
-
-            }
-        );
-
-
-        socket.on(
-            "user-typing",
-            () => {
-
-                setTyping(true);
-
-            }
-        );
-
-
-        socket.on(
-            "user-stop-typing",
-            () => {
-
-                setTyping(false);
-
-            }
-        );
-
-
-        return () => {
-
-            socket.disconnect();
-
-            socketRef.current =
-                null;
-
-        };
-
-    }, [user, selectedUser]);
-
-
-    // =========================================
-    // AUTO SCROLL
-    // =========================================
-
-    useEffect(() => {
-
-        messagesEndRef.current?.scrollIntoView({
-            behavior: "smooth"
-        });
-
-    }, [messages, typing]);
-
-
-    // =========================================
-    // ROOM ID
-    // =========================================
-
-    const getRoomId = (
-        firstUser,
-        secondUser
-    ) => {
-
-        const first =
-            (
-                firstUser?._id ||
-                firstUser?.id
-            )?.toString();
-
-
-        const second =
-            (
-                secondUser?._id ||
-                secondUser?.id
-            )?.toString();
-
-
-        if (!first || !second) {
-            return null;
-        }
-
-
-        return [
-            first,
-            second
-        ]
-            .sort()
-            .join("_");
-
-    };
-
-
-    // =========================================
-    // SELECT USER
-    // =========================================
-
-    const selectUser =
-        async selected => {
-
-            setSelectedUser(
-                selected
-            );
-
-            setMessages([]);
-
-            setTyping(false);
-
-
-            if (!user || !selected) {
-                return;
-            }
-
-
-            const selectedUserId =
-                selected._id ||
-                selected.id;
-
-
-            const roomId =
-                getRoomId(
-                    user,
-                    selected
-                );
-
-
-            if (
-                roomId &&
-                socketRef.current
-            ) {
-
-                socketRef.current.emit(
-                    "join-room",
-                    roomId
-                );
-
-            }
-
-
-            try {
-
-                const response =
-                    await api.get(
-                        `/messages/conversation/${selectedUserId}`
-                    );
-
-
-                setMessages(
-                    response.data?.data ||
-                    response.data?.messages ||
-                    response.data ||
-                    []
-                );
-
-
-                await api.put(
-                    `/messages/seen/${selectedUserId}`
-                );
-
-
-            } catch (error) {
-
-                console.error(
-                    "Conversation error:",
-                    error
-                );
-
-            }
-
-        };
-
-
-    // =========================================
-    // SEND MESSAGE
-    // =========================================
-
-    const sendMessage =
-        async e => {
-
-            e.preventDefault();
-
-
-            const text =
-                message.trim();
-
-
-            if (
-                !text ||
-                !selectedUser ||
-                !user ||
-                sending
-            ) {
-                return;
-            }
-
-
-            const receiver =
-                selectedUser._id ||
-                selectedUser.id;
-
-
-            const roomId =
-                getRoomId(
-                    user,
-                    selectedUser
-                );
-
-
-            try {
-
-                setSending(true);
-
-
-                const response =
-                    await api.post(
-                        "/messages/send",
-                        {
-                            receiver,
-                            message: text
-                        }
-                    );
-
-
-                const savedMessage =
-                    response.data?.data;
-
-
-                if (savedMessage) {
-
-                    setMessages(
-                        previous => {
-
-                            const exists =
-                                previous.some(
-                                    item =>
-                                        item._id ===
-                                        savedMessage._id
-                                );
-
-
-                            if (exists) {
-                                return previous;
-                            }
-
-
-                            return [
-                                ...previous,
-                                savedMessage
-                            ];
-
-                        }
-                    );
-
-
-                    if (
-                        socketRef.current &&
-                        roomId
-                    ) {
-
-                        socketRef.current.emit(
-                            "send-message",
-                            {
-                                ...savedMessage,
-                                roomId
-                            }
-                        );
-
-                    }
-
-                }
-
-
-                setMessage("");
-
-
-                socketRef.current?.emit(
-                    "stop-typing",
-                    {
-                        roomId,
-                        userId:
-                            user._id ||
-                            user.id
-                    }
-                );
-
-
-            } catch (error) {
-
-                console.error(
-                    "Send message error:",
-                    error
-                );
-
-
-                alert(
-                    error.response?.data?.message ||
-                    "Message could not be sent."
-                );
-
-            } finally {
-
-                setSending(false);
-
-            }
-
-        };
-
-
-    // =========================================
-    // TYPING
-    // =========================================
-
-    const handleTyping =
-        e => {
-
-            const value =
-                e.target.value;
-
-
-            setMessage(value);
-
-
-            if (
-                !selectedUser ||
-                !user ||
-                !socketRef.current
-            ) {
-                return;
-            }
-
-
-            const roomId =
-                getRoomId(
-                    user,
-                    selectedUser
-                );
-
-
-            if (!roomId) {
-                return;
-            }
-
-
-            if (value.trim()) {
-
-                socketRef.current.emit(
-                    "typing",
-                    {
-                        roomId,
-                        userId:
-                            user._id ||
-                            user.id
-                    }
-                );
-
-            } else {
-
-                socketRef.current.emit(
-                    "stop-typing",
-                    {
-                        roomId,
-                        userId:
-                            user._id ||
-                            user.id
-                    }
-                );
-
-            }
-
-        };
-
-
-    // =========================================
-    // ONLINE CHECK
-    // =========================================
-
-    const isUserOnline =
-        selected => {
-
-            if (!selected) {
-                return false;
-            }
-
-
-            const id =
-                (
-                    selected._id ||
-                    selected.id
-                )?.toString();
-
-
-            return onlineUsers.some(
-                onlineId =>
-                    onlineId?.toString() ===
-                    id
-            );
-
-        };
-
-
-    // =========================================
-    // FILTER USERS
-    // =========================================
-
-    const filteredUsers =
-        users.filter(item => {
-
-            const currentId =
-                (
-                    user?._id ||
-                    user?.id
-                )?.toString();
-
-
-            const itemId =
-                (
-                    item._id ||
-                    item.id
-                )?.toString();
-
-
-            if (
-                !itemId ||
-                itemId === currentId
-            ) {
-                return false;
-            }
-
-
-            return (
-                item.name
-                    ?.toLowerCase()
-                    .includes(
-                        searchText
-                            .toLowerCase()
-                    ) ||
-                item.email
-                    ?.toLowerCase()
-                    .includes(
-                        searchText
-                            .toLowerCase()
-                    )
-            );
-
-        });
-
-
-    // =========================================
-    // AVATAR
-    // =========================================
-
-    const getAvatar =
-        person => {
-
-            return (
-                person?.profileImage ||
-                person?.avatar ||
-                person?.image ||
-                null
-            );
-
-        };
-
-
-    // =========================================
-    // MESSAGE TIME
-    // =========================================
-
-    const formatTime =
-        date => {
-
-            if (!date) {
-                return "";
-            }
-
-
-            return new Date(
-                date
-            ).toLocaleTimeString(
-                [],
-                {
-                    hour: "2-digit",
-                    minute: "2-digit"
-                }
-            );
-
-        };
-
-
-    // =========================================
-    // LOADING
-    // =========================================
-
-    if (loading) {
-
-        return (
-
-            <div className="messenger-page">
-
-                <div className="messenger-loading">
-
-                    <div className="messenger-loader"></div>
-
-                    <p>
-                        Loading Messenger...
-                    </p>
-
-                </div>
-
-            </div>
-
-        );
-
+/* =========================================
+   MESSENGER PAGE
+========================================= */
+
+.messenger-page {
+    width: 100%;
+    height: calc(100vh - 72px);
+    display: flex;
+    background: #f0f2f5;
+    overflow: hidden;
+    color: #050505;
+}
+
+
+/* =========================================
+   SIDEBAR
+========================================= */
+
+.messenger-sidebar {
+    width: 360px;
+    min-width: 360px;
+    height: 100%;
+    background: #ffffff;
+    border-right: 1px solid #e4e6eb;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 5;
+}
+
+.messenger-sidebar-header {
+    height: 82px;
+    padding: 18px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.messenger-sidebar-header h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.messenger-sidebar-header span {
+    display: block;
+    margin-top: 3px;
+    color: #65676b;
+    font-size: 13px;
+}
+
+.header-icon-btn {
+    width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: 50%;
+    background: #f0f2f5;
+    color: #050505;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.header-icon-btn:hover {
+    background: #e4e6eb;
+}
+
+
+/* =========================================
+   SEARCH
+========================================= */
+
+.messenger-search {
+    margin: 0 16px 10px;
+    height: 42px;
+    border-radius: 22px;
+    background: #f0f2f5;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    color: #65676b;
+}
+
+.messenger-search > svg {
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.messenger-search input {
+    width: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    margin-left: 9px;
+    font-size: 14px;
+    color: #050505;
+}
+
+.messenger-search input::placeholder {
+    color: #65676b;
+}
+
+.clear-search-btn {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: #d8dadf;
+    color: #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+
+/* =========================================
+   CHAT FILTER
+========================================= */
+
+.chat-filter-row {
+    display: flex;
+    gap: 8px;
+    padding: 4px 16px 10px;
+}
+
+.chat-filter-row button {
+    border: none;
+    background: transparent;
+    color: #65676b;
+    padding: 7px 14px;
+    border-radius: 18px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.chat-filter-row button:hover {
+    background: #f0f2f5;
+}
+
+.chat-filter-row button.active {
+    background: #e7f3ff;
+    color: #0084ff;
+}
+
+
+/* =========================================
+   USER LIST
+========================================= */
+
+.user-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 8px 15px;
+}
+
+.user-list::-webkit-scrollbar,
+.messages-container::-webkit-scrollbar {
+    width: 7px;
+}
+
+.user-list::-webkit-scrollbar-thumb,
+.messages-container::-webkit-scrollbar-thumb {
+    background: #c9ccd1;
+    border-radius: 10px;
+}
+
+.chat-user {
+    width: 100%;
+    min-height: 72px;
+    padding: 8px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.18s ease;
+}
+
+.chat-user:hover {
+    background: #f2f3f5;
+}
+
+.chat-user.active {
+    background: #e7f3ff;
+}
+
+
+/* =========================================
+   AVATAR
+========================================= */
+
+.messenger-avatar {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    min-width: 52px;
+    border-radius: 50%;
+    overflow: visible;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #e4e6eb;
+    color: #65676b;
+}
+
+.messenger-avatar > svg {
+    width: 100%;
+    height: 100%;
+}
+
+.messenger-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.messenger-avatar.large {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+}
+
+.online-dot {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.online-dot svg {
+    width: 10px;
+    height: 10px;
+    color: #31a24c;
+}
+
+
+/* =========================================
+   USER CONTENT
+========================================= */
+
+.chat-user-content {
+    min-width: 0;
+    flex: 1;
+}
+
+.chat-user-top,
+.chat-user-bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.chat-user-top strong {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-time {
+    color: #65676b;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.chat-user-bottom {
+    margin-top: 5px;
+}
+
+.chat-user-bottom > span {
+    color: #65676b;
+    font-size: 13px;
+}
+
+.unread-badge {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: #0084ff;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+}
+
+
+/* =========================================
+   NO USERS
+========================================= */
+
+.no-users {
+    height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #65676b;
+}
+
+.no-users svg {
+    font-size: 26px;
+    margin-bottom: 10px;
+}
+
+.no-users p {
+    margin: 0 0 4px;
+    font-weight: 600;
+}
+
+.no-users small {
+    font-size: 12px;
+}
+
+
+/* =========================================
+   CHAT AREA
+========================================= */
+
+.messenger-chat {
+    flex: 1;
+    height: 100%;
+    min-width: 0;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+
+/* =========================================
+   EMPTY CHAT
+========================================= */
+
+.empty-chat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 30px;
+}
+
+.empty-chat-icon {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: #e7f3ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.empty-message-icon {
+    font-size: 38px;
+}
+
+.empty-chat h2 {
+    margin: 0 0 8px;
+    font-size: 22px;
+}
+
+.empty-chat p {
+    margin: 0;
+    color: #65676b;
+    font-size: 14px;
+}
+
+
+/* =========================================
+   CHAT HEADER
+========================================= */
+
+.chat-header {
+    height: 72px;
+    min-height: 72px;
+    padding: 8px 18px;
+    border-bottom: 1px solid #e4e6eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    z-index: 2;
+}
+
+.chat-header-left {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 11px;
+}
+
+.chat-header-user {
+    min-width: 0;
+}
+
+.chat-header-user h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chat-header-user span {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    color: #65676b;
+}
+
+.chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.chat-header-actions button {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #0084ff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 17px;
+    transition: 0.2s;
+}
+
+.chat-header-actions button:hover {
+    background: #f0f2f5;
+}
+
+.mobile-back-btn {
+    display: none;
+    width: 38px;
+    height: 38px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    color: #050505;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* =========================================
+   MESSAGES
+========================================= */
+
+.messages-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 22px 24px;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+}
+
+.message-row {
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    gap: 7px;
+    margin-bottom: 3px;
+}
+
+.message-row.own {
+    justify-content: flex-end;
+}
+
+.message-row:not(.own) .messenger-avatar {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+}
+
+.message-wrapper {
+    max-width: min(65%, 550px);
+    display: flex;
+    flex-direction: column;
+}
+
+.message-wrapper.own {
+    align-items: flex-end;
+}
+
+.message-bubble {
+    max-width: 100%;
+    padding: 9px 13px;
+    border-radius: 18px;
+    background: #e4e6eb;
+    color: #050505;
+    word-break: break-word;
+}
+
+.message-bubble.own {
+    background: #0084ff;
+    color: #ffffff;
+}
+
+.message-bubble p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.message-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 5px 0;
+    font-size: 10px;
+    color: #65676b;
+}
+
+.message-meta.own {
+    justify-content: flex-end;
+}
+
+.message-status {
+    display: flex;
+    align-items: center;
+    color: #0084ff;
+}
+
+.message-status svg {
+    font-size: 11px;
+}
+
+
+/* =========================================
+   CONVERSATION START
+========================================= */
+
+.conversation-start {
+    flex: 1;
+    min-height: 350px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    text-align: center;
+    padding-bottom: 20px;
+}
+
+.conversation-start .messenger-avatar {
+    margin-bottom: 10px;
+}
+
+.conversation-start h3 {
+    margin: 0 0 5px;
+    font-size: 20px;
+}
+
+.conversation-start p {
+    margin: 0 0 5px;
+    color: #65676b;
+    font-size: 13px;
+}
+
+.conversation-start span {
+    color: #0084ff;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+
+/* =========================================
+   TYPING
+========================================= */
+
+.typing-row {
+    display: flex;
+    align-items: flex-end;
+    margin-top: 6px;
+}
+
+.typing-bubble {
+    width: 55px;
+    height: 34px;
+    border-radius: 18px;
+    background: #e4e6eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.typing-bubble span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #65676b;
+    animation: messengerTyping 1.2s infinite ease-in-out;
+}
+
+.typing-bubble span:nth-child(2) {
+    animation-delay: 0.15s;
+}
+
+.typing-bubble span:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+@keyframes messengerTyping {
+    0%,
+    60%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.5;
     }
 
-
-    return (
-
-        <div className="messenger-page">
-
-
-            {/* =================================
-                LEFT SIDEBAR
-            ================================= */}
-
-            <aside className="messenger-sidebar">
-
-
-                <div className="messenger-topbar">
-
-                    <div>
-
-                        <h1>
-                            Chats
-                        </h1>
-
-                        <span>
-                            Messenger
-                        </span>
-
-                    </div>
-
-
-                    <button
-                        className="icon-btn"
-                        title="More"
-                    >
-
-                        <FaEllipsisH />
-
-                    </button>
-
-                </div>
-
-
-                {/* SEARCH */}
-
-                <div className="messenger-search">
-
-                    <FaSearch />
-
-                    <input
-                        type="text"
-                        placeholder="Search Messenger"
-                        value={searchText}
-                        onChange={
-                            e =>
-                                setSearchText(
-                                    e.target.value
-                                )
-                        }
-                    />
-
-                </div>
-
-
-                {/* USER LIST */}
-
-                <div className="messenger-user-list">
-
-                    {filteredUsers.length === 0 ? (
-
-                        <div className="no-chat-users">
-
-                            <FaSearch />
-
-                            <p>
-                                No people found
-                            </p>
-
-                        </div>
-
-                    ) : (
-
-                        filteredUsers.map(
-                            person => {
-
-                                const id =
-                                    person._id ||
-                                    person.id;
-
-
-                                const active =
-                                    selectedUser &&
-                                    (
-                                        selectedUser._id ||
-                                        selectedUser.id
-                                    )?.toString() ===
-                                    id?.toString();
-
-
-                                const avatar =
-                                    getAvatar(
-                                        person
-                                    );
-
-
-                                return (
-
-                                    <button
-                                        key={id}
-                                        className={
-                                            active
-                                                ? "messenger-user active"
-                                                : "messenger-user"
-                                        }
-                                        onClick={() =>
-                                            selectUser(
-                                                person
-                                            )
-                                        }
-                                    >
-
-
-                                        <div className="messenger-avatar">
-
-                                            {avatar ? (
-
-                                                <img
-                                                    src={
-                                                        avatar
-                                                    }
-                                                    alt={
-                                                        person.name
-                                                    }
-                                                />
-
-                                            ) : (
-
-                                                <span>
-                                                    {
-                                                        person.name
-                                                            ?.charAt(0)
-                                                            ?.toUpperCase() ||
-                                                        "U"
-                                                    }
-                                                </span>
-
-                                            )}
-
-
-                                            {isUserOnline(
-                                                person
-                                            ) && (
-
-                                                <i className="online-dot"></i>
-
-                                            )}
-
-                                        </div>
-
-
-                                        <div className="messenger-user-content">
-
-                                            <strong>
-                                                {
-                                                    person.name ||
-                                                    "User"
-                                                }
-                                            </strong>
-
-                                            <span>
-                                                {
-                                                    isUserOnline(
-                                                        person
-                                                    )
-                                                        ? "Active now"
-                                                        : "Offline"
-                                                }
-                                            </span>
-
-                                        </div>
-
-                                    </button>
-
-                                );
-
-                            }
-                        )
-
-                    )}
-
-                </div>
-
-            </aside>
-
-
-            {/* =================================
-                CHAT WINDOW
-            ================================= */}
-
-            <main className="messenger-chat">
-
-
-                {!selectedUser ? (
-
-                    <div className="messenger-empty">
-
-                        <div className="empty-icon">
-                            💬
-                        </div>
-
-                        <h2>
-                            Your Messages
-                        </h2>
-
-                        <p>
-                            Select a conversation
-                            to start chatting.
-                        </p>
-
-                    </div>
-
-                ) : (
-
-                    <>
-
-
-                        {/* CHAT HEADER */}
-
-                        <header className="messenger-chat-header">
-
-
-                            <button
-                                className="mobile-back-btn"
-                                onClick={() =>
-                                    setSelectedUser(
-                                        null
-                                    )
-                                }
-                            >
-
-                                <FaArrowLeft />
-
-                            </button>
-
-
-                            <div className="chat-header-avatar">
-
-                                {getAvatar(
-                                    selectedUser
-                                ) ? (
-
-                                    <img
-                                        src={
-                                            getAvatar(
-                                                selectedUser
-                                            )
-                                        }
-                                        alt={
-                                            selectedUser.name
-                                        }
-                                    />
-
-                                ) : (
-
-                                    <span>
-                                        {
-                                            selectedUser.name
-                                                ?.charAt(0)
-                                                ?.toUpperCase() ||
-                                            "U"
-                                        }
-                                    </span>
-
-                                )}
-
-
-                                {isUserOnline(
-                                    selectedUser
-                                ) && (
-
-                                    <i className="online-dot"></i>
-
-                                )}
-
-                            </div>
-
-
-                            <div className="chat-header-info">
-
-                                <h2>
-                                    {
-                                        selectedUser.name ||
-                                        "User"
-                                    }
-                                </h2>
-
-                                <span>
-
-                                    {
-                                        typing
-                                            ? "Typing..."
-                                            : isUserOnline(
-                                                selectedUser
-                                            )
-                                                ? "Active now"
-                                                : "Offline"
-                                    }
-
-                                </span>
-
-                            </div>
-
-
-                            <div className="chat-header-actions">
-
-                                <button
-                                    title="Voice call"
-                                >
-                                    <FaPhone />
-                                </button>
-
-                                <button
-                                    title="Video call"
-                                >
-                                    <FaVideo />
-                                </button>
-
-                                <button
-                                    title="Chat information"
-                                >
-                                    <FaInfoCircle />
-                                </button>
-
-                            </div>
-
-                        </header>
-
-
-                        {/* MESSAGES */}
-
-                        <div className="messages-container">
-
-
-                            {messages.length === 0 ? (
-
-                                <div className="conversation-start">
-
-                                    <div className="conversation-avatar">
-
-                                        {getAvatar(
-                                            selectedUser
-                                        ) ? (
-
-                                            <img
-                                                src={
-                                                    getAvatar(
-                                                        selectedUser
-                                                    )
-                                                }
-                                                alt=""
-                                            />
-
-                                        ) : (
-
-                                            <span>
-                                                {
-                                                    selectedUser.name
-                                                        ?.charAt(0)
-                                                        ?.toUpperCase() ||
-                                                    "U"
-                                                }
-                                            </span>
-
-                                        )}
-
-                                    </div>
-
-
-                                    <h3>
-                                        {
-                                            selectedUser.name
-                                        }
-                                    </h3>
-
-                                    <p>
-                                        You're now connected
-                                        on Messenger.
-                                    </p>
-
-                                </div>
-
-                            ) : (
-
-                                messages.map(
-                                    (
-                                        msg,
-                                        index
-                                    ) => {
-
-                                        const senderId =
-                                            (
-                                                msg.sender?._id ||
-                                                msg.sender
-                                            )?.toString();
-
-
-                                        const currentId =
-                                            (
-                                                user?._id ||
-                                                user?.id
-                                            )?.toString();
-
-
-                                        const own =
-                                            senderId ===
-                                            currentId;
-
-
-                                        return (
-
-                                            <div
-                                                key={
-                                                    msg._id ||
-                                                    index
-                                                }
-                                                className={
-                                                    own
-                                                        ? "message-row own"
-                                                        : "message-row"
-                                                }
-                                            >
-
-                                                {!own && (
-
-                                                    <div className="message-small-avatar">
-
-                                                        {getAvatar(
-                                                            selectedUser
-                                                        ) ? (
-
-                                                            <img
-                                                                src={
-                                                                    getAvatar(
-                                                                        selectedUser
-                                                                    )
-                                                                }
-                                                                alt=""
-                                                            />
-
-                                                        ) : (
-
-                                                            <span>
-                                                                {
-                                                                    selectedUser.name
-                                                                        ?.charAt(0)
-                                                                        ?.toUpperCase() ||
-                                                                    "U"
-                                                                }
-                                                            </span>
-
-                                                        )}
-
-                                                    </div>
-
-                                                )}
-
-
-                                                <div
-                                                    className={
-                                                        own
-                                                            ? "message-bubble own"
-                                                            : "message-bubble"
-                                                    }
-                                                >
-
-                                                    <p>
-                                                        {
-                                                            msg.message ||
-                                                            msg.text ||
-                                                            ""
-                                                        }
-                                                    </p>
-
-
-                                                    <div className="message-meta">
-
-                                                        <span>
-                                                            {
-                                                                formatTime(
-                                                                    msg.createdAt
-                                                                )
-                                                            }
-                                                        </span>
-
-
-                                                        {own && (
-
-                                                            <FaCheckDouble />
-
-                                                        )}
-
-                                                    </div>
-
-                                                </div>
-
-                                            </div>
-
-                                        );
-
-                                    }
-                                )
-
-                            )}
-
-
-                            {typing && (
-
-                                <div className="typing-bubble">
-
-                                    <span></span>
-                                    <span></span>
-                                    <span></span>
-
-                                </div>
-
-                            )}
-
-
-                            <div
-                                ref={
-                                    messagesEndRef
-                                }
-                            />
-
-                        </div>
-
-
-                        {/* MESSAGE INPUT */}
-
-                        <form
-                            className="messenger-input-area"
-                            onSubmit={
-                                sendMessage
-                            }
-                        >
-
-                            <button
-                                type="button"
-                                title="Emoji"
-                            >
-
-                                <FaSmile />
-
-                            </button>
-
-
-                            <button
-                                type="button"
-                                title="Attach file"
-                            >
-
-                                <FaPaperclip />
-
-                            </button>
-
-
-                            <button
-                                type="button"
-                                title="Send image"
-                            >
-
-                                <FaImage />
-
-                            </button>
-
-
-                            <input
-                                type="text"
-                                placeholder={
-                                    `Message ${
-                                        selectedUser.name ||
-                                        "User"
-                                    }...`
-                                }
-                                value={
-                                    message
-                                }
-                                onChange={
-                                    handleTyping
-                                }
-                            />
-
-
-                            <button
-                                type="submit"
-                                className="send-button"
-                                disabled={
-                                    !message.trim() ||
-                                    sending
-                                }
-                            >
-
-                                <FaPaperPlane />
-
-                            </button>
-
-                        </form>
-
-                    </>
-
-                )}
-
-            </main>
-
-        </div>
-
-    );
-
-};
-
-
-export default Messenger;
+    30% {
+        transform: translateY(-4px);
+        opacity: 1;
+    }
+}
+
+
+/* =========================================
+   CHAT LOADING
+========================================= */
+
+.chat-loading {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #65676b;
+    gap: 10px;
+}
+
+.chat-loading div {
+    width: 30px;
+    height: 30px;
+    border: 3px solid #e4e6eb;
+    border-top-color: #0084ff;
+    border-radius: 50%;
+    animation: messengerSpin 0.8s linear infinite;
+}
+
+@keyframes messengerSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* =========================================
+   MESSAGE COMPOSER
+========================================= */
+
+.message-form {
+    min-height: 68px;
+    padding: 10px 16px;
+    border-top: 1px solid #e4e6eb;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.composer-icon,
+.emoji-btn,
+.send-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.composer-icon {
+    width: 38px;
+    height: 38px;
+    color: #0084ff;
+    font-size: 18px;
+    border-radius: 50%;
+}
+
+.composer-icon:hover {
+    background: #f0f2f5;
+}
+
+.message-input-wrapper {
+    flex: 1;
+    height: 42px;
+    border-radius: 22px;
+    background: #f0f2f5;
+    display: flex;
+    align-items: center;
+    padding-left: 15px;
+}
+
+.message-input-wrapper input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 14px;
+    color: #050505;
+}
+
+.message-input-wrapper input::placeholder {
+    color: #65676b;
+}
+
+.emoji-btn {
+    width: 40px;
+    height: 40px;
+    color: #0084ff;
+    font-size: 18px;
+    border-radius: 50%;
+}
+
+.emoji-btn:hover {
+    background: #e4e6eb;
+}
+
+.send-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #0084ff;
+    color: #ffffff;
+    font-size: 16px;
+    transition: 0.2s;
+}
+
+.send-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+}
+
+.send-btn:disabled {
+    background: transparent;
+    color: #bcc0c4;
+    cursor: default;
+}
+
+
+/* =========================================
+   INFO PANEL
+========================================= */
+
+.chat-info-panel {
+    width: 300px;
+    min-width: 300px;
+    height: 100%;
+    background: #ffffff;
+    border-left: 1px solid #e4e6eb;
+    overflow-y: auto;
+    z-index: 4;
+}
+
+.info-panel-header {
+    height: 72px;
+    padding: 0 18px;
+    border-bottom: 1px solid #e4e6eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.info-panel-header h3 {
+    margin: 0;
+    font-size: 17px;
+}
+
+.info-panel-header button {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: #f0f2f5;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.info-profile {
+    padding: 28px 20px;
+    text-align: center;
+    border-bottom: 1px solid #e4e6eb;
+}
+
+.info-profile .messenger-avatar {
+    margin: 0 auto 12px;
+    width: 80px;
+    height: 80px;
+}
+
+.info-profile h2 {
+    margin: 0 0 5px;
+    font-size: 18px;
+}
+
+.info-profile span {
+    color: #65676b;
+    font-size: 13px;
+    word-break: break-word;
+}
+
+.info-section {
+    padding: 17px 20px;
+    border-bottom: 1px solid #f0f2f5;
+}
+
+.info-section p {
+    margin: 0 0 6px;
+    color: #65676b;
+    font-size: 12px;
+}
+
+.info-section strong {
+    display: block;
+    font-size: 14px;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+
+/* =========================================
+   MAIN LOADING
+========================================= */
+
+.messenger-loading {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+}
+
+.messenger-loader-circle {
+    width: 42px;
+    height: 42px;
+    border: 4px solid #e4e6eb;
+    border-top-color: #0084ff;
+    border-radius: 50%;
+    animation: messengerSpin 0.8s linear infinite;
+}
+
+.messenger-loading p {
+    margin-top: 14px;
+    color: #65676b;
+    font-size: 14px;
+}
+
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media (max-width: 1100px) {
+
+    .messenger-sidebar {
+        width: 320px;
+        min-width: 320px;
+    }
+
+    .chat-info-panel {
+        width: 260px;
+        min-width: 260px;
+    }
+
+    .message-wrapper {
+        max-width: 72%;
+    }
+
+}
+
+
+@media (max-width: 850px) {
+
+    .chat-info-panel {
+        display: none;
+    }
+
+    .messenger-sidebar {
+        width: 320px;
+        min-width: 320px;
+    }
+
+}
+
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 700px) {
+
+    .messenger-page {
+        height: calc(100vh - 60px);
+        position: relative;
+    }
+
+    .messenger-sidebar {
+        width: 100%;
+        min-width: 100%;
+        position: absolute;
+        inset: 0;
+        transition: transform 0.25s ease;
+    }
+
+    .messenger-sidebar.mobile-hidden {
+        transform: translateX(-100%);
+    }
+
+    .messenger-chat {
+        width: 100%;
+        min-width: 100%;
+        position: absolute;
+        inset: 0;
+        transform: translateX(100%);
+        transition: transform 0.25s ease;
+    }
+
+    .messenger-chat.mobile-visible {
+        transform: translateX(0);
+    }
+
+    .mobile-back-btn {
+        display: flex;
+    }
+
+    .chat-header {
+        padding: 7px 10px;
+    }
+
+    .chat-header-actions button:nth-child(1),
+    .chat-header-actions button:nth-child(2) {
+        display: none;
+    }
+
+    .messages-container {
+        padding: 18px 12px;
+    }
+
+    .message-wrapper {
+        max-width: 78%;
+    }
+
+    .message-form {
+        padding: 8px 9px;
+    }
+
+    .composer-icon {
+        display: none;
+    }
+
+}
+
+
+@media (max-width: 450px) {
+
+    .messenger-sidebar-header {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    .messenger-sidebar-header h1 {
+        font-size: 24px;
+    }
+
+    .chat-header-user h2 {
+        max-width: 150px;
+    }
+
+    .chat-header-actions {
+        gap: 0;
+    }
+
+    .chat-header-actions button {
+        width: 34px;
+        height: 34px;
+    }
+
+    .message-wrapper {
+        max-width: 84%;
+    }
+
+    .message-bubble {
+        padding: 8px 12px;
+    }
+
+    .message-bubble p {
+        font-size: 13px;
+    }
+
+    .emoji-btn {
+        display: none;
+    }
+
+}
