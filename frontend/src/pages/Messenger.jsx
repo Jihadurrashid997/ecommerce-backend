@@ -1,48 +1,130 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+    useEffect,
+    useMemo,
+    useRef,
+    useState
+} from "react";
+
+import {
+    FaSearch,
+    FaPaperPlane,
+    FaSmile,
+    FaPaperclip,
+    FaEllipsisH,
+    FaPhone,
+    FaVideo,
+    FaInfoCircle,
+    FaArrowLeft,
+    FaCheck,
+    FaCheckDouble,
+    FaCircle,
+    FaUserCircle,
+    FaTimes
+} from "react-icons/fa";
+
 import { io } from "socket.io-client";
 
 import api from "../services/api";
+
 import "../styles/Messenger.css";
+
 
 const SOCKET_URL =
     process.env.REACT_APP_API_URL
         ? process.env.REACT_APP_API_URL.replace("/api", "")
         : window.location.origin;
 
+
 const Messenger = () => {
 
-    const socketRef = useRef(null);
     const messagesEndRef = useRef(null);
+    const socketRef = useRef(null);
 
-    const [user, setUser] = useState(null);
-    const [users, setUsers] = useState([]);
-    const [selectedUser, setSelectedUser] = useState(null);
-    const [messages, setMessages] = useState([]);
-    const [message, setMessage] = useState("");
-    const [onlineUsers, setOnlineUsers] = useState([]);
-    const [typing, setTyping] = useState(false);
-    const [loading, setLoading] = useState(true);
+    const typingTimeoutRef = useRef(null);
 
 
     // ==========================
     // CURRENT USER
     // ==========================
 
+    const [user, setUser] = useState(null);
+
+
+    // ==========================
+    // USERS
+    // ==========================
+
+    const [users, setUsers] = useState([]);
+
+    const [selectedUser, setSelectedUser] =
+        useState(null);
+
+
+    // ==========================
+    // MESSAGES
+    // ==========================
+
+    const [messages, setMessages] =
+        useState([]);
+
+    const [message, setMessage] =
+        useState("");
+
+
+    // ==========================
+    // UI STATES
+    // ==========================
+
+    const [loading, setLoading] =
+        useState(true);
+
+    const [chatLoading, setChatLoading] =
+        useState(false);
+
+    const [search, setSearch] =
+        useState("");
+
+    const [mobileChatOpen, setMobileChatOpen] =
+        useState(false);
+
+    const [showInfo, setShowInfo] =
+        useState(false);
+
+    const [typing, setTyping] =
+        useState(false);
+
+    const [onlineUsers, setOnlineUsers] =
+        useState([]);
+
+    const [unreadUsers, setUnreadUsers] =
+        useState({});
+
+
+    // ==========================
+    // LOAD CURRENT USER
+    // ==========================
+
     useEffect(() => {
 
-        const storedUser =
-            localStorage.getItem("user");
+        try {
 
-        if (storedUser) {
+            const savedUser =
+                localStorage.getItem("user");
 
-            try {
-                setUser(JSON.parse(storedUser));
-            } catch (error) {
-                console.error(
-                    "User data error:",
-                    error
+            if (savedUser) {
+
+                setUser(
+                    JSON.parse(savedUser)
                 );
+
             }
+
+        } catch (error) {
+
+            console.error(
+                "User loading error:",
+                error
+            );
 
         }
 
@@ -55,12 +137,21 @@ const Messenger = () => {
 
     useEffect(() => {
 
-        const fetchUsers = async () => {
+        if (!user) {
+            return;
+        }
+
+
+        const loadUsers = async () => {
 
             try {
 
+                setLoading(true);
+
+
                 const response =
                     await api.get("/users");
+
 
                 const data =
                     response.data?.users ||
@@ -68,11 +159,35 @@ const Messenger = () => {
                     response.data ||
                     [];
 
-                setUsers(
+
+                const currentUserId =
+                    (
+                        user._id ||
+                        user.id
+                    )?.toString();
+
+
+                const filtered =
                     Array.isArray(data)
-                        ? data
-                        : []
-                );
+                        ? data.filter(item => {
+
+                            const id =
+                                (
+                                    item._id ||
+                                    item.id
+                                )?.toString();
+
+                            return (
+                                id &&
+                                id !== currentUserId
+                            );
+
+                        })
+                        : [];
+
+
+                setUsers(filtered);
+
 
             } catch (error) {
 
@@ -89,9 +204,10 @@ const Messenger = () => {
 
         };
 
-        fetchUsers();
 
-    }, []);
+        loadUsers();
+
+    }, [user]);
 
 
     // ==========================
@@ -104,6 +220,7 @@ const Messenger = () => {
             return;
         }
 
+
         const socket =
             io(SOCKET_URL, {
                 transports: [
@@ -112,30 +229,31 @@ const Messenger = () => {
                 ]
             });
 
-        socketRef.current = socket;
+
+        socketRef.current =
+            socket;
 
 
-        socket.on("connect", () => {
-
-            console.log(
-                "Socket connected:",
-                socket.id
-            );
-
-            socket.emit(
-                "user-online",
-                user._id || user.id
-            );
-
-        });
+        const currentUserId =
+            (
+                user._id ||
+                user.id
+            )?.toString();
 
 
         socket.on(
-            "online-users",
-            (online) => {
+            "connect",
+            () => {
 
-                setOnlineUsers(
-                    online || []
+                console.log(
+                    "Messenger socket connected:",
+                    socket.id
+                );
+
+
+                socket.emit(
+                    "user-online",
+                    currentUserId
                 );
 
             }
@@ -143,26 +261,33 @@ const Messenger = () => {
 
 
         socket.on(
+            "online-users",
+            online => {
+
+                setOnlineUsers(
+                    Array.isArray(online)
+                        ? online
+                        : []
+                );
+
+            }
+        );
+
+
+        // ==========================
+        // RECEIVE MESSAGE
+        // ==========================
+
+        socket.on(
             "receive-message",
-            (newMessage) => {
-
-                const currentUserId =
-                    (
-                        user._id ||
-                        user.id
-                    )?.toString();
-
-                const selectedUserId =
-                    (
-                        selectedUser?._id ||
-                        selectedUser?.id
-                    )?.toString();
+            newMessage => {
 
                 const senderId =
                     (
                         newMessage.sender?._id ||
                         newMessage.sender
                     )?.toString();
+
 
                 const receiverId =
                     (
@@ -171,26 +296,35 @@ const Messenger = () => {
                     )?.toString();
 
 
+                const selectedId =
+                    (
+                        selectedUser?._id ||
+                        selectedUser?.id
+                    )?.toString();
+
+
                 const belongsToCurrentChat =
-                    selectedUserId &&
+                    selectedId &&
                     (
                         (
-                            senderId === selectedUserId &&
+                            senderId === selectedId &&
                             receiverId === currentUserId
                         ) ||
                         (
                             senderId === currentUserId &&
-                            receiverId === selectedUserId
+                            receiverId === selectedId
                         )
                     );
 
 
-                if (belongsToCurrentChat) {
+                if (
+                    belongsToCurrentChat
+                ) {
 
                     setMessages(
                         previous => {
 
-                            const alreadyExists =
+                            const exists =
                                 previous.some(
                                     item =>
                                         item._id &&
@@ -199,9 +333,11 @@ const Messenger = () => {
                                         newMessage._id
                                 );
 
-                            if (alreadyExists) {
+
+                            if (exists) {
                                 return previous;
                             }
+
 
                             return [
                                 ...previous,
@@ -211,6 +347,66 @@ const Messenger = () => {
                         }
                     );
 
+
+                    return;
+                }
+
+
+                // ==========================
+                // UNREAD MESSAGE
+                // ==========================
+
+                if (
+                    senderId &&
+                    senderId !== currentUserId
+                ) {
+
+                    setUnreadUsers(
+                        previous => ({
+                            ...previous,
+                            [senderId]:
+                                (
+                                    previous[senderId] ||
+                                    0
+                                ) + 1
+                        })
+                    );
+
+                }
+
+            }
+        );
+
+
+        // ==========================
+        // TYPING
+        // ==========================
+
+        socket.on(
+            "user-typing",
+            data => {
+
+                const selectedId =
+                    (
+                        selectedUser?._id ||
+                        selectedUser?.id
+                    )?.toString();
+
+
+                const typingUserId =
+                    (
+                        data?.userId ||
+                        data
+                    )?.toString();
+
+
+                if (
+                    selectedId &&
+                    typingUserId === selectedId
+                ) {
+
+                    setTyping(true);
+
                 }
 
             }
@@ -218,20 +414,31 @@ const Messenger = () => {
 
 
         socket.on(
-            "user-typing",
-            () => {
-
-                setTyping(true);
-
-            }
-        );
-
-
-        socket.on(
             "user-stop-typing",
-            () => {
+            data => {
 
-                setTyping(false);
+                const selectedId =
+                    (
+                        selectedUser?._id ||
+                        selectedUser?.id
+                    )?.toString();
+
+
+                const typingUserId =
+                    (
+                        data?.userId ||
+                        data
+                    )?.toString();
+
+
+                if (
+                    selectedId &&
+                    typingUserId === selectedId
+                ) {
+
+                    setTyping(false);
+
+                }
 
             }
         );
@@ -240,7 +447,9 @@ const Messenger = () => {
         return () => {
 
             socket.disconnect();
-            socketRef.current = null;
+
+            socketRef.current =
+                null;
 
         };
 
@@ -257,7 +466,7 @@ const Messenger = () => {
             behavior: "smooth"
         });
 
-    }, [messages]);
+    }, [messages, typing]);
 
 
     // ==========================
@@ -275,19 +484,56 @@ const Messenger = () => {
                 firstUser?.id
             )?.toString();
 
+
         const second =
             (
                 secondUser?._id ||
                 secondUser?.id
             )?.toString();
 
-        if (!first || !second) {
+
+        if (
+            !first ||
+            !second
+        ) {
             return null;
         }
 
-        return [first, second]
+
+        return [
+            first,
+            second
+        ]
             .sort()
             .join("_");
+
+    };
+
+
+    // ==========================
+    // USER ONLINE
+    // ==========================
+
+    const isUserOnline = (
+        targetUser
+    ) => {
+
+        if (!targetUser) {
+            return false;
+        }
+
+
+        const id =
+            (
+                targetUser._id ||
+                targetUser.id
+            )?.toString();
+
+
+        return onlineUsers.some(
+            onlineId =>
+                onlineId?.toString() === id
+        );
 
     };
 
@@ -297,38 +543,70 @@ const Messenger = () => {
     // ==========================
 
     const selectUser = async (
-        selected
+        targetUser
     ) => {
 
-        setSelectedUser(selected);
-        setMessages([]);
-        setTyping(false);
-
-
-        if (!user || !selected) {
+        if (!targetUser) {
             return;
         }
 
 
-        const currentUserId =
-            user._id || user.id;
+        setSelectedUser(
+            targetUser
+        );
 
-        const selectedUserId =
-            selected._id || selected.id;
+
+        setMobileChatOpen(
+            true
+        );
+
+
+        setMessages([]);
+
+        setTyping(false);
+
+
+        const currentUserId =
+            user?._id ||
+            user?.id;
+
+
+        const targetUserId =
+            targetUser._id ||
+            targetUser.id;
 
 
         const roomId =
             getRoomId(
                 user,
-                selected
+                targetUser
             );
 
 
-        // Join socket room
+        // Clear unread
+
+        setUnreadUsers(
+            previous => {
+
+                const updated = {
+                    ...previous
+                };
+
+                delete updated[
+                    targetUserId
+                ];
+
+                return updated;
+
+            }
+        );
+
+
+        // Join room
 
         if (
-            roomId &&
-            socketRef.current
+            socketRef.current &&
+            roomId
         ) {
 
             socketRef.current.emit(
@@ -339,13 +617,14 @@ const Messenger = () => {
         }
 
 
-        // Load conversation
-
         try {
+
+            setChatLoading(true);
+
 
             const response =
                 await api.get(
-                    `/messages/conversation/${selectedUserId}`
+                    `/messages/conversation/${targetUserId}`
                 );
 
 
@@ -354,18 +633,23 @@ const Messenger = () => {
             );
 
 
-            // Mark messages as seen
+            // Mark seen
 
             await api.put(
-                `/messages/seen/${selectedUserId}`
+                `/messages/seen/${targetUserId}`
             );
+
 
         } catch (error) {
 
             console.error(
-                "Failed to load conversation:",
+                "Conversation error:",
                 error
             );
+
+        } finally {
+
+            setChatLoading(false);
 
         }
 
@@ -376,13 +660,19 @@ const Messenger = () => {
     // SEND MESSAGE
     // ==========================
 
-    const sendMessage = async (e) => {
+    const sendMessage = async (
+        e
+    ) => {
 
         e.preventDefault();
 
 
+        const text =
+            message.trim();
+
+
         if (
-            !message.trim() ||
+            !text ||
             !selectedUser ||
             !user
         ) {
@@ -404,15 +694,12 @@ const Messenger = () => {
 
         try {
 
-            // Save message in MongoDB
-
             const response =
                 await api.post(
                     "/messages/send",
                     {
                         receiver,
-                        message:
-                            message.trim()
+                        message: text
                     }
                 );
 
@@ -421,7 +708,40 @@ const Messenger = () => {
                 response.data?.data;
 
 
-            // Send real-time message
+            // Add locally immediately
+
+            if (savedMessage) {
+
+                setMessages(
+                    previous => {
+
+                        const exists =
+                            previous.some(
+                                item =>
+                                    item._id &&
+                                    savedMessage._id &&
+                                    item._id ===
+                                    savedMessage._id
+                            );
+
+
+                        if (exists) {
+                            return previous;
+                        }
+
+
+                        return [
+                            ...previous,
+                            savedMessage
+                        ];
+
+                    }
+                );
+
+            }
+
+
+            // Socket broadcast
 
             if (
                 socketRef.current &&
@@ -452,12 +772,14 @@ const Messenger = () => {
                 }
             );
 
+
         } catch (error) {
 
             console.error(
-                "Failed to send message:",
+                "Send message error:",
                 error
             );
+
 
             alert(
                 error.response?.data?.message ||
@@ -473,10 +795,13 @@ const Messenger = () => {
     // TYPING
     // ==========================
 
-    const handleTyping = (e) => {
+    const handleTyping = (
+        e
+    ) => {
 
         const value =
             e.target.value;
+
 
         setMessage(value);
 
@@ -497,63 +822,219 @@ const Messenger = () => {
             );
 
 
-        if (!roomId) {
+        const userId =
+            user._id ||
+            user.id;
+
+
+        if (
+            !roomId
+        ) {
             return;
         }
 
 
-        if (value.trim()) {
+        socketRef.current.emit(
+            "typing",
+            {
+                roomId,
+                userId
+            }
+        );
 
-            socketRef.current.emit(
-                "typing",
-                {
-                    roomId,
-                    userId:
-                        user._id ||
-                        user.id
-                }
+
+        clearTimeout(
+            typingTimeoutRef.current
+        );
+
+
+        typingTimeoutRef.current =
+            setTimeout(
+                () => {
+
+                    socketRef.current?.emit(
+                        "stop-typing",
+                        {
+                            roomId,
+                            userId
+                        }
+                    );
+
+                },
+                1000
             );
-
-        } else {
-
-            socketRef.current.emit(
-                "stop-typing",
-                {
-                    roomId,
-                    userId:
-                        user._id ||
-                        user.id
-                }
-            );
-
-        }
 
     };
 
 
     // ==========================
-    // ONLINE CHECK
+    // FILTER USERS
     // ==========================
 
-    const isUserOnline = (
-        selected
+    const filteredUsers =
+        useMemo(() => {
+
+            const query =
+                search.trim().toLowerCase();
+
+
+            if (!query) {
+                return users;
+            }
+
+
+            return users.filter(
+                item =>
+                    (
+                        item.name ||
+                        ""
+                    )
+                        .toLowerCase()
+                        .includes(query)
+                    ||
+                    (
+                        item.email ||
+                        ""
+                    )
+                        .toLowerCase()
+                        .includes(query)
+            );
+
+        }, [
+            users,
+            search
+        ]);
+
+
+    // ==========================
+    // AVATAR
+    // ==========================
+
+    const Avatar = ({
+        person,
+        large = false
+    }) => {
+
+        const image =
+            person?.profileImage ||
+            person?.avatar ||
+            person?.image;
+
+
+        return (
+
+            <div
+                className={
+                    large
+                        ? "messenger-avatar large"
+                        : "messenger-avatar"
+                }
+            >
+
+                {image ? (
+
+                    <img
+                        src={image}
+                        alt={
+                            person?.name ||
+                            "User"
+                        }
+                    />
+
+                ) : (
+
+                    <FaUserCircle />
+
+                )}
+
+
+                {isUserOnline(person) && (
+
+                    <span className="online-dot">
+                        <FaCircle />
+                    </span>
+
+                )}
+
+            </div>
+
+        );
+
+    };
+
+
+    // ==========================
+    // MESSAGE TIME
+    // ==========================
+
+    const formatTime = (
+        date
     ) => {
 
-        if (!selected) {
-            return false;
+        if (!date) {
+            return "";
         }
 
 
-        const id =
+        return new Date(
+            date
+        ).toLocaleTimeString(
+            [],
+            {
+                hour: "2-digit",
+                minute: "2-digit"
+            }
+        );
+
+    };
+
+
+    // ==========================
+    // MESSAGE STATUS
+    // ==========================
+
+    const MessageStatus = ({
+        msg
+    }) => {
+
+        const senderId =
             (
-                selected._id ||
-                selected.id
+                msg.sender?._id ||
+                msg.sender
             )?.toString();
 
 
-        return onlineUsers.some(
-            onlineId =>
-                onlineId?.toString() === id
+        const currentUserId =
+            (
+                user?._id ||
+                user?.id
+            )?.toString();
+
+
+        if (
+            senderId !==
+            currentUserId
+        ) {
+            return null;
+        }
+
+
+        return (
+
+            <span className="message-status">
+
+                {msg.isSeen ? (
+
+                    <FaCheckDouble />
+
+                ) : (
+
+                    <FaCheck />
+
+                )}
+
+            </span>
+
         );
 
     };
@@ -570,7 +1051,13 @@ const Messenger = () => {
             <div className="messenger-page">
 
                 <div className="messenger-loading">
-                    Loading Messenger...
+
+                    <div className="messenger-loader-circle" />
+
+                    <p>
+                        Loading Messenger...
+                    </p>
+
                 </div>
 
             </div>
@@ -585,105 +1072,199 @@ const Messenger = () => {
         <div className="messenger-page">
 
 
-            {/* ==========================
+            {/* =================================
                 SIDEBAR
-            =========================== */}
+            ================================== */}
 
-            <aside className="messenger-sidebar">
+            <aside
+                className={
+                    mobileChatOpen
+                        ? "messenger-sidebar mobile-hidden"
+                        : "messenger-sidebar"
+                }
+            >
+
+
+                {/* SIDEBAR HEADER */}
 
                 <div className="messenger-sidebar-header">
 
-                    <h2>
-                        Messages
-                    </h2>
+                    <div>
+
+                        <h1>
+                            Chats
+                        </h1>
+
+                        <span>
+                            {users.length} people
+                        </span>
+
+                    </div>
+
+                    <button
+                        className="header-icon-btn"
+                        title="More"
+                    >
+                        <FaEllipsisH />
+                    </button>
 
                 </div>
 
 
+                {/* SEARCH */}
+
+                <div className="messenger-search">
+
+                    <FaSearch />
+
+                    <input
+                        type="search"
+                        placeholder="Search Messenger"
+                        value={search}
+                        onChange={
+                            e =>
+                                setSearch(
+                                    e.target.value
+                                )
+                        }
+                    />
+
+
+                    {search && (
+
+                        <button
+                            onClick={() =>
+                                setSearch("")
+                            }
+                            className="clear-search-btn"
+                            type="button"
+                        >
+                            <FaTimes />
+                        </button>
+
+                    )}
+
+                </div>
+
+
+                {/* FILTER */}
+
+                <div className="chat-filter-row">
+
+                    <button
+                        className="active"
+                        type="button"
+                    >
+                        All
+                    </button>
+
+                    <button
+                        type="button"
+                    >
+                        Online
+                    </button>
+
+                    <button
+                        type="button"
+                    >
+                        Unread
+                    </button>
+
+                </div>
+
+
+                {/* USER LIST */}
+
                 <div className="user-list">
 
-                    {users
-                        .filter(item => {
-
-                            const currentId =
-                                (
-                                    user?._id ||
-                                    user?.id
-                                )?.toString();
-
-                            const itemId =
-                                (
-                                    item._id ||
-                                    item.id
-                                )?.toString();
-
-                            return (
-                                itemId &&
-                                itemId !== currentId
-                            );
-
-                        })
-                        .map(item => {
+                    {filteredUsers.map(
+                        person => {
 
                             const id =
-                                item._id ||
-                                item.id;
+                                person._id ||
+                                person.id;
 
 
-                            const active =
-                                selectedUser &&
+                            const selected =
                                 (
-                                    selectedUser._id ||
-                                    selectedUser.id
+                                    selectedUser?._id ||
+                                    selectedUser?.id
                                 )?.toString() ===
                                 id?.toString();
+
+
+                            const unread =
+                                unreadUsers[
+                                    id
+                                ] || 0;
 
 
                             return (
 
                                 <button
                                     key={id}
+                                    type="button"
                                     className={
-                                        active
+                                        selected
                                             ? "chat-user active"
                                             : "chat-user"
                                     }
                                     onClick={() =>
-                                        selectUser(item)
+                                        selectUser(
+                                            person
+                                        )
                                     }
                                 >
 
-                                    <div className="user-avatar">
-
-                                        {
-                                            item.name
-                                                ?.charAt(0)
-                                                ?.toUpperCase() ||
-                                            "U"
+                                    <Avatar
+                                        person={
+                                            person
                                         }
-
-                                    </div>
-
-
-                                    <div className="user-info">
-
-                                        <strong>
-                                            {
-                                                item.name ||
-                                                "User"
-                                            }
-                                        </strong>
+                                    />
 
 
-                                        <span>
+                                    <div className="chat-user-content">
 
-                                            {
-                                                isUserOnline(item)
-                                                    ? "🟢 Online"
-                                                    : "Offline"
-                                            }
+                                        <div className="chat-user-top">
 
-                                        </span>
+                                            <strong>
+                                                {
+                                                    person.name ||
+                                                    "User"
+                                                }
+                                            </strong>
+
+                                            <span className="chat-time">
+                                                --
+                                            </span>
+
+                                        </div>
+
+
+                                        <div className="chat-user-bottom">
+
+                                            <span>
+
+                                                {isUserOnline(
+                                                    person
+                                                )
+                                                    ? "Active now"
+                                                    : "Offline"}
+
+                                            </span>
+
+
+                                            {unread > 0 && (
+
+                                                <b className="unread-badge">
+
+                                                    {unread}
+
+                                                </b>
+
+                                            )}
+
+                                        </div>
 
                                     </div>
 
@@ -691,15 +1272,25 @@ const Messenger = () => {
 
                             );
 
-                        })
-                    }
+                        }
+                    )}
 
 
-                    {users.length === 0 && (
+                    {filteredUsers.length === 0 && (
 
-                        <p className="no-users">
-                            No users available.
-                        </p>
+                        <div className="no-users">
+
+                            <FaSearch />
+
+                            <p>
+                                No people found
+                            </p>
+
+                            <small>
+                                Try another name or email.
+                            </small>
+
+                        </div>
 
                     )}
 
@@ -708,27 +1299,37 @@ const Messenger = () => {
             </aside>
 
 
-            {/* ==========================
+            {/* =================================
                 CHAT AREA
-            =========================== */}
+            ================================== */}
 
-            <main className="chat-area">
+            <main
+                className={
+                    mobileChatOpen
+                        ? "messenger-chat mobile-visible"
+                        : "messenger-chat"
+                }
+            >
+
 
                 {!selectedUser ? (
 
                     <div className="empty-chat">
 
-                        <div>
+                        <div className="empty-chat-icon">
 
-                            <h2>
-                                💬 Welcome to Messenger
-                            </h2>
-
-                            <p>
-                                Select a user to start chatting.
-                            </p>
+                            <FaCommentsIcon />
 
                         </div>
+
+                        <h2>
+                            Your messages
+                        </h2>
+
+                        <p>
+                            Select someone from your
+                            chats to start a conversation.
+                        </p>
 
                     </div>
 
@@ -737,65 +1338,143 @@ const Messenger = () => {
                     <>
 
 
-                        {/* CHAT HEADER */}
+                        {/* ==========================
+                            CHAT HEADER
+                        =========================== */}
 
-                        <div className="chat-header">
+                        <header className="chat-header">
 
-                            <div className="chat-user-avatar">
+                            <div className="chat-header-left">
 
-                                {
-                                    selectedUser.name
-                                        ?.charAt(0)
-                                        ?.toUpperCase() ||
-                                    "U"
-                                }
+                                <button
+                                    type="button"
+                                    className="mobile-back-btn"
+                                    onClick={() => {
+                                        setMobileChatOpen(
+                                            false
+                                        );
+                                    }}
+                                >
+
+                                    <FaArrowLeft />
+
+                                </button>
+
+
+                                <Avatar
+                                    person={
+                                        selectedUser
+                                    }
+                                    large
+                                />
+
+
+                                <div className="chat-header-user">
+
+                                    <h2>
+                                        {
+                                            selectedUser.name ||
+                                            "User"
+                                        }
+                                    </h2>
+
+
+                                    <span>
+
+                                        {typing
+                                            ? "Typing..."
+                                            : isUserOnline(
+                                                selectedUser
+                                            )
+                                                ? "Active now"
+                                                : "Offline"}
+
+                                    </span>
+
+                                </div>
 
                             </div>
 
 
-                            <div>
+                            <div className="chat-header-actions">
 
-                                <h3>
-                                    {
-                                        selectedUser.name ||
-                                        "User"
-                                    }
-                                </h3>
+                                <button
+                                    type="button"
+                                    title="Voice call"
+                                >
+                                    <FaPhone />
+                                </button>
 
 
-                                <span>
+                                <button
+                                    type="button"
+                                    title="Video call"
+                                >
+                                    <FaVideo />
+                                </button>
 
-                                    {
-                                        isUserOnline(
-                                            selectedUser
+
+                                <button
+                                    type="button"
+                                    title="Conversation info"
+                                    onClick={() =>
+                                        setShowInfo(
+                                            !showInfo
                                         )
-                                            ? "🟢 Online"
-                                            : "Offline"
                                     }
-
-                                </span>
+                                >
+                                    <FaInfoCircle />
+                                </button>
 
                             </div>
 
-                        </div>
+                        </header>
 
 
-                        {/* MESSAGES */}
+                        {/* ==========================
+                            CHAT BODY
+                        =========================== */}
 
                         <div className="messages-container">
 
-                            {messages.length === 0 ? (
 
-                                <div className="no-messages">
+                            {chatLoading ? (
+
+                                <div className="chat-loading">
+
+                                    <div />
+
+                                    <span>
+                                        Loading conversation...
+                                    </span>
+
+                                </div>
+
+                            ) : messages.length === 0 ? (
+
+                                <div className="conversation-start">
+
+                                    <Avatar
+                                        person={
+                                            selectedUser
+                                        }
+                                        large
+                                    />
+
+                                    <h3>
+                                        {
+                                            selectedUser.name
+                                        }
+                                    </h3>
 
                                     <p>
-                                        No messages yet.
+                                        You're connected on
+                                        Marketplace.
                                     </p>
 
-                                    <small>
-                                        Send a message to start
-                                        the conversation.
-                                    </small>
+                                    <span>
+                                        Say hello 👋
+                                    </span>
 
                                 </div>
 
@@ -821,7 +1500,7 @@ const Messenger = () => {
                                             )?.toString();
 
 
-                                        const ownMessage =
+                                        const own =
                                             senderId ===
                                             currentUserId;
 
@@ -834,48 +1513,78 @@ const Messenger = () => {
                                                     index
                                                 }
                                                 className={
-                                                    ownMessage
+                                                    own
                                                         ? "message-row own"
                                                         : "message-row"
                                                 }
                                             >
 
+                                                {!own && (
+
+                                                    <Avatar
+                                                        person={
+                                                            selectedUser
+                                                        }
+                                                    />
+
+                                                )}
+
+
                                                 <div
                                                     className={
-                                                        ownMessage
-                                                            ? "message-bubble own"
-                                                            : "message-bubble"
+                                                        own
+                                                            ? "message-wrapper own"
+                                                            : "message-wrapper"
                                                     }
                                                 >
 
-                                                    <p>
-                                                        {
-                                                            msg.message ||
-                                                            msg.text ||
-                                                            ""
+                                                    <div
+                                                        className={
+                                                            own
+                                                                ? "message-bubble own"
+                                                                : "message-bubble"
                                                         }
-                                                    </p>
+                                                    >
+
+                                                        <p>
+                                                            {
+                                                                msg.message ||
+                                                                msg.text ||
+                                                                ""
+                                                            }
+                                                        </p>
+
+                                                    </div>
 
 
-                                                    <small>
+                                                    <div
+                                                        className={
+                                                            own
+                                                                ? "message-meta own"
+                                                                : "message-meta"
+                                                        }
+                                                    >
 
-                                                        {
-                                                            msg.createdAt
-                                                                ? new Date(
+                                                        <span>
+                                                            {
+                                                                formatTime(
                                                                     msg.createdAt
-                                                                ).toLocaleTimeString(
-                                                                    [],
-                                                                    {
-                                                                        hour:
-                                                                            "2-digit",
-                                                                        minute:
-                                                                            "2-digit"
-                                                                    }
                                                                 )
-                                                                : ""
-                                                        }
+                                                            }
+                                                        </span>
 
-                                                    </small>
+
+                                                        {own && (
+
+                                                            <MessageStatus
+                                                                msg={
+                                                                    msg
+                                                                }
+                                                            />
+
+                                                        )}
+
+                                                    </div>
 
                                                 </div>
 
@@ -891,11 +1600,15 @@ const Messenger = () => {
 
                             {typing && (
 
-                                <div className="typing-indicator">
+                                <div className="typing-row">
 
-                                    <span>
-                                        Typing...
-                                    </span>
+                                    <div className="typing-bubble">
+
+                                        <span />
+                                        <span />
+                                        <span />
+
+                                    </div>
 
                                 </div>
 
@@ -903,36 +1616,70 @@ const Messenger = () => {
 
 
                             <div
-                                ref={messagesEndRef}
+                                ref={
+                                    messagesEndRef
+                                }
                             />
 
                         </div>
 
 
-                        {/* MESSAGE INPUT */}
+                        {/* ==========================
+                            MESSAGE COMPOSER
+                        =========================== */}
 
                         <form
                             className="message-form"
-                            onSubmit={sendMessage}
+                            onSubmit={
+                                sendMessage
+                            }
                         >
 
-                            <input
-                                type="text"
-                                placeholder="Write a message..."
-                                value={message}
-                                onChange={
-                                    handleTyping
-                                }
-                            />
+                            <button
+                                type="button"
+                                title="Attach file"
+                                className="composer-icon"
+                            >
+                                <FaPaperclip />
+                            </button>
+
+
+                            <div className="message-input-wrapper">
+
+                                <input
+                                    type="text"
+                                    placeholder="Aa"
+                                    value={
+                                        message
+                                    }
+                                    onChange={
+                                        handleTyping
+                                    }
+                                />
+
+
+                                <button
+                                    type="button"
+                                    className="emoji-btn"
+                                    title="Emoji"
+                                >
+                                    <FaSmile />
+                                </button>
+
+                            </div>
 
 
                             <button
                                 type="submit"
+                                className="send-btn"
                                 disabled={
                                     !message.trim()
                                 }
+                                title="Send"
                             >
-                                Send
+
+                                <FaPaperPlane />
+
                             </button>
 
                         </form>
@@ -943,10 +1690,134 @@ const Messenger = () => {
 
             </main>
 
+
+            {/* =================================
+                INFO PANEL
+            ================================== */}
+
+            {showInfo &&
+                selectedUser && (
+
+                    <aside className="chat-info-panel">
+
+                        <div className="info-panel-header">
+
+                            <h3>
+                                Chat Info
+                            </h3>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setShowInfo(
+                                        false
+                                    )
+                                }
+                            >
+                                <FaTimes />
+                            </button>
+
+                        </div>
+
+
+                        <div className="info-profile">
+
+                            <Avatar
+                                person={
+                                    selectedUser
+                                }
+                                large
+                            />
+
+                            <h2>
+                                {
+                                    selectedUser.name
+                                }
+                            </h2>
+
+                            <span>
+                                {
+                                    selectedUser.email ||
+                                    "Marketplace User"
+                                }
+                            </span>
+
+                        </div>
+
+
+                        <div className="info-section">
+
+                            <p>
+                                Account type
+                            </p>
+
+                            <strong>
+                                {
+                                    selectedUser.role ||
+                                    "customer"
+                                }
+                            </strong>
+
+                        </div>
+
+
+                        {selectedUser.bio && (
+
+                            <div className="info-section">
+
+                                <p>
+                                    Bio
+                                </p>
+
+                                <strong>
+                                    {
+                                        selectedUser.bio
+                                    }
+                                </strong>
+
+                            </div>
+
+                        )}
+
+
+                        {selectedUser.location && (
+
+                            <div className="info-section">
+
+                                <p>
+                                    Location
+                                </p>
+
+                                <strong>
+                                    {
+                                        selectedUser.location
+                                    }
+                                </strong>
+
+                            </div>
+
+                        )}
+
+                    </aside>
+
+                )}
+
         </div>
 
     );
 
 };
+
+
+// Small helper icon for empty state
+
+const FaCommentsIcon = () => (
+
+    <div className="empty-message-icon">
+        💬
+    </div>
+
+);
+
 
 export default Messenger;
