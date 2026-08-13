@@ -1,20 +1,50 @@
 const express = require("express");
-const router = express.Router();
 
-const auth = require("../middleware/auth");
+const router =
+    express.Router();
+
+const auth =
+    require("../middleware/auth");
 
 const {
-
     sendMessage,
     getConversation,
     markSeen
+} =
+    require("../controllers/messageController");
 
-} = require("../controllers/messageController");
 
-router.post("/send", auth(), sendMessage);
+// ==========================
+// SEND MESSAGE
+// ==========================
 
-router.get("/conversation/:userId", auth(), getConversation);
+router.post(
+    "/send",
+    auth(),
+    sendMessage
+);
 
-router.put("/seen/:userId", auth(), markSeen);
+
+// ==========================
+// GET CONVERSATION
+// ==========================
+
+router.get(
+    "/conversation/:userId",
+    auth(),
+    getConversation
+);
+
+
+// ==========================
+// MARK SEEN
+// ==========================
+
+router.put(
+    "/seen/:userId",
+    auth(),
+    markSeen
+);
+
 
 module.exports = router;
