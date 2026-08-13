@@ -5,7 +5,7 @@ import React, {
     useState
 } from "react";
 
-const AppContext = createContext();
+const AppContext = createContext(null);
 
 export const AppProvider = ({ children }) => {
 
@@ -38,14 +38,14 @@ export const AppProvider = ({ children }) => {
 
 
     // ==========================
-    // LOADING
+    // AUTH LOADING
     // ==========================
 
     const [loading, setLoading] = useState(true);
 
 
     // ==========================
-    // APP THEME
+    // THEME
     // ==========================
 
     const [theme, setTheme] = useState(
@@ -53,81 +53,181 @@ export const AppProvider = ({ children }) => {
     );
 
 
-    // ==========================
-    // LOAD SAVED DATA
-    // ==========================
+    // ==================================================
+    // LOAD SAVED AUTH + DATA
+    // ==================================================
 
     useEffect(() => {
 
-        try {
+        const loadAppData = () => {
 
-            const savedUser =
-                localStorage.getItem("user");
+            try {
 
-            const savedCart =
-                localStorage.getItem("cart");
+                const token =
+                    localStorage.getItem("token");
 
-            const savedWishlist =
-                localStorage.getItem("wishlist");
+                const savedUser =
+                    localStorage.getItem("user");
 
-            const savedNotifications =
-                localStorage.getItem("notifications");
+                const savedCart =
+                    localStorage.getItem("cart");
+
+                const savedWishlist =
+                    localStorage.getItem("wishlist");
+
+                const savedNotifications =
+                    localStorage.getItem(
+                        "notifications"
+                    );
 
 
-            if (savedUser) {
+                // ==========================
+                // AUTH
+                // ==========================
 
-                setUser(
-                    JSON.parse(savedUser)
+                if (token && savedUser) {
+
+                    try {
+
+                        setUser(
+                            JSON.parse(savedUser)
+                        );
+
+                    } catch {
+
+                        localStorage.removeItem(
+                            "user"
+                        );
+
+                    }
+
+                } else {
+
+                    // Token/user incomplete হলে
+                    // clean করে দিচ্ছি
+
+                    localStorage.removeItem(
+                        "token"
+                    );
+
+                    localStorage.removeItem(
+                        "user"
+                    );
+
+                    setUser(null);
+
+                }
+
+
+                // ==========================
+                // CART
+                // ==========================
+
+                if (savedCart) {
+
+                    try {
+
+                        const parsedCart =
+                            JSON.parse(savedCart);
+
+                        setCart(
+                            Array.isArray(parsedCart)
+                                ? parsedCart
+                                : []
+                        );
+
+                    } catch {
+
+                        setCart([]);
+
+                    }
+
+                }
+
+
+                // ==========================
+                // WISHLIST
+                // ==========================
+
+                if (savedWishlist) {
+
+                    try {
+
+                        const parsedWishlist =
+                            JSON.parse(
+                                savedWishlist
+                            );
+
+                        setWishlist(
+                            Array.isArray(
+                                parsedWishlist
+                            )
+                                ? parsedWishlist
+                                : []
+                        );
+
+                    } catch {
+
+                        setWishlist([]);
+
+                    }
+
+                }
+
+
+                // ==========================
+                // NOTIFICATIONS
+                // ==========================
+
+                if (savedNotifications) {
+
+                    try {
+
+                        const parsedNotifications =
+                            JSON.parse(
+                                savedNotifications
+                            );
+
+                        setNotifications(
+                            Array.isArray(
+                                parsedNotifications
+                            )
+                                ? parsedNotifications
+                                : []
+                        );
+
+                    } catch {
+
+                        setNotifications([]);
+
+                    }
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "JR Store AppContext error:",
+                    error
                 );
+
+            } finally {
+
+                setLoading(false);
 
             }
 
-
-            if (savedCart) {
-
-                setCart(
-                    JSON.parse(savedCart)
-                );
-
-            }
+        };
 
 
-            if (savedWishlist) {
-
-                setWishlist(
-                    JSON.parse(savedWishlist)
-                );
-
-            }
-
-
-            if (savedNotifications) {
-
-                setNotifications(
-                    JSON.parse(savedNotifications)
-                );
-
-            }
-
-        } catch (err) {
-
-            console.error(
-                "Local storage error:",
-                err
-            );
-
-        } finally {
-
-            setLoading(false);
-
-        }
+        loadAppData();
 
     }, []);
 
 
-    // ==========================
+    // ==================================================
     // SAVE USER
-    // ==========================
+    // ==================================================
 
     useEffect(() => {
 
@@ -140,16 +240,18 @@ export const AppProvider = ({ children }) => {
 
         } else {
 
-            localStorage.removeItem("user");
+            localStorage.removeItem(
+                "user"
+            );
 
         }
 
     }, [user]);
 
 
-    // ==========================
+    // ==================================================
     // SAVE CART
-    // ==========================
+    // ==================================================
 
     useEffect(() => {
 
@@ -161,9 +263,9 @@ export const AppProvider = ({ children }) => {
     }, [cart]);
 
 
-    // ==========================
+    // ==================================================
     // SAVE WISHLIST
-    // ==========================
+    // ==================================================
 
     useEffect(() => {
 
@@ -175,23 +277,25 @@ export const AppProvider = ({ children }) => {
     }, [wishlist]);
 
 
-    // ==========================
+    // ==================================================
     // SAVE NOTIFICATIONS
-    // ==========================
+    // ==================================================
 
     useEffect(() => {
 
         localStorage.setItem(
             "notifications",
-            JSON.stringify(notifications)
+            JSON.stringify(
+                notifications
+            )
         );
 
     }, [notifications]);
 
 
-    // ==========================
+    // ==================================================
     // THEME
-    // ==========================
+    // ==================================================
 
     useEffect(() => {
 
@@ -208,24 +312,25 @@ export const AppProvider = ({ children }) => {
     }, [theme]);
 
 
-    // ==========================
+    // ==================================================
     // TOGGLE THEME
-    // ==========================
+    // ==================================================
 
     const toggleTheme = () => {
 
-        setTheme((currentTheme) =>
-            currentTheme === "dark"
-                ? "light"
-                : "dark"
+        setTheme(
+            currentTheme =>
+                currentTheme === "dark"
+                    ? "light"
+                    : "dark"
         );
 
     };
 
 
-    // ==========================
+    // ==================================================
     // ADD NOTIFICATION
-    // ==========================
+    // ==================================================
 
     const addNotification = (
         message,
@@ -235,8 +340,7 @@ export const AppProvider = ({ children }) => {
         const notification = {
 
             id:
-                Date.now() +
-                Math.random(),
+                `${Date.now()}-${Math.random()}`,
 
             message,
 
@@ -251,7 +355,7 @@ export const AppProvider = ({ children }) => {
 
 
         setNotifications(
-            (previous) => [
+            previous => [
                 notification,
                 ...previous
             ]
@@ -260,20 +364,24 @@ export const AppProvider = ({ children }) => {
     };
 
 
-    // ==========================
+    // ==================================================
     // MARK NOTIFICATION READ
-    // ==========================
+    // ==================================================
 
     const markNotificationRead = (
         notificationId
     ) => {
 
         setNotifications(
-            (previous) =>
+            previous =>
                 previous.map(
-                    (notification) =>
-                        notification.id ===
-                        notificationId
+                    notification =>
+                        String(
+                            notification.id
+                        ) ===
+                        String(
+                            notificationId
+                        )
                             ? {
                                 ...notification,
                                 read: true
@@ -285,9 +393,9 @@ export const AppProvider = ({ children }) => {
     };
 
 
-    // ==========================
+    // ==================================================
     // CLEAR NOTIFICATIONS
-    // ==========================
+    // ==================================================
 
     const clearNotifications = () => {
 
@@ -296,98 +404,152 @@ export const AppProvider = ({ children }) => {
     };
 
 
-    // ==========================
+    // ==================================================
     // CART COUNT
-    // ==========================
+    // ==================================================
 
     const cartCount =
         cart.reduce(
             (total, item) =>
                 total +
-                Number(item.quantity || 1),
+                Number(
+                    item.quantity || 1
+                ),
             0
         );
 
 
-    // ==========================
+    // ==================================================
     // WISHLIST COUNT
-    // ==========================
+    // ==================================================
 
     const wishlistCount =
         wishlist.length;
 
 
-    // ==========================
+    // ==================================================
     // UNREAD NOTIFICATION COUNT
-    // ==========================
+    // ==================================================
 
     const unreadNotificationCount =
         notifications.filter(
-            (notification) =>
+            notification =>
                 !notification.read
         ).length;
 
 
-    // ==========================
+    // ==================================================
     // LOGOUT
-    // ==========================
+    // ==================================================
 
     const logout = () => {
 
-        localStorage.removeItem("token");
+        // JWT token remove
 
-        localStorage.removeItem("user");
+        localStorage.removeItem(
+            "token"
+        );
+
+
+        // User remove
+
+        localStorage.removeItem(
+            "user"
+        );
+
+
+        // React state clear
 
         setUser(null);
 
+
+        // Notifications clear
+
         setNotifications([]);
+
+
+        /*
+         * Cart & wishlist intentionally
+         * রাখা হচ্ছে।
+         *
+         * চাইলে পরে logout-এর সময়
+         * এগুলোও clear করতে পারবো।
+         */
 
     };
 
 
-    // ==========================
-    // CONTEXT
-    // ==========================
+    // ==================================================
+    // CONTEXT VALUE
+    // ==================================================
+
+    const value = {
+
+        // ==========================
+        // AUTH
+        // ==========================
+
+        user,
+        setUser,
+        logout,
+
+
+        // ==========================
+        // CART
+        // ==========================
+
+        cart,
+        setCart,
+        cartCount,
+
+
+        // ==========================
+        // WISHLIST
+        // ==========================
+
+        wishlist,
+        setWishlist,
+        wishlistCount,
+
+
+        // ==========================
+        // NOTIFICATIONS
+        // ==========================
+
+        notifications,
+        setNotifications,
+
+        addNotification,
+
+        markNotificationRead,
+
+        clearNotifications,
+
+        unreadNotificationCount,
+
+
+        // ==========================
+        // THEME
+        // ==========================
+
+        theme,
+        setTheme,
+        toggleTheme,
+
+
+        // ==========================
+        // APP
+        // ==========================
+
+        loading
+
+    };
+
 
     return (
 
         <AppContext.Provider
-            value={{
-
-                // User
-                user,
-                setUser,
-
-                // Cart
-                cart,
-                setCart,
-                cartCount,
-
-                // Wishlist
-                wishlist,
-                setWishlist,
-                wishlistCount,
-
-                // Notifications
-                notifications,
-                setNotifications,
-                addNotification,
-                markNotificationRead,
-                clearNotifications,
-                unreadNotificationCount,
-
-                // Theme
-                theme,
-                setTheme,
-                toggleTheme,
-
-                // App
-                loading,
-
-                // Auth
-                logout
-
-            }}
+            value={value}
         >
 
             {children}
@@ -399,9 +561,25 @@ export const AppProvider = ({ children }) => {
 };
 
 
-// ==========================
+// ==================================================
 // CUSTOM HOOK
-// ==========================
+// ==================================================
 
-export const useApp = () =>
-    useContext(AppContext);
+export const useApp = () => {
+
+    const context =
+        useContext(AppContext);
+
+
+    if (!context) {
+
+        throw new Error(
+            "useApp must be used inside AppProvider"
+        );
+
+    }
+
+
+    return context;
+
+};
