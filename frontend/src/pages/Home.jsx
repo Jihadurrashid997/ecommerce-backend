@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 
 import api from "../services/api";
@@ -7,17 +7,21 @@ import ProductCard from "../components/ProductCard";
 
 import "../styles/Home.css";
 
+
 const Home = () => {
-    const [searchParams, setSearchParams] = useSearchParams();
+
+    const navigate = useNavigate();
+
+    const [searchParams] = useSearchParams();
 
     const [products, setProducts] = useState([]);
+
     const [loading, setLoading] = useState(true);
+
     const [error, setError] = useState("");
 
     const [keyword, setKeyword] = useState(
-        searchParams.get("search") ||
-        searchParams.get("q") ||
-        ""
+        searchParams.get("search") || ""
     );
 
     const [category, setCategory] = useState(
@@ -28,188 +32,127 @@ const Home = () => {
 
     const productsPerPage = 8;
 
-    // ==========================================
+
+    // ==================================================
     // FETCH PRODUCTS
-    // ==========================================
+    // ==================================================
 
     useEffect(() => {
-        let cancelled = false;
-
-        const fetchProducts = async () => {
-            try {
-                setLoading(true);
-                setError("");
-
-                const params = new URLSearchParams();
-
-                if (keyword.trim()) {
-                    params.set(
-                        "keyword",
-                        keyword.trim()
-                    );
-                }
-
-                if (category) {
-                    params.set(
-                        "category",
-                        category
-                    );
-                }
-
-                const query = params.toString();
-
-                const response = await api.get(
-                    query
-                        ? `/products?${query}`
-                        : "/products"
-                );
-
-                if (cancelled) return;
-
-                const data = response.data;
-
-                const productList =
-                    Array.isArray(data)
-                        ? data
-                        : Array.isArray(data?.products)
-                            ? data.products
-                            : [];
-
-                setProducts(productList);
-                setPage(1);
-
-            } catch (err) {
-                if (cancelled) return;
-
-                console.error(
-                    "Failed to load products:",
-                    err
-                );
-
-                setProducts([]);
-
-                setError(
-                    err.response?.data?.message ||
-                    "Failed to load products. Please try again."
-                );
-
-            } finally {
-                if (!cancelled) {
-                    setLoading(false);
-                }
-            }
-        };
 
         fetchProducts();
 
-        return () => {
-            cancelled = true;
-        };
-
-    }, [keyword, category]);
+    }, [category]);
 
 
-    // ==========================================
-    // UPDATE URL
-    // ==========================================
+    const fetchProducts = async () => {
 
-    const updateSearchParams = (
-        searchValue,
-        categoryValue
-    ) => {
+        try {
 
-        const params = {};
+            setLoading(true);
+            setError("");
 
-        if (searchValue.trim()) {
-            params.search =
-                searchValue.trim();
+            const params = new URLSearchParams();
+
+            if (category) {
+                params.append("category", category);
+            }
+
+            const response = await api.get(
+                params.toString()
+                    ? `/products?${params.toString()}`
+                    : "/products"
+            );
+
+            const data =
+                Array.isArray(response.data)
+                    ? response.data
+                    : response.data?.products || [];
+
+            setProducts(data);
+
+            setPage(1);
+
+        } catch (err) {
+
+            console.error(
+                "Failed to load products:",
+                err
+            );
+
+            setProducts([]);
+
+            setError(
+                err.response?.data?.message ||
+                "Unable to load products right now."
+            );
+
+        } finally {
+
+            setLoading(false);
+
         }
 
-        if (categoryValue) {
-            params.category =
-                categoryValue;
-        }
-
-        setSearchParams(params);
     };
 
 
-    // ==========================================
+    // ==================================================
     // SEARCH
-    // ==========================================
+    // ==================================================
 
-    const handleSearchChange = (e) => {
+    const handleSearchSubmit = (e) => {
 
-        const value = e.target.value;
+        e.preventDefault();
 
-        setKeyword(value);
-        setPage(1);
+        const search = keyword.trim();
 
-        updateSearchParams(
-            value,
-            category
+        if (!search) {
+
+            navigate("/");
+
+            return;
+
+        }
+
+        navigate(
+            `/search?q=${encodeURIComponent(search)}`
         );
+
     };
 
 
-    // ==========================================
+    // ==================================================
     // CATEGORY
-    // ==========================================
+    // ==================================================
 
     const handleCategoryChange = (e) => {
 
         const value = e.target.value;
 
         setCategory(value);
+
         setPage(1);
 
-        updateSearchParams(
-            keyword,
-            value
-        );
     };
 
 
-    // ==========================================
-    // CLEAR FILTERS
-    // ==========================================
-
-    const clearFilters = () => {
-
-        setKeyword("");
-        setCategory("");
-        setPage(1);
-
-        setSearchParams({});
-    };
-
-
-    // ==========================================
+    // ==================================================
     // PAGINATION
-    // ==========================================
+    // ==================================================
 
     const totalPages =
-        Math.max(
-            1,
-            Math.ceil(
-                products.length /
-                productsPerPage
-            )
+        Math.ceil(
+            products.length /
+            productsPerPage
         );
 
-    const safePage =
-        Math.min(
-            page,
-            totalPages
-        );
-
-    const firstIndex =
-        (safePage - 1) *
-        productsPerPage;
+    const safeTotalPages =
+        totalPages || 1;
 
     const lastIndex =
-        firstIndex +
-        productsPerPage;
+        page * productsPerPage;
+
+    const firstIndex =
+        lastIndex - productsPerPage;
 
     const currentProducts =
         products.slice(
@@ -218,117 +161,312 @@ const Home = () => {
         );
 
 
-    // ==========================================
+    // ==================================================
     // LOADING
-    // ==========================================
+    // ==================================================
 
     if (loading) {
 
         return (
+
             <div className="home-loading">
 
                 <motion.div
-                    className="loader"
+                    className="premium-loader-orb"
+
                     animate={{
-                        rotate: 360
+                        rotateY: 360,
+                        rotateX: 360
                     }}
+
                     transition={{
-                        duration: 1,
+                        duration: 2.5,
                         repeat: Infinity,
                         ease: "linear"
                     }}
-                />
+                >
 
-                <p>
-                    Loading products...
-                </p>
+                    JR
+
+                </motion.div>
+
+                <motion.p
+                    initial={{
+                        opacity: 0
+                    }}
+                    animate={{
+                        opacity: 1
+                    }}
+                >
+                    Loading JR Store...
+                </motion.p>
 
             </div>
+
         );
+
     }
 
 
     return (
 
-        <div className="home-page">
+        <motion.div
+            className="home-page"
 
-            {/* =====================================
-                HERO
-            ====================================== */}
+            initial={{
+                opacity: 0
+            }}
+
+            animate={{
+                opacity: 1
+            }}
+
+            transition={{
+                duration: 0.7
+            }}
+        >
+
+
+            {/* ==================================================
+                PREMIUM 3D HERO
+            ================================================== */}
 
             <section className="hero-section">
 
-                <div className="hero-content">
+                <div className="hero-ambient ambient-one" />
+                <div className="hero-ambient ambient-two" />
+                <div className="hero-grid" />
+
+
+                <motion.div
+                    className="hero-content"
+
+                    initial={{
+                        opacity: 0,
+                        y: 60
+                    }}
+
+                    animate={{
+                        opacity: 1,
+                        y: 0
+                    }}
+
+                    transition={{
+                        duration: 1,
+                        ease: [0.22, 1, 0.36, 1]
+                    }}
+                >
 
                     <motion.span
                         className="hero-badge"
+
                         initial={{
                             opacity: 0,
-                            y: 20
+                            scale: 0.8
                         }}
+
                         animate={{
                             opacity: 1,
-                            y: 0
+                            scale: 1
+                        }}
+
+                        transition={{
+                            delay: 0.2,
+                            duration: 0.6
                         }}
                     >
-                        ✨ Your Trusted Marketplace
+                        ✨ PREMIUM MARKETPLACE
                     </motion.span>
 
 
-                    <motion.h1
-                        initial={{
-                            opacity: 0,
-                            y: 30
-                        }}
-                        animate={{
-                            opacity: 1,
-                            y: 0
-                        }}
-                        transition={{
-                            delay: 0.1
-                        }}
-                    >
+                    <h1>
 
                         Buy.
                         <span> Sell. </span>
                         Connect.
 
-                    </motion.h1>
+                    </h1>
 
 
-                    <motion.p
-                        initial={{
-                            opacity: 0,
-                            y: 20
-                        }}
-                        animate={{
-                            opacity: 1,
-                            y: 0
-                        }}
-                        transition={{
-                            delay: 0.2
-                        }}
-                    >
+                    <p>
 
                         Discover amazing products,
                         connect with sellers,
                         and enjoy a secure
                         marketplace experience.
 
-                    </motion.p>
+                    </p>
 
-                </div>
+
+                    {/* SEARCH */}
+
+                    <motion.form
+                        className="premium-search"
+
+                        onSubmit={handleSearchSubmit}
+
+                        initial={{
+                            opacity: 0,
+                            y: 25
+                        }}
+
+                        animate={{
+                            opacity: 1,
+                            y: 0
+                        }}
+
+                        transition={{
+                            delay: 0.45,
+                            duration: 0.7
+                        }}
+                    >
+
+                        <span className="search-icon">
+                            🔍
+                        </span>
+
+
+                        <input
+                            type="search"
+                            placeholder="Search products, sellers..."
+                            value={keyword}
+                            onChange={(e) =>
+                                setKeyword(
+                                    e.target.value
+                                )
+                            }
+                        />
+
+
+                        <button type="submit">
+                            Search
+                        </button>
+
+                    </motion.form>
+
+                </motion.div>
+
+
+                {/* ==================================================
+                    3D FLOATING CARDS
+                ================================================== */}
+
+                <motion.div
+                    className="hero-3d-card card-one"
+
+                    animate={{
+                        y: [-12, 12, -12],
+                        rotateZ: [-2, 2, -2]
+                    }}
+
+                    transition={{
+                        duration: 5,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                >
+
+                    <div className="floating-card-icon">
+                        🛍️
+                    </div>
+
+                    <strong>
+                        Shop
+                    </strong>
+
+                    <span>
+                        Discover products
+                    </span>
+
+                </motion.div>
+
+
+                <motion.div
+                    className="hero-3d-card card-two"
+
+                    animate={{
+                        y: [10, -14, 10],
+                        rotateZ: [2, -2, 2]
+                    }}
+
+                    transition={{
+                        duration: 6,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                >
+
+                    <div className="floating-card-icon">
+                        💬
+                    </div>
+
+                    <strong>
+                        Connect
+                    </strong>
+
+                    <span>
+                        Chat with sellers
+                    </span>
+
+                </motion.div>
+
+
+                <motion.div
+                    className="hero-3d-card card-three"
+
+                    animate={{
+                        y: [-8, 15, -8],
+                        rotateZ: [-1, 3, -1]
+                    }}
+
+                    transition={{
+                        duration: 5.5,
+                        repeat: Infinity,
+                        ease: "easeInOut"
+                    }}
+                >
+
+                    <div className="floating-card-icon">
+                        🔐
+                    </div>
+
+                    <strong>
+                        Secure
+                    </strong>
+
+                    <span>
+                        Safe marketplace
+                    </span>
+
+                </motion.div>
 
             </section>
 
 
-            {/* =====================================
-                PRODUCTS
-            ====================================== */}
+            {/* ==================================================
+                MARKETPLACE
+            ================================================== */}
 
             <div className="container">
 
-                <div className="marketplace-header">
+
+                <motion.div
+                    className="marketplace-header"
+
+                    initial={{
+                        opacity: 0,
+                        y: 25
+                    }}
+
+                    whileInView={{
+                        opacity: 1,
+                        y: 0
+                    }}
+
+                    viewport={{
+                        once: true
+                    }}
+                >
 
                     <div>
 
@@ -337,26 +475,31 @@ const Home = () => {
                         </h2>
 
                         <p className="subtitle">
-                            Find exactly what
-                            you're looking for.
+                            Find exactly what you're looking for.
                         </p>
 
                     </div>
 
+
                     <span className="product-count">
+
                         {products.length} Products
+
                     </span>
 
-                </div>
+                </motion.div>
 
 
-                {/* =====================================
-                    FILTER BAR
-                ====================================== */}
+                {/* ==================================================
+                    FILTER
+                ================================================== */}
 
                 <div className="filter-bar">
 
-                    <div className="home-search">
+                    <form
+                        className="home-search"
+                        onSubmit={handleSearchSubmit}
+                    >
 
                         <span>
                             🔍
@@ -366,25 +509,18 @@ const Home = () => {
                             type="search"
                             placeholder="Search products..."
                             value={keyword}
-                            onChange={
-                                handleSearchChange
+                            onChange={(e) =>
+                                setKeyword(
+                                    e.target.value
+                                )
                             }
                         />
 
-                        {keyword && (
+                        <button type="submit">
+                            Search
+                        </button>
 
-                            <button
-                                type="button"
-                                onClick={clearFilters}
-                                aria-label="Clear search"
-                                className="search-clear"
-                            >
-                                ×
-                            </button>
-
-                        )}
-
-                    </div>
+                    </form>
 
 
                     <select
@@ -423,24 +559,22 @@ const Home = () => {
                 </div>
 
 
-                {/* =====================================
+                {/* ==================================================
                     ERROR
-                ====================================== */}
+                ================================================== */}
 
                 {error && (
 
                     <div className="error-message">
 
-                        <p>
-                            {error}
-                        </p>
+                        {error}
 
                         <button
-                            onClick={() =>
-                                window.location.reload()
+                            onClick={
+                                fetchProducts
                             }
                         >
-                            Try Again
+                            Retry
                         </button>
 
                     </div>
@@ -448,55 +582,26 @@ const Home = () => {
                 )}
 
 
-                {/* =====================================
-                    NO PRODUCTS
-                ====================================== */}
+                {/* ==================================================
+                    PRODUCTS
+                ================================================== */}
 
                 {!error &&
-                    currentProducts.length === 0 && (
-
-                        <div className="no-products">
-
-                            <div className="no-products-icon">
-                                🔍
-                            </div>
-
-                            <h2>
-                                No Products Found
-                            </h2>
-
-                            <p>
-                                We couldn't find
-                                any products matching
-                                your search.
-                            </p>
-
-                            <button
-                                onClick={
-                                    clearFilters
-                                }
-                            >
-                                Clear Filters
-                            </button>
-
-                        </div>
-
-                    )}
-
-
-                {/* =====================================
-                    PRODUCT GRID
-                ====================================== */}
-
-                {currentProducts.length > 0 && (
+                    currentProducts.length > 0 && (
 
                     <motion.div
                         className="product-grid"
+
                         initial={{
                             opacity: 0
                         }}
+
                         animate={{
                             opacity: 1
+                        }}
+
+                        transition={{
+                            duration: 0.6
                         }}
                     >
 
@@ -505,21 +610,23 @@ const Home = () => {
 
                                 <motion.div
                                     key={
-                                        product._id ||
-                                        product.id ||
-                                        index
+                                        product._id
                                     }
+
                                     initial={{
                                         opacity: 0,
-                                        y: 20
+                                        y: 35
                                     }}
+
                                     animate={{
                                         opacity: 1,
                                         y: 0
                                     }}
+
                                     transition={{
                                         delay:
-                                            index * 0.05
+                                            index * 0.06,
+                                        duration: 0.5
                                     }}
                                 >
 
@@ -537,25 +644,46 @@ const Home = () => {
                 )}
 
 
-                {/* =====================================
+                {/* ==================================================
+                    NO PRODUCTS
+                ================================================== */}
+
+                {!error &&
+                    currentProducts.length === 0 && (
+
+                    <div className="no-products">
+
+                        <div className="no-products-icon">
+                            🔍
+                        </div>
+
+                        <h2>
+                            No Products Found
+                        </h2>
+
+                        <p>
+                            There are no products available
+                            in this category.
+                        </p>
+
+                    </div>
+
+                )}
+
+
+                {/* ==================================================
                     PAGINATION
-                ====================================== */}
+                ================================================== */}
 
                 {products.length > 0 && (
 
                     <div className="pagination">
 
                         <button
-                            disabled={
-                                safePage === 1
-                            }
+                            disabled={page === 1}
                             onClick={() =>
                                 setPage(
-                                    previous =>
-                                        Math.max(
-                                            1,
-                                            previous - 1
-                                        )
+                                    page - 1
                                 )
                             }
                         >
@@ -567,13 +695,13 @@ const Home = () => {
 
                             Page{" "}
                             <strong>
-                                {safePage}
+                                {page}
                             </strong>
 
                             {" "}of{" "}
 
                             <strong>
-                                {totalPages}
+                                {safeTotalPages}
                             </strong>
 
                         </div>
@@ -581,16 +709,13 @@ const Home = () => {
 
                         <button
                             disabled={
-                                safePage ===
-                                totalPages
+                                page ===
+                                safeTotalPages
                             }
+
                             onClick={() =>
                                 setPage(
-                                    previous =>
-                                        Math.min(
-                                            totalPages,
-                                            previous + 1
-                                        )
+                                    page + 1
                                 )
                             }
                         >
@@ -603,8 +728,11 @@ const Home = () => {
 
             </div>
 
-        </div>
+        </motion.div>
+
     );
+
 };
+
 
 export default Home;
