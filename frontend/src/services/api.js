@@ -1,31 +1,38 @@
 import axios from "axios";
 
-/* =========================================================
-   JR STORE - CENTRAL API
-========================================================= */
 
 const API_URL =
     "https://ecommerce-api-9wc9.onrender.com/api";
 
-const api = axios.create({
-    baseURL: API_URL,
 
-    timeout: 60000,
+const api =
+    axios.create({
 
-    headers: {
-        "Content-Type": "application/json"
-    }
-});
+        baseURL: API_URL,
 
-/* =========================================================
-   REQUEST
-========================================================= */
+        headers: {
+            "Content-Type":
+                "application/json"
+        },
+
+        timeout: 30000
+
+    });
+
+
+// ======================================================
+// REQUEST INTERCEPTOR
+// ======================================================
 
 api.interceptors.request.use(
-    config => {
+
+    (config) => {
 
         const token =
-            localStorage.getItem("token");
+            localStorage.getItem(
+                "token"
+            );
+
 
         if (token) {
 
@@ -34,49 +41,63 @@ api.interceptors.request.use(
 
             config.headers.Authorization =
                 `Bearer ${token}`;
+
         }
 
+
         return config;
+
     },
 
-    error => {
-        return Promise.reject(error);
+
+    (error) => {
+
+        return Promise.reject(
+            error
+        );
+
     }
+
 );
 
-/* =========================================================
-   RESPONSE
-========================================================= */
+
+// ======================================================
+// RESPONSE INTERCEPTOR
+// ======================================================
 
 api.interceptors.response.use(
-    response => response,
 
-    error => {
+    (response) => {
+
+        return response;
+
+    },
+
+
+    (error) => {
 
         const status =
             error.response?.status;
 
-        const data =
-            error.response?.data;
 
-        const requestUrl =
+        const url =
             error.config?.url || "";
 
-        const isLogin =
-            requestUrl.includes("/auth/login");
 
-        const isRegister =
-            requestUrl.includes("/auth/register");
+        // Never clear login data because
+        // login/register itself returned 401.
+        const authRequest =
+            url.includes(
+                "/auth/login"
+            ) ||
+            url.includes(
+                "/auth/register"
+            );
 
-        /*
-         * Authentication failure should NOT
-         * destroy an existing session during login.
-         */
 
         if (
             status === 401 &&
-            !isLogin &&
-            !isRegister
+            !authRequest
         ) {
 
             localStorage.removeItem(
@@ -86,25 +107,17 @@ api.interceptors.response.use(
             localStorage.removeItem(
                 "user"
             );
+
         }
 
-        const message =
-            data?.message ||
-            data?.error ||
-            (
-                error.code === "ECONNABORTED"
-                    ? "Server response timeout. Please try again."
-                    : error.message
-            ) ||
-            "Something went wrong.";
-
-        error.jrMessage =
-            message;
 
         return Promise.reject(
             error
         );
+
     }
+
 );
+
 
 export default api;
