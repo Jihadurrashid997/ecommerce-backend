@@ -1,36 +1,46 @@
 import axios from "axios";
 
 
-const api = axios.create({
-
-    baseURL:
-        "https://ecommerce-api-9wc9.onrender.com/api",
-
-    timeout: 15000,
-
-    headers: {
-        "Content-Type": "application/json"
-    }
-
-});
+const API_URL =
+    "https://ecommerce-api-9wc9.onrender.com/api";
 
 
-// ==================================================
-// REQUEST INTERCEPTOR
-// ==================================================
+const api =
+    axios.create({
+
+        baseURL:
+            API_URL,
+
+        timeout:
+            20000,
+
+        headers: {
+            "Content-Type":
+                "application/json"
+        }
+
+    });
+
+
+// ======================================================
+// REQUEST
+// ======================================================
 
 api.interceptors.request.use(
 
-    (config) => {
+    config => {
 
         const token =
-            localStorage.getItem("token");
+            localStorage.getItem(
+                "token"
+            );
 
 
         if (token) {
 
             config.headers =
                 config.headers || {};
+
 
             config.headers.Authorization =
                 `Bearer ${token}`;
@@ -42,30 +52,22 @@ api.interceptors.request.use(
 
     },
 
-    (error) => {
-
-        return Promise.reject(
-            error
-        );
-
-    }
+    error =>
+        Promise.reject(error)
 
 );
 
 
-// ==================================================
-// RESPONSE INTERCEPTOR
-// ==================================================
+// ======================================================
+// RESPONSE
+// ======================================================
 
 api.interceptors.response.use(
 
-    (response) => {
+    response =>
+        response,
 
-        return response;
-
-    },
-
-    (error) => {
+    error => {
 
         if (
             error.response?.status ===
