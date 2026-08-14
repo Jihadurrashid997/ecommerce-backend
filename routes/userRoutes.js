@@ -3,8 +3,8 @@ const express = require("express");
 const router =
     express.Router();
 
-
 const {
+
     getUsers,
     getChatUsers,
     getProfile,
@@ -12,37 +12,21 @@ const {
     searchUsers,
     getPublicProfile,
     deleteUser
+
 } =
     require("../controllers/userController");
-
 
 const auth =
     require("../middleware/auth");
 
 
 // ======================================================
-// PUBLIC USER SEARCH
+// IMPORTANT ROUTE ORDER
+// Specific routes MUST come before /:id
 // ======================================================
 
-router.get(
-    "/search",
-    searchUsers
-);
 
-
-// ======================================================
-// PUBLIC USER PROFILE
-// ======================================================
-
-router.get(
-    "/public/:id",
-    getPublicProfile
-);
-
-
-// ======================================================
 // MY PROFILE
-// ======================================================
 
 router.get(
     "/profile",
@@ -51,9 +35,7 @@ router.get(
 );
 
 
-// ======================================================
-// UPDATE MY PROFILE
-// ======================================================
+// UPDATE PROFILE
 
 router.put(
     "/profile",
@@ -62,9 +44,7 @@ router.put(
 );
 
 
-// ======================================================
 // CHAT USERS
-// ======================================================
 
 router.get(
     "/chat-users",
@@ -73,9 +53,24 @@ router.get(
 );
 
 
-// ======================================================
-// ADMIN - GET ALL USERS
-// ======================================================
+// PUBLIC USER SEARCH
+// No authentication required
+
+router.get(
+    "/search",
+    searchUsers
+);
+
+
+// PUBLIC PROFILE
+
+router.get(
+    "/public/:id",
+    getPublicProfile
+);
+
+
+// ADMIN USERS
 
 router.get(
     "/",
@@ -84,9 +79,7 @@ router.get(
 );
 
 
-// ======================================================
-// ADMIN - DELETE USER
-// ======================================================
+// ADMIN DELETE
 
 router.delete(
     "/:id",
