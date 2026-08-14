@@ -1,19 +1,73 @@
-const express = require('express');
-const router = express.Router();
-const auth = require('../middleware/auth');
-const { 
-    updateMarketplaceSettings, 
-    approveProduct, 
-    getAllRegisteredUsers 
-} = require('../controllers/adminController');
+const express =
+    require("express");
 
-// Marketplace settings update (Admin only)
-router.put('/settings', auth(['admin']), updateMarketplaceSettings);
+const router =
+    express.Router();
 
-// Product approval (Admin only)
-router.put('/approve/:productId', auth(['admin']), approveProduct);
+const auth =
+    require("../middleware/auth");
 
-// View all registered accounts/users (Admin only)
-router.get('/users', auth(['admin']), getAllRegisteredUsers);
+const {
 
-module.exports = router;
+    getAnalytics,
+    updateMarketplaceSettings,
+    approveProduct,
+    getAllRegisteredUsers,
+    getDashboardSummary
+
+} =
+    require("../controllers/adminController");
+
+
+// ======================================================
+// ALL ADMIN ROUTES ARE PROTECTED
+// ======================================================
+
+
+// ANALYTICS
+
+router.get(
+    "/analytics",
+    auth(["admin"]),
+    getAnalytics
+);
+
+
+// DASHBOARD SUMMARY
+
+router.get(
+    "/summary",
+    auth(["admin"]),
+    getDashboardSummary
+);
+
+
+// USERS
+
+router.get(
+    "/users",
+    auth(["admin"]),
+    getAllRegisteredUsers
+);
+
+
+// MARKETPLACE SETTINGS
+
+router.put(
+    "/settings",
+    auth(["admin"]),
+    updateMarketplaceSettings
+);
+
+
+// PRODUCT APPROVAL
+
+router.put(
+    "/approve/:productId",
+    auth(["admin"]),
+    approveProduct
+);
+
+
+module.exports =
+    router;
