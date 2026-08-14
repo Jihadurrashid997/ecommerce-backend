@@ -1,28 +1,28 @@
+```javascript
 import axios from "axios";
 
 
-const API_URL =
-    (
-        process.env.REACT_APP_API_URL ||
-        "https://ecommerce-api-9wc9.onrender.com/api"
-    ).replace(/\/+$/, "");
+// ======================================================
+// API BASE URL
+// ======================================================
+
+const API_URL = (
+    process.env.REACT_APP_API_URL ||
+    "https://ecommerce-api-9wc9.onrender.com/api"
+).replace(/\/+$/, "");
 
 
-const api =
-    axios.create({
+const api = axios.create({
 
-        baseURL: API_URL,
+    baseURL: API_URL,
 
-        headers: {
+    headers: {
+        "Content-Type": "application/json"
+    },
 
-            "Content-Type":
-                "application/json"
+    timeout: 30000
 
-        },
-
-        timeout: 15000
-
-    });
+});
 
 
 // ======================================================
@@ -34,9 +34,7 @@ api.interceptors.request.use(
     (config) => {
 
         const token =
-            localStorage.getItem(
-                "token"
-            );
+            localStorage.getItem("token");
 
 
         if (token) {
@@ -54,8 +52,11 @@ api.interceptors.request.use(
 
     },
 
-    (error) =>
-        Promise.reject(error)
+    (error) => {
+
+        return Promise.reject(error);
+
+    }
 
 );
 
@@ -66,8 +67,11 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
 
-    (response) =>
-        response,
+    (response) => {
+
+        return response;
+
+    },
 
     (error) => {
 
@@ -75,22 +79,18 @@ api.interceptors.response.use(
             error.response?.status;
 
 
+        // Only clear login data
+        // when server actually returns 401
+
         if (status === 401) {
 
-            localStorage.removeItem(
-                "token"
-            );
-
-            localStorage.removeItem(
-                "user"
-            );
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
 
         }
 
 
-        return Promise.reject(
-            error
-        );
+        return Promise.reject(error);
 
     }
 
@@ -98,3 +98,4 @@ api.interceptors.response.use(
 
 
 export default api;
+```
