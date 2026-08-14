@@ -1,171 +1,458 @@
-const User = require("../models/User");
-const Product = require("../models/Product");
-const Order = require("../models/Order");
+const User =
+    require("../models/User");
 
-// ========================================
+const Product =
+    require("../models/Product");
+
+const Order =
+    require("../models/Order");
+
+
+// ======================================================
 // ADMIN ANALYTICS
-// GET /api/admin/analytics
-// ========================================
+// ======================================================
 
-exports.getAnalytics = async (req, res) => {
-    try {
+exports.getAnalytics =
+    async (req, res) => {
 
-        const totalUsers =
-            await User.countDocuments();
+        try {
 
-        const totalProducts =
-            await Product.countDocuments();
-
-        const totalOrders =
-            await Order.countDocuments();
-
-
-        // Paid orders
-
-        const paidOrders =
-            await Order.find({
-                paymentStatus: "paid"
-            });
-
-
-        const totalRevenue =
-            paidOrders.reduce(
-                (total, order) =>
-                    total +
-                    Number(order.totalPrice || 0),
-                0
-            );
-
-
-        // Order statistics
-
-        const pendingOrders =
-            await Order.countDocuments({
-                status: "Pending"
-            });
-
-
-        const processingOrders =
-            await Order.countDocuments({
-                status: "Processing"
-            });
-
-
-        const shippedOrders =
-            await Order.countDocuments({
-                status: "Shipped"
-            });
-
-
-        const deliveredOrders =
-            await Order.countDocuments({
-                status: "Delivered"
-            });
-
-
-        const cancelledOrders =
-            await Order.countDocuments({
-                status: "Cancelled"
-            });
-
-
-        // Payment statistics
-
-        const paidCount =
-            await Order.countDocuments({
-                paymentStatus: "paid"
-            });
-
-
-        const pendingPaymentCount =
-            await Order.countDocuments({
-                paymentStatus: "pending"
-            });
-
-
-        const failedPaymentCount =
-            await Order.countDocuments({
-                paymentStatus: "failed"
-            });
-
-
-        const cancelledPaymentCount =
-            await Order.countDocuments({
-                paymentStatus: "cancelled"
-            });
-
-
-        res.status(200).json({
-
-            success: true,
-
-            analytics: {
+            const [
 
                 totalUsers,
-
                 totalProducts,
-
                 totalOrders,
 
-                totalRevenue,
+                pendingOrders,
+                processingOrders,
+                shippedOrders,
+                deliveredOrders,
+                cancelledOrders,
 
-                orders: {
+                paidPayments,
+                pendingPayments,
+                failedPayments,
+                cancelledPayments
 
-                    pending:
-                        pendingOrders,
+            ] = await Promise.all([
 
-                    processing:
-                        processingOrders,
+                User.countDocuments(),
 
-                    shipped:
-                        shippedOrders,
+                Product.countDocuments(),
 
-                    delivered:
-                        deliveredOrders,
+                Order.countDocuments(),
 
-                    cancelled:
-                        cancelledOrders
 
-                },
+                Order.countDocuments({
+                    status: {
+                        $regex: /^pending$/i
+                    }
+                }),
 
-                payments: {
+                Order.countDocuments({
+                    status: {
+                        $regex: /^processing$/i
+                    }
+                }),
 
-                    paid:
-                        paidCount,
+                Order.countDocuments({
+                    status: {
+                        $regex: /^shipped$/i
+                    }
+                }),
 
-                    pending:
-                        pendingPaymentCount,
+                Order.countDocuments({
+                    status: {
+                        $regex: /^delivered$/i
+                    }
+                }),
 
-                    failed:
-                        failedPaymentCount,
+                Order.countDocuments({
+                    status: {
+                        $regex: /^cancelled$/i
+                    }
+                }),
 
-                    cancelled:
-                        cancelledPaymentCount
+
+                Order.countDocuments({
+                    paymentStatus: "paid"
+                }),
+
+                Order.countDocuments({
+                    paymentStatus: "pending"
+                }),
+
+                Order.countDocuments({
+                    paymentStatus: "failed"
+                }),
+
+                Order.countDocuments({
+                    paymentStatus: "cancelled"
+                })
+
+            ]);
+
+
+            const revenueResult =
+                await Order.aggregate([
+
+                    {
+                        $match: {
+                            paymentStatus: "paid"
+                        }
+                    },
+
+                    {
+                        $group: {
+
+                            _id: null,
+
+                            total: {
+                                $sum: {
+                                    $toDouble:
+                                        "$totalPrice"
+                                }
+                            }
+
+                        }
+
+                    }
+
+                ]);
+
+
+            const totalRevenue =
+                Number(
+                    revenueResult[0]?.total ||
+                    0
+                );
+
+
+            const sellers =
+                await User.countDocuments({
+                    role: "seller"
+                });
+
+
+            const customers =
+                await User.countDocuments({
+                    role: "customer"
+                });
+
+
+            const admins =
+                await User.countDocuments({
+                    role: "admin"
+                });
+
+
+            res.json({
+
+                success: true,
+
+                analytics: {
+
+                    totalUsers,
+
+                    totalProducts,
+
+                    totalOrders,
+
+                    totalRevenue,
+
+                    users: {
+
+                        total:
+                            totalUsers,
+
+                        sellers,
+
+                        customers,
+
+                        admins
+
+                    },
+
+                    orders: {
+
+                        pending:
+                            pendingOrders,
+
+                        processing:
+                            processingOrders,
+
+                        shipped:
+                            shippedOrders,
+
+                        delivered:
+                            deliveredOrders,
+
+                        cancelled:
+                            cancelledOrders
+
+                    },
+
+                    payments: {
+
+                        paid:
+                            paidPayments,
+
+                        pending:
+                            pendingPayments,
+
+                        failed:
+                            failedPayments,
+
+                        cancelled:
+                            cancelledPayments
+
+                    }
 
                 }
 
-            }
+            });
 
-        });
+        } catch (err) {
+
+            console.error(
+                "ADMIN ANALYTICS ERROR:",
+                err
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                message:
+                    "Failed to load admin analytics."
+
+            });
+
+        }
+
+    };
 
 
-    } catch (err) {
+// ======================================================
+// MARKETPLACE SETTINGS
+// ======================================================
 
-        console.error(
-            "Admin analytics error:",
-            err
-        );
+exports.updateMarketplaceSettings =
+    async (req, res) => {
 
+        res.json({
 
-        res.status(500).json({
-
-            success: false,
+            success: true,
 
             message:
-                err.message ||
-                "Failed to load analytics."
+                "Marketplace settings endpoint is ready."
 
         });
 
-    }
-};
+    };
+
+
+// ======================================================
+// APPROVE PRODUCT
+// ======================================================
+
+exports.approveProduct =
+    async (req, res) => {
+
+        try {
+
+            const product =
+                await Product.findById(
+                    req.params.productId
+                );
+
+            if (!product) {
+
+                return res.status(404).json({
+
+                    success: false,
+
+                    message:
+                        "Product not found."
+
+                });
+
+            }
+
+
+            if (
+                Object.prototype.hasOwnProperty.call(
+                    product.toObject(),
+                    "isApproved"
+                )
+            ) {
+
+                product.isApproved = true;
+
+            }
+
+
+            if (
+                Object.prototype.hasOwnProperty.call(
+                    product.toObject(),
+                    "status"
+                )
+            ) {
+
+                product.status =
+                    "approved";
+
+            }
+
+
+            await product.save();
+
+
+            res.json({
+
+                success: true,
+
+                message:
+                    "Product approved successfully.",
+
+                product
+
+            });
+
+        } catch (err) {
+
+            console.error(
+                "APPROVE PRODUCT ERROR:",
+                err
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                message:
+                    "Failed to approve product."
+
+            });
+
+        }
+
+    };
+
+
+// ======================================================
+// GET ALL USERS - ADMIN
+// ======================================================
+
+exports.getAllRegisteredUsers =
+    async (req, res) => {
+
+        try {
+
+            const users =
+                await User.find()
+                    .select(
+                        "-password"
+                    )
+                    .sort({
+                        createdAt: -1
+                    })
+                    .lean();
+
+            res.json({
+
+                success: true,
+
+                users
+
+            });
+
+        } catch (err) {
+
+            console.error(
+                "ADMIN USERS ERROR:",
+                err
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                message:
+                    "Failed to load users."
+
+            });
+
+        }
+
+    };
+
+
+// ======================================================
+// DASHBOARD SUMMARY
+// ======================================================
+
+exports.getDashboardSummary =
+    async (req, res) => {
+
+        try {
+
+            const [
+
+                users,
+                products,
+                orders,
+                sellers
+
+            ] = await Promise.all([
+
+                User.countDocuments(),
+
+                Product.countDocuments(),
+
+                Order.countDocuments(),
+
+                User.countDocuments({
+                    role: "seller"
+                })
+
+            ]);
+
+
+            res.json({
+
+                success: true,
+
+                summary: {
+
+                    users,
+
+                    products,
+
+                    orders,
+
+                    sellers
+
+                }
+
+            });
+
+        } catch (err) {
+
+            console.error(
+                "DASHBOARD SUMMARY ERROR:",
+                err
+            );
+
+            res.status(500).json({
+
+                success: false,
+
+                message:
+                    "Failed to load dashboard."
+
+            });
+
+        }
+
+    };
