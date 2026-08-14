@@ -1,19 +1,25 @@
 import React, {
+    useCallback,
     useEffect,
     useRef,
     useState
 } from "react";
 
 import {
-    io
-} from "socket.io-client";
+    useSearchParams
+} from "react-router-dom";
 
 import {
     FaCheck,
     FaCheckDouble,
+    FaCircle,
     FaPaperPlane,
-    FaCircle
+    FaSearch,
+    FaTimes,
+    FaComments
 } from "react-icons/fa";
+
+import { io } from "socket.io-client";
 
 import api from "../services/api";
 
@@ -21,15 +27,14 @@ import "../styles/Messenger.css";
 
 
 const SOCKET_URL =
-    process.env.REACT_APP_API_URL
-        ? process.env.REACT_APP_API_URL.replace(
-            "/api",
-            ""
-        )
-        : window.location.origin;
+    "https://ecommerce-api-9wc9.onrender.com";
 
 
 const Messenger = () => {
+
+    const [searchParams] =
+        useSearchParams();
+
 
     const socketRef =
         useRef(null);
@@ -37,75 +42,55 @@ const Messenger = () => {
     const messagesEndRef =
         useRef(null);
 
-    const typingTimeoutRef =
+    const typingTimerRef =
         useRef(null);
 
 
-    const [
-        user,
-        setUser
-    ] = useState(null);
+    const [user, setUser] =
+        useState(null);
+
+    const [users, setUsers] =
+        useState([]);
+
+    const [selectedUser, setSelectedUser] =
+        useState(null);
+
+    const [messages, setMessages] =
+        useState([]);
+
+    const [message, setMessage] =
+        useState("");
+
+    const [onlineUsers, setOnlineUsers] =
+        useState([]);
+
+    const [typingUserId, setTypingUserId] =
+        useState(null);
+
+    const [loading, setLoading] =
+        useState(true);
+
+    const [sending, setSending] =
+        useState(false);
+
+    const [userSearch, setUserSearch] =
+        useState("");
+
+    const [conversationLoading, setConversationLoading] =
+        useState(false);
 
 
-    const [
-        users,
-        setUsers
-    ] = useState([]);
-
-
-    const [
-        selectedUser,
-        setSelectedUser
-    ] = useState(null);
-
-
-    const [
-        messages,
-        setMessages
-    ] = useState([]);
-
-
-    const [
-        message,
-        setMessage
-    ] = useState("");
-
-
-    const [
-        onlineUsers,
-        setOnlineUsers
-    ] = useState([]);
-
-
-    const [
-        typingUserId,
-        setTypingUserId
-    ] = useState(null);
-
-
-    const [
-        loading,
-        setLoading
-    ] = useState(true);
-
-
-    const [
-        sending,
-        setSending
-    ] = useState(false);
-
-
-    // ==========================
+    // =====================================================
     // CURRENT USER
-    // ==========================
+    // =====================================================
 
     useEffect(() => {
 
-        const storedUser =
+        const stored =
             localStorage.getItem("user");
 
 
-        if (!storedUser) {
+        if (!stored) {
             return;
         }
 
@@ -113,15 +98,13 @@ const Messenger = () => {
         try {
 
             setUser(
-                JSON.parse(
-                    storedUser
-                )
+                JSON.parse(stored)
             );
 
         } catch (error) {
 
             console.error(
-                "User data error:",
+                "User parse error:",
                 error
             );
 
@@ -130,10 +113,6 @@ const Messenger = () => {
     }, []);
 
 
-    // ==========================
-    // CURRENT USER ID
-    // ==========================
-
     const currentUserId =
         (
             user?._id ||
@@ -141,156 +120,284 @@ const Messenger = () => {
         )?.toString();
 
 
-    // ==========================
-    // USER ID
-    // ==========================
+    // =====================================================
+    // HELPERS
+    // =====================================================
 
-    const getUserId = (
-        item
-    ) => {
+    const getUserId = useCallback(
+        item => {
 
-        return (
-            item?._id ||
-            item?.id ||
-            item
-        )?.toString();
+            return (
+                item?._id ||
+                item?.id ||
+                item
+            )?.toString();
 
-    };
-
-
-    // ==========================
-    // ROOM ID
-    // ==========================
-
-    const getRoomId = (
-        first,
-        second
-    ) => {
-
-        const firstId =
-            getUserId(first);
-
-        const secondId =
-            getUserId(second);
+        },
+        []
+    );
 
 
-        if (
-            !firstId ||
-            !secondId
-        ) {
+    const getRoomId = useCallback(
+        (first, second) => {
 
+            const firstId =
+                getUserId(first);
+
+            const secondId =
+                getUserId(second);
+
+
+            if (
+                !firstId ||
+                !secondId
+            ) {
+                return null;
+            }
+
+
+            return [
+                firstId,
+                secondId
+            ]
+                .sort()
+                .join("_");
+
+        },
+        [getUserId]
+    );
+
+
+    const getAvatar = item => {
+
+        const image =
+            item?.profileImage ||
+            item?.avatar ||
+            item?.image;
+
+
+        if (!image) {
             return null;
-
         }
 
 
-        return [
-            firstId,
-            secondId
-        ]
-            .sort()
-            .join("_");
+        if (
+            image.startsWith("http://") ||
+            image.startsWith("https://")
+        ) {
+            return image;
+        }
+
+
+        const baseURL =
+            api.defaults.baseURL
+                ?.replace("/api", "") || "";
+
+
+        return `${baseURL}${
+            image.startsWith("/")
+                ? ""
+                : "/"
+        }${image}`;
 
     };
 
 
-    // ==========================
-    // LOAD USERS
-    // ==========================
+    // =====================================================
+    // LOAD CHAT USERS
+    // =====================================================
 
     useEffect(() => {
 
-        if (!user) {
+        if (!currentUserId) {
             return;
         }
 
 
-        const fetchUsers =
-            async () => {
-
-                try {
-
-                    const response =
-                        await api.get(
-                            "/users/chat-users"
-                        );
+        let cancelled = false;
 
 
-                    const data =
-                        response.data?.users ||
-                        response.data?.data ||
-                        response.data ||
-                        [];
+        const loadUsers = async () => {
 
+            try {
 
-                    setUsers(
-                        Array.isArray(data)
-                            ? data
-                            : []
+                const response =
+                    await api.get(
+                        "/users/chat-users"
                     );
 
 
-                } catch (error) {
+                if (cancelled) {
+                    return;
+                }
 
-                    console.error(
-                        "Failed to load chat users:",
-                        error
+
+                const data =
+                    response.data?.users ||
+                    response.data?.data ||
+                    response.data ||
+                    [];
+
+
+                setUsers(
+                    Array.isArray(data)
+                        ? data
+                        : []
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Chat users error:",
+                    error
+                );
+
+                setUsers([]);
+
+            } finally {
+
+                if (!cancelled) {
+                    setLoading(false);
+                }
+
+            }
+
+        };
+
+
+        loadUsers();
+
+
+        return () => {
+            cancelled = true;
+        };
+
+    }, [currentUserId]);
+
+
+    // =====================================================
+    // SOCKET
+    // =====================================================
+
+    const handleIncomingMessage =
+        useCallback(
+            newMessage => {
+
+                if (!newMessage) {
+                    return;
+                }
+
+
+                const senderId =
+                    getUserId(
+                        newMessage.sender
+                    );
+
+                const receiverId =
+                    getUserId(
+                        newMessage.receiver
                     );
 
 
-                    // fallback
-                    // admin route থাকলে
+                const selectedId =
+                    getUserId(
+                        selectedUser
+                    );
 
-                    try {
 
-                        const fallback =
-                            await api.get(
-                                "/users"
+                const belongs =
+                    selectedId &&
+                    (
+                        (
+                            senderId ===
+                            selectedId &&
+                            receiverId ===
+                            currentUserId
+                        ) ||
+                        (
+                            senderId ===
+                            currentUserId &&
+                            receiverId ===
+                            selectedId
+                        )
+                    );
+
+
+                if (!belongs) {
+                    return;
+                }
+
+
+                setMessages(
+                    previous => {
+
+                        const exists =
+                            previous.some(
+                                item =>
+                                    item._id &&
+                                    newMessage._id &&
+                                    item._id ===
+                                    newMessage._id
                             );
 
 
-                        const data =
-                            fallback.data?.users ||
-                            fallback.data?.data ||
-                            fallback.data ||
-                            [];
+                        if (exists) {
+                            return previous;
+                        }
 
 
-                        setUsers(
-                            Array.isArray(data)
-                                ? data
-                                : []
-                        );
-
-                    } catch (
-                        fallbackError
-                    ) {
-
-                        console.error(
-                            fallbackError
-                        );
-
-                        setUsers([]);
+                        return [
+                            ...previous,
+                            newMessage
+                        ];
 
                     }
+                );
 
-                } finally {
 
-                    setLoading(false);
+                // Incoming message is automatically seen
+                // when this conversation is open.
+
+                if (
+                    senderId ===
+                    selectedId &&
+                    receiverId ===
+                    currentUserId
+                ) {
+
+                    api.put(
+                        `/messages/seen/${selectedId}`
+                    ).catch(() => {});
+
+
+                    const roomId =
+                        getRoomId(
+                            user,
+                            selectedUser
+                        );
+
+
+                    socketRef.current?.emit(
+                        "message-seen",
+                        {
+                            roomId,
+                            senderId,
+                            receiverId
+                        }
+                    );
 
                 }
 
-            };
+            },
+            [
+                currentUserId,
+                getRoomId,
+                getUserId,
+                selectedUser,
+                user
+            ]
+        );
 
-
-        fetchUsers();
-
-    }, [user]);
-
-
-    // ==========================
-    // SOCKET CONNECTION
-    // ==========================
 
     useEffect(() => {
 
@@ -306,7 +413,10 @@ const Messenger = () => {
                     transports: [
                         "websocket",
                         "polling"
-                    ]
+                    ],
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
+                    reconnectionDelay: 1000
                 }
             );
 
@@ -315,16 +425,12 @@ const Messenger = () => {
             socket;
 
 
-        // ==========================
-        // CONNECT
-        // ==========================
-
         socket.on(
             "connect",
             () => {
 
                 console.log(
-                    "🟢 Messenger socket connected:",
+                    "Messenger connected:",
                     socket.id
                 );
 
@@ -335,45 +441,37 @@ const Messenger = () => {
                 );
 
 
-                setTimeout(() => {
+                if (selectedUser) {
 
-                    if (selectedUser) {
-
-                        const roomId =
-                            getRoomId(
-                                currentUserId,
-                                selectedUser
-                            );
+                    const roomId =
+                        getRoomId(
+                            currentUserId,
+                            selectedUser
+                        );
 
 
-                        if (roomId) {
+                    if (roomId) {
 
-                            socket.emit(
-                                "join-room",
-                                roomId
-                            );
-
-                        }
+                        socket.emit(
+                            "join-room",
+                            roomId
+                        );
 
                     }
 
-                }, 100);
+                }
 
             }
         );
 
 
-        // ==========================
-        // ONLINE USERS
-        // ==========================
-
         socket.on(
             "online-users",
-            online => {
+            list => {
 
                 setOnlineUsers(
-                    Array.isArray(online)
-                        ? online
+                    Array.isArray(list)
+                        ? list
                         : []
                 );
 
@@ -381,47 +479,21 @@ const Messenger = () => {
         );
 
 
-        // ==========================
-        // RECEIVE MESSAGE
-        // ==========================
-
         socket.on(
             "receive-message",
-            newMessage => {
-
-                handleIncomingMessage(
-                    newMessage
-                );
-
-            }
+            handleIncomingMessage
         );
 
-
-        // ==========================
-        // DIRECT MESSAGE
-        // ==========================
 
         socket.on(
             "direct-message",
-            newMessage => {
-
-                handleIncomingMessage(
-                    newMessage
-                );
-
-            }
+            handleIncomingMessage
         );
 
 
-        // ==========================
-        // TYPING
-        // ==========================
-
         socket.on(
             "user-typing",
-            ({
-                userId
-            }) => {
+            ({ userId }) => {
 
                 if (
                     userId?.toString() !==
@@ -438,15 +510,9 @@ const Messenger = () => {
         );
 
 
-        // ==========================
-        // STOP TYPING
-        // ==========================
-
         socket.on(
             "user-stop-typing",
-            ({
-                userId
-            }) => {
+            ({ userId }) => {
 
                 if (
                     userId?.toString() ===
@@ -461,15 +527,9 @@ const Messenger = () => {
         );
 
 
-        // ==========================
-        // SEEN
-        // ==========================
-
         socket.on(
             "messages-seen",
-            ({
-                senderId
-            }) => {
+            ({ senderId }) => {
 
                 if (
                     senderId?.toString() ===
@@ -481,8 +541,7 @@ const Messenger = () => {
                             previous.map(
                                 item => ({
                                     ...item,
-                                    isSeen:
-                                        true
+                                    isSeen: true
                                 })
                             )
                     );
@@ -493,11 +552,12 @@ const Messenger = () => {
         );
 
 
-        // ==========================
-        // CLEANUP
-        // ==========================
-
         return () => {
+
+            clearTimeout(
+                typingTimerRef.current
+            );
+
 
             socket.off(
                 "connect"
@@ -508,11 +568,13 @@ const Messenger = () => {
             );
 
             socket.off(
-                "receive-message"
+                "receive-message",
+                handleIncomingMessage
             );
 
             socket.off(
-                "direct-message"
+                "direct-message",
+                handleIncomingMessage
             );
 
             socket.off(
@@ -527,7 +589,9 @@ const Messenger = () => {
                 "messages-seen"
             );
 
+
             socket.disconnect();
+
 
             socketRef.current =
                 null;
@@ -535,109 +599,17 @@ const Messenger = () => {
         };
 
     }, [
-        currentUserId
+        currentUserId,
+        getRoomId,
+        handleIncomingMessage,
+        selectedUser,
+        typingUserId
     ]);
 
 
-    // ==========================
-    // INCOMING MESSAGE
-    // ==========================
-
-    const handleIncomingMessage = (
-        newMessage
-    ) => {
-
-        if (!newMessage) {
-            return;
-        }
-
-
-        const senderId =
-            getUserId(
-                newMessage.sender
-            );
-
-
-        const receiverId =
-            getUserId(
-                newMessage.receiver
-            );
-
-
-        const selectedId =
-            getUserId(
-                selectedUser
-            );
-
-
-        const belongsToCurrentChat =
-            selectedId &&
-            (
-                (
-                    senderId === selectedId &&
-                    receiverId === currentUserId
-                ) ||
-                (
-                    senderId === currentUserId &&
-                    receiverId === selectedId
-                )
-            );
-
-
-        if (!belongsToCurrentChat) {
-            return;
-        }
-
-
-        setMessages(
-            previous => {
-
-                const exists =
-                    previous.some(
-                        item =>
-                            item._id &&
-                            newMessage._id &&
-                            item._id ===
-                            newMessage._id
-                    );
-
-
-                if (exists) {
-
-                    return previous;
-
-                }
-
-
-                return [
-                    ...previous,
-                    newMessage
-                ];
-
-            }
-        );
-
-
-        // incoming message seen
-        // if current chat is open
-
-        if (
-            senderId === selectedId &&
-            receiverId === currentUserId
-        ) {
-
-            markConversationSeen(
-                selectedId
-            );
-
-        }
-
-    };
-
-
-    // ==========================
+    // =====================================================
     // AUTO SCROLL
-    // ==========================
+    // =====================================================
 
     useEffect(() => {
 
@@ -645,398 +617,354 @@ const Messenger = () => {
             behavior: "smooth"
         });
 
-    }, [
-        messages,
-        typingUserId
-    ]);
+    }, [messages, typingUserId]);
 
 
-    // ==========================
-    // SELECT USER
-    // ==========================
+    // =====================================================
+    // LOAD CONVERSATION
+    // =====================================================
 
-    const selectUser = async (
-        selected
-    ) => {
+    const selectUser =
+        useCallback(
+            async selected => {
 
-        if (!selected) {
+                if (!selected) {
+                    return;
+                }
+
+
+                const oldRoom =
+                    selectedUser
+                        ? getRoomId(
+                            user,
+                            selectedUser
+                        )
+                        : null;
+
+
+                const newRoom =
+                    getRoomId(
+                        user,
+                        selected
+                    );
+
+
+                if (
+                    oldRoom &&
+                    socketRef.current
+                ) {
+
+                    socketRef.current.emit(
+                        "leave-room",
+                        oldRoom
+                    );
+
+                }
+
+
+                setSelectedUser(
+                    selected
+                );
+
+                setMessages([]);
+
+                setTypingUserId(null);
+
+
+                if (
+                    newRoom &&
+                    socketRef.current
+                ) {
+
+                    socketRef.current.emit(
+                        "join-room",
+                        newRoom
+                    );
+
+                }
+
+
+                const selectedId =
+                    getUserId(
+                        selected
+                    );
+
+
+                if (!selectedId) {
+                    return;
+                }
+
+
+                setConversationLoading(true);
+
+
+                try {
+
+                    const response =
+                        await api.get(
+                            `/messages/conversation/${selectedId}`
+                        );
+
+
+                    setMessages(
+                        response.data?.data ||
+                        []
+                    );
+
+
+                    await api.put(
+                        `/messages/seen/${selectedId}`
+                    );
+
+
+                    if (
+                        socketRef.current &&
+                        newRoom
+                    ) {
+
+                        socketRef.current.emit(
+                            "message-seen",
+                            {
+                                roomId: newRoom,
+                                senderId:
+                                    selectedId,
+                                receiverId:
+                                    currentUserId
+                            }
+                        );
+
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        "Conversation error:",
+                        error
+                    );
+
+                } finally {
+
+                    setConversationLoading(
+                        false
+                    );
+
+                }
+
+            },
+            [
+                currentUserId,
+                getRoomId,
+                getUserId,
+                selectedUser,
+                user
+            ]
+        );
+
+
+    // =====================================================
+    // OPEN PROFILE MESSAGE LINK
+    // =====================================================
+
+    useEffect(() => {
+
+        const targetId =
+            searchParams.get("user");
+
+
+        if (
+            !targetId ||
+            users.length === 0
+        ) {
             return;
         }
 
 
-        const oldRoom =
-            selectedUser
-                ? getRoomId(
-                    user,
-                    selectedUser
-                )
-                : null;
+        const target =
+            users.find(
+                item =>
+                    getUserId(item) ===
+                    targetId
+            );
 
 
-        const newRoom =
+        if (target) {
+
+            selectUser(target);
+
+        }
+
+    }, [
+        searchParams,
+        users,
+        getUserId,
+        selectUser
+    ]);
+
+
+    // =====================================================
+    // SEND MESSAGE
+    // =====================================================
+
+    const sendMessage = async e => {
+
+        e.preventDefault();
+
+
+        const text =
+            message.trim();
+
+
+        if (
+            !text ||
+            !selectedUser ||
+            !currentUserId ||
+            sending
+        ) {
+            return;
+        }
+
+
+        const receiver =
+            getUserId(
+                selectedUser
+            );
+
+
+        const roomId =
             getRoomId(
                 user,
-                selected
+                selectedUser
             );
 
 
-        // Leave old room
-
-        if (
-            oldRoom &&
-            socketRef.current
-        ) {
-
-            socketRef.current.emit(
-                "leave-room",
-                oldRoom
-            );
-
+        if (!receiver) {
+            return;
         }
 
 
-        setSelectedUser(
-            selected
-        );
-
-        setMessages([]);
-
-        setTypingUserId(null);
-
-
-        // Join new room
-
-        if (
-            newRoom &&
-            socketRef.current
-        ) {
-
-            socketRef.current.emit(
-                "join-room",
-                newRoom
-            );
-
-        }
+        setSending(true);
 
 
         try {
 
-            const selectedId =
-                getUserId(
-                    selected
-                );
-
-
             const response =
-                await api.get(
-                    `/messages/conversation/${selectedId}`
+                await api.post(
+                    "/messages/send",
+                    {
+                        receiver,
+                        message: text
+                    }
                 );
 
+
+            const saved =
+                response.data?.data;
+
+
+            if (!saved) {
+                throw new Error(
+                    "Message was not saved."
+                );
+            }
+
+
+            // Instant sender UI
 
             setMessages(
-                response.data?.data || []
+                previous => {
+
+                    const exists =
+                        previous.some(
+                            item =>
+                                item._id ===
+                                saved._id
+                        );
+
+
+                    if (exists) {
+                        return previous;
+                    }
+
+
+                    return [
+                        ...previous,
+                        saved
+                    ];
+
+                }
             );
 
 
-            await markConversationSeen(
-                selectedId
-            );
+            // Realtime receiver
 
+            if (
+                socketRef.current &&
+                roomId
+            ) {
+
+                socketRef.current.emit(
+                    "send-message",
+                    {
+                        ...saved,
+                        roomId
+                    }
+                );
+
+            }
+
+
+            setMessage("");
+
+
+            socketRef.current?.emit(
+                "stop-typing",
+                {
+                    roomId,
+                    userId:
+                        currentUserId
+                }
+            );
 
         } catch (error) {
 
             console.error(
-                "Failed to load conversation:",
+                "Send message error:",
                 error
             );
+
+
+            alert(
+                error.response?.data?.message ||
+                "Message could not be sent."
+            );
+
+        } finally {
+
+            setSending(false);
 
         }
 
     };
 
 
-    // ==========================
-    // MARK SEEN
-    // ==========================
-
-    const markConversationSeen =
-        async (
-            selectedId
-        ) => {
-
-            if (!selectedId) {
-                return;
-            }
-
-
-            try {
-
-                await api.put(
-                    `/messages/seen/${selectedId}`
-                );
-
-
-                setMessages(
-                    previous =>
-                        previous.map(
-                            item => {
-
-                                const senderId =
-                                    getUserId(
-                                        item.sender
-                                    );
-
-                                const receiverId =
-                                    getUserId(
-                                        item.receiver
-                                    );
-
-
-                                if (
-                                    senderId ===
-                                        selectedId &&
-                                    receiverId ===
-                                        currentUserId
-                                ) {
-
-                                    return {
-                                        ...item,
-                                        isSeen:
-                                            true
-                                    };
-
-                                }
-
-
-                                return item;
-
-                            }
-                        )
-                );
-
-
-                const roomId =
-                    getRoomId(
-                        user,
-                        selectedUser
-                    );
-
-
-                if (
-                    socketRef.current &&
-                    roomId
-                ) {
-
-                    socketRef.current.emit(
-                        "message-seen",
-                        {
-                            roomId,
-
-                            senderId:
-                                selectedId,
-
-                            receiverId:
-                                currentUserId
-                        }
-                    );
-
-                }
-
-            } catch (error) {
-
-                console.error(
-                    "Mark seen error:",
-                    error
-                );
-
-            }
-
-        };
-
-
-    // ==========================
-    // SEND MESSAGE
-    // ==========================
-
-    const sendMessage =
-        async e => {
-
-            e.preventDefault();
-
-
-            const text =
-                message.trim();
-
-
-            if (
-                !text ||
-                !selectedUser ||
-                !user ||
-                sending
-            ) {
-
-                return;
-
-            }
-
-
-            const receiver =
-                getUserId(
-                    selectedUser
-                );
-
-
-            const roomId =
-                getRoomId(
-                    user,
-                    selectedUser
-                );
-
-
-            try {
-
-                setSending(true);
-
-
-                // ==========================
-                // SAVE TO DATABASE
-                // ==========================
-
-                const response =
-                    await api.post(
-                        "/messages/send",
-                        {
-                            receiver,
-                            message: text
-                        }
-                    );
-
-
-                const savedMessage =
-                    response.data?.data;
-
-
-                if (!savedMessage) {
-
-                    throw new Error(
-                        "Message was not saved"
-                    );
-
-                }
-
-
-                // ==========================
-                // INSTANT UI
-                // ==========================
-
-                setMessages(
-                    previous => {
-
-                        const exists =
-                            previous.some(
-                                item =>
-                                    item._id ===
-                                    savedMessage._id
-                            );
-
-
-                        if (exists) {
-
-                            return previous;
-
-                        }
-
-
-                        return [
-                            ...previous,
-                            savedMessage
-                        ];
-
-                    }
-                );
-
-
-                // ==========================
-                // REAL TIME SOCKET
-                // ==========================
-
-                if (
-                    socketRef.current &&
-                    roomId
-                ) {
-
-                    socketRef.current.emit(
-                        "send-message",
-                        {
-                            ...savedMessage,
-                            roomId
-                        }
-                    );
-
-                }
-
-
-                setMessage("");
-
-
-                // stop typing
-
-                socketRef.current?.emit(
-                    "stop-typing",
-                    {
-                        roomId,
-                        userId:
-                            currentUserId
-                    }
-                );
-
-
-            } catch (error) {
-
-                console.error(
-                    "Failed to send message:",
-                    error
-                );
-
-
-                alert(
-                    error.response?.data?.message ||
-                    "Failed to send message"
-                );
-
-            } finally {
-
-                setSending(false);
-
-            }
-
-        };
-
-
-    // ==========================
+    // =====================================================
     // TYPING
-    // ==========================
+    // =====================================================
 
-    const handleTyping = (
-        e
-    ) => {
+    const handleTyping = e => {
 
         const value =
             e.target.value;
 
 
-        setMessage(
-            value
-        );
+        setMessage(value);
 
 
         if (
             !selectedUser ||
             !socketRef.current
         ) {
-
             return;
-
         }
 
 
@@ -1052,53 +980,64 @@ const Messenger = () => {
         }
 
 
-        socketRef.current.emit(
-            "typing",
-            {
-                roomId,
-                userId:
-                    currentUserId
-            }
-        );
+        if (value.trim()) {
 
-
-        clearTimeout(
-            typingTimeoutRef.current
-        );
-
-
-        typingTimeoutRef.current =
-            setTimeout(
-                () => {
-
-                    socketRef.current?.emit(
-                        "stop-typing",
-                        {
-                            roomId,
-                            userId:
-                                currentUserId
-                        }
-                    );
-
-                },
-                1000
+            socketRef.current.emit(
+                "typing",
+                {
+                    roomId,
+                    userId:
+                        currentUserId
+                }
             );
+
+
+            clearTimeout(
+                typingTimerRef.current
+            );
+
+
+            typingTimerRef.current =
+                setTimeout(
+                    () => {
+
+                        socketRef.current?.emit(
+                            "stop-typing",
+                            {
+                                roomId,
+                                userId:
+                                    currentUserId
+                            }
+                        );
+
+                    },
+                    1000
+                );
+
+        } else {
+
+            socketRef.current.emit(
+                "stop-typing",
+                {
+                    roomId,
+                    userId:
+                        currentUserId
+                }
+            );
+
+        }
 
     };
 
 
-    // ==========================
-    // ONLINE CHECK
-    // ==========================
+    // =====================================================
+    // ONLINE
+    // =====================================================
 
-    const isUserOnline = (
-        selected
-    ) => {
+    const isOnline = item => {
 
         const id =
-            getUserId(
-                selected
-            );
+            getUserId(item);
 
 
         return onlineUsers.some(
@@ -1110,62 +1049,11 @@ const Messenger = () => {
     };
 
 
-    // ==========================
-    // AVATAR
-    // ==========================
+    // =====================================================
+    // TIME
+    // =====================================================
 
-    const getAvatar = (
-        item
-    ) => {
-
-        const image =
-            item?.profileImage ||
-            item?.avatar ||
-            item?.image;
-
-
-        if (image) {
-
-            const baseURL =
-                process.env.REACT_APP_API_URL
-                    ? process.env.REACT_APP_API_URL.replace(
-                        "/api",
-                        ""
-                    )
-                    : window.location.origin;
-
-
-            if (
-                image.startsWith(
-                    "http://"
-                ) ||
-                image.startsWith(
-                    "https://"
-                )
-            ) {
-
-                return image;
-
-            }
-
-
-            return `${baseURL}${image.startsWith("/") ? "" : "/"}${image}`;
-
-        }
-
-
-        return null;
-
-    };
-
-
-    // ==========================
-    // MESSAGE TIME
-    // ==========================
-
-    const formatTime = (
-        date
-    ) => {
+    const formatTime = date => {
 
         if (!date) {
             return "";
@@ -1185,9 +1073,52 @@ const Messenger = () => {
     };
 
 
-    // ==========================
+    // =====================================================
+    // FILTER USERS
+    // =====================================================
+
+    const visibleUsers =
+        users
+            .filter(
+                item =>
+                    getUserId(item) !==
+                    currentUserId
+            )
+            .filter(item => {
+
+                const search =
+                    userSearch
+                        .trim()
+                        .toLowerCase();
+
+
+                if (!search) {
+                    return true;
+                }
+
+
+                return (
+                    String(
+                        item.name ||
+                        ""
+                    )
+                        .toLowerCase()
+                        .includes(search) ||
+
+                    String(
+                        item.email ||
+                        ""
+                    )
+                        .toLowerCase()
+                        .includes(search)
+                );
+
+            });
+
+
+    // =====================================================
     // LOADING
-    // ==========================
+    // =====================================================
 
     if (loading) {
 
@@ -1213,164 +1144,162 @@ const Messenger = () => {
         <div className="messenger-page">
 
 
-            {/* ==========================
+            {/* =================================================
                 SIDEBAR
-            ========================== */}
+            ================================================= */}
 
-            <aside
-                className="messenger-sidebar"
-            >
+            <aside className="messenger-sidebar">
 
-                <div
-                    className="messenger-sidebar-header"
-                >
+                <div className="messenger-sidebar-header">
 
                     <h2>
                         Messages
                     </h2>
 
                     <span>
-                        {
-                            onlineUsers.length
-                        } online
+                        {onlineUsers.length}
+                        {" "}
+                        online
                     </span>
 
                 </div>
 
 
+                {/* CHAT SEARCH */}
+
                 <div
-                    className="user-list"
+                    className="messenger-user-search"
                 >
 
-                    {users
-                        .filter(
-                            item =>
-                                getUserId(
-                                    item
-                                ) !==
-                                currentUserId
-                        )
-                        .map(
-                            item => {
+                    <FaSearch />
 
-                                const id =
-                                    getUserId(
-                                        item
-                                    );
+                    <input
+                        type="search"
+                        value={userSearch}
+                        onChange={e =>
+                            setUserSearch(
+                                e.target.value
+                            )
+                        }
+                        placeholder="Search people..."
+                    />
 
+                    {userSearch && (
 
-                                const active =
-                                    selectedUser &&
-                                    getUserId(
-                                        selectedUser
-                                    ) === id;
-
-
-                                const online =
-                                    isUserOnline(
-                                        item
-                                    );
-
-
-                                const avatar =
-                                    getAvatar(
-                                        item
-                                    );
-
-
-                                return (
-
-                                    <button
-                                        key={id}
-                                        type="button"
-                                        className={
-                                            active
-                                                ? "chat-user active"
-                                                : "chat-user"
-                                        }
-                                        onClick={() =>
-                                            selectUser(
-                                                item
-                                            )
-                                        }
-                                    >
-
-                                        <div
-                                            className="user-avatar"
-                                        >
-
-                                            {avatar ? (
-
-                                                <img
-                                                    src={
-                                                        avatar
-                                                    }
-                                                    alt={
-                                                        item.name
-                                                    }
-                                                />
-
-                                            ) : (
-
-                                                item.name
-                                                    ?.charAt(
-                                                        0
-                                                    )
-                                                    ?.toUpperCase() ||
-                                                "U"
-
-                                            )}
-
-
-                                            {online && (
-
-                                                <span
-                                                    className="online-dot"
-                                                />
-
-                                            )}
-
-                                        </div>
-
-
-                                        <div
-                                            className="user-info"
-                                        >
-
-                                            <strong>
-
-                                                {
-                                                    item.name ||
-                                                    "User"
-                                                }
-
-                                            </strong>
-
-
-                                            <span>
-
-                                                {online
-                                                    ? "Online"
-                                                    : "Offline"}
-
-                                            </span>
-
-                                        </div>
-
-                                    </button>
-
-                                );
-
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setUserSearch("")
                             }
-                        )
-                    }
+                        >
+                            <FaTimes />
+                        </button>
+
+                    )}
+
+                </div>
 
 
-                    {users.length === 0 && (
+                <div className="user-list">
+
+                    {visibleUsers.map(item => {
+
+                        const id =
+                            getUserId(item);
+
+
+                        const active =
+                            selectedUser &&
+                            getUserId(
+                                selectedUser
+                            ) === id;
+
+
+                        const online =
+                            isOnline(item);
+
+
+                        const avatar =
+                            getAvatar(item);
+
+
+                        return (
+
+                            <button
+                                key={id}
+                                type="button"
+                                className={
+                                    active
+                                        ? "chat-user active"
+                                        : "chat-user"
+                                }
+                                onClick={() =>
+                                    selectUser(item)
+                                }
+                            >
+
+                                <div className="user-avatar">
+
+                                    {avatar ? (
+
+                                        <img
+                                            src={avatar}
+                                            alt={
+                                                item.name ||
+                                                "User"
+                                            }
+                                        />
+
+                                    ) : (
+
+                                        item.name
+                                            ?.charAt(0)
+                                            ?.toUpperCase() ||
+                                        "U"
+
+                                    )}
+
+
+                                    {online && (
+
+                                        <span className="online-dot" />
+
+                                    )}
+
+                                </div>
+
+
+                                <div className="user-info">
+
+                                    <strong>
+                                        {
+                                            item.name ||
+                                            "User"
+                                        }
+                                    </strong>
+
+                                    <span>
+                                        {
+                                            online
+                                                ? "Active now"
+                                                : "Offline"
+                                        }
+                                    </span>
+
+                                </div>
+
+                            </button>
+
+                        );
+
+                    })}
+
+
+                    {visibleUsers.length === 0 && (
 
                         <p className="no-users">
 
-                            No users available.
+                            No people found.
 
                         </p>
 
@@ -1381,28 +1310,27 @@ const Messenger = () => {
             </aside>
 
 
-            {/* ==========================
+            {/* =================================================
                 CHAT
-            ========================== */}
+            ================================================= */}
 
-            <main
-                className="chat-area"
-            >
+            <main className="chat-area">
 
                 {!selectedUser ? (
 
-                    <div
-                        className="empty-chat"
-                    >
+                    <div className="empty-chat">
 
                         <div>
 
+                            <FaComments />
+
                             <h2>
-                                💬 Welcome to Messenger
+                                Welcome to Messenger
                             </h2>
 
                             <p>
-                                Select a user to start chatting.
+                                Select someone to start
+                                a conversation.
                             </p>
 
                         </div>
@@ -1413,27 +1341,22 @@ const Messenger = () => {
 
                     <>
 
+                        {/* CHAT HEADER */}
 
-                        {/* ==========================
-                            HEADER
-                        ========================== */}
+                        <div className="chat-header">
 
-                        <div
-                            className="chat-header"
-                        >
-
-                            <div
-                                className="chat-user-avatar"
-                            >
+                            <div className="chat-user-avatar">
 
                                 {getAvatar(
                                     selectedUser
                                 ) ? (
 
                                     <img
-                                        src={getAvatar(
-                                            selectedUser
-                                        )}
+                                        src={
+                                            getAvatar(
+                                                selectedUser
+                                            )
+                                        }
                                         alt={
                                             selectedUser.name
                                         }
@@ -1454,14 +1377,11 @@ const Messenger = () => {
                             <div>
 
                                 <h3>
-
                                     {
                                         selectedUser.name ||
                                         "User"
                                     }
-
                                 </h3>
-
 
                                 <span>
 
@@ -1474,11 +1394,13 @@ const Messenger = () => {
 
                                     {" "}
 
-                                    {isUserOnline(
-                                        selectedUser
-                                    )
-                                        ? "Active now"
-                                        : "Offline"}
+                                    {
+                                        isOnline(
+                                            selectedUser
+                                        )
+                                            ? "Active now"
+                                            : "Offline"
+                                    }
 
                                 </span>
 
@@ -1487,26 +1409,28 @@ const Messenger = () => {
                         </div>
 
 
-                        {/* ==========================
-                            MESSAGES
-                        ========================== */}
+                        {/* MESSAGES */}
 
-                        <div
-                            className="messages-container"
-                        >
+                        <div className="messages-container">
 
-                            {messages.length === 0 ? (
+                            {conversationLoading ? (
 
-                                <div
-                                    className="no-messages"
-                                >
+                                <div className="no-messages">
+
+                                    Loading conversation...
+
+                                </div>
+
+                            ) : messages.length === 0 ? (
+
+                                <div className="no-messages">
 
                                     <p>
                                         No messages yet.
                                     </p>
 
                                     <small>
-                                        Send a message to start the conversation.
+                                        Say hello 👋
                                     </small>
 
                                 </div>
@@ -1514,10 +1438,7 @@ const Messenger = () => {
                             ) : (
 
                                 messages.map(
-                                    (
-                                        msg,
-                                        index
-                                    ) => {
+                                    (msg, index) => {
 
                                         const senderId =
                                             getUserId(
@@ -1525,7 +1446,7 @@ const Messenger = () => {
                                             );
 
 
-                                        const ownMessage =
+                                        const own =
                                             senderId ===
                                             currentUserId;
 
@@ -1538,7 +1459,7 @@ const Messenger = () => {
                                                     index
                                                 }
                                                 className={
-                                                    ownMessage
+                                                    own
                                                         ? "message-row own"
                                                         : "message-row"
                                                 }
@@ -1546,7 +1467,7 @@ const Messenger = () => {
 
                                                 <div
                                                     className={
-                                                        ownMessage
+                                                        own
                                                             ? "message-bubble own"
                                                             : "message-bubble"
                                                     }
@@ -1561,22 +1482,18 @@ const Messenger = () => {
                                                     </p>
 
 
-                                                    <div
-                                                        className="message-meta"
-                                                    >
+                                                    <div className="message-meta">
 
                                                         <small>
-
                                                             {
                                                                 formatTime(
                                                                     msg.createdAt
                                                                 )
                                                             }
-
                                                         </small>
 
 
-                                                        {ownMessage && (
+                                                        {own && (
 
                                                             msg.isSeen ? (
 
@@ -1606,23 +1523,19 @@ const Messenger = () => {
                             )}
 
 
-                            {/* ==========================
-                                TYPING
-                            ========================== */}
-
                             {typingUserId ===
                                 getUserId(
                                     selectedUser
                                 ) && (
 
-                                <div
-                                    className="typing-indicator"
-                                >
+                                <div className="typing-indicator">
 
                                     <span>
                                         {
                                             selectedUser.name
-                                        } is typing...
+                                        }
+                                        {" "}
+                                        is typing...
                                     </span>
 
                                 </div>
@@ -1639,9 +1552,7 @@ const Messenger = () => {
                         </div>
 
 
-                        {/* ==========================
-                            MESSAGE FORM
-                        ========================== */}
+                        {/* MESSAGE FORM */}
 
                         <form
                             className="message-form"
@@ -1652,14 +1563,15 @@ const Messenger = () => {
 
                             <input
                                 type="text"
-                                placeholder="Write a message..."
-                                value={
-                                    message
-                                }
+                                value={message}
                                 onChange={
                                     handleTyping
                                 }
+                                placeholder="Write a message..."
                                 autoComplete="off"
+                                disabled={
+                                    sending
+                                }
                             />
 
 
@@ -1673,13 +1585,9 @@ const Messenger = () => {
 
                                 <FaPaperPlane />
 
-                                <span>
-                                    {
-                                        sending
-                                            ? "Sending..."
-                                            : "Send"
-                                    }
-                                </span>
+                                {sending
+                                    ? "Sending..."
+                                    : "Send"}
 
                             </button>
 
