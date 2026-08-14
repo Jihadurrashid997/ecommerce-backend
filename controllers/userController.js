@@ -1,4 +1,55 @@
+const mongoose = require("mongoose");
 const User = require("../models/User");
+
+// ======================================================
+// HELPERS
+// ======================================================
+
+const safeUserFields = [
+    "_id",
+    "name",
+    "email",
+    "role",
+    "bio",
+    "location",
+    "profileImage",
+    "avatar",
+    "image",
+    "createdAt"
+];
+
+const normalizeUser = (user) => {
+
+    if (!user) {
+        return null;
+    }
+
+    const object =
+        typeof user.toObject === "function"
+            ? user.toObject()
+            : user;
+
+    return {
+        _id: object._id,
+        name: object.name || "",
+        email: object.email || "",
+        role: object.role || "customer",
+        bio: object.bio || "",
+        location: object.location || "",
+        profileImage:
+            object.profileImage ||
+            object.avatar ||
+            object.image ||
+            "",
+        createdAt: object.createdAt
+    };
+};
+
+const escapeRegex = (value) => {
+
+    return String(value || "")
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
 
 
 // ======================================================
@@ -9,25 +60,109 @@ exports.getUsers = async (req, res) => {
 
     try {
 
+        const page =
+            Math.max(
+                parseInt(req.query.page, 10) || 1,
+                1
+            );
+
+        const limit =
+            Math.min(
+                Math.max(
+                    parseInt(req.query.limit, 10) || 50,
+                    1
+                ),
+                100
+            );
+
+        const search =
+            String(
+                req.query.search ||
+                req.query.q ||
+                ""
+            ).trim();
+
+        const role =
+            String(
+                req.query.role ||
+                ""
+            ).trim();
+
+        const filter = {};
+
+        if (search) {
+
+            const regex =
+                new RegExp(
+                    escapeRegex(search),
+                    "i"
+                );
+
+            filter.$or = [
+                { name: regex },
+                { email: regex },
+                { bio: regex },
+                { location: regex }
+            ];
+
+        }
+
+        if (
+            role &&
+            ["customer", "seller", "admin"].includes(role)
+        ) {
+
+            filter.role = role;
+
+        }
+
+        const total =
+            await User.countDocuments(filter);
+
         const users =
-            await User.find()
-                .select("-password")
+            await User.find(filter)
+                .select(safeUserFields.join(" "))
                 .sort({
                     createdAt: -1
-                });
+                })
+                .skip((page - 1) * limit)
+                .limit(limit)
+                .lean();
 
-        res.status(200).json(users);
+        res.json({
+
+            success: true,
+
+            users:
+                users.map(normalizeUser),
+
+            pagination: {
+
+                page,
+                limit,
+                total,
+
+                totalPages:
+                    Math.ceil(total / limit)
+
+            }
+
+        });
 
     } catch (err) {
 
         console.error(
-            "Get users error:",
+            "GET USERS ERROR:",
             err
         );
 
         res.status(500).json({
+
             success: false,
-            message: err.message
+
+            message:
+                "Failed to load users."
+
         });
 
     }
@@ -46,33 +181,35 @@ exports.getChatUsers = async (req, res) => {
         const currentUserId =
             req.user.id;
 
-
         const users =
             await User.find({
+
                 _id: {
                     $ne: currentUserId
                 }
+
             })
-            .select(
-                "_id name email role bio location profileImage createdAt"
-            )
-            .sort({
-                name: 1
-            });
+                .select(
+                    safeUserFields.join(" ")
+                )
+                .sort({
+                    name: 1
+                })
+                .lean();
 
-
-        res.status(200).json({
+        res.json({
 
             success: true,
 
-            users
+            users:
+                users.map(normalizeUser)
 
         });
 
     } catch (err) {
 
         console.error(
-            "Get chat users error:",
+            "GET CHAT USERS ERROR:",
             err
         );
 
@@ -81,7 +218,7 @@ exports.getChatUsers = async (req, res) => {
             success: false,
 
             message:
-                "Unable to load users."
+                "Failed to load chat users."
 
         });
 
@@ -102,8 +239,10 @@ exports.getProfile = async (req, res) => {
             await User.findById(
                 req.user.id
             )
-            .select("-password");
-
+                .select(
+                    safeUserFields.join(" ")
+                )
+                .lean();
 
         if (!user) {
 
@@ -112,25 +251,25 @@ exports.getProfile = async (req, res) => {
                 success: false,
 
                 message:
-                    "User not found"
+                    "User not found."
 
             });
 
         }
 
-
-        res.status(200).json({
+        res.json({
 
             success: true,
 
-            user
+            user:
+                normalizeUser(user)
 
         });
 
     } catch (err) {
 
         console.error(
-            "Get profile error:",
+            "GET PROFILE ERROR:",
             err
         );
 
@@ -139,7 +278,7 @@ exports.getProfile = async (req, res) => {
             success: false,
 
             message:
-                err.message
+                "Failed to load profile."
 
         });
 
@@ -149,13 +288,10 @@ exports.getProfile = async (req, res) => {
 
 
 // ======================================================
-// UPDATE MY PROFILE
+// UPDATE PROFILE
 // ======================================================
 
-exports.updateProfile = async (
-    req,
-    res
-) => {
+exports.updateProfile = async (req, res) => {
 
     try {
 
@@ -166,12 +302,10 @@ exports.updateProfile = async (
             profileImage
         } = req.body;
 
-
         const user =
             await User.findById(
                 req.user.id
             );
-
 
         if (!user) {
 
@@ -180,12 +314,11 @@ exports.updateProfile = async (
                 success: false,
 
                 message:
-                    "User not found"
+                    "User not found."
 
             });
 
         }
-
 
         if (
             typeof name === "string" &&
@@ -197,7 +330,6 @@ exports.updateProfile = async (
 
         }
 
-
         if (
             typeof bio === "string"
         ) {
@@ -206,7 +338,6 @@ exports.updateProfile = async (
                 bio.trim();
 
         }
-
 
         if (
             typeof location === "string"
@@ -217,7 +348,6 @@ exports.updateProfile = async (
 
         }
 
-
         if (
             typeof profileImage === "string"
         ) {
@@ -227,33 +357,33 @@ exports.updateProfile = async (
 
         }
 
-
         await user.save();
 
-
-        const safeUser =
+        const updated =
             await User.findById(
                 user._id
             )
-            .select("-password");
+                .select(
+                    safeUserFields.join(" ")
+                )
+                .lean();
 
-
-        res.status(200).json({
+        res.json({
 
             success: true,
 
             message:
-                "Profile updated successfully",
+                "Profile updated successfully.",
 
             user:
-                safeUser
+                normalizeUser(updated)
 
         });
 
     } catch (err) {
 
         console.error(
-            "Update profile error:",
+            "UPDATE PROFILE ERROR:",
             err
         );
 
@@ -262,7 +392,7 @@ exports.updateProfile = async (
             success: false,
 
             message:
-                err.message
+                "Failed to update profile."
 
         });
 
@@ -274,17 +404,8 @@ exports.updateProfile = async (
 // ======================================================
 // SEARCH USERS
 // ======================================================
-//
-// Search is intentionally simple and reliable.
-// It searches every actual text field currently
-// available in the User model.
-//
-// ======================================================
 
-exports.searchUsers = async (
-    req,
-    res
-) => {
+exports.searchUsers = async (req, res) => {
 
     try {
 
@@ -292,105 +413,91 @@ exports.searchUsers = async (
             String(
                 req.query.q ||
                 req.query.search ||
+                req.query.keyword ||
                 ""
-            )
-            .trim();
-
+            ).trim();
 
         if (!keyword) {
 
-            return res.status(200).json({
+            return res.json({
 
                 success: true,
 
-                users: []
+                users: [],
+
+                total: 0
 
             });
 
         }
 
-
-        const escaped =
-            keyword.replace(
-                /[.*+?^${}()|[\]\\]/g,
-                "\\$&"
+        const regex =
+            new RegExp(
+                escapeRegex(keyword),
+                "i"
             );
 
+        /*
+         * IMPORTANT:
+         * Only search real User fields.
+         * Do not dynamically search schema fields.
+         */
+
+        const filter = {
+
+            $or: [
+
+                {
+                    name: regex
+                },
+
+                {
+                    email: regex
+                },
+
+                {
+                    bio: regex
+                },
+
+                {
+                    location: regex
+                },
+
+                {
+                    role: regex
+                }
+
+            ]
+
+        };
 
         const users =
-            await User.find({
-
-                $or: [
-
-                    {
-                        name: {
-                            $regex:
-                                escaped,
-                            $options:
-                                "i"
-                        }
-                    },
-
-                    {
-                        email: {
-                            $regex:
-                                escaped,
-                            $options:
-                                "i"
-                        }
-                    },
-
-                    {
-                        bio: {
-                            $regex:
-                                escaped,
-                            $options:
-                                "i"
-                        }
-                    },
-
-                    {
-                        location: {
-                            $regex:
-                                escaped,
-                            $options:
-                                "i"
-                        }
-                    },
-
-                    {
-                        role: {
-                            $regex:
-                                escaped,
-                            $options:
-                                "i"
-                        }
-                    }
-
-                ]
-
-            })
-            .select(
-                "_id name email role bio location profileImage createdAt"
-            )
-            .sort({
-                name: 1
-            })
-            .limit(50);
-
+            await User.find(filter)
+                .select(
+                    safeUserFields.join(" ")
+                )
+                .sort({
+                    name: 1
+                })
+                .limit(50)
+                .lean();
 
         res.status(200).json({
 
             success: true,
 
-            users
+            users:
+                users.map(normalizeUser),
+
+            total:
+                users.length
 
         });
 
     } catch (err) {
 
         console.error(
-            "Search users error:",
+            "SEARCH USERS ERROR:",
             err
         );
 
@@ -409,42 +516,39 @@ exports.searchUsers = async (
 
 
 // ======================================================
-// GET PUBLIC PROFILE
+// PUBLIC USER PROFILE
 // ======================================================
 
-exports.getPublicProfile = async (
-    req,
-    res
-) => {
+exports.getPublicProfile = async (req, res) => {
 
     try {
 
-        const userId =
-            req.params.id;
+        const id =
+            String(
+                req.params.id || ""
+            ).trim();
 
-
-        if (!userId) {
+        if (
+            !mongoose.Types.ObjectId.isValid(id)
+        ) {
 
             return res.status(400).json({
 
                 success: false,
 
                 message:
-                    "User ID is required"
+                    "Invalid user ID."
 
             });
 
         }
 
-
         const user =
-            await User.findById(
-                userId
-            )
-            .select(
-                "_id name email role bio location profileImage createdAt"
-            );
-
+            await User.findById(id)
+                .select(
+                    safeUserFields.join(" ")
+                )
+                .lean();
 
         if (!user) {
 
@@ -453,25 +557,25 @@ exports.getPublicProfile = async (
                 success: false,
 
                 message:
-                    "User not found"
+                    "User not found."
 
             });
 
         }
 
-
-        res.status(200).json({
+        res.json({
 
             success: true,
 
-            user
+            user:
+                normalizeUser(user)
 
         });
 
     } catch (err) {
 
         console.error(
-            "Public profile error:",
+            "PUBLIC PROFILE ERROR:",
             err
         );
 
@@ -480,7 +584,7 @@ exports.getPublicProfile = async (
             success: false,
 
             message:
-                "Unable to load profile."
+                "Failed to load user profile."
 
         });
 
@@ -493,18 +597,48 @@ exports.getPublicProfile = async (
 // DELETE USER - ADMIN
 // ======================================================
 
-exports.deleteUser = async (
-    req,
-    res
-) => {
+exports.deleteUser = async (req, res) => {
 
     try {
 
-        const user =
-            await User.findById(
-                req.params.id
-            );
+        const id =
+            String(
+                req.params.id || ""
+            ).trim();
 
+        if (
+            !mongoose.Types.ObjectId.isValid(id)
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "Invalid user ID."
+
+            });
+
+        }
+
+        if (
+            id.toString() ===
+            req.user.id.toString()
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "Admin cannot delete their own account."
+
+            });
+
+        }
+
+        const user =
+            await User.findById(id);
 
         if (!user) {
 
@@ -513,31 +647,27 @@ exports.deleteUser = async (
                 success: false,
 
                 message:
-                    "User not found"
+                    "User not found."
 
             });
 
         }
 
+        await User.findByIdAndDelete(id);
 
-        await User.findByIdAndDelete(
-            req.params.id
-        );
-
-
-        res.status(200).json({
+        res.json({
 
             success: true,
 
             message:
-                "User deleted successfully"
+                "User deleted successfully."
 
         });
 
     } catch (err) {
 
         console.error(
-            "Delete user error:",
+            "DELETE USER ERROR:",
             err
         );
 
@@ -546,7 +676,7 @@ exports.deleteUser = async (
             success: false,
 
             message:
-                err.message
+                "Failed to delete user."
 
         });
 
