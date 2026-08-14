@@ -11,22 +11,72 @@ const connectDB = require("./config/db");
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
+
+const PORT = process.env.PORT || 5000;
 
 
 // ======================================================
-// MIDDLEWARE
+// CORS
 // ======================================================
+
+const allowedOrigins = [
+    "https://ecommerce-backend-1-a9y7.onrender.com",
+    "http://localhost:3000",
+    "http://localhost:3001"
+];
 
 app.use(
     cors({
-        origin: "*",
-        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        origin: function (origin, callback) {
+
+            // Allow Postman, server-to-server and mobile clients
+            if (!origin) {
+                return callback(null, true);
+            }
+
+            if (
+                allowedOrigins.includes(origin) ||
+                origin.endsWith(".onrender.com")
+            ) {
+                return callback(null, true);
+            }
+
+            return callback(null, true);
+        },
+
+        methods: [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE",
+            "OPTIONS"
+        ],
+
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization"
+        ],
+
         credentials: false
     })
 );
 
+
+// ======================================================
+// BODY PARSER
+// ======================================================
+
 app.use(
     express.json({
+        limit: "10mb"
+    })
+);
+
+app.use(
+    express.urlencoded({
+        extended: true,
         limit: "10mb"
     })
 );
@@ -36,10 +86,16 @@ app.use(
 // UPLOADS
 // ======================================================
 
-const uploadPath = path.join(__dirname, "uploads");
+const uploadPath =
+    path.join(__dirname, "uploads");
 
 if (!fs.existsSync(uploadPath)) {
-    fs.mkdirSync(uploadPath, { recursive: true });
+    fs.mkdirSync(
+        uploadPath,
+        {
+            recursive: true
+        }
+    );
 }
 
 app.use(
@@ -49,189 +105,314 @@ app.use(
 
 
 // ======================================================
-// DATABASE
+// REQUEST LOGGER
 // ======================================================
 
-connectDB();
+app.use(
+    (req, res, next) => {
 
+        console.log(
+            `${new Date().toISOString()} ${req.method} ${req.originalUrl}`
+        );
 
-// ======================================================
-// API ROUTES
-// ======================================================
-
-app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/users", require("./routes/userRoutes"));
-app.use("/api/admin", require("./routes/adminRoutes"));
-app.use("/api/seller", require("./routes/sellerRoutes"));
-app.use("/api/orders", require("./routes/orderRoutes"));
-app.use("/api/payment", require("./routes/paymentRoutes"));
-app.use("/api/products", require("./routes/productRoutes"));
-app.use("/api/messages", require("./routes/messageRoutes"));
+        next();
+    }
+);
 
 
 // ======================================================
 // HEALTH CHECK
 // ======================================================
 
-app.get("/", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "JR Store API is running 🚀",
-        service: "ecommerce-backend",
-        socket: "enabled",
-        timestamp: new Date().toISOString()
-    });
-});
+app.get(
+    "/",
+    (req, res) => {
+
+        res.status(200).json({
+            success: true,
+            message: "JR Store API is running 🚀",
+            service: "ecommerce-backend",
+            database: "connected",
+            socket: "enabled",
+            timestamp:
+                new Date().toISOString()
+        });
+
+    }
+);
+
+
+app.get(
+    "/api/health",
+    (req, res) => {
+
+        res.status(200).json({
+            success: true,
+            message: "API is healthy",
+            timestamp:
+                new Date().toISOString()
+        });
+
+    }
+);
 
 
 // ======================================================
-// 404 API
+// API ROUTES
 // ======================================================
 
-app.use((req, res) => {
-    res.status(404).json({
-        success: false,
-        message: `Route not found: ${req.method} ${req.originalUrl}`
-    });
-});
+app.use(
+    "/api/auth",
+    require("./routes/authRoutes")
+);
+
+app.use(
+    "/api/users",
+    require("./routes/userRoutes")
+);
+
+app.use(
+    "/api/admin",
+    require("./routes/adminRoutes")
+);
+
+app.use(
+    "/api/seller",
+    require("./routes/sellerRoutes")
+);
+
+app.use(
+    "/api/orders",
+    require("./routes/orderRoutes")
+);
+
+app.use(
+    "/api/payment",
+    require("./routes/paymentRoutes")
+);
+
+app.use(
+    "/api/products",
+    require("./routes/productRoutes")
+);
+
+app.use(
+    "/api/messages",
+    require("./routes/messageRoutes")
+);
 
 
 // ======================================================
-// HTTP SERVER
+// API 404
 // ======================================================
 
-const PORT = process.env.PORT || 5000;
+app.use(
+    (req, res) => {
 
-const server = http.createServer(app);
+        res.status(404).json({
+            success: false,
+            message:
+                `Route not found: ${req.method} ${req.originalUrl}`
+        });
+
+    }
+);
+
+
+// ======================================================
+// GLOBAL ERROR HANDLER
+// ======================================================
+
+app.use(
+    (err, req, res, next) => {
+
+        console.error(
+            "GLOBAL API ERROR:",
+            err
+        );
+
+        if (res.headersSent) {
+            return next(err);
+        }
+
+        res.status(
+            err.status || 500
+        ).json({
+
+            success: false,
+
+            message:
+                err.message ||
+                "Internal server error"
+
+        });
+
+    }
+);
 
 
 // ======================================================
 // SOCKET.IO
 // ======================================================
 
-const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    },
-    transports: ["websocket", "polling"],
-    pingInterval: 25000,
-    pingTimeout: 20000
-});
+const io =
+    new Server(
+        server,
+        {
+            cors: {
+                origin: "*",
+
+                methods: [
+                    "GET",
+                    "POST"
+                ]
+            },
+
+            transports: [
+                "websocket",
+                "polling"
+            ],
+
+            pingInterval: 25000,
+            pingTimeout: 20000
+        }
+    );
 
 
 // ======================================================
 // ONLINE USERS
-// userId -> Set(socketId)
 // ======================================================
 
-const onlineUsers = new Map();
+const onlineUsers =
+    new Map();
 
 
-// ======================================================
-// HELPERS
-// ======================================================
+const normalizeId =
+    (value) => {
 
-const normalizeId = value => {
-    if (!value) {
-        return null;
-    }
-
-    if (typeof value === "object") {
-        return String(
-            value._id ||
-            value.id ||
-            value.userId ||
-            ""
-        ) || null;
-    }
-
-    return String(value);
-};
-
-
-const getOnlineUserIds = () => {
-    return Array.from(
-        onlineUsers.keys()
-    );
-};
-
-
-const addOnlineUser = (
-    userId,
-    socketId
-) => {
-
-    const id = normalizeId(userId);
-
-    if (!id) {
-        return;
-    }
-
-    if (!onlineUsers.has(id)) {
-        onlineUsers.set(
-            id,
-            new Set()
-        );
-    }
-
-    onlineUsers
-        .get(id)
-        .add(socketId);
-};
-
-
-const removeOnlineUser = (
-    userId,
-    socketId
-) => {
-
-    const id = normalizeId(userId);
-
-    if (!id || !onlineUsers.has(id)) {
-        return;
-    }
-
-    const sockets =
-        onlineUsers.get(id);
-
-    sockets.delete(socketId);
-
-    if (sockets.size === 0) {
-        onlineUsers.delete(id);
-    }
-};
-
-
-const sendToUser = (
-    userId,
-    event,
-    payload
-) => {
-
-    const id =
-        normalizeId(userId);
-
-    if (!id) {
-        return;
-    }
-
-    const sockets =
-        onlineUsers.get(id);
-
-    if (!sockets) {
-        return;
-    }
-
-    sockets.forEach(
-        socketId => {
-            io.to(socketId).emit(
-                event,
-                payload
-            );
+        if (!value) {
+            return null;
         }
-    );
-};
+
+        if (
+            typeof value === "object"
+        ) {
+
+            return String(
+                value._id ||
+                value.id ||
+                value.userId ||
+                ""
+            ) || null;
+
+        }
+
+        return String(value);
+    };
+
+
+const getOnlineUsers =
+    () => {
+
+        return Array.from(
+            onlineUsers.keys()
+        );
+
+    };
+
+
+const addOnlineUser =
+    (userId, socketId) => {
+
+        const id =
+            normalizeId(userId);
+
+        if (!id) {
+            return;
+        }
+
+        if (
+            !onlineUsers.has(id)
+        ) {
+
+            onlineUsers.set(
+                id,
+                new Set()
+            );
+
+        }
+
+        onlineUsers
+            .get(id)
+            .add(socketId);
+
+    };
+
+
+const removeOnlineUser =
+    (userId, socketId) => {
+
+        const id =
+            normalizeId(userId);
+
+        if (
+            !id ||
+            !onlineUsers.has(id)
+        ) {
+            return;
+        }
+
+        const sockets =
+            onlineUsers.get(id);
+
+        sockets.delete(socketId);
+
+        if (
+            sockets.size === 0
+        ) {
+
+            onlineUsers.delete(id);
+
+        }
+
+    };
+
+
+const sendToUser =
+    (
+        userId,
+        event,
+        payload
+    ) => {
+
+        const id =
+            normalizeId(userId);
+
+        if (!id) {
+            return;
+        }
+
+        const sockets =
+            onlineUsers.get(id);
+
+        if (!sockets) {
+            return;
+        }
+
+        sockets.forEach(
+            socketId => {
+
+                io
+                    .to(socketId)
+                    .emit(
+                        event,
+                        payload
+                    );
+
+            }
+        );
+
+    };
 
 
 // ======================================================
@@ -240,7 +421,7 @@ const sendToUser = (
 
 io.on(
     "connection",
-    socket => {
+    (socket) => {
 
         console.log(
             "🟢 Socket connected:",
@@ -254,7 +435,7 @@ io.on(
 
         socket.on(
             "user-online",
-            userId => {
+            (userId) => {
 
                 const id =
                     normalizeId(userId);
@@ -272,7 +453,7 @@ io.on(
 
                 io.emit(
                     "online-users",
-                    getOnlineUserIds()
+                    getOnlineUsers()
                 );
 
             }
@@ -280,12 +461,12 @@ io.on(
 
 
         // ==================================================
-        // JOIN ROOM
+        // JOIN PRIVATE CHAT ROOM
         // ==================================================
 
         socket.on(
             "join-room",
-            roomId => {
+            (roomId) => {
 
                 if (!roomId) {
                     return;
@@ -305,7 +486,7 @@ io.on(
 
         socket.on(
             "leave-room",
-            roomId => {
+            (roomId) => {
 
                 if (!roomId) {
                     return;
@@ -320,12 +501,12 @@ io.on(
 
 
         // ==================================================
-        // SEND MESSAGE
+        // REAL-TIME MESSAGE
         // ==================================================
 
         socket.on(
             "send-message",
-            payload => {
+            (payload) => {
 
                 if (!payload) {
                     return;
@@ -338,28 +519,28 @@ io.on(
                     return;
                 }
 
-
                 const receiverId =
                     normalizeId(
                         payload.receiver
                     );
-
 
                 const message = {
                     ...payload
                 };
 
 
-                // Current conversation
-                io.to(
-                    String(roomId)
-                ).emit(
-                    "receive-message",
-                    message
-                );
+                // Send to current room
+                io
+                    .to(
+                        String(roomId)
+                    )
+                    .emit(
+                        "receive-message",
+                        message
+                    );
 
 
-                // Receiver's other open tabs/windows
+                // Send notification to receiver
                 if (receiverId) {
 
                     sendToUser(
@@ -380,9 +561,11 @@ io.on(
 
         socket.on(
             "typing",
-            payload => {
+            (payload) => {
 
-                if (!payload?.roomId) {
+                if (
+                    !payload?.roomId
+                ) {
                     return;
                 }
 
@@ -412,9 +595,11 @@ io.on(
 
         socket.on(
             "stop-typing",
-            payload => {
+            (payload) => {
 
-                if (!payload?.roomId) {
+                if (
+                    !payload?.roomId
+                ) {
                     return;
                 }
 
@@ -444,35 +629,44 @@ io.on(
 
         socket.on(
             "message-seen",
-            payload => {
+            (payload) => {
 
-                if (!payload?.roomId) {
+                if (
+                    !payload?.roomId
+                ) {
                     return;
                 }
 
                 const data = {
+
                     senderId:
                         normalizeId(
                             payload.senderId
                         ),
+
                     receiverId:
                         normalizeId(
                             payload.receiverId
                         )
+
                 };
 
 
-                io.to(
-                    String(
-                        payload.roomId
+                io
+                    .to(
+                        String(
+                            payload.roomId
+                        )
                     )
-                ).emit(
-                    "messages-seen",
-                    data
-                );
+                    .emit(
+                        "messages-seen",
+                        data
+                    );
 
 
-                if (data.senderId) {
+                if (
+                    data.senderId
+                ) {
 
                     sendToUser(
                         data.senderId,
@@ -492,7 +686,7 @@ io.on(
 
         socket.on(
             "disconnect",
-            reason => {
+            (reason) => {
 
                 console.log(
                     "🔴 Socket disconnected:",
@@ -500,8 +694,9 @@ io.on(
                     reason
                 );
 
-
-                if (socket.userId) {
+                if (
+                    socket.userId
+                ) {
 
                     removeOnlineUser(
                         socket.userId,
@@ -510,10 +705,9 @@ io.on(
 
                 }
 
-
                 io.emit(
                     "online-users",
-                    getOnlineUserIds()
+                    getOnlineUsers()
                 );
 
             }
@@ -524,21 +718,43 @@ io.on(
 
 
 // ======================================================
-// START
+// START SERVER ONLY AFTER DATABASE CONNECTION
 // ======================================================
 
-server.listen(
-    PORT,
-    () => {
+const startServer =
+    async () => {
 
-        console.log(
-            `🚀 JR Store API running on port ${PORT}`
-        );
+        try {
 
-        console.log(
-            "💬 Real-time Messenger enabled"
-        );
+            await connectDB();
 
-    }
-);
-```
+            server.listen(
+                PORT,
+                () => {
+
+                    console.log(
+                        `🚀 JR Store API running on port ${PORT}`
+                    );
+
+                    console.log(
+                        "💬 Real-time Messenger enabled"
+                    );
+
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ SERVER STARTUP FAILED:",
+                error
+            );
+
+            process.exit(1);
+
+        }
+
+    };
+
+
+startServer();
