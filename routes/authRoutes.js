@@ -1,73 +1,31 @@
-const express =
-    require("express");
+```javascript
+const express = require("express");
 
-const router =
-    express.Router();
-
-const auth =
-    require("../middleware/auth");
+const router = express.Router();
 
 const {
-
-    getAnalytics,
-    updateMarketplaceSettings,
-    approveProduct,
-    getAllRegisteredUsers,
-    getDashboardSummary
-
-} =
-    require("../controllers/adminController");
+    register,
+    login
+} = require("../controllers/authController");
 
 
 // ======================================================
-// ALL ADMIN ROUTES ARE PROTECTED
+// AUTH ROUTES
 // ======================================================
 
-
-// ANALYTICS
-
-router.get(
-    "/analytics",
-    auth(["admin"]),
-    getAnalytics
+// REGISTER
+router.post(
+    "/register",
+    register
 );
 
 
-// DASHBOARD SUMMARY
-
-router.get(
-    "/summary",
-    auth(["admin"]),
-    getDashboardSummary
+// LOGIN
+router.post(
+    "/login",
+    login
 );
 
 
-// USERS
-
-router.get(
-    "/users",
-    auth(["admin"]),
-    getAllRegisteredUsers
-);
-
-
-// MARKETPLACE SETTINGS
-
-router.put(
-    "/settings",
-    auth(["admin"]),
-    updateMarketplaceSettings
-);
-
-
-// PRODUCT APPROVAL
-
-router.put(
-    "/approve/:productId",
-    auth(["admin"]),
-    approveProduct
-);
-
-
-module.exports =
-    router;
+module.exports = router;
+```
