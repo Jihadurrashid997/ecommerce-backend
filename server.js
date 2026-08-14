@@ -17,31 +17,47 @@ const PORT = process.env.PORT || 5000;
 
 
 // ======================================================
+// BASIC APP SETTINGS
+// ======================================================
+
+app.disable("x-powered-by");
+
+
+// ======================================================
 // CORS
 // ======================================================
 
 const allowedOrigins = [
-    "https://ecommerce-backend-1-a9y7.onrender.com",
     "http://localhost:3000",
-    "http://localhost:3001"
+    "http://localhost:3001",
+
+    // Current Render backend
+    "https://ecommerce-backend-1-a9y7.onrender.com",
+
+    // Current Render frontend/API deployments if used
+    "https://ecommerce-api-9wc9.onrender.com"
 ];
 
 app.use(
     cors({
         origin: function (origin, callback) {
 
-            // Allow Postman, server-to-server and mobile clients
+            // Server-to-server / Postman / mobile
             if (!origin) {
                 return callback(null, true);
             }
 
-            if (
-                allowedOrigins.includes(origin) ||
-                origin.endsWith(".onrender.com")
-            ) {
+            // Allow known origins
+            if (allowedOrigins.includes(origin)) {
                 return callback(null, true);
             }
 
+            // Allow Render deployments
+            if (origin.endsWith(".onrender.com")) {
+                return callback(null, true);
+            }
+
+            // Keep compatibility with current frontend
             return callback(null, true);
         },
 
@@ -56,7 +72,8 @@ app.use(
 
         allowedHeaders: [
             "Content-Type",
-            "Authorization"
+            "Authorization",
+            "Accept"
         ],
 
         credentials: false
@@ -83,19 +100,21 @@ app.use(
 
 
 // ======================================================
-// UPLOADS
+// UPLOAD DIRECTORY
 // ======================================================
 
 const uploadPath =
     path.join(__dirname, "uploads");
 
 if (!fs.existsSync(uploadPath)) {
+
     fs.mkdirSync(
         uploadPath,
         {
             recursive: true
         }
     );
+
 }
 
 app.use(
@@ -111,11 +130,25 @@ app.use(
 app.use(
     (req, res, next) => {
 
-        console.log(
-            `${new Date().toISOString()} ${req.method} ${req.originalUrl}`
+        const startedAt =
+            Date.now();
+
+        res.on(
+            "finish",
+            () => {
+
+                const duration =
+                    Date.now() - startedAt;
+
+                console.log(
+                    `${new Date().toISOString()} | ${req.method} ${req.originalUrl} | ${res.statusCode} | ${duration}ms`
+                );
+
+            }
         );
 
         next();
+
     }
 );
 
@@ -129,13 +162,27 @@ app.get(
     (req, res) => {
 
         res.status(200).json({
+
             success: true,
-            message: "JR Store API is running 🚀",
-            service: "ecommerce-backend",
-            database: "connected",
-            socket: "enabled",
+
+            message:
+                "JR Store API is running 🚀",
+
+            service:
+                "ecommerce-backend",
+
+            database:
+                "connected",
+
+            socket:
+                "enabled",
+
+            version:
+                "2.0.0",
+
             timestamp:
                 new Date().toISOString()
+
         });
 
     }
@@ -147,10 +194,18 @@ app.get(
     (req, res) => {
 
         res.status(200).json({
+
             success: true,
-            message: "API is healthy",
+
+            message:
+                "JR Store API is healthy",
+
+            socket:
+                "enabled",
+
             timestamp:
                 new Date().toISOString()
+
         });
 
     }
@@ -203,16 +258,19 @@ app.use(
 
 
 // ======================================================
-// API 404
+// API 404 HANDLER
 // ======================================================
 
 app.use(
     (req, res) => {
 
         res.status(404).json({
+
             success: false,
+
             message:
                 `Route not found: ${req.method} ${req.originalUrl}`
+
         });
 
     }
@@ -259,13 +317,16 @@ const io =
     new Server(
         server,
         {
+
             cors: {
+
                 origin: "*",
 
                 methods: [
                     "GET",
                     "POST"
                 ]
+
             },
 
             transports: [
@@ -273,8 +334,15 @@ const io =
                 "polling"
             ],
 
-            pingInterval: 25000,
-            pingTimeout: 20000
+            pingInterval:
+                25000,
+
+            pingTimeout:
+                20000,
+
+            maxHttpBufferSize:
+                10e6
+
         }
     );
 
@@ -287,6 +355,10 @@ const onlineUsers =
     new Map();
 
 
+// ======================================================
+// NORMALIZE USER ID
+// ======================================================
+
 const normalizeId =
     (value) => {
 
@@ -295,21 +367,29 @@ const normalizeId =
         }
 
         if (
-            typeof value === "object"
+            typeof value ===
+            "object"
         ) {
 
-            return String(
+            const id =
                 value._id ||
                 value.id ||
-                value.userId ||
-                ""
-            ) || null;
+                value.userId;
+
+            return id
+                ? String(id)
+                : null;
 
         }
 
         return String(value);
+
     };
 
+
+// ======================================================
+// GET ONLINE USERS
+// ======================================================
 
 const getOnlineUsers =
     () => {
@@ -321,8 +401,15 @@ const getOnlineUsers =
     };
 
 
+// ======================================================
+// ADD ONLINE USER
+// ======================================================
+
 const addOnlineUser =
-    (userId, socketId) => {
+    (
+        userId,
+        socketId
+    ) => {
 
         const id =
             normalizeId(userId);
@@ -349,8 +436,15 @@ const addOnlineUser =
     };
 
 
+// ======================================================
+// REMOVE ONLINE USER
+// ======================================================
+
 const removeOnlineUser =
-    (userId, socketId) => {
+    (
+        userId,
+        socketId
+    ) => {
 
         const id =
             normalizeId(userId);
@@ -359,7 +453,9 @@ const removeOnlineUser =
             !id ||
             !onlineUsers.has(id)
         ) {
+
             return;
+
         }
 
         const sockets =
@@ -377,6 +473,10 @@ const removeOnlineUser =
 
     };
 
+
+// ======================================================
+// SEND EVENT TO SPECIFIC USER
+// ======================================================
 
 const sendToUser =
     (
@@ -400,7 +500,7 @@ const sendToUser =
         }
 
         sockets.forEach(
-            socketId => {
+            (socketId) => {
 
                 io
                     .to(socketId)
@@ -444,7 +544,8 @@ io.on(
                     return;
                 }
 
-                socket.userId = id;
+                socket.userId =
+                    id;
 
                 addOnlineUser(
                     id,
@@ -461,7 +562,7 @@ io.on(
 
 
         // ==================================================
-        // JOIN PRIVATE CHAT ROOM
+        // JOIN CHAT ROOM
         // ==================================================
 
         socket.on(
@@ -472,8 +573,13 @@ io.on(
                     return;
                 }
 
-                socket.join(
-                    String(roomId)
+                const room =
+                    String(roomId);
+
+                socket.join(room);
+
+                console.log(
+                    `💬 ${socket.id} joined room ${room}`
                 );
 
             }
@@ -481,7 +587,7 @@ io.on(
 
 
         // ==================================================
-        // LEAVE ROOM
+        // LEAVE CHAT ROOM
         // ==================================================
 
         socket.on(
@@ -519,17 +625,17 @@ io.on(
                     return;
                 }
 
+                const message = {
+                    ...payload
+                };
+
                 const receiverId =
                     normalizeId(
                         payload.receiver
                     );
 
-                const message = {
-                    ...payload
-                };
 
-
-                // Send to current room
+                // Send to everyone inside room
                 io
                     .to(
                         String(roomId)
@@ -540,7 +646,7 @@ io.on(
                     );
 
 
-                // Send notification to receiver
+                // Direct notification
                 if (receiverId) {
 
                     sendToUser(
@@ -556,7 +662,7 @@ io.on(
 
 
         // ==================================================
-        // TYPING
+        // TYPING START
         // ==================================================
 
         socket.on(
@@ -566,7 +672,9 @@ io.on(
                 if (
                     !payload?.roomId
                 ) {
+
                     return;
+
                 }
 
                 socket
@@ -578,10 +686,12 @@ io.on(
                     .emit(
                         "user-typing",
                         {
+
                             userId:
                                 normalizeId(
                                     payload.userId
                                 )
+
                         }
                     );
 
@@ -590,7 +700,7 @@ io.on(
 
 
         // ==================================================
-        // STOP TYPING
+        // TYPING STOP
         // ==================================================
 
         socket.on(
@@ -600,7 +710,9 @@ io.on(
                 if (
                     !payload?.roomId
                 ) {
+
                     return;
+
                 }
 
                 socket
@@ -612,10 +724,12 @@ io.on(
                     .emit(
                         "user-stop-typing",
                         {
+
                             userId:
                                 normalizeId(
                                     payload.userId
                                 )
+
                         }
                     );
 
@@ -634,7 +748,9 @@ io.on(
                 if (
                     !payload?.roomId
                 ) {
+
                     return;
+
                 }
 
                 const data = {
@@ -681,6 +797,64 @@ io.on(
 
 
         // ==================================================
+        // MESSAGE DELIVERED
+        // ==================================================
+
+        socket.on(
+            "message-delivered",
+            (payload) => {
+
+                if (
+                    !payload?.roomId
+                ) {
+
+                    return;
+
+                }
+
+                io
+                    .to(
+                        String(
+                            payload.roomId
+                        )
+                    )
+                    .emit(
+                        "message-delivered",
+                        payload
+                    );
+
+            }
+        );
+
+
+        // ==================================================
+        // CHAT NOTIFICATION
+        // ==================================================
+
+        socket.on(
+            "chat-notification",
+            (payload) => {
+
+                const receiverId =
+                    normalizeId(
+                        payload?.receiverId
+                    );
+
+                if (!receiverId) {
+                    return;
+                }
+
+                sendToUser(
+                    receiverId,
+                    "chat-notification",
+                    payload
+                );
+
+            }
+        );
+
+
+        // ==================================================
         // DISCONNECT
         // ==================================================
 
@@ -718,7 +892,7 @@ io.on(
 
 
 // ======================================================
-// START SERVER ONLY AFTER DATABASE CONNECTION
+// SERVER START
 // ======================================================
 
 const startServer =
@@ -730,6 +904,7 @@ const startServer =
 
             server.listen(
                 PORT,
+                "0.0.0.0",
                 () => {
 
                     console.log(
@@ -737,7 +912,15 @@ const startServer =
                     );
 
                     console.log(
-                        "💬 Real-time Messenger enabled"
+                        "🗄️ MongoDB connected"
+                    );
+
+                    console.log(
+                        "💬 Socket.IO Messenger enabled"
+                    );
+
+                    console.log(
+                        "🟢 Online presence enabled"
                     );
 
                 }
@@ -756,5 +939,52 @@ const startServer =
 
     };
 
+
+// ======================================================
+// GRACEFUL SHUTDOWN
+// ======================================================
+
+const shutdown =
+    async (signal) => {
+
+        console.log(
+            `\n${signal} received. Shutting down...`
+        );
+
+        io.close(
+            () => {
+
+                server.close(
+                    () => {
+
+                        console.log(
+                            "✅ Server closed safely"
+                        );
+
+                        process.exit(0);
+
+                    }
+                );
+
+            }
+        );
+
+    };
+
+
+process.on(
+    "SIGTERM",
+    () => shutdown("SIGTERM")
+);
+
+process.on(
+    "SIGINT",
+    () => shutdown("SIGINT")
+);
+
+
+// ======================================================
+// START
+// ======================================================
 
 startServer();
