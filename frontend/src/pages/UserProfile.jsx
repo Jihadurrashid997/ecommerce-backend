@@ -1,5 +1,21 @@
-import React, { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import React, {
+    useEffect,
+    useState
+} from "react";
+
+import {
+    Link,
+    useNavigate,
+    useParams
+} from "react-router-dom";
+
+import {
+    FaArrowLeft,
+    FaComments,
+    FaMapMarkerAlt,
+    FaEnvelope,
+    FaUserCircle
+} from "react-icons/fa";
 
 import api from "../services/api";
 
@@ -10,10 +26,17 @@ const UserProfile = () => {
 
     const { id } = useParams();
 
-    const [user, setUser] = useState(null);
+    const navigate = useNavigate();
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+
+    const [user, setUser] =
+        useState(null);
+
+    const [loading, setLoading] =
+        useState(true);
+
+    const [error, setError] =
+        useState("");
 
 
     // =====================================================
@@ -21,6 +44,9 @@ const UserProfile = () => {
     // =====================================================
 
     useEffect(() => {
+
+        let cancelled = false;
+
 
         const loadProfile = async () => {
 
@@ -48,6 +74,11 @@ const UserProfile = () => {
                     );
 
 
+                if (cancelled) {
+                    return;
+                }
+
+
                 const profile =
                     response.data?.user ||
                     response.data?.data ||
@@ -65,23 +96,28 @@ const UserProfile = () => {
 
                 setUser(profile);
 
-
             } catch (err) {
 
                 console.error(
-                    "Profile loading error:",
+                    "Public profile error:",
                     err
                 );
 
 
-                setError(
-                    err.response?.data?.message ||
-                    "User profile not found."
-                );
+                if (!cancelled) {
+
+                    setError(
+                        err.response?.data?.message ||
+                        "User profile not found."
+                    );
+
+                }
 
             } finally {
 
-                setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                }
 
             }
 
@@ -90,14 +126,19 @@ const UserProfile = () => {
 
         loadProfile();
 
+
+        return () => {
+            cancelled = true;
+        };
+
     }, [id]);
 
 
     // =====================================================
-    // IMAGE URL
+    // IMAGE
     // =====================================================
 
-    const getImageUrl = (image) => {
+    const getImageUrl = image => {
 
         if (!image) {
             return null;
@@ -115,13 +156,15 @@ const UserProfile = () => {
 
 
         const baseURL =
-            api.defaults.baseURL?.replace(
-                "/api",
-                ""
-            ) || "";
+            api.defaults.baseURL
+                ?.replace("/api", "") || "";
 
 
-        return `${baseURL}${image.startsWith("/") ? "" : "/"}${image}`;
+        return `${baseURL}${
+            image.startsWith("/")
+                ? ""
+                : "/"
+        }${image}`;
 
     };
 
@@ -161,19 +204,28 @@ const UserProfile = () => {
 
                 <div className="profile-error">
 
+                    <FaUserCircle />
+
                     <h2>
                         User Not Found
                     </h2>
 
                     <p>
-                        {error ||
-                            "This profile does not exist."}
+                        {
+                            error ||
+                            "This profile does not exist."
+                        }
                     </p>
 
-
-                    <Link to="/search">
-                        Back to Search
-                    </Link>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            navigate(-1)
+                        }
+                    >
+                        <FaArrowLeft />
+                        Go Back
+                    </button>
 
                 </div>
 
@@ -184,14 +236,15 @@ const UserProfile = () => {
     }
 
 
-    // =====================================================
-    // PROFILE
-    // =====================================================
-
     const image =
         user.profileImage ||
         user.avatar ||
         user.image;
+
+
+    const userId =
+        user._id ||
+        user.id;
 
 
     return (
@@ -201,16 +254,25 @@ const UserProfile = () => {
             <div className="profile-card">
 
 
-                {/* PROFILE IMAGE */}
+                {/* BACK */}
+
+                <Link
+                    to="/"
+                    className="profile-back"
+                >
+                    <FaArrowLeft />
+                    Marketplace
+                </Link>
+
+
+                {/* AVATAR */}
 
                 <div className="profile-avatar">
 
                     {image ? (
 
                         <img
-                            src={
-                                getImageUrl(image)
-                            }
+                            src={getImageUrl(image)}
                             alt={
                                 user.name ||
                                 "User"
@@ -219,21 +281,11 @@ const UserProfile = () => {
 
                     ) : (
 
-                        <span>
-
-                            {
-                                user.name
-                                    ?.charAt(0)
-                                    ?.toUpperCase() ||
-                                "U"
-                            }
-
-                        </span>
+                        <FaUserCircle />
 
                     )}
 
                 </div>
-
 
 
                 {/* NAME */}
@@ -241,26 +293,21 @@ const UserProfile = () => {
                 <h1>
                     {
                         user.name ||
-                        "User"
+                        "Marketplace User"
                     }
                 </h1>
 
 
-
                 {/* ROLE */}
 
-                {user.role && (
+                <span className="profile-role">
 
-                    <span className="profile-role">
+                    {
+                        user.role ||
+                        "customer"
+                    }
 
-                        {
-                            user.role
-                        }
-
-                    </span>
-
-                )}
-
+                </span>
 
 
                 {/* EMAIL */}
@@ -268,23 +315,14 @@ const UserProfile = () => {
                 {user.email && (
 
                     <p>
-                        📧 {user.email}
+
+                        <FaEnvelope />
+
+                        {user.email}
+
                     </p>
 
                 )}
-
-
-
-                {/* BIO */}
-
-                {user.bio && (
-
-                    <p className="profile-bio">
-                        {user.bio}
-                    </p>
-
-                )}
-
 
 
                 {/* LOCATION */}
@@ -292,22 +330,58 @@ const UserProfile = () => {
                 {user.location && (
 
                     <p>
-                        📍 {user.location}
+
+                        <FaMapMarkerAlt />
+
+                        {user.location}
+
                     </p>
 
                 )}
 
 
+                {/* BIO */}
 
-                {/* MESSAGE */}
+                {user.bio && (
 
-                <Link
-                    to="/messenger"
-                    className="profile-message-btn"
-                >
-                    💬 Message
-                </Link>
+                    <p className="profile-bio">
 
+                        {user.bio}
+
+                    </p>
+
+                )}
+
+
+                {/* ACTIONS */}
+
+                <div className="profile-actions">
+
+                    <Link
+                        to={`/messenger?user=${userId}`}
+                        className="profile-message-btn"
+                    >
+
+                        <FaComments />
+
+                        Message
+
+                    </Link>
+
+                </div>
+
+
+                <small className="profile-member">
+
+                    Member since{" "}
+
+                    {user.createdAt
+                        ? new Date(
+                            user.createdAt
+                        ).toLocaleDateString()
+                        : "2026"}
+
+                </small>
 
             </div>
 
