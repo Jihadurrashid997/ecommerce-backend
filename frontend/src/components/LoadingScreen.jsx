@@ -1,34 +1,20 @@
-import React, { useEffect } from "react";
-import { motion } from "framer-motion";
+import React from "react";
+
+import {
+    motion
+} from "framer-motion";
 
 import "../styles/LoadingScreen.css";
 
 
-const LoadingScreen = ({ onComplete }) => {
-
-
-    useEffect(() => {
-
-        const timer =
-            setTimeout(() => {
-
-                if (onComplete) {
-                    onComplete();
-                }
-
-            }, 3000);
-
-
-        return () => {
-            clearTimeout(timer);
-        };
-
-    }, [onComplete]);
-
+const LoadingScreen = ({
+    onComplete
+}) => {
 
     return (
 
         <motion.div
+
             className="loading-screen"
 
             initial={{
@@ -38,32 +24,51 @@ const LoadingScreen = ({ onComplete }) => {
             animate={{
                 opacity: 1
             }}
+
+            exit={{
+                opacity: 0
+            }}
+
+            transition={{
+                duration: 0.45
+            }}
+
+            onAnimationComplete={() => {
+
+                if (onComplete) {
+
+                    onComplete();
+
+                }
+
+            }}
+
         >
 
             <div className="loading-content">
 
 
-                {/* 3D LOGO */}
-
                 <motion.div
+
                     className="loading-logo"
 
                     initial={{
                         scale: 0,
-                        rotateY: -180,
-                        opacity: 0
+                        opacity: 0,
+                        rotate: -20
                     }}
 
                     animate={{
                         scale: 1,
-                        rotateY: 0,
-                        opacity: 1
+                        opacity: 1,
+                        rotate: 0
                     }}
 
                     transition={{
-                        duration: 1,
-                        ease: [0.22, 1, 0.36, 1]
+                        duration: 0.65,
+                        ease: "easeOut"
                     }}
+
                 >
 
                     JR
@@ -71,13 +76,11 @@ const LoadingScreen = ({ onComplete }) => {
                 </motion.div>
 
 
-                {/* BRAND */}
-
                 <motion.h1
 
                     initial={{
                         opacity: 0,
-                        y: 25
+                        y: 20
                     }}
 
                     animate={{
@@ -86,12 +89,13 @@ const LoadingScreen = ({ onComplete }) => {
                     }}
 
                     transition={{
-                        delay: 0.45,
-                        duration: 0.7
+                        delay: 0.25,
+                        duration: 0.45
                     }}
+
                 >
 
-                    JR Store
+                    Marketplace
 
                 </motion.h1>
 
@@ -107,9 +111,10 @@ const LoadingScreen = ({ onComplete }) => {
                     }}
 
                     transition={{
-                        delay: 0.8,
-                        duration: 0.6
+                        delay: 0.4,
+                        duration: 0.4
                     }}
+
                 >
 
                     Buy • Sell • Chat • Secure Payment
@@ -117,49 +122,24 @@ const LoadingScreen = ({ onComplete }) => {
                 </motion.p>
 
 
-                {/* LOADING BAR */}
+                <motion.div
 
-                <div className="loading-bar">
-
-                    <motion.div
-                        className="loading-bar-progress"
-
-                        initial={{
-                            width: "0%"
-                        }}
-
-                        animate={{
-                            width: "100%"
-                        }}
-
-                        transition={{
-                            duration: 2.5,
-                            ease: "easeInOut"
-                        }}
-                    />
-
-                </div>
-
-
-                <motion.span
-                    className="loading-status"
+                    className="loading-line"
 
                     initial={{
-                        opacity: 0
+                        width: 0
                     }}
 
                     animate={{
-                        opacity: 1
+                        width: "180px"
                     }}
 
                     transition={{
-                        delay: 1
+                        delay: 0.35,
+                        duration: 0.6
                     }}
-                >
 
-                    Preparing your marketplace...
-
-                </motion.span>
+                />
 
             </div>
 
