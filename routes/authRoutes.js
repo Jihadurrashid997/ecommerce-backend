@@ -1,87 +1,73 @@
-const express = require("express");
+const express =
+    require("express");
 
 const router =
     express.Router();
 
-
-const {
-    register,
-    login,
-    me
-} = require("../controllers/authController");
-
-
 const auth =
     require("../middleware/auth");
 
+const {
+
+    getAnalytics,
+    updateMarketplaceSettings,
+    approveProduct,
+    getAllRegisteredUsers,
+    getDashboardSummary
+
+} =
+    require("../controllers/adminController");
 
 
-// ==================================================
-// PUBLIC ROUTES
-// ==================================================
+// ======================================================
+// ALL ADMIN ROUTES ARE PROTECTED
+// ======================================================
 
 
-// ==============================
-// REGISTER
-// ==============================
-
-router.post(
-    "/register",
-    register
-);
-
-
-// ==============================
-// LOGIN
-// ==============================
-
-router.post(
-    "/login",
-    login
-);
-
-
-
-// ==================================================
-// PROTECTED ROUTES
-// ==================================================
-
-
-// ==============================
-// VERIFY CURRENT USER
-// ==============================
+// ANALYTICS
 
 router.get(
-    "/me",
-    auth(),
-    me
+    "/analytics",
+    auth(["admin"]),
+    getAnalytics
 );
 
 
-// ==============================
-// PROFILE
-// ==============================
+// DASHBOARD SUMMARY
 
 router.get(
-    "/profile",
-    auth(),
-    (req, res) => {
-
-        res.status(200).json({
-
-            success: true,
-
-            message:
-                "Welcome to your profile!",
-
-            user:
-                req.user
-
-        });
-
-    }
+    "/summary",
+    auth(["admin"]),
+    getDashboardSummary
 );
 
 
+// USERS
 
-module.exports = router;
+router.get(
+    "/users",
+    auth(["admin"]),
+    getAllRegisteredUsers
+);
+
+
+// MARKETPLACE SETTINGS
+
+router.put(
+    "/settings",
+    auth(["admin"]),
+    updateMarketplaceSettings
+);
+
+
+// PRODUCT APPROVAL
+
+router.put(
+    "/approve/:productId",
+    auth(["admin"]),
+    approveProduct
+);
+
+
+module.exports =
+    router;
