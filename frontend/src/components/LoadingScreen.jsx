@@ -1,575 +1,284 @@
-```javascript
-import React, {
-    useEffect,
-    useState
-} from "react";
+```jsx
+import React, { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import "../styles/Animation.css";
 
-import {
-    motion,
-    AnimatePresence
-} from "framer-motion";
-
-
-const LoadingScreen = ({
-    onComplete
-}) => {
-
-    const [
-        exiting,
-        setExiting
-    ] = useState(false);
-
+const LoadingScreen = ({ onComplete }) => {
+    const [progress, setProgress] = useState(0);
+    const [finished, setFinished] = useState(false);
 
     useEffect(() => {
+        let current = 0;
 
-        const timer =
-            setTimeout(
-                () => {
+        const interval = setInterval(() => {
+            current += Math.floor(Math.random() * 8) + 4;
 
-                    setExiting(true);
+            if (current >= 100) {
+                current = 100;
+                clearInterval(interval);
 
-                    setTimeout(
-                        () => {
+                setProgress(100);
 
-                            if (onComplete) {
-                                onComplete();
-                            }
+                setTimeout(() => {
+                    setFinished(true);
 
-                        },
-                        850
-                    );
+                    setTimeout(() => {
+                        if (typeof onComplete === "function") {
+                            onComplete();
+                        }
+                    }, 500);
+                }, 500);
+            } else {
+                setProgress(current);
+            }
+        }, 100);
 
-                },
-                3000
-            );
-
-
-        return () =>
-            clearTimeout(timer);
-
+        return () => clearInterval(interval);
     }, [onComplete]);
 
-
-    const particles =
-        Array.from(
-            {
-                length: 18
-            },
-            (_, index) =>
-                index
-        );
-
-
     return (
-
         <AnimatePresence>
-
-            {!exiting && (
-
+            {!finished && (
                 <motion.div
-                    initial={{
-                        opacity: 1
-                    }}
-                    animate={{
-                        opacity: 1
-                    }}
+                    className="loading-screen"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     exit={{
                         opacity: 0,
-                        scale: 1.08,
-                        filter:
-                            "blur(14px)"
+                        scale: 1.05
                     }}
                     transition={{
-                        duration: 0.85,
-                        ease:
-                            [0.22, 1, 0.36, 1]
-                    }}
-                    style={{
-                        position: "fixed",
-                        inset: 0,
-                        zIndex: 999999,
-                        overflow: "hidden",
-                        display: "flex",
-                        alignItems:
-                            "center",
-                        justifyContent:
-                            "center",
-                        background:
-                            "radial-gradient(circle at 50% 35%, #182848 0%, #080d18 42%, #03050a 100%)",
-                        color: "#fff",
-                        fontFamily:
-                            "Inter, Arial, sans-serif"
+                        duration: 0.6
                     }}
                 >
 
-                    {/* =================================================
-                        AMBIENT GLOW
-                    ================================================= */}
+                    {/* Animated background */}
+                    <div className="loading-background">
 
+                        <motion.div
+                            className="loading-orb orb-one"
+                            animate={{
+                                x: [0, 80, 0],
+                                y: [0, -50, 0],
+                                scale: [1, 1.15, 1]
+                            }}
+                            transition={{
+                                duration: 5,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                        />
+
+                        <motion.div
+                            className="loading-orb orb-two"
+                            animate={{
+                                x: [0, -70, 0],
+                                y: [0, 60, 0],
+                                scale: [1, 1.2, 1]
+                            }}
+                            transition={{
+                                duration: 6,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                        />
+
+                        <motion.div
+                            className="loading-orb orb-three"
+                            animate={{
+                                rotate: [0, 180, 360],
+                                scale: [1, 1.1, 1]
+                            }}
+                            transition={{
+                                duration: 8,
+                                repeat: Infinity,
+                                ease: "linear"
+                            }}
+                        />
+
+                    </div>
+
+
+                    {/* Main content */}
                     <motion.div
+                        className="loading-content"
+                        initial={{
+                            opacity: 0,
+                            y: 40,
+                            scale: 0.9
+                        }}
                         animate={{
-                            scale: [
-                                1,
-                                1.25,
-                                1
-                            ],
-                            opacity: [
-                                0.25,
-                                0.5,
-                                0.25
-                            ]
+                            opacity: 1,
+                            y: 0,
+                            scale: 1
                         }}
                         transition={{
-                            duration: 3,
-                            repeat: Infinity,
-                            ease:
-                                "easeInOut"
-                        }}
-                        style={{
-                            position:
-                                "absolute",
-                            width:
-                                "520px",
-                            height:
-                                "520px",
-                            borderRadius:
-                                "50%",
-                            background:
-                                "radial-gradient(circle, rgba(99,102,241,.45), transparent 68%)",
-                            filter:
-                                "blur(30px)"
-                        }}
-                    />
-
-
-                    {/* =================================================
-                        PARTICLES
-                    ================================================= */}
-
-                    {particles.map(
-                        particle => (
-
-                            <motion.span
-                                key={
-                                    particle
-                                }
-                                initial={{
-                                    opacity: 0,
-                                    y: 40
-                                }}
-                                animate={{
-                                    opacity: [
-                                        0,
-                                        0.8,
-                                        0
-                                    ],
-                                    y: [
-                                        40,
-                                        -160,
-                                        -260
-                                    ],
-                                    x: [
-                                        0,
-                                        (particle % 2
-                                            ? 1
-                                            : -1) *
-                                            (30 +
-                                                particle *
-                                                4)
-                                    ]
-                                }}
-                                transition={{
-                                    duration:
-                                        2.6 +
-                                        (particle %
-                                            5) *
-                                            0.25,
-                                    delay:
-                                        particle *
-                                        0.08,
-                                    repeat:
-                                        Infinity,
-                                    ease:
-                                        "easeOut"
-                                }}
-                                style={{
-                                    position:
-                                        "absolute",
-                                    left:
-                                        `${15 +
-                                        (particle *
-                                            4.7) %
-                                            70}%`,
-                                    top:
-                                        `${50 +
-                                        (particle %
-                                            5) *
-                                            5}%`,
-                                    width:
-                                        particle %
-                                            3 ===
-                                        0
-                                            ? "5px"
-                                            : "3px",
-                                    height:
-                                        particle %
-                                            3 ===
-                                        0
-                                            ? "5px"
-                                            : "3px",
-                                    borderRadius:
-                                        "50%",
-                                    background:
-                                        "#fff",
-                                    boxShadow:
-                                        "0 0 14px rgba(255,255,255,.9)"
-                                }}
-                            />
-
-                        )
-                    )}
-
-
-                    {/* =================================================
-                        3D LOGO SCENE
-                    ================================================= */}
-
-                    <div
-                        style={{
-                            position:
-                                "relative",
-                            width:
-                                "310px",
-                            height:
-                                "390px",
-                            display:
-                                "flex",
-                            flexDirection:
-                                "column",
-                            alignItems:
-                                "center",
-                            justifyContent:
-                                "center",
-                            perspective:
-                                "1000px"
+                            duration: 0.9,
+                            ease: [0.22, 1, 0.36, 1]
                         }}
                     >
 
-                        {/* ORBIT 1 */}
-
+                        {/* Logo */}
                         <motion.div
+                            className="loading-logo"
                             animate={{
-                                rotateX: 70,
-                                rotateZ: 360
+                                y: [0, -8, 0],
+                                rotateY: [0, 8, 0, -8, 0]
                             }}
                             transition={{
-                                rotateZ: {
-                                    duration:
-                                        5,
-                                    repeat:
-                                        Infinity,
-                                    ease:
-                                        "linear"
-                                }
-                            }}
-                            style={{
-                                position:
-                                    "absolute",
-                                width:
-                                    "280px",
-                                height:
-                                    "280px",
-                                border:
-                                    "1px solid rgba(129,140,248,.5)",
-                                borderRadius:
-                                    "50%",
-                                boxShadow:
-                                    "0 0 30px rgba(99,102,241,.25)"
-                            }}
-                        />
-
-
-                        {/* ORBIT 2 */}
-
-                        <motion.div
-                            animate={{
-                                rotateY:
-                                    70,
-                                rotateZ:
-                                    -360
-                            }}
-                            transition={{
-                                rotateZ: {
-                                    duration:
-                                        7,
-                                    repeat:
-                                        Infinity,
-                                    ease:
-                                        "linear"
-                                }
-                            }}
-                            style={{
-                                position:
-                                    "absolute",
-                                width:
-                                    "235px",
-                                height:
-                                    "235px",
-                                border:
-                                    "1px solid rgba(56,189,248,.45)",
-                                borderRadius:
-                                    "50%"
-                            }}
-                        />
-
-
-                        {/* 3D CARD */}
-
-                        <motion.div
-                            initial={{
-                                opacity: 0,
-                                scale: 0.2,
-                                rotateX: -80,
-                                rotateY: 80
-                            }}
-                            animate={{
-                                opacity: 1,
-                                scale: 1,
-                                rotateX: 0,
-                                rotateY: 0
-                            }}
-                            transition={{
-                                duration:
-                                    1.2,
-                                ease:
-                                    [0.16, 1, 0.3, 1]
-                            }}
-                            style={{
-                                width:
-                                    "150px",
-                                height:
-                                    "150px",
-                                borderRadius:
-                                    "36px",
-                                display:
-                                    "flex",
-                                alignItems:
-                                    "center",
-                                justifyContent:
-                                    "center",
-                                position:
-                                    "relative",
-                                zIndex: 5,
-                                transformStyle:
-                                    "preserve-3d",
-                                background:
-                                    "linear-gradient(145deg, rgba(255,255,255,.2), rgba(255,255,255,.04))",
-                                border:
-                                    "1px solid rgba(255,255,255,.3)",
-                                boxShadow:
-                                    "0 35px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.35)",
-                                backdropFilter:
-                                    "blur(18px)"
-                            }}
-                        >
-
-                            <motion.div
-                                animate={{
-                                    rotateY: [
-                                        0,
-                                        360
-                                    ]
-                                }}
-                                transition={{
-                                    duration:
-                                        4,
-                                    repeat:
-                                        Infinity,
-                                    ease:
-                                        "linear"
-                                }}
-                                style={{
-                                    fontSize:
-                                        "64px",
-                                    fontWeight:
-                                        900,
-                                    letterSpacing:
-                                        "-5px",
-                                    background:
-                                        "linear-gradient(135deg, #fff, #818cf8, #38bdf8)",
-                                    WebkitBackgroundClip:
-                                        "text",
-                                    WebkitTextFillColor:
-                                        "transparent",
-                                    textShadow:
-                                        "0 10px 40px rgba(99,102,241,.5)"
-                                }}
-                            >
-                                JR
-                            </motion.div>
-
-                        </motion.div>
-
-
-                        {/* BRAND */}
-
-                        <motion.h1
-                            initial={{
-                                opacity: 0,
-                                y: 25
-                            }}
-                            animate={{
-                                opacity: 1,
-                                y: 0
-                            }}
-                            transition={{
-                                delay:
-                                    0.75,
-                                duration:
-                                    0.7
-                            }}
-                            style={{
-                                marginTop:
-                                    "42px",
-                                marginBottom:
-                                    "6px",
-                                fontSize:
-                                    "36px",
-                                fontWeight:
-                                    800,
-                                letterSpacing:
-                                    "-1px"
+                                duration: 3,
+                                repeat: Infinity,
+                                ease: "easeInOut"
                             }}
                         >
                             JR
-                            <span
-                                style={{
-                                    fontWeight:
-                                        400,
-                                    marginLeft:
-                                        "7px",
-                                    opacity:
-                                        0.85
-                                }}
-                            >
-                                Store
-                            </span>
+                        </motion.div>
+
+
+                        {/* Brand */}
+                        <motion.h1
+                            className="loading-title"
+                            initial={{
+                                opacity: 0,
+                                letterSpacing: "10px"
+                            }}
+                            animate={{
+                                opacity: 1,
+                                letterSpacing: "2px"
+                            }}
+                            transition={{
+                                duration: 1
+                            }}
+                        >
+                            <strong>JR</strong> Store
                         </motion.h1>
 
 
                         <motion.p
+                            className="loading-subtitle"
                             initial={{
                                 opacity: 0
                             }}
                             animate={{
-                                opacity: 0.75
+                                opacity: 1
                             }}
                             transition={{
-                                delay:
-                                    1.1,
-                                duration:
-                                    0.6
-                            }}
-                            style={{
-                                margin: 0,
-                                fontSize:
-                                    "13px",
-                                letterSpacing:
-                                    "3px",
-                                textTransform:
-                                    "uppercase"
+                                delay: 0.4,
+                                duration: 0.7
                             }}
                         >
-                            Buy • Sell • Connect
+                            Buy • Sell • Chat • Secure Payment
                         </motion.p>
 
 
-                        {/* LOADING BAR */}
-
-                        <div
-                            style={{
-                                width:
-                                    "190px",
-                                height:
-                                    "3px",
-                                marginTop:
-                                    "28px",
-                                borderRadius:
-                                    "999px",
-                                overflow:
-                                    "hidden",
-                                background:
-                                    "rgba(255,255,255,.12)"
-                            }}
-                        >
+                        {/* 3D rotating ring */}
+                        <div className="loading-loader">
 
                             <motion.div
-                                initial={{
-                                    width: 0
-                                }}
+                                className="loader-ring ring-one"
                                 animate={{
-                                    width:
-                                        "100%"
+                                    rotate: 360
                                 }}
                                 transition={{
-                                    duration:
-                                        2.5,
-                                    ease:
-                                        "linear"
+                                    duration: 1.8,
+                                    repeat: Infinity,
+                                    ease: "linear"
                                 }}
-                                style={{
-                                    height:
-                                        "100%",
-                                    borderRadius:
-                                        "999px",
-                                    background:
-                                        "linear-gradient(90deg, #6366f1, #38bdf8, #a78bfa)",
-                                    boxShadow:
-                                        "0 0 18px rgba(99,102,241,.9)"
+                            />
+
+                            <motion.div
+                                className="loader-ring ring-two"
+                                animate={{
+                                    rotate: -360
+                                }}
+                                transition={{
+                                    duration: 2.4,
+                                    repeat: Infinity,
+                                    ease: "linear"
+                                }}
+                            />
+
+                            <motion.div
+                                className="loader-dot"
+                                animate={{
+                                    scale: [1, 1.5, 1],
+                                    opacity: [0.6, 1, 0.6]
+                                }}
+                                transition={{
+                                    duration: 1,
+                                    repeat: Infinity
                                 }}
                             />
 
                         </div>
 
 
-                        <motion.span
-                            animate={{
-                                opacity: [
-                                    0.35,
-                                    1,
-                                    0.35
-                                ]
-                            }}
-                            transition={{
-                                duration:
-                                    1.2,
-                                repeat:
-                                    Infinity
-                            }}
-                            style={{
-                                marginTop:
-                                    "13px",
-                                fontSize:
-                                    "11px",
-                                opacity:
-                                    0.55
-                            }}
-                        >
-                            Preparing your marketplace...
-                        </motion.span>
+                        {/* Progress */}
+                        <div className="loading-progress-wrapper">
 
-                    </div>
+                            <div className="loading-progress">
+
+                                <motion.div
+                                    className="loading-progress-bar"
+                                    initial={{
+                                        width: "0%"
+                                    }}
+                                    animate={{
+                                        width: `${progress}%`
+                                    }}
+                                    transition={{
+                                        duration: 0.25
+                                    }}
+                                />
+
+                            </div>
+
+                            <div className="loading-progress-info">
+
+                                <span>
+                                    {progress < 100
+                                        ? "Preparing your marketplace..."
+                                        : "Welcome to JR Store"}
+                                </span>
+
+                                <span>
+                                    {progress}%
+                                </span>
+
+                            </div>
+
+                        </div>
+
+                    </motion.div>
+
+
+                    {/* Bottom text */}
+                    <motion.div
+                        className="loading-footer"
+                        initial={{
+                            opacity: 0
+                        }}
+                        animate={{
+                            opacity: 1
+                        }}
+                        transition={{
+                            delay: 1
+                        }}
+                    >
+                        <span>
+                            © 2026 JR Store
+                        </span>
+
+                        <span>
+                            Premium Marketplace
+                        </span>
+                    </motion.div>
 
                 </motion.div>
-
             )}
-
         </AnimatePresence>
-
     );
-
 };
-
 
 export default LoadingScreen;
 ```
