@@ -1,45 +1,32 @@
+// ============================================================
+// JR STORE - CENTRAL API SERVICE
+// ============================================================
+
 import axios from "axios";
-
-/*
-=========================================================
-JR STORE - CENTRAL API CONFIGURATION
-=========================================================
-
-IMPORTANT:
-Frontend:
-https://ecommerce-backend-1-a9y7.onrender.com
-
-Backend API:
-https://ecommerce-api-9wc9.onrender.com
-
-We intentionally keep the production API URL fixed here.
-This prevents an incorrect Render REACT_APP_API_URL
-environment variable from breaking login/search/chat.
-=========================================================
-*/
 
 const API_URL =
     "https://ecommerce-api-9wc9.onrender.com/api";
 
+// ============================================================
+// AXIOS INSTANCE
+// ============================================================
 
 const api = axios.create({
 
     baseURL: API_URL,
 
-    headers: {
-        "Content-Type": "application/json"
-    },
+    timeout: 30000,
 
-    timeout: 30000
+    headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+    }
 
 });
 
-
-/*
-=========================================================
-REQUEST INTERCEPTOR
-=========================================================
-*/
+// ============================================================
+// REQUEST INTERCEPTOR
+// ============================================================
 
 api.interceptors.request.use(
 
@@ -70,12 +57,9 @@ api.interceptors.request.use(
 
 );
 
-
-/*
-=========================================================
-RESPONSE INTERCEPTOR
-=========================================================
-*/
+// ============================================================
+// RESPONSE INTERCEPTOR
+// ============================================================
 
 api.interceptors.response.use(
 
@@ -88,35 +72,69 @@ api.interceptors.response.use(
     (error) => {
 
         const status =
-            error.response?.status;
-
-        /*
-        Do NOT immediately logout on every 401
-        from login/register requests.
-        */
+            error?.response?.status;
 
         const requestUrl =
-            error.config?.url || "";
+            error?.config?.url || "";
 
-        const isAuthRequest =
-            requestUrl.includes("/auth/login") ||
-            requestUrl.includes("/auth/register");
+        const isLogin =
+            requestUrl.includes(
+                "/auth/login"
+            );
+
+        const isRegister =
+            requestUrl.includes(
+                "/auth/register"
+            );
+
+        /*
+         * Never delete the login credentials/token here.
+         *
+         * A failed login must be handled by the login page.
+         * This interceptor is only responsible for expired
+         * authenticated sessions.
+         */
 
         if (
             status === 401 &&
-            !isAuthRequest
+            !isLogin &&
+            !isRegister
         ) {
 
-            localStorage.removeItem("token");
-            localStorage.removeItem("user");
+            localStorage.removeItem(
+                "token"
+            );
+
+            localStorage.removeItem(
+                "user"
+            );
 
         }
 
-        return Promise.reject(error);
+        return Promise.reject(
+            error
+        );
 
     }
 
 );
 
+// ============================================================
+// API HELPER
+// ============================================================
+
+export const getApiErrorMessage = (
+    error,
+    fallback = "Something went wrong"
+) => {
+
+    return (
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        fallback
+    );
+
+};
 
 export default api;
