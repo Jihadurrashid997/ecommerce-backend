@@ -16,6 +16,9 @@ const MessageSchema =
                     "User",
 
                 required:
+                    true,
+
+                index:
                     true
 
             },
@@ -30,6 +33,9 @@ const MessageSchema =
                     "User",
 
                 required:
+                    true,
+
+                index:
                     true
 
             },
@@ -44,7 +50,10 @@ const MessageSchema =
                     true,
 
                 trim:
-                    true
+                    true,
+
+                maxlength:
+                    5000
 
             },
 
@@ -55,7 +64,10 @@ const MessageSchema =
                     Boolean,
 
                 default:
-                    false
+                    false,
+
+                index:
+                    true
 
             }
 
@@ -67,6 +79,22 @@ const MessageSchema =
         }
 
     );
+
+
+// Fast conversation lookup
+
+MessageSchema.index({
+    sender: 1,
+    receiver: 1,
+    createdAt: 1
+});
+
+
+MessageSchema.index({
+    receiver: 1,
+    sender: 1,
+    createdAt: 1
+});
 
 
 module.exports =
