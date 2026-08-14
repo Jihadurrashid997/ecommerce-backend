@@ -1,30 +1,45 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import React, {
+    useEffect,
+    useMemo,
+    useState
+} from "react";
+
+import {
+    Link,
+    useSearchParams
+} from "react-router-dom";
+
 import {
     FaSearch,
     FaUserCircle,
-    FaComments,
     FaBoxOpen,
     FaArrowLeft,
-    FaTimes
+    FaComments
 } from "react-icons/fa";
 
 import api from "../services/api";
-import ProductCard from "../components/ProductCard";
 
 import "../styles/SearchResults.css";
 
 
 const SearchResults = () => {
 
-    const [searchParams] = useSearchParams();
+    const [searchParams] =
+        useSearchParams();
 
-    const query =
-        (searchParams.get("q") || "").trim();
+    const keyword =
+        (
+            searchParams.get("q") ||
+            searchParams.get("search") ||
+            ""
+        ).trim();
 
 
-    const [products, setProducts] = useState([]);
-    const [users, setUsers] = useState([]);
+    const [users, setUsers] =
+        useState([]);
+
+    const [products, setProducts] =
+        useState([]);
 
     const [loading, setLoading] =
         useState(false);
@@ -32,90 +47,203 @@ const SearchResults = () => {
     const [error, setError] =
         useState("");
 
+    const [searched, setSearched] =
+        useState(false);
 
-    // =====================================================
+
+    // ==================================================
+    // API BASE
+    // ==================================================
+
+    const apiBase =
+        useMemo(() => {
+
+            return (
+                api.defaults.baseURL ||
+                ""
+            ).replace(/\/api\/?$/, "");
+
+        }, []);
+
+
+    // ==================================================
     // IMAGE URL
-    // =====================================================
+    // ==================================================
 
-    const getImageUrl = (image) => {
+    const getImageUrl = (value) => {
 
-        if (!image) {
+        if (!value) {
             return null;
         }
 
+        const image =
+            String(value);
+
         if (
             image.startsWith("http://") ||
-            image.startsWith("https://")
+            image.startsWith("https://") ||
+            image.startsWith("data:")
         ) {
+
             return image;
+
         }
 
-        const baseURL =
-            api.defaults.baseURL
-                ?.replace("/api", "") || "";
-
-        return `${baseURL}${
-            image.startsWith("/")
-                ? ""
-                : "/"
-        }${image}`;
+        return (
+            apiBase +
+            (
+                image.startsWith("/")
+                    ? image
+                    : `/${image}`
+            )
+        );
 
     };
 
 
-    // =====================================================
+    // ==================================================
+    // NORMALIZE USERS
+    // ==================================================
+
+    const normalizeUsers = (response) => {
+
+        const data =
+            response?.data;
+
+        if (
+            Array.isArray(data)
+        ) {
+            return data;
+        }
+
+        if (
+            Array.isArray(
+                data?.users
+            )
+        ) {
+            return data.users;
+        }
+
+        if (
+            Array.isArray(
+                data?.data
+            )
+        ) {
+            return data.data;
+        }
+
+        if (
+            Array.isArray(
+                data?.results
+            )
+        ) {
+            return data.results;
+        }
+
+        return [];
+
+    };
+
+
+    // ==================================================
+    // NORMALIZE PRODUCTS
+    // ==================================================
+
+    const normalizeProducts =
+        (response) => {
+
+            const data =
+                response?.data;
+
+            if (
+                Array.isArray(data)
+            ) {
+                return data;
+            }
+
+            if (
+                Array.isArray(
+                    data?.products
+                )
+            ) {
+                return data.products;
+            }
+
+            if (
+                Array.isArray(
+                    data?.data
+                )
+            ) {
+                return data.data;
+            }
+
+            if (
+                Array.isArray(
+                    data?.results
+                )
+            ) {
+                return data.results;
+            }
+
+            return [];
+
+        };
+
+
+    // ==================================================
     // SEARCH
-    // =====================================================
+    // ==================================================
 
     useEffect(() => {
 
         let cancelled = false;
 
-
         const runSearch = async () => {
 
-            if (!query) {
+            if (!keyword) {
 
-                setProducts([]);
                 setUsers([]);
+                setProducts([]);
+                setError("");
                 setLoading(false);
+                setSearched(false);
 
                 return;
-            }
 
+            }
 
             setLoading(true);
             setError("");
+            setSearched(false);
 
 
-            // -------------------------------------------------
-            // PRODUCTS
-            // -------------------------------------------------
-
-            const productRequest =
-                api.get(
-                    `/products?keyword=${encodeURIComponent(query)}`
+            const encoded =
+                encodeURIComponent(
+                    keyword
                 );
 
 
-            // -------------------------------------------------
-            // USERS
-            //
-            // We use /chat-users as the primary directory.
-            // This avoids the old search endpoint problem.
-            // -------------------------------------------------
-
-            const userRequest =
-                api.get("/users/chat-users");
-
-
             const [
-                productResult,
-                userResult
-            ] = await Promise.allSettled([
-                productRequest,
-                userRequest
-            ]);
+                userResult,
+                productResult
+            ] =
+                await Promise.allSettled([
+
+                    api.get(
+                        `/users/search?q=${encoded}`,
+                        {
+                            timeout: 12000
+                        }
+                    ),
+
+                    api.get(
+                        `/products?keyword=${encoded}`,
+                        {
+                            timeout: 12000
+                        }
+                    )
+
+                ]);
 
 
             if (cancelled) {
@@ -123,138 +251,70 @@ const SearchResults = () => {
             }
 
 
-            // =================================================
-            // PRODUCTS
-            // =================================================
-
-            if (
-                productResult.status ===
-                "fulfilled"
-            ) {
-
-                const data =
-                    productResult.value.data;
-
-                const list =
-                    Array.isArray(data)
-                        ? data
-                        : data?.products ||
-                          data?.data ||
-                          [];
-
-                setProducts(
-                    Array.isArray(list)
-                        ? list
-                        : []
-                );
-
-            } else {
-
-                console.error(
-                    "Product search error:",
-                    productResult.reason
-                );
-
-                setProducts([]);
-
-            }
+            let foundUsers = [];
+            let foundProducts = [];
 
 
-            // =================================================
             // USERS
-            // =================================================
 
             if (
                 userResult.status ===
                 "fulfilled"
             ) {
 
-                const response =
-                    userResult.value.data;
-
-                const allUsers =
-                    response?.users ||
-                    response?.data ||
-                    response ||
-                    [];
-
-
-                const userList =
-                    Array.isArray(allUsers)
-                        ? allUsers
-                        : [];
-
-
-                const search =
-                    query.toLowerCase();
-
-
-                const matchedUsers =
-                    userList.filter(
-                        person => {
-
-                            const name =
-                                String(
-                                    person.name ||
-                                    ""
-                                ).toLowerCase();
-
-                            const email =
-                                String(
-                                    person.email ||
-                                    ""
-                                ).toLowerCase();
-
-                            const role =
-                                String(
-                                    person.role ||
-                                    ""
-                                ).toLowerCase();
-
-                            const bio =
-                                String(
-                                    person.bio ||
-                                    ""
-                                ).toLowerCase();
-
-                            const location =
-                                String(
-                                    person.location ||
-                                    ""
-                                ).toLowerCase();
-
-
-                            return (
-                                name.includes(search) ||
-                                email.includes(search) ||
-                                role.includes(search) ||
-                                bio.includes(search) ||
-                                location.includes(search)
-                            );
-
-                        }
+                foundUsers =
+                    normalizeUsers(
+                        userResult.value
                     );
-
-
-                setUsers(matchedUsers);
 
             } else {
 
                 console.error(
-                    "User directory error:",
+                    "User search failed:",
                     userResult.reason
                 );
 
-                setUsers([]);
+            }
+
+
+            // PRODUCTS
+
+            if (
+                productResult.status ===
+                "fulfilled"
+            ) {
+
+                foundProducts =
+                    normalizeProducts(
+                        productResult.value
+                    );
+
+            } else {
+
+                console.error(
+                    "Product search failed:",
+                    productResult.reason
+                );
 
             }
 
 
+            setUsers(
+                Array.isArray(foundUsers)
+                    ? foundUsers
+                    : []
+            );
+
+            setProducts(
+                Array.isArray(foundProducts)
+                    ? foundProducts
+                    : []
+            );
+
+
             if (
-                productResult.status ===
-                    "rejected" &&
-                userResult.status ===
-                    "rejected"
+                userResult.status === "rejected" &&
+                productResult.status === "rejected"
             ) {
 
                 setError(
@@ -264,6 +324,7 @@ const SearchResults = () => {
             }
 
 
+            setSearched(true);
             setLoading(false);
 
         };
@@ -273,33 +334,19 @@ const SearchResults = () => {
 
 
         return () => {
+
             cancelled = true;
+
         };
 
-    }, [query]);
+    }, [keyword]);
 
 
-    // =====================================================
-    // RESULT COUNT
-    // =====================================================
+    // ==================================================
+    // NO KEYWORD
+    // ==================================================
 
-    const totalResults =
-        useMemo(
-            () =>
-                users.length +
-                products.length,
-            [
-                users.length,
-                products.length
-            ]
-        );
-
-
-    // =====================================================
-    // NO QUERY
-    // =====================================================
-
-    if (!query) {
+    if (!keyword) {
 
         return (
 
@@ -316,7 +363,7 @@ const SearchResults = () => {
                         </h2>
 
                         <p>
-                            Search for products,
+                            Search products,
                             sellers and people.
                         </p>
 
@@ -339,9 +386,9 @@ const SearchResults = () => {
     }
 
 
-    // =====================================================
+    // ==================================================
     // LOADING
-    // =====================================================
+    // ==================================================
 
     if (loading) {
 
@@ -356,11 +403,11 @@ const SearchResults = () => {
                         <div className="search-spinner"></div>
 
                         <h2>
-                            Searching Marketplace...
+                            Searching Marketplace
                         </h2>
 
                         <p>
-                            Finding products and people.
+                            Finding products and people...
                         </p>
 
                     </div>
@@ -373,10 +420,6 @@ const SearchResults = () => {
 
     }
 
-
-    // =====================================================
-    // PAGE
-    // =====================================================
 
     return (
 
@@ -398,28 +441,13 @@ const SearchResults = () => {
                         </h1>
 
                         <p>
-
                             Results for{" "}
-
                             <strong>
-                                "{query}"
+                                "{keyword}"
                             </strong>
-
-                            {" • "}
-
-                            {totalResults} results
-
                         </p>
 
                     </div>
-
-                    <Link
-                        to="/"
-                        className="search-back-button"
-                        title="Back"
-                    >
-                        <FaTimes />
-                    </Link>
 
                 </div>
 
@@ -429,23 +457,24 @@ const SearchResults = () => {
                 {error && (
 
                     <div className="search-error">
+
                         {error}
+
                     </div>
 
                 )}
 
 
-                {/* =================================================
+                {/* ==========================================
                     PEOPLE
-                ================================================= */}
+                =========================================== */}
 
                 <section className="search-section">
 
                     <div className="section-heading">
 
                         <h2>
-                            <FaUserCircle />
-                            People
+                            👤 People
                         </h2>
 
                         <span>
@@ -460,9 +489,8 @@ const SearchResults = () => {
                         <div className="no-results-small">
 
                             No people found for{" "}
-
                             <strong>
-                                "{query}"
+                                "{keyword}"
                             </strong>
 
                         </div>
@@ -471,51 +499,76 @@ const SearchResults = () => {
 
                         <div className="user-search-grid">
 
-                            {users.map(person => {
+                            {users.map(
+                                (person) => {
 
-                                const id =
-                                    person._id ||
-                                    person.id;
+                                    const id =
+                                        person._id ||
+                                        person.id;
 
-                                const image =
-                                    person.profileImage ||
-                                    person.avatar ||
-                                    person.image;
+                                    const avatar =
+                                        person.profileImage ||
+                                        person.avatar ||
+                                        person.image;
 
 
-                                return (
+                                    if (!id) {
+                                        return null;
+                                    }
 
-                                    <div
-                                        className="user-search-card"
-                                        key={id}
-                                    >
 
-                                        <Link
-                                            to={`/user/${id}`}
-                                            className="user-search-main"
+                                    return (
+
+                                        <div
+                                            key={id}
+                                            className="user-search-card"
                                         >
 
                                             <div className="user-search-avatar">
 
-                                                {image ? (
+                                                {avatar ? (
 
                                                     <img
-                                                        src={getImageUrl(image)}
+                                                        src={
+                                                            getImageUrl(
+                                                                avatar
+                                                            )
+                                                        }
                                                         alt={
                                                             person.name ||
                                                             "User"
                                                         }
-                                                        onError={e => {
+                                                        onError={(e) => {
+
                                                             e.currentTarget.style.display =
                                                                 "none";
+
+                                                            if (
+                                                                e.currentTarget
+                                                                    .nextSibling
+                                                            ) {
+
+                                                                e.currentTarget
+                                                                    .nextSibling
+                                                                    .style.display =
+                                                                    "flex";
+
+                                                            }
+
                                                         }}
                                                     />
 
-                                                ) : (
+                                                ) : null}
 
-                                                    <FaUserCircle />
 
-                                                )}
+                                                <FaUserCircle
+                                                    style={{
+                                                        display:
+                                                            avatar
+                                                                ? "none"
+                                                                : "block"
+                                                    }}
+                                                />
 
                                             </div>
 
@@ -529,20 +582,20 @@ const SearchResults = () => {
                                                     }
                                                 </h3>
 
-                                                {person.email && (
-
-                                                    <p>
-                                                        {person.email}
-                                                    </p>
-
-                                                )}
-
                                                 <span>
                                                     {
                                                         person.role ||
                                                         "customer"
                                                     }
                                                 </span>
+
+                                                {person.bio && (
+
+                                                    <p>
+                                                        {person.bio}
+                                                    </p>
+
+                                                )}
 
                                                 {person.location && (
 
@@ -557,34 +610,36 @@ const SearchResults = () => {
 
                                             </div>
 
-                                        </Link>
+
+                                            <div className="user-search-actions">
+
+                                                <Link
+                                                    to={`/user/${id}`}
+                                                    className="profile-result-btn"
+                                                >
+                                                    Profile
+                                                </Link>
 
 
-                                        <div className="user-search-actions">
+                                                <Link
+                                                    to={`/messenger?user=${id}`}
+                                                    className="message-result-btn"
+                                                >
 
-                                            <Link
-                                                to={`/user/${id}`}
-                                                className="profile-result-btn"
-                                            >
-                                                Profile
-                                            </Link>
+                                                    <FaComments />
 
+                                                    Message
 
-                                            <Link
-                                                to={`/messenger?user=${id}`}
-                                                className="message-result-btn"
-                                            >
-                                                <FaComments />
-                                                Message
-                                            </Link>
+                                                </Link>
+
+                                            </div>
 
                                         </div>
 
-                                    </div>
+                                    );
 
-                                );
-
-                            })}
+                                }
+                            )}
 
                         </div>
 
@@ -593,17 +648,16 @@ const SearchResults = () => {
                 </section>
 
 
-                {/* =================================================
+                {/* ==========================================
                     PRODUCTS
-                ================================================= */}
+                =========================================== */}
 
                 <section className="search-section">
 
                     <div className="section-heading">
 
                         <h2>
-                            <FaBoxOpen />
-                            Products
+                            🛍️ Products
                         </h2>
 
                         <span>
@@ -617,11 +671,14 @@ const SearchResults = () => {
 
                         <div className="no-results-small">
 
-                            No products found for{" "}
+                            <FaBoxOpen />
 
-                            <strong>
-                                "{query}"
-                            </strong>
+                            <p>
+                                No products found for{" "}
+                                <strong>
+                                    "{keyword}"
+                                </strong>
+                            </p>
 
                         </div>
 
@@ -629,17 +686,104 @@ const SearchResults = () => {
 
                         <div className="product-grid">
 
-                            {products.map(product => (
+                            {products.map(
+                                (product) => {
 
-                                <ProductCard
-                                    key={
+                                    const id =
                                         product._id ||
-                                        product.id
-                                    }
-                                    product={product}
-                                />
+                                        product.id;
 
-                            ))}
+                                    if (!id) {
+                                        return null;
+                                    }
+
+                                    return (
+
+                                        <Link
+                                            key={id}
+                                            to={`/product/${id}`}
+                                            className="search-product-card"
+                                        >
+
+                                            <div className="search-product-image">
+
+                                                {product.image ||
+                                                product.imageUrl ||
+                                                product.productImage ||
+                                                (
+                                                    Array.isArray(
+                                                        product.images
+                                                    )
+                                                        ? product.images[0]
+                                                        : null
+                                                ) ? (
+
+                                                    <img
+                                                        src={
+                                                            getImageUrl(
+                                                                product.image ||
+                                                                product.imageUrl ||
+                                                                product.productImage ||
+                                                                product.images?.[0]
+                                                            )
+                                                        }
+                                                        alt={
+                                                            product.name ||
+                                                            product.title ||
+                                                            "Product"
+                                                        }
+                                                    />
+
+                                                ) : (
+
+                                                    <div>
+                                                        📦
+                                                    </div>
+
+                                                )}
+
+                                            </div>
+
+
+                                            <div className="search-product-info">
+
+                                                <h3>
+                                                    {
+                                                        product.name ||
+                                                        product.title ||
+                                                        "Product"
+                                                    }
+                                                </h3>
+
+                                                {product.price !== undefined && (
+
+                                                    <strong>
+                                                        ৳{" "}
+                                                        {
+                                                            product.price
+                                                        }
+                                                    </strong>
+
+                                                )}
+
+                                                {product.category && (
+
+                                                    <small>
+                                                        {
+                                                            product.category
+                                                        }
+                                                    </small>
+
+                                                )}
+
+                                            </div>
+
+                                        </Link>
+
+                                    );
+
+                                }
+                            )}
 
                         </div>
 
@@ -650,25 +794,23 @@ const SearchResults = () => {
 
                 {/* NOTHING */}
 
-                {users.length === 0 &&
-                    products.length === 0 && (
+                {searched &&
+                    users.length === 0 &&
+                    products.length === 0 &&
+                    !error && (
 
-                        <div className="search-empty">
+                        <div className="no-results">
 
                             <FaSearch />
 
                             <h2>
-                                No results found
+                                Nothing Found
                             </h2>
 
                             <p>
                                 Try another name,
-                                product or keyword.
+                                email or product keyword.
                             </p>
-
-                            <Link to="/">
-                                Back to Marketplace
-                            </Link>
 
                         </div>
 
