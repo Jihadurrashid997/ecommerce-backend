@@ -10,11 +10,9 @@ import {
 } from "react-router-dom";
 
 import {
-    FaArrowLeft,
+    FaUserCircle,
     FaComments,
-    FaMapMarkerAlt,
-    FaEnvelope,
-    FaUserCircle
+    FaArrowLeft
 } from "react-icons/fa";
 
 import api from "../services/api";
@@ -24,9 +22,11 @@ import "../styles/Profile.css";
 
 const UserProfile = () => {
 
-    const { id } = useParams();
+    const { id } =
+        useParams();
 
-    const navigate = useNavigate();
+    const navigate =
+        useNavigate();
 
 
     const [user, setUser] =
@@ -39,139 +39,154 @@ const UserProfile = () => {
         useState("");
 
 
-    // =====================================================
-    // LOAD PUBLIC PROFILE
-    // =====================================================
+    // ==================================================
+    // LOAD PROFILE
+    // ==================================================
 
     useEffect(() => {
 
         let cancelled = false;
 
+        const loadProfile =
+            async () => {
 
-        const loadProfile = async () => {
+                if (!id) {
 
-            if (!id) {
-
-                setError(
-                    "User profile not found."
-                );
-
-                setLoading(false);
-
-                return;
-            }
-
-
-            try {
-
-                setLoading(true);
-                setError("");
-
-
-                const response =
-                    await api.get(
-                        `/users/public/${id}`
+                    setError(
+                        "Invalid user profile."
                     );
 
+                    setLoading(false);
 
-                if (cancelled) {
                     return;
+
                 }
 
 
-                const profile =
-                    response.data?.user ||
-                    response.data?.data ||
-                    response.data;
+                try {
+
+                    setLoading(true);
+                    setError("");
 
 
-                if (!profile) {
+                    const response =
+                        await api.get(
+                            `/users/public/${id}`,
+                            {
+                                timeout: 12000
+                            }
+                        );
 
-                    throw new Error(
-                        "User not found"
+
+                    if (cancelled) {
+                        return;
+                    }
+
+
+                    const profile =
+                        response.data?.user ||
+                        response.data?.data ||
+                        response.data;
+
+
+                    if (!profile) {
+
+                        throw new Error(
+                            "User not found."
+                        );
+
+                    }
+
+
+                    setUser(profile);
+
+                } catch (err) {
+
+                    if (cancelled) {
+                        return;
+                    }
+
+                    console.error(
+                        "PUBLIC PROFILE ERROR:",
+                        err
                     );
-
-                }
-
-
-                setUser(profile);
-
-            } catch (err) {
-
-                console.error(
-                    "Public profile error:",
-                    err
-                );
-
-
-                if (!cancelled) {
 
                     setError(
                         err.response?.data?.message ||
-                        "User profile not found."
+                        "User profile could not be loaded."
                     );
 
+                } finally {
+
+                    if (!cancelled) {
+
+                        setLoading(false);
+
+                    }
+
                 }
 
-            } finally {
-
-                if (!cancelled) {
-                    setLoading(false);
-                }
-
-            }
-
-        };
+            };
 
 
         loadProfile();
 
 
         return () => {
+
             cancelled = true;
+
         };
 
     }, [id]);
 
 
-    // =====================================================
+    // ==================================================
     // IMAGE
-    // =====================================================
+    // ==================================================
 
-    const getImageUrl = image => {
+    const getImageUrl = (
+        image
+    ) => {
 
         if (!image) {
             return null;
         }
 
-
         if (
             image.startsWith("http://") ||
-            image.startsWith("https://")
+            image.startsWith("https://") ||
+            image.startsWith("data:")
         ) {
 
             return image;
 
         }
 
+        const base =
+            (
+                api.defaults.baseURL ||
+                ""
+            ).replace(
+                /\/api\/?$/,
+                ""
+            );
 
-        const baseURL =
-            api.defaults.baseURL
-                ?.replace("/api", "") || "";
-
-
-        return `${baseURL}${
-            image.startsWith("/")
-                ? ""
-                : "/"
-        }${image}`;
+        return (
+            base +
+            (
+                image.startsWith("/")
+                    ? image
+                    : `/${image}`
+            )
+        );
 
     };
 
 
-    // =====================================================
+    // ==================================================
     // LOADING
-    // =====================================================
+    // ==================================================
 
     if (loading) {
 
@@ -192,11 +207,14 @@ const UserProfile = () => {
     }
 
 
-    // =====================================================
+    // ==================================================
     // ERROR
-    // =====================================================
+    // ==================================================
 
-    if (error || !user) {
+    if (
+        error ||
+        !user
+    ) {
 
         return (
 
@@ -217,15 +235,13 @@ const UserProfile = () => {
                         }
                     </p>
 
-                    <button
-                        type="button"
-                        onClick={() =>
-                            navigate(-1)
-                        }
-                    >
+                    <Link to="/">
+
                         <FaArrowLeft />
-                        Go Back
-                    </button>
+
+                        Back to Marketplace
+
+                    </Link>
 
                 </div>
 
@@ -242,27 +258,11 @@ const UserProfile = () => {
         user.image;
 
 
-    const userId =
-        user._id ||
-        user.id;
-
-
     return (
 
         <div className="profile-page">
 
             <div className="profile-card">
-
-
-                {/* BACK */}
-
-                <Link
-                    to="/"
-                    className="profile-back"
-                >
-                    <FaArrowLeft />
-                    Marketplace
-                </Link>
 
 
                 {/* AVATAR */}
@@ -272,18 +272,46 @@ const UserProfile = () => {
                     {image ? (
 
                         <img
-                            src={getImageUrl(image)}
+                            src={
+                                getImageUrl(
+                                    image
+                                )
+                            }
                             alt={
                                 user.name ||
                                 "User"
                             }
+                            onError={(e) => {
+
+                                e.currentTarget.style.display =
+                                    "none";
+
+                                if (
+                                    e.currentTarget
+                                        .nextSibling
+                                ) {
+
+                                    e.currentTarget
+                                        .nextSibling
+                                        .style.display =
+                                        "flex";
+
+                                }
+
+                            }}
                         />
 
-                    ) : (
+                    ) : null}
 
-                        <FaUserCircle />
 
-                    )}
+                    <FaUserCircle
+                        style={{
+                            display:
+                                image
+                                    ? "none"
+                                    : "block"
+                        }}
+                    />
 
                 </div>
 
@@ -315,11 +343,7 @@ const UserProfile = () => {
                 {user.email && (
 
                     <p>
-
-                        <FaEnvelope />
-
-                        {user.email}
-
+                        📧 {user.email}
                     </p>
 
                 )}
@@ -330,11 +354,8 @@ const UserProfile = () => {
                 {user.location && (
 
                     <p>
-
-                        <FaMapMarkerAlt />
-
+                        📍{" "}
                         {user.location}
-
                     </p>
 
                 )}
@@ -353,35 +374,24 @@ const UserProfile = () => {
                 )}
 
 
-                {/* ACTIONS */}
+                {/* MESSAGE */}
 
-                <div className="profile-actions">
+                <button
+                    type="button"
+                    className="profile-message-btn"
+                    onClick={() =>
+                        navigate(
+                            `/messenger?user=${user._id}`
+                        )
+                    }
+                >
 
-                    <Link
-                        to={`/messenger?user=${userId}`}
-                        className="profile-message-btn"
-                    >
+                    <FaComments />
 
-                        <FaComments />
+                    Message
 
-                        Message
+                </button>
 
-                    </Link>
-
-                </div>
-
-
-                <small className="profile-member">
-
-                    Member since{" "}
-
-                    {user.createdAt
-                        ? new Date(
-                            user.createdAt
-                        ).toLocaleDateString()
-                        : "2026"}
-
-                </small>
 
             </div>
 
