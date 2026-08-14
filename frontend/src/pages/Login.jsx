@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, {
+    useEffect,
+    useState
+} from "react";
 
 import {
     Link,
@@ -30,50 +33,71 @@ import "../styles/Login.css";
 
 const Login = () => {
 
-    const navigate = useNavigate();
-    const location = useLocation();
+    const navigate =
+        useNavigate();
+
+    const location =
+        useLocation();
+
 
     const {
         user,
         setUser
-    } = useApp();
+    } =
+        useApp();
 
 
-    // ==========================
-    // FORM
-    // ==========================
+    /*
+    =====================================================
+    FORM
+    =====================================================
+    */
 
-    const [form, setForm] = useState({
+    const [
+        form,
+        setForm
+    ] = useState({
+
         email: "",
         password: ""
+
     });
 
 
-    // ==========================
-    // STATES
-    // ==========================
-
-    const [loading, setLoading] =
-        useState(false);
-
-    const [showPassword, setShowPassword] =
-        useState(false);
-
-    const [error, setError] =
-        useState("");
+    const [
+        loading,
+        setLoading
+    ] = useState(false);
 
 
-    // ==========================
-    // ALREADY LOGGED IN
-    // ==========================
+    const [
+        showPassword,
+        setShowPassword
+    ] = useState(false);
+
+
+    const [
+        error,
+        setError
+    ] = useState("");
+
+
+    /*
+    =====================================================
+    REDIRECT IF ALREADY LOGGED IN
+    =====================================================
+    */
 
     useEffect(() => {
 
         if (user) {
 
-            navigate("/", {
-                replace: true
-            });
+            navigate(
+                "/",
+                {
+                    replace: true
+                }
+            );
 
         }
 
@@ -83,192 +107,298 @@ const Login = () => {
     ]);
 
 
-    // ==========================
-    // INPUT CHANGE
-    // ==========================
+    /*
+    =====================================================
+    INPUT
+    =====================================================
+    */
 
-    const handleChange = (e) => {
+    const handleChange = (
+        e
+    ) => {
 
         const {
             name,
             value
-        } = e.target;
+        } =
+            e.target;
 
 
-        setForm(previous => ({
-            ...previous,
-            [name]: value
-        }));
+        setForm(
+            previous => ({
+
+                ...previous,
+
+                [name]:
+                    value
+
+            })
+        );
 
 
         if (error) {
+
             setError("");
+
         }
 
     };
 
 
-    // ==========================
-    // LOGIN
-    // ==========================
+    /*
+    =====================================================
+    LOGIN
+    =====================================================
+    */
 
-    const handleLogin = async (e) => {
+    const handleLogin =
+        async (e) => {
 
-        e.preventDefault();
-
-
-        const email =
-            form.email.trim();
-
-        const password =
-            form.password;
+            e.preventDefault();
 
 
-        // ==========================
-        // VALIDATION
-        // ==========================
-
-        if (!email || !password) {
-
-            setError(
-                "Please enter your email and password."
-            );
-
-            return;
-
-        }
+            if (loading) {
+                return;
+            }
 
 
-        try {
+            const email =
+                form.email
+                    .trim()
+                    .toLowerCase();
 
-            setLoading(true);
-
-            setError("");
-
-
-            // ==========================
-            // API LOGIN
-            // ==========================
-
-            const response =
-                await api.post(
-                    "/auth/login",
-                    {
-                        email,
-                        password
-                    }
-                );
+            const password =
+                form.password;
 
 
-            const token =
-                response.data?.token;
-
-            const loggedInUser =
-                response.data?.user;
-
-
-            // ==========================
-            // CHECK RESPONSE
-            // ==========================
+            /*
+            VALIDATION
+            */
 
             if (
-                !token ||
-                !loggedInUser
+                !email ||
+                !password
             ) {
 
-                throw new Error(
-                    "Invalid login response."
+                setError(
+                    "Please enter your email and password."
                 );
+
+                return;
 
             }
 
 
-            // ==========================
-            // SAVE TOKEN
-            // ==========================
-
-            localStorage.setItem(
-                "token",
-                token
-            );
+            setLoading(true);
+            setError("");
 
 
-            // ==========================
-            // SAVE USER
-            // ==========================
+            try {
 
-            localStorage.setItem(
-                "user",
-                JSON.stringify(
-                    loggedInUser
-                )
-            );
+                /*
+                =========================================
+                LOGIN REQUEST
+                =========================================
+                */
 
-
-            // ==========================
-            // UPDATE CONTEXT
-            // ==========================
-
-            setUser(
-                loggedInUser
-            );
+                const response =
+                    await api.post(
+                        "/auth/login",
+                        {
+                            email,
+                            password
+                        }
+                    );
 
 
-            // ==========================
-            // REDIRECT
-            // ==========================
-
-            /*
-             * PrivateRoute থেকে যদি কোনো
-             * নির্দিষ্ট page-এর জন্য Login-এ
-             * পাঠানো হয়ে থাকে, তাহলে Login-এর
-             * পরে সেই page-এ ফেরত যাবে।
-             *
-             * না হলে সরাসরি JR Store Home.
-             */
-
-            const requestedPage =
-                location.state?.from;
+                const data =
+                    response.data || {};
 
 
-            const destination =
-                requestedPage || "/";
+                const token =
+                    data.token;
 
 
-            navigate(
-                destination,
-                {
-                    replace: true
+                const loggedInUser =
+                    data.user;
+
+
+                /*
+                =========================================
+                VERIFY RESPONSE
+                =========================================
+                */
+
+                if (
+                    !token ||
+                    !loggedInUser
+                ) {
+
+                    throw new Error(
+                        "The server returned an invalid login response."
+                    );
+
                 }
-            );
 
 
-        } catch (err) {
+                /*
+                =========================================
+                SAVE TOKEN
+                =========================================
+                */
 
-            console.error(
-                "Login error:",
-                err
-            );
-
-
-            setError(
-                err.response?.data?.message ||
-                "Login failed. Please check your email and password."
-            );
+                localStorage.setItem(
+                    "token",
+                    token
+                );
 
 
-        } finally {
+                /*
+                =========================================
+                SAVE USER
+                =========================================
+                */
 
-            setLoading(false);
+                localStorage.setItem(
 
-        }
+                    "user",
 
-    };
+                    JSON.stringify(
+                        loggedInUser
+                    )
+
+                );
 
 
-    // ==========================
-    // PAGE ANIMATION
-    // ==========================
+                /*
+                =========================================
+                UPDATE REACT CONTEXT
+                =========================================
+                */
+
+                setUser(
+                    loggedInUser
+                );
+
+
+                /*
+                =========================================
+                REDIRECT
+                =========================================
+                */
+
+                const requestedPage =
+                    location.state?.from;
+
+
+                const destination =
+                    typeof requestedPage === "string"
+                        ? requestedPage
+                        : "/";
+
+
+                navigate(
+
+                    destination,
+
+                    {
+                        replace: true
+                    }
+
+                );
+
+
+            } catch (err) {
+
+                console.error(
+                    "LOGIN ERROR:",
+                    err
+                );
+
+
+                /*
+                =========================================
+                NETWORK ERROR
+                =========================================
+                */
+
+                if (
+                    !err.response
+                ) {
+
+                    setError(
+                        "Cannot connect to JR Store server. Please try again."
+                    );
+
+                    return;
+
+                }
+
+
+                /*
+                =========================================
+                SERVER ERROR
+                =========================================
+                */
+
+                const serverMessage =
+                    err.response?.data?.message;
+
+
+                if (
+                    serverMessage
+                ) {
+
+                    setError(
+                        serverMessage
+                    );
+
+                } else if (
+                    err.response?.status === 401
+                ) {
+
+                    setError(
+                        "Invalid email or password."
+                    );
+
+                } else if (
+                    err.response?.status === 404
+                ) {
+
+                    setError(
+                        "Login API was not found. Please refresh and try again."
+                    );
+
+                } else if (
+                    err.response?.status >= 500
+                ) {
+
+                    setError(
+                        "Server error. Please try again in a moment."
+                    );
+
+                } else {
+
+                    setError(
+                        "Login failed. Please try again."
+                    );
+
+                }
+
+            } finally {
+
+                setLoading(false);
+
+            }
+
+        };
+
+
+    /*
+    =====================================================
+    ANIMATIONS
+    =====================================================
+    */
 
     const pageVariants = {
 
@@ -289,16 +419,14 @@ const Login = () => {
     };
 
 
-    // ==========================
-    // CARD ANIMATION
-    // ==========================
-
     const cardVariants = {
 
         hidden: {
+
             opacity: 0,
             y: 50,
             scale: 0.96
+
         },
 
         visible: {
@@ -308,6 +436,7 @@ const Login = () => {
             scale: 1,
 
             transition: {
+
                 duration: 0.8,
 
                 ease: [
@@ -316,6 +445,7 @@ const Login = () => {
                     0.36,
                     1
                 ]
+
             }
 
         }
@@ -328,43 +458,40 @@ const Login = () => {
         <motion.div
             className="login-page jr-login-page"
 
-            variants={pageVariants}
+            variants={
+                pageVariants
+            }
 
             initial="hidden"
-
             animate="visible"
         >
 
+            <div
+                className="login-bg-glow glow-one"
+            />
 
-            {/* ==========================
-                BACKGROUND EFFECTS
-            =========================== */}
+            <div
+                className="login-bg-glow glow-two"
+            />
 
-            <div className="login-bg-glow glow-one" />
+            <div
+                className="login-bg-grid"
+            />
 
-            <div className="login-bg-glow glow-two" />
-
-            <div className="login-bg-grid" />
-
-
-            {/* ==========================
-                LOGIN CARD
-            =========================== */}
 
             <motion.div
                 className="login-box jr-login-box"
 
-                variants={cardVariants}
+                variants={
+                    cardVariants
+                }
 
                 initial="hidden"
-
                 animate="visible"
             >
 
 
-                {/* ==========================
-                    BRAND
-                =========================== */}
+                {/* BRAND */}
 
                 <motion.div
                     className="login-brand"
@@ -426,9 +553,7 @@ const Login = () => {
                 </motion.div>
 
 
-                {/* ==========================
-                    TITLE
-                =========================== */}
+                {/* TITLE */}
 
                 <div className="login-heading">
 
@@ -438,15 +563,15 @@ const Login = () => {
 
                     <p>
                         Sign in to continue to
-                        <strong> JR Store</strong>
+                        <strong>
+                            {" "}JR Store
+                        </strong>
                     </p>
 
                 </div>
 
 
-                {/* ==========================
-                    ERROR
-                =========================== */}
+                {/* ERROR */}
 
                 {error && (
 
@@ -471,19 +596,18 @@ const Login = () => {
                 )}
 
 
-                {/* ==========================
-                    FORM
-                =========================== */}
+                {/* FORM */}
 
                 <form
-                    onSubmit={handleLogin}
+                    onSubmit={
+                        handleLogin
+                    }
+
                     className="jr-login-form"
                 >
 
 
-                    {/* ==========================
-                        EMAIL
-                    =========================== */}
+                    {/* EMAIL */}
 
                     <div className="login-input-group">
 
@@ -501,9 +625,7 @@ const Login = () => {
 
                             <input
                                 id="email"
-
                                 type="email"
-
                                 name="email"
 
                                 placeholder="Enter your email"
@@ -518,7 +640,9 @@ const Login = () => {
 
                                 autoComplete="email"
 
-                                disabled={loading}
+                                disabled={
+                                    loading
+                                }
 
                                 required
                             />
@@ -528,9 +652,7 @@ const Login = () => {
                     </div>
 
 
-                    {/* ==========================
-                        PASSWORD
-                    =========================== */}
+                    {/* PASSWORD */}
 
                     <div className="login-input-group">
 
@@ -569,7 +691,9 @@ const Login = () => {
 
                                 autoComplete="current-password"
 
-                                disabled={loading}
+                                disabled={
+                                    loading
+                                }
 
                                 required
                             />
@@ -598,9 +722,10 @@ const Login = () => {
                                 }
                             >
 
-                                {showPassword
-                                    ? <FaEyeSlash />
-                                    : <FaEye />
+                                {
+                                    showPassword
+                                        ? <FaEyeSlash />
+                                        : <FaEye />
                                 }
 
                             </button>
@@ -610,22 +735,22 @@ const Login = () => {
                     </div>
 
 
-                    {/* ==========================
-                        LOGIN BUTTON
-                    =========================== */}
+                    {/* LOGIN BUTTON */}
 
                     <motion.button
                         type="submit"
 
-                        className="jr-login-button"
+                        className="login-submit-btn"
 
-                        disabled={loading}
+                        disabled={
+                            loading
+                        }
 
                         whileHover={
                             !loading
                                 ? {
-                                    y: -2,
-                                    scale: 1.01
+                                    scale: 1.02,
+                                    y: -2
                                 }
                                 : {}
                         }
@@ -639,72 +764,42 @@ const Login = () => {
                         }
                     >
 
-                        {loading ? (
+                        {
+                            loading
+                                ? "Signing in..."
+                                : "Login to JR Store"
+                        }
 
-                            <>
 
-                                <span className="login-spinner" />
+                        {!loading && (
 
-                                Signing In...
-
-                            </>
-
-                        ) : (
-
-                            <>
-
-                                Login to JR Store
-
-                                <FaArrowRight />
-
-                            </>
+                            <FaArrowRight />
 
                         )}
 
                     </motion.button>
 
+
                 </form>
 
 
-                {/* ==========================
-                    REGISTER
-                =========================== */}
+                {/* REGISTER */}
 
-                <div className="auth-link jr-auth-link">
+                <div className="login-register">
 
                     <span>
                         Don't have an account?
                     </span>
 
 
-                    <Link to="/register">
-
+                    <Link
+                        to="/register"
+                    >
                         Create Account
-
                     </Link>
 
                 </div>
 
-
-                {/* ==========================
-                    FOOTER
-                =========================== */}
-
-                <div className="login-footer">
-
-                    <span>
-                        © 2026 JR Store
-                    </span>
-
-                    <span>
-                        •
-                    </span>
-
-                    <span>
-                        Secure Marketplace
-                    </span>
-
-                </div>
 
             </motion.div>
 
