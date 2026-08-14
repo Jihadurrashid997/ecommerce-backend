@@ -1,7 +1,16 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import {
+    FaSearch,
+    FaUserCircle,
+    FaComments,
+    FaBoxOpen,
+    FaArrowLeft,
+    FaTimes
+} from "react-icons/fa";
 
 import api from "../services/api";
+import ProductCard from "../components/ProductCard";
 
 import "../styles/SearchResults.css";
 
@@ -11,22 +20,59 @@ const SearchResults = () => {
     const [searchParams] = useSearchParams();
 
     const query =
-        searchParams.get("q")?.trim() || "";
+        (searchParams.get("q") || "").trim();
+
 
     const [products, setProducts] = useState([]);
     const [users, setUsers] = useState([]);
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+    const [loading, setLoading] =
+        useState(false);
+
+    const [error, setError] =
+        useState("");
 
 
     // =====================================================
-    // SEARCH PRODUCTS + USERS
+    // IMAGE URL
+    // =====================================================
+
+    const getImageUrl = (image) => {
+
+        if (!image) {
+            return null;
+        }
+
+        if (
+            image.startsWith("http://") ||
+            image.startsWith("https://")
+        ) {
+            return image;
+        }
+
+        const baseURL =
+            api.defaults.baseURL
+                ?.replace("/api", "") || "";
+
+        return `${baseURL}${
+            image.startsWith("/")
+                ? ""
+                : "/"
+        }${image}`;
+
+    };
+
+
+    // =====================================================
+    // SEARCH
     // =====================================================
 
     useEffect(() => {
 
-        const searchEverything = async () => {
+        let cancelled = false;
+
+
+        const runSearch = async () => {
 
             if (!query) {
 
@@ -42,140 +88,255 @@ const SearchResults = () => {
             setError("");
 
 
-            try {
+            // -------------------------------------------------
+            // PRODUCTS
+            // -------------------------------------------------
 
-                // ==========================================
-                // SEARCH PRODUCTS
-                // ==========================================
-
-                let productData = [];
-
-                try {
-
-                    const productResponse =
-                        await api.get(
-                            `/products?keyword=${encodeURIComponent(query)}`
-                        );
-
-                    productData =
-                        productResponse.data?.products ||
-                        productResponse.data?.data ||
-                        productResponse.data ||
-                        [];
-
-                    if (!Array.isArray(productData)) {
-                        productData = [];
-                    }
-
-                } catch (productError) {
-
-                    console.error(
-                        "Product search error:",
-                        productError
-                    );
-
-                    productData = [];
-
-                }
+            const productRequest =
+                api.get(
+                    `/products?keyword=${encodeURIComponent(query)}`
+                );
 
 
-                // ==========================================
-                // SEARCH USERS
-                // ==========================================
+            // -------------------------------------------------
+            // USERS
+            //
+            // We use /chat-users as the primary directory.
+            // This avoids the old search endpoint problem.
+            // -------------------------------------------------
 
-                let userData = [];
-
-                try {
-
-                    const userResponse =
-                        await api.get(
-                            `/users/search?q=${encodeURIComponent(query)}`
-                        );
+            const userRequest =
+                api.get("/users/chat-users");
 
 
-                    userData =
-                        userResponse.data?.users ||
-                        userResponse.data?.data ||
-                        userResponse.data ||
-                        [];
+            const [
+                productResult,
+                userResult
+            ] = await Promise.allSettled([
+                productRequest,
+                userRequest
+            ]);
 
 
-                    if (!Array.isArray(userData)) {
-                        userData = [];
-                    }
-
-                } catch (userError) {
-
-                    console.error(
-                        "User search error:",
-                        userError
-                    );
-
-                    userData = [];
-
-                }
+            if (cancelled) {
+                return;
+            }
 
 
-                setProducts(productData);
-                setUsers(userData);
+            // =================================================
+            // PRODUCTS
+            // =================================================
 
+            if (
+                productResult.status ===
+                "fulfilled"
+            ) {
 
-            } catch (err) {
+                const data =
+                    productResult.value.data;
+
+                const list =
+                    Array.isArray(data)
+                        ? data
+                        : data?.products ||
+                          data?.data ||
+                          [];
+
+                setProducts(
+                    Array.isArray(list)
+                        ? list
+                        : []
+                );
+
+            } else {
 
                 console.error(
-                    "Search error:",
-                    err
+                    "Product search error:",
+                    productResult.reason
                 );
 
-                setError(
-                    "Something went wrong while searching."
-                );
-
-            } finally {
-
-                setLoading(false);
+                setProducts([]);
 
             }
+
+
+            // =================================================
+            // USERS
+            // =================================================
+
+            if (
+                userResult.status ===
+                "fulfilled"
+            ) {
+
+                const response =
+                    userResult.value.data;
+
+                const allUsers =
+                    response?.users ||
+                    response?.data ||
+                    response ||
+                    [];
+
+
+                const userList =
+                    Array.isArray(allUsers)
+                        ? allUsers
+                        : [];
+
+
+                const search =
+                    query.toLowerCase();
+
+
+                const matchedUsers =
+                    userList.filter(
+                        person => {
+
+                            const name =
+                                String(
+                                    person.name ||
+                                    ""
+                                ).toLowerCase();
+
+                            const email =
+                                String(
+                                    person.email ||
+                                    ""
+                                ).toLowerCase();
+
+                            const role =
+                                String(
+                                    person.role ||
+                                    ""
+                                ).toLowerCase();
+
+                            const bio =
+                                String(
+                                    person.bio ||
+                                    ""
+                                ).toLowerCase();
+
+                            const location =
+                                String(
+                                    person.location ||
+                                    ""
+                                ).toLowerCase();
+
+
+                            return (
+                                name.includes(search) ||
+                                email.includes(search) ||
+                                role.includes(search) ||
+                                bio.includes(search) ||
+                                location.includes(search)
+                            );
+
+                        }
+                    );
+
+
+                setUsers(matchedUsers);
+
+            } else {
+
+                console.error(
+                    "User directory error:",
+                    userResult.reason
+                );
+
+                setUsers([]);
+
+            }
+
+
+            if (
+                productResult.status ===
+                    "rejected" &&
+                userResult.status ===
+                    "rejected"
+            ) {
+
+                setError(
+                    "Search service is temporarily unavailable."
+                );
+
+            }
+
+
+            setLoading(false);
 
         };
 
 
-        searchEverything();
+        runSearch();
+
+
+        return () => {
+            cancelled = true;
+        };
 
     }, [query]);
 
 
     // =====================================================
-    // IMAGE URL
+    // RESULT COUNT
     // =====================================================
 
-    const getImageUrl = (image) => {
-
-        if (!image) {
-            return null;
-        }
-
-
-        if (
-            image.startsWith("http://") ||
-            image.startsWith("https://")
-        ) {
-
-            return image;
-
-        }
+    const totalResults =
+        useMemo(
+            () =>
+                users.length +
+                products.length,
+            [
+                users.length,
+                products.length
+            ]
+        );
 
 
-        const baseURL =
-            api.defaults.baseURL?.replace(
-                "/api",
-                ""
-            ) || "";
+    // =====================================================
+    // NO QUERY
+    // =====================================================
 
+    if (!query) {
 
-        return `${baseURL}${image.startsWith("/") ? "" : "/"}${image}`;
+        return (
 
-    };
+            <div className="search-results-page">
+
+                <div className="search-results-container">
+
+                    <div className="no-results">
+
+                        <FaSearch />
+
+                        <h2>
+                            Search Marketplace
+                        </h2>
+
+                        <p>
+                            Search for products,
+                            sellers and people.
+                        </p>
+
+                        <Link
+                            to="/"
+                            className="profile-result-btn"
+                        >
+                            <FaArrowLeft />
+                            Back to Marketplace
+                        </Link>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        );
+
+    }
 
 
     // =====================================================
@@ -188,15 +349,21 @@ const SearchResults = () => {
 
             <div className="search-results-page">
 
-                <div className="search-loading">
+                <div className="search-results-container">
 
-                    <h2>
-                        Searching...
-                    </h2>
+                    <div className="search-loading">
 
-                    <p>
-                        Finding products and people.
-                    </p>
+                        <div className="search-spinner"></div>
+
+                        <h2>
+                            Searching Marketplace...
+                        </h2>
+
+                        <p>
+                            Finding products and people.
+                        </p>
+
+                    </div>
 
                 </div>
 
@@ -208,328 +375,306 @@ const SearchResults = () => {
 
 
     // =====================================================
-    // ERROR
+    // PAGE
     // =====================================================
-
-    if (error) {
-
-        return (
-
-            <div className="search-results-page">
-
-                <div className="search-empty">
-
-                    <h2>
-                        Search Error
-                    </h2>
-
-                    <p>
-                        {error}
-                    </p>
-
-                </div>
-
-            </div>
-
-        );
-
-    }
-
 
     return (
 
         <div className="search-results-page">
 
+            <div className="search-results-container">
 
-            {/* =================================================
-                HEADER
-            ================================================= */}
 
-            <div className="search-results-header">
+                {/* HEADER */}
 
-                <h1>
-                    Search Results
-                </h1>
+                <div className="search-results-header">
 
-                <p>
-                    Results for:
-                    <strong>
-                        {" "}
-                        "{query}"
-                    </strong>
-                </p>
+                    <FaSearch />
 
-            </div>
+                    <div>
 
-
-
-            {/* =================================================
-                PEOPLE
-            ================================================= */}
-
-            {users.length > 0 && (
-
-                <section className="search-section">
-
-                    <div className="search-section-title">
-
-                        <h2>
-                            👤 People
-                        </h2>
-
-                        <span>
-                            {users.length} found
-                        </span>
-
-                    </div>
-
-
-                    <div className="people-search-grid">
-
-                        {users.map((person) => {
-
-                            const personId =
-                                person._id ||
-                                person.id;
-
-
-                            const image =
-                                person.profileImage ||
-                                person.avatar ||
-                                person.image;
-
-
-                            return (
-
-                                <Link
-                                    key={personId}
-                                    to={`/user/${personId}`}
-                                    className="person-search-card"
-                                >
-
-                                    <div className="person-search-avatar">
-
-                                        {image ? (
-
-                                            <img
-                                                src={
-                                                    getImageUrl(
-                                                        image
-                                                    )
-                                                }
-                                                alt={
-                                                    person.name ||
-                                                    "User"
-                                                }
-                                            />
-
-                                        ) : (
-
-                                            <span>
-                                                {
-                                                    person.name
-                                                        ?.charAt(0)
-                                                        ?.toUpperCase() ||
-                                                    "U"
-                                                }
-                                            </span>
-
-                                        )}
-
-                                    </div>
-
-
-                                    <div className="person-search-info">
-
-                                        <h3>
-                                            {
-                                                person.name ||
-                                                "User"
-                                            }
-                                        </h3>
-
-
-                                        {person.email && (
-
-                                            <p>
-                                                {
-                                                    person.email
-                                                }
-                                            </p>
-
-                                        )}
-
-
-                                        {person.role && (
-
-                                            <span className="person-role">
-
-                                                {
-                                                    person.role
-                                                }
-
-                                            </span>
-
-                                        )}
-
-                                    </div>
-
-                                </Link>
-
-                            );
-
-                        })}
-
-                    </div>
-
-                </section>
-
-            )}
-
-
-
-            {/* =================================================
-                PRODUCTS
-            ================================================= */}
-
-            {products.length > 0 && (
-
-                <section className="search-section">
-
-                    <div className="search-section-title">
-
-                        <h2>
-                            🛍️ Products
-                        </h2>
-
-                        <span>
-                            {products.length} found
-                        </span>
-
-                    </div>
-
-
-                    <div className="search-products-grid">
-
-                        {products.map((product) => {
-
-                            const productId =
-                                product._id ||
-                                product.id;
-
-
-                            const image =
-                                product.image ||
-                                product.imageUrl ||
-                                product.productImage ||
-                                (
-                                    Array.isArray(
-                                        product.images
-                                    )
-                                        ? product.images[0]
-                                        : null
-                                );
-
-
-                            return (
-
-                                <Link
-                                    key={productId}
-                                    to={`/product/${productId}`}
-                                    className="search-product-card"
-                                >
-
-                                    <div className="search-product-image">
-
-                                        {image ? (
-
-                                            <img
-                                                src={
-                                                    getImageUrl(
-                                                        image
-                                                    )
-                                                }
-                                                alt={
-                                                    product.name ||
-                                                    "Product"
-                                                }
-                                            />
-
-                                        ) : (
-
-                                            <div>
-                                                No Image
-                                            </div>
-
-                                        )}
-
-                                    </div>
-
-
-                                    <div className="search-product-info">
-
-                                        <h3>
-                                            {
-                                                product.name ||
-                                                product.title ||
-                                                "Product"
-                                            }
-                                        </h3>
-
-
-                                        {product.price !== undefined && (
-
-                                            <strong>
-                                                ৳
-                                                {
-                                                    product.price
-                                                }
-                                            </strong>
-
-                                        )}
-
-                                    </div>
-
-                                </Link>
-
-                            );
-
-                        })}
-
-                    </div>
-
-                </section>
-
-            )}
-
-
-
-            {/* =================================================
-                NOTHING FOUND
-            ================================================= */}
-
-            {users.length === 0 &&
-                products.length === 0 && (
-
-                    <div className="search-empty">
-
-                        <div className="search-empty-icon">
-                            🔍
-                        </div>
-
-                        <h2>
-                            No results found
-                        </h2>
+                        <h1>
+                            Search Results
+                        </h1>
 
                         <p>
-                            We couldn't find any
-                            person or product matching
-                            "{query}".
+
+                            Results for{" "}
+
+                            <strong>
+                                "{query}"
+                            </strong>
+
+                            {" • "}
+
+                            {totalResults} results
+
                         </p>
 
                     </div>
 
+                    <Link
+                        to="/"
+                        className="search-back-button"
+                        title="Back"
+                    >
+                        <FaTimes />
+                    </Link>
+
+                </div>
+
+
+                {/* ERROR */}
+
+                {error && (
+
+                    <div className="search-error">
+                        {error}
+                    </div>
+
                 )}
+
+
+                {/* =================================================
+                    PEOPLE
+                ================================================= */}
+
+                <section className="search-section">
+
+                    <div className="section-heading">
+
+                        <h2>
+                            <FaUserCircle />
+                            People
+                        </h2>
+
+                        <span>
+                            {users.length}
+                        </span>
+
+                    </div>
+
+
+                    {users.length === 0 ? (
+
+                        <div className="no-results-small">
+
+                            No people found for{" "}
+
+                            <strong>
+                                "{query}"
+                            </strong>
+
+                        </div>
+
+                    ) : (
+
+                        <div className="user-search-grid">
+
+                            {users.map(person => {
+
+                                const id =
+                                    person._id ||
+                                    person.id;
+
+                                const image =
+                                    person.profileImage ||
+                                    person.avatar ||
+                                    person.image;
+
+
+                                return (
+
+                                    <div
+                                        className="user-search-card"
+                                        key={id}
+                                    >
+
+                                        <Link
+                                            to={`/user/${id}`}
+                                            className="user-search-main"
+                                        >
+
+                                            <div className="user-search-avatar">
+
+                                                {image ? (
+
+                                                    <img
+                                                        src={getImageUrl(image)}
+                                                        alt={
+                                                            person.name ||
+                                                            "User"
+                                                        }
+                                                        onError={e => {
+                                                            e.currentTarget.style.display =
+                                                                "none";
+                                                        }}
+                                                    />
+
+                                                ) : (
+
+                                                    <FaUserCircle />
+
+                                                )}
+
+                                            </div>
+
+
+                                            <div className="user-search-info">
+
+                                                <h3>
+                                                    {
+                                                        person.name ||
+                                                        "Marketplace User"
+                                                    }
+                                                </h3>
+
+                                                {person.email && (
+
+                                                    <p>
+                                                        {person.email}
+                                                    </p>
+
+                                                )}
+
+                                                <span>
+                                                    {
+                                                        person.role ||
+                                                        "customer"
+                                                    }
+                                                </span>
+
+                                                {person.location && (
+
+                                                    <small>
+                                                        📍{" "}
+                                                        {
+                                                            person.location
+                                                        }
+                                                    </small>
+
+                                                )}
+
+                                            </div>
+
+                                        </Link>
+
+
+                                        <div className="user-search-actions">
+
+                                            <Link
+                                                to={`/user/${id}`}
+                                                className="profile-result-btn"
+                                            >
+                                                Profile
+                                            </Link>
+
+
+                                            <Link
+                                                to={`/messenger?user=${id}`}
+                                                className="message-result-btn"
+                                            >
+                                                <FaComments />
+                                                Message
+                                            </Link>
+
+                                        </div>
+
+                                    </div>
+
+                                );
+
+                            })}
+
+                        </div>
+
+                    )}
+
+                </section>
+
+
+                {/* =================================================
+                    PRODUCTS
+                ================================================= */}
+
+                <section className="search-section">
+
+                    <div className="section-heading">
+
+                        <h2>
+                            <FaBoxOpen />
+                            Products
+                        </h2>
+
+                        <span>
+                            {products.length}
+                        </span>
+
+                    </div>
+
+
+                    {products.length === 0 ? (
+
+                        <div className="no-results-small">
+
+                            No products found for{" "}
+
+                            <strong>
+                                "{query}"
+                            </strong>
+
+                        </div>
+
+                    ) : (
+
+                        <div className="product-grid">
+
+                            {products.map(product => (
+
+                                <ProductCard
+                                    key={
+                                        product._id ||
+                                        product.id
+                                    }
+                                    product={product}
+                                />
+
+                            ))}
+
+                        </div>
+
+                    )}
+
+                </section>
+
+
+                {/* NOTHING */}
+
+                {users.length === 0 &&
+                    products.length === 0 && (
+
+                        <div className="search-empty">
+
+                            <FaSearch />
+
+                            <h2>
+                                No results found
+                            </h2>
+
+                            <p>
+                                Try another name,
+                                product or keyword.
+                            </p>
+
+                            <Link to="/">
+                                Back to Marketplace
+                            </Link>
+
+                        </div>
+
+                    )}
+
+            </div>
 
         </div>
 
