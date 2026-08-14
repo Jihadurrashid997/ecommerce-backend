@@ -2,33 +2,36 @@ import axios from "axios";
 
 
 const API_URL =
-    "https://ecommerce-api-9wc9.onrender.com/api";
+    (
+        process.env.REACT_APP_API_URL ||
+        "https://ecommerce-api-9wc9.onrender.com/api"
+    ).replace(/\/+$/, "");
 
 
 const api =
     axios.create({
 
-        baseURL:
-            API_URL,
-
-        timeout:
-            20000,
+        baseURL: API_URL,
 
         headers: {
+
             "Content-Type":
                 "application/json"
-        }
+
+        },
+
+        timeout: 15000
 
     });
 
 
 // ======================================================
-// REQUEST
+// REQUEST INTERCEPTOR
 // ======================================================
 
 api.interceptors.request.use(
 
-    config => {
+    (config) => {
 
         const token =
             localStorage.getItem(
@@ -41,7 +44,6 @@ api.interceptors.request.use(
             config.headers =
                 config.headers || {};
 
-
             config.headers.Authorization =
                 `Bearer ${token}`;
 
@@ -52,27 +54,28 @@ api.interceptors.request.use(
 
     },
 
-    error =>
+    (error) =>
         Promise.reject(error)
 
 );
 
 
 // ======================================================
-// RESPONSE
+// RESPONSE INTERCEPTOR
 // ======================================================
 
 api.interceptors.response.use(
 
-    response =>
+    (response) =>
         response,
 
-    error => {
+    (error) => {
 
-        if (
-            error.response?.status ===
-            401
-        ) {
+        const status =
+            error.response?.status;
+
+
+        if (status === 401) {
 
             localStorage.removeItem(
                 "token"
