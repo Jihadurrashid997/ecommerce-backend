@@ -1,10 +1,10 @@
+```javascript
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
-
 const { Server } = require("socket.io");
 
 const connectDB = require("./config/db");
@@ -14,176 +14,182 @@ dotenv.config();
 const app = express();
 
 
-// ==========================
+// ======================================================
 // MIDDLEWARE
-// ==========================
+// ======================================================
 
-app.use(cors());
+app.use(
+    cors({
+        origin: "*",
+        methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        credentials: false
+    })
+);
 
-app.use(express.json());
+app.use(
+    express.json({
+        limit: "10mb"
+    })
+);
 
 
-// ==========================
-// UPLOAD FOLDER
-// ==========================
+// ======================================================
+// UPLOADS
+// ======================================================
 
-if (!fs.existsSync("./uploads")) {
-    fs.mkdirSync("./uploads");
+const uploadPath = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(uploadPath)) {
+    fs.mkdirSync(uploadPath, { recursive: true });
 }
 
 app.use(
     "/uploads",
-    express.static(
-        path.join(__dirname, "uploads")
-    )
+    express.static(uploadPath)
 );
 
 
-// ==========================
+// ======================================================
 // DATABASE
-// ==========================
+// ======================================================
 
 connectDB();
 
 
-// ==========================
+// ======================================================
 // API ROUTES
-// ==========================
+// ======================================================
 
-app.use(
-    "/api/auth",
-    require("./routes/authRoutes")
-);
-
-app.use(
-    "/api/users",
-    require("./routes/userRoutes")
-);
-
-app.use(
-    "/api/admin",
-    require("./routes/adminRoutes")
-);
-
-app.use(
-    "/api/seller",
-    require("./routes/sellerRoutes")
-);
-
-app.use(
-    "/api/orders",
-    require("./routes/orderRoutes")
-);
-
-app.use(
-    "/api/payment",
-    require("./routes/paymentRoutes")
-);
-
-app.use(
-    "/api/products",
-    require("./routes/productRoutes")
-);
-
-app.use(
-    "/api/messages",
-    require("./routes/messageRoutes")
-);
+app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/users", require("./routes/userRoutes"));
+app.use("/api/admin", require("./routes/adminRoutes"));
+app.use("/api/seller", require("./routes/sellerRoutes"));
+app.use("/api/orders", require("./routes/orderRoutes"));
+app.use("/api/payment", require("./routes/paymentRoutes"));
+app.use("/api/products", require("./routes/productRoutes"));
+app.use("/api/messages", require("./routes/messageRoutes"));
 
 
-// ==========================
-// HOME
-// ==========================
+// ======================================================
+// HEALTH CHECK
+// ======================================================
 
 app.get("/", (req, res) => {
-
-    res.send(
-        "Ecommerce Backend is running perfectly! 🚀"
-    );
-
+    res.status(200).json({
+        success: true,
+        message: "JR Store API is running 🚀",
+        service: "ecommerce-backend",
+        socket: "enabled",
+        timestamp: new Date().toISOString()
+    });
 });
 
 
-// ==========================
-// HTTP SERVER
-// ==========================
+// ======================================================
+// 404 API
+// ======================================================
 
-const PORT =
-    process.env.PORT || 5000;
-
-const server =
-    http.createServer(app);
-
-
-// ==========================
-// SOCKET.IO
-// ==========================
-
-const io =
-    new Server(server, {
-
-        cors: {
-            origin: "*",
-            methods: [
-                "GET",
-                "POST",
-                "PUT",
-                "DELETE"
-            ]
-        }
-
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: `Route not found: ${req.method} ${req.originalUrl}`
     });
+});
 
 
-// ==========================
+// ======================================================
+// HTTP SERVER
+// ======================================================
+
+const PORT = process.env.PORT || 5000;
+
+const server = http.createServer(app);
+
+
+// ======================================================
+// SOCKET.IO
+// ======================================================
+
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    },
+    transports: ["websocket", "polling"],
+    pingInterval: 25000,
+    pingTimeout: 20000
+});
+
+
+// ======================================================
 // ONLINE USERS
-// userId -> Set of socket IDs
-// ==========================
+// userId -> Set(socketId)
+// ======================================================
 
 const onlineUsers = new Map();
 
 
-// ==========================
-// ADD ONLINE USER
-// ==========================
+// ======================================================
+// HELPERS
+// ======================================================
+
+const normalizeId = value => {
+    if (!value) {
+        return null;
+    }
+
+    if (typeof value === "object") {
+        return String(
+            value._id ||
+            value.id ||
+            value.userId ||
+            ""
+        ) || null;
+    }
+
+    return String(value);
+};
+
+
+const getOnlineUserIds = () => {
+    return Array.from(
+        onlineUsers.keys()
+    );
+};
+
 
 const addOnlineUser = (
     userId,
     socketId
 ) => {
 
-    const id =
-        userId.toString();
+    const id = normalizeId(userId);
+
+    if (!id) {
+        return;
+    }
 
     if (!onlineUsers.has(id)) {
-
         onlineUsers.set(
             id,
             new Set()
         );
-
     }
 
     onlineUsers
         .get(id)
         .add(socketId);
-
 };
 
-
-// ==========================
-// REMOVE ONLINE USER
-// ==========================
 
 const removeOnlineUser = (
     userId,
     socketId
 ) => {
 
-    const id =
-        userId.toString();
+    const id = normalizeId(userId);
 
-    if (!onlineUsers.has(id)) {
+    if (!id || !onlineUsers.has(id)) {
         return;
     }
 
@@ -193,45 +199,26 @@ const removeOnlineUser = (
     sockets.delete(socketId);
 
     if (sockets.size === 0) {
-
         onlineUsers.delete(id);
-
     }
-
 };
 
-
-// ==========================
-// GET ONLINE USER IDS
-// ==========================
-
-const getOnlineUserIds = () => {
-
-    return Array.from(
-        onlineUsers.keys()
-    );
-
-};
-
-
-// ==========================
-// SEND TO SPECIFIC USER
-// ==========================
 
 const sendToUser = (
     userId,
     event,
-    data
+    payload
 ) => {
 
-    if (!userId) {
+    const id =
+        normalizeId(userId);
+
+    if (!id) {
         return;
     }
 
     const sockets =
-        onlineUsers.get(
-            userId.toString()
-        );
+        onlineUsers.get(id);
 
     if (!sockets) {
         return;
@@ -239,21 +226,18 @@ const sendToUser = (
 
     sockets.forEach(
         socketId => {
-
             io.to(socketId).emit(
                 event,
-                data
+                payload
             );
-
         }
     );
-
 };
 
 
-// ==========================
+// ======================================================
 // SOCKET CONNECTION
-// ==========================
+// ======================================================
 
 io.on(
     "connection",
@@ -265,29 +249,26 @@ io.on(
         );
 
 
-        // ==========================
+        // ==================================================
         // USER ONLINE
-        // ==========================
+        // ==================================================
 
         socket.on(
             "user-online",
             userId => {
 
-                if (!userId) {
+                const id =
+                    normalizeId(userId);
+
+                if (!id) {
                     return;
                 }
 
-                socket.userId =
-                    userId.toString();
+                socket.userId = id;
 
                 addOnlineUser(
-                    userId,
+                    id,
                     socket.id
-                );
-
-                console.log(
-                    "User online:",
-                    userId
                 );
 
                 io.emit(
@@ -299,9 +280,9 @@ io.on(
         );
 
 
-        // ==========================
-        // JOIN CHAT ROOM
-        // ==========================
+        // ==================================================
+        // JOIN ROOM
+        // ==================================================
 
         socket.on(
             "join-room",
@@ -312,20 +293,16 @@ io.on(
                 }
 
                 socket.join(
-                    roomId.toString()
-                );
-
-                console.log(
-                    `Socket ${socket.id} joined room ${roomId}`
+                    String(roomId)
                 );
 
             }
         );
 
 
-        // ==========================
-        // LEAVE CHAT ROOM
-        // ==========================
+        // ==================================================
+        // LEAVE ROOM
+        // ==================================================
 
         socket.on(
             "leave-room",
@@ -336,57 +313,54 @@ io.on(
                 }
 
                 socket.leave(
-                    roomId.toString()
+                    String(roomId)
                 );
 
             }
         );
 
 
-        // ==========================
-        // REAL-TIME MESSAGE
-        // ==========================
+        // ==================================================
+        // SEND MESSAGE
+        // ==================================================
 
         socket.on(
             "send-message",
-            message => {
+            payload => {
 
-                if (!message) {
+                if (!payload) {
                     return;
                 }
 
-                const {
-                    roomId,
-                    receiver
-                } = message;
-
+                const roomId =
+                    payload.roomId;
 
                 if (!roomId) {
                     return;
                 }
 
 
-                // Send to everyone inside
-                // current chat room
+                const receiverId =
+                    normalizeId(
+                        payload.receiver
+                    );
 
+
+                const message = {
+                    ...payload
+                };
+
+
+                // Current conversation
                 io.to(
-                    roomId.toString()
+                    String(roomId)
                 ).emit(
                     "receive-message",
                     message
                 );
 
 
-                // Also send directly to receiver
-                // even if receiver has not joined
-                // the room yet.
-
-                const receiverId =
-                    receiver?._id ||
-                    receiver?.id ||
-                    receiver;
-
-
+                // Receiver's other open tabs/windows
                 if (receiverId) {
 
                     sendToUser(
@@ -401,27 +375,31 @@ io.on(
         );
 
 
-        // ==========================
+        // ==================================================
         // TYPING
-        // ==========================
+        // ==================================================
 
         socket.on(
             "typing",
-            ({
-                roomId,
-                userId
-            }) => {
+            payload => {
 
-                if (!roomId) {
+                if (!payload?.roomId) {
                     return;
                 }
 
                 socket
-                    .to(roomId.toString())
+                    .to(
+                        String(
+                            payload.roomId
+                        )
+                    )
                     .emit(
                         "user-typing",
                         {
-                            userId
+                            userId:
+                                normalizeId(
+                                    payload.userId
+                                )
                         }
                     );
 
@@ -429,27 +407,31 @@ io.on(
         );
 
 
-        // ==========================
+        // ==================================================
         // STOP TYPING
-        // ==========================
+        // ==================================================
 
         socket.on(
             "stop-typing",
-            ({
-                roomId,
-                userId
-            }) => {
+            payload => {
 
-                if (!roomId) {
+                if (!payload?.roomId) {
                     return;
                 }
 
                 socket
-                    .to(roomId.toString())
+                    .to(
+                        String(
+                            payload.roomId
+                        )
+                    )
                     .emit(
                         "user-stop-typing",
                         {
-                            userId
+                            userId:
+                                normalizeId(
+                                    payload.userId
+                                )
                         }
                     );
 
@@ -457,43 +439,46 @@ io.on(
         );
 
 
-        // ==========================
+        // ==================================================
         // MESSAGE SEEN
-        // ==========================
+        // ==================================================
 
         socket.on(
             "message-seen",
-            ({
-                roomId,
-                senderId,
-                receiverId
-            }) => {
+            payload => {
 
-                if (!roomId) {
+                if (!payload?.roomId) {
                     return;
                 }
 
+                const data = {
+                    senderId:
+                        normalizeId(
+                            payload.senderId
+                        ),
+                    receiverId:
+                        normalizeId(
+                            payload.receiverId
+                        )
+                };
+
 
                 io.to(
-                    roomId.toString()
+                    String(
+                        payload.roomId
+                    )
                 ).emit(
                     "messages-seen",
-                    {
-                        senderId,
-                        receiverId
-                    }
+                    data
                 );
 
 
-                if (senderId) {
+                if (data.senderId) {
 
                     sendToUser(
-                        senderId,
+                        data.senderId,
                         "messages-seen",
-                        {
-                            senderId,
-                            receiverId
-                        }
+                        data
                     );
 
                 }
@@ -502,17 +487,18 @@ io.on(
         );
 
 
-        // ==========================
+        // ==================================================
         // DISCONNECT
-        // ==========================
+        // ==================================================
 
         socket.on(
             "disconnect",
-            () => {
+            reason => {
 
                 console.log(
                     "🔴 Socket disconnected:",
-                    socket.id
+                    socket.id,
+                    reason
                 );
 
 
@@ -538,21 +524,22 @@ io.on(
 );
 
 
-// ==========================
-// START SERVER
-// ==========================
+// ======================================================
+// START
+// ======================================================
 
 server.listen(
     PORT,
     () => {
 
         console.log(
-            `🚀 Server running on port ${PORT}`
+            `🚀 JR Store API running on port ${PORT}`
         );
 
         console.log(
-            "💬 Socket.io real-time chat enabled"
+            "💬 Real-time Messenger enabled"
         );
 
     }
 );
+```
