@@ -1,152 +1,138 @@
-import React, {
-    useEffect,
-    useMemo,
-    useRef,
-    useState
-} from "react";
-
-import {
-    FaSearch,
-    FaPaperPlane,
-    FaSmile,
-    FaPaperclip,
-    FaEllipsisH,
-    FaPhone,
-    FaVideo,
-    FaInfoCircle,
-    FaArrowLeft,
-    FaCheck,
-    FaCheckDouble,
-    FaCircle,
-    FaUserCircle,
-    FaTimes,
-    FaImage,
-    FaPalette
-} from "react-icons/fa";
-
+```jsx
+import React, { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
+import {
+    FaPhone,
+    FaVideo,
+    FaSmile,
+    FaPaperclip,
+    FaMicrophone,
+    FaPaperPlane,
+    FaTimes,
+    FaCheck,
+    FaCheckDouble,
+    FaImage,
+    FaPalette,
+    FaVolumeUp,
+    FaVolumeMute
+} from "react-icons/fa";
+
 import api from "../services/api";
-
 import "../styles/Messenger.css";
-
 
 const SOCKET_URL =
     process.env.REACT_APP_API_URL
-        ? process.env.REACT_APP_API_URL.replace(/\/api\/?$/, "")
+        ? process.env.REACT_APP_API_URL
+            .replace(/\/api\/?$/, "")
         : window.location.origin;
 
+const getId = (item) => {
+    if (!item) return null;
 
-const EMOJIS = [
-    "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
-    "😊", "😇", "🙂", "🙃", "😉", "😌", "😍", "🥰",
-    "😘", "😗", "😙", "😚", "😋", "😛", "😝", "😜",
-    "🤪", "🤨", "🧐", "🤓", "😎", "🥳", "😏", "😒",
-    "😞", "😔", "😟", "😕", "🙁", "☹️", "😣", "😖",
-    "😫", "😩", "🥺", "😢", "😭", "😤", "😠", "😡",
-    "🤬", "🤔", "🤭", "🤫", "🤥", "😶", "😐", "😑",
-    "😬", "🙄", "😯", "😦", "😧", "😮", "😲", "🥱",
-    "😴", "🤗", "🤩", "🥲", "❤️", "🧡", "💛", "💚",
-    "💙", "💜", "🖤", "🤍", "🤎", "💔", "💕", "💖",
-    "👍", "👎", "👏", "🙌", "🙏", "🔥", "🎉", "💯"
-];
-
-
-const CHAT_BACKGROUNDS = [
-    {
-        id: "default",
-        name: "Classic",
-        value: ""
-    },
-    {
-        id: "blue",
-        name: "Blue",
-        value: "linear-gradient(135deg, #eef5ff, #dbeafe)"
-    },
-    {
-        id: "purple",
-        name: "Purple",
-        value: "linear-gradient(135deg, #f5f3ff, #ede9fe)"
-    },
-    {
-        id: "green",
-        name: "Green",
-        value: "linear-gradient(135deg, #ecfdf5, #d1fae5)"
-    },
-    {
-        id: "sunset",
-        name: "Sunset",
-        value: "linear-gradient(135deg, #fff7ed, #ffedd5)"
-    },
-    {
-        id: "dark",
-        name: "Dark",
-        value: "linear-gradient(135deg, #111827, #1f2937)"
+    if (typeof item === "string") {
+        return item.toString();
     }
-];
 
+    return (
+        item._id ||
+        item.id ||
+        item.userId ||
+        null
+    )?.toString();
+};
+
+const getUserName = (item) =>
+    item?.name ||
+    item?.username ||
+    item?.email?.split("@")[0] ||
+    "User";
+
+const getInitial = (item) =>
+    getUserName(item)
+        .charAt(0)
+        .toUpperCase();
 
 const Messenger = () => {
 
     const socketRef = useRef(null);
     const messagesEndRef = useRef(null);
     const typingTimeoutRef = useRef(null);
+    const notificationSoundRef = useRef(null);
     const fileInputRef = useRef(null);
+    const callTimeoutRef = useRef(null);
 
     const [user, setUser] = useState(null);
-
     const [users, setUsers] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
 
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState("");
 
-    const [loading, setLoading] = useState(true);
-    const [chatLoading, setChatLoading] = useState(false);
-
-    const [search, setSearch] = useState("");
-
-    const [typing, setTyping] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState([]);
-
-    const [unreadUsers, setUnreadUsers] = useState({});
-
-    const [mobileChatOpen, setMobileChatOpen] = useState(false);
+    const [typing, setTyping] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [sending, setSending] = useState(false);
 
     const [showEmoji, setShowEmoji] = useState(false);
     const [showBackgrounds, setShowBackgrounds] = useState(false);
-    const [showMenu, setShowMenu] = useState(false);
 
-    const [background, setBackground] = useState(
-        () => localStorage.getItem("jr-chat-background") || "default"
-    );
+    const [chatBackground, setChatBackground] =
+        useState("default");
 
-    const [callState, setCallState] = useState(null);
+    const [soundEnabled, setSoundEnabled] =
+        useState(true);
+
+    const [notificationPermission, setNotificationPermission] =
+        useState(
+            typeof Notification !== "undefined"
+                ? Notification.permission
+                : "denied"
+        );
+
+    const [incomingCall, setIncomingCall] =
+        useState(null);
+
+    const [activeCall, setActiveCall] =
+        useState(null);
+
+    const [callType, setCallType] =
+        useState(null);
+
+    const [callStatus, setCallStatus] =
+        useState("");
+
+    const [searchUsers, setSearchUsers] =
+        useState("");
+
+    const [selectedFile, setSelectedFile] =
+        useState(null);
 
 
-    // =====================================================
-    // CURRENT USER
-    // =====================================================
+    /* ======================================================
+       CURRENT USER
+    ====================================================== */
 
     useEffect(() => {
 
+        const storedUser =
+            localStorage.getItem("user");
+
+        if (!storedUser) {
+            return;
+        }
+
         try {
 
-            const savedUser =
-                localStorage.getItem("user");
+            const parsed =
+                JSON.parse(storedUser);
 
-            if (savedUser) {
-
-                setUser(
-                    JSON.parse(savedUser)
-                );
-
-            }
+            setUser(parsed);
 
         } catch (error) {
 
             console.error(
-                "User loading error:",
+                "User data error:",
                 error
             );
 
@@ -155,24 +141,121 @@ const Messenger = () => {
     }, []);
 
 
-    // =====================================================
-    // LOAD USERS
-    // =====================================================
+    /* ======================================================
+       NOTIFICATION PERMISSION
+    ====================================================== */
 
     useEffect(() => {
 
-        if (!user) {
+        if (
+            typeof Notification === "undefined"
+        ) {
             return;
         }
 
-        const loadUsers = async () => {
+        setNotificationPermission(
+            Notification.permission
+        );
+
+    }, []);
+
+
+    const requestNotifications = async () => {
+
+        if (
+            typeof Notification === "undefined"
+        ) {
+            return;
+        }
+
+        if (
+            Notification.permission === "default"
+        ) {
 
             try {
 
-                setLoading(true);
+                const permission =
+                    await Notification.requestPermission();
+
+                setNotificationPermission(
+                    permission
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Notification permission error:",
+                    error
+                );
+
+            }
+
+        }
+
+    };
+
+
+    const showNotification = (
+        title,
+        body
+    ) => {
+
+        if (
+            typeof Notification === "undefined"
+        ) {
+            return;
+        }
+
+        if (
+            Notification.permission !==
+            "granted"
+        ) {
+            return;
+        }
+
+        if (
+            document.visibilityState ===
+            "visible"
+        ) {
+            return;
+        }
+
+        try {
+
+            new Notification(
+                title,
+                {
+                    body,
+                    icon: "/favicon.ico"
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Notification error:",
+                error
+            );
+
+        }
+
+    };
+
+
+    /* ======================================================
+       LOAD USERS
+    ====================================================== */
+
+    useEffect(() => {
+
+        const fetchUsers = async () => {
+
+            try {
 
                 const response =
-                    await api.get("/users/chat-users");
+                    await api.get(
+                        "/users/chat-users"
+                    );
 
                 const data =
                     response.data?.users ||
@@ -180,38 +263,48 @@ const Messenger = () => {
                     response.data ||
                     [];
 
-                const currentUserId =
-                    (
-                        user._id ||
-                        user.id
-                    )?.toString();
-
-                const filtered =
+                setUsers(
                     Array.isArray(data)
-                        ? data.filter(item => {
-
-                            const id =
-                                (
-                                    item._id ||
-                                    item.id
-                                )?.toString();
-
-                            return (
-                                id &&
-                                id !== currentUserId
-                            );
-
-                        })
-                        : [];
-
-                setUsers(filtered);
-
-            } catch (error) {
-
-                console.error(
-                    "Failed to load chat users:",
-                    error
+                        ? data
+                        : []
                 );
+
+            } catch (firstError) {
+
+                console.warn(
+                    "chat-users endpoint failed:",
+                    firstError
+                );
+
+                try {
+
+                    const response =
+                        await api.get(
+                            "/users"
+                        );
+
+                    const data =
+                        response.data?.users ||
+                        response.data?.data ||
+                        response.data ||
+                        [];
+
+                    setUsers(
+                        Array.isArray(data)
+                            ? data
+                            : []
+                    );
+
+                } catch (secondError) {
+
+                    console.error(
+                        "Failed to load users:",
+                        secondError
+                    );
+
+                    setUsers([]);
+
+                }
 
             } finally {
 
@@ -221,14 +314,14 @@ const Messenger = () => {
 
         };
 
-        loadUsers();
+        fetchUsers();
 
-    }, [user]);
+    }, []);
 
 
-    // =====================================================
-    // SOCKET.IO
-    // =====================================================
+    /* ======================================================
+       SOCKET.IO
+    ====================================================== */
 
     useEffect(() => {
 
@@ -236,24 +329,23 @@ const Messenger = () => {
             return;
         }
 
+        requestNotifications();
+
         const socket =
-            io(SOCKET_URL, {
-                transports: [
-                    "websocket",
-                    "polling"
-                ],
-                reconnection: true,
-                reconnectionAttempts: Infinity,
-                reconnectionDelay: 1000
-            });
+            io(
+                SOCKET_URL,
+                {
+                    transports: [
+                        "websocket",
+                        "polling"
+                    ],
+                    reconnection: true,
+                    reconnectionAttempts: Infinity,
+                    reconnectionDelay: 1000
+                }
+            );
 
         socketRef.current = socket;
-
-        const currentUserId =
-            (
-                user._id ||
-                user.id
-            )?.toString();
 
 
         socket.on(
@@ -261,9 +353,12 @@ const Messenger = () => {
             () => {
 
                 console.log(
-                    "JR Messenger connected:",
+                    "Socket connected:",
                     socket.id
                 );
+
+                const currentUserId =
+                    getId(user);
 
                 socket.emit(
                     "user-online",
@@ -275,8 +370,33 @@ const Messenger = () => {
 
 
         socket.on(
+            "disconnect",
+            () => {
+
+                console.log(
+                    "Socket disconnected"
+                );
+
+            }
+        );
+
+
+        socket.on(
+            "connect_error",
+            (error) => {
+
+                console.error(
+                    "Socket connection error:",
+                    error
+                );
+
+            }
+        );
+
+
+        socket.on(
             "online-users",
-            online => {
+            (online) => {
 
                 setOnlineUsers(
                     Array.isArray(online)
@@ -288,68 +408,96 @@ const Messenger = () => {
         );
 
 
-        // =================================================
-        // RECEIVE MESSAGE
-        // =================================================
+        /* ==================================================
+           RECEIVE MESSAGE
+        ================================================== */
 
         socket.on(
             "receive-message",
-            newMessage => {
+            (newMessage) => {
 
                 if (!newMessage) {
                     return;
                 }
 
+                const currentUserId =
+                    getId(user);
+
                 const senderId =
-                    (
-                        newMessage.sender?._id ||
+                    getId(
                         newMessage.sender
-                    )?.toString();
+                    );
 
                 const receiverId =
-                    (
-                        newMessage.receiver?._id ||
+                    getId(
                         newMessage.receiver
-                    )?.toString();
+                    );
 
-                const selectedId =
-                    (
-                        selectedUser?._id ||
-                        selectedUser?.id
-                    )?.toString();
+                const selectedUserId =
+                    getId(selectedUser);
+
+
+                const isForCurrentUser =
+                    senderId ===
+                        currentUserId ||
+                    receiverId ===
+                        currentUserId;
+
+
+                if (!isForCurrentUser) {
+                    return;
+                }
 
 
                 const belongsToCurrentChat =
-                    selectedId &&
+                    selectedUserId &&
                     (
                         (
-                            senderId === selectedId &&
-                            receiverId === currentUserId
+                            senderId ===
+                            selectedUserId &&
+                            receiverId ===
+                            currentUserId
                         ) ||
                         (
-                            senderId === currentUserId &&
-                            receiverId === selectedId
+                            senderId ===
+                            currentUserId &&
+                            receiverId ===
+                            selectedUserId
                         )
                     );
 
 
-                if (belongsToCurrentChat) {
+                if (
+                    belongsToCurrentChat
+                ) {
 
                     setMessages(
                         previous => {
 
                             const exists =
                                 previous.some(
-                                    item =>
-                                        item._id &&
-                                        newMessage._id &&
-                                        item._id ===
-                                        newMessage._id
+                                    item => {
+
+                                        if (
+                                            item._id &&
+                                            newMessage._id
+                                        ) {
+                                            return (
+                                                item._id ===
+                                                newMessage._id
+                                            );
+                                        }
+
+                                        return false;
+
+                                    }
                                 );
+
 
                             if (exists) {
                                 return previous;
                             }
+
 
                             return [
                                 ...previous,
@@ -359,41 +507,58 @@ const Messenger = () => {
                         }
                     );
 
-                    setUnreadUsers(
-                        previous => {
 
-                            const updated = {
-                                ...previous
-                            };
+                    if (
+                        senderId !==
+                        currentUserId
+                    ) {
 
-                            delete updated[
-                                senderId
-                            ];
+                        setTimeout(
+                            () => {
 
-                            return updated;
+                                api.put(
+                                    `/messages/seen/${senderId}`
+                                ).catch(
+                                    () => {}
+                                );
 
-                        }
-                    );
+                            },
+                            300
+                        );
 
-                    return;
+                    }
 
                 }
 
 
                 if (
-                    senderId &&
-                    senderId !== currentUserId
+                    senderId !==
+                    currentUserId
                 ) {
 
-                    setUnreadUsers(
-                        previous => ({
-                            ...previous,
-                            [senderId]:
-                                (
-                                    previous[senderId] ||
-                                    0
-                                ) + 1
-                        })
+                    if (
+                        soundEnabled &&
+                        notificationSoundRef.current
+                    ) {
+
+                        notificationSoundRef.current
+                            .play()
+                            .catch(
+                                () => {}
+                            );
+
+                    }
+
+
+                    const senderName =
+                        newMessage.sender?.name ||
+                        "New message";
+
+
+                    showNotification(
+                        senderName,
+                        newMessage.message ||
+                        "You received a new message"
                     );
 
                 }
@@ -402,29 +567,23 @@ const Messenger = () => {
         );
 
 
-        // =================================================
-        // TYPING
-        // =================================================
+        /* ==================================================
+           TYPING
+        ================================================== */
 
         socket.on(
             "user-typing",
-            data => {
-
-                const selectedId =
-                    (
-                        selectedUser?._id ||
-                        selectedUser?.id
-                    )?.toString();
+            (data) => {
 
                 const typingUserId =
-                    (
-                        data?.userId ||
-                        data
-                    )?.toString();
+                    getId(
+                        data?.userId
+                    );
 
                 if (
-                    selectedId &&
-                    typingUserId === selectedId
+                    typingUserId &&
+                    typingUserId ===
+                    getId(selectedUser)
                 ) {
 
                     setTyping(true);
@@ -437,23 +596,17 @@ const Messenger = () => {
 
         socket.on(
             "user-stop-typing",
-            data => {
-
-                const selectedId =
-                    (
-                        selectedUser?._id ||
-                        selectedUser?.id
-                    )?.toString();
+            (data) => {
 
                 const typingUserId =
-                    (
-                        data?.userId ||
-                        data
-                    )?.toString();
+                    getId(
+                        data?.userId
+                    );
 
                 if (
-                    selectedId &&
-                    typingUserId === selectedId
+                    !typingUserId ||
+                    typingUserId ===
+                    getId(selectedUser)
                 ) {
 
                     setTyping(false);
@@ -464,22 +617,43 @@ const Messenger = () => {
         );
 
 
-        // =================================================
-        // CALL SIGNALING
-        // =================================================
+        /* ==================================================
+           CALL EVENTS
+        ================================================== */
 
         socket.on(
             "incoming-call",
-            data => {
+            (data) => {
 
                 if (!data) {
                     return;
                 }
 
-                setCallState({
-                    type: "incoming",
-                    ...data
-                });
+                setIncomingCall(data);
+
+                setCallStatus(
+                    "Incoming call..."
+                );
+
+
+                if (
+                    soundEnabled &&
+                    notificationSoundRef.current
+                ) {
+
+                    notificationSoundRef.current
+                        .play()
+                        .catch(
+                            () => {}
+                        );
+
+                }
+
+
+                showNotification(
+                    "Incoming call",
+                    `${data.callerName || "Someone"} is calling you`
+                );
 
             }
         );
@@ -487,13 +661,16 @@ const Messenger = () => {
 
         socket.on(
             "call-accepted",
-            data => {
+            (data) => {
 
-                setCallState(
+                setCallStatus(
+                    "Call accepted"
+                );
+
+                setActiveCall(
                     previous => ({
                         ...(previous || {}),
-                        type: "accepted",
-                        ...data
+                        ...(data || {})
                     })
                 );
 
@@ -505,7 +682,7 @@ const Messenger = () => {
             "call-rejected",
             () => {
 
-                setCallState(null);
+                clearCallState();
 
                 alert(
                     "Call was declined."
@@ -519,7 +696,7 @@ const Messenger = () => {
             "call-ended",
             () => {
 
-                setCallState(null);
+                clearCallState();
 
             }
         );
@@ -527,8 +704,36 @@ const Messenger = () => {
 
         return () => {
 
-            clearTimeout(
-                typingTimeoutRef.current
+            socket.off(
+                "receive-message"
+            );
+
+            socket.off(
+                "online-users"
+            );
+
+            socket.off(
+                "user-typing"
+            );
+
+            socket.off(
+                "user-stop-typing"
+            );
+
+            socket.off(
+                "incoming-call"
+            );
+
+            socket.off(
+                "call-accepted"
+            );
+
+            socket.off(
+                "call-rejected"
+            );
+
+            socket.off(
+                "call-ended"
             );
 
             socket.disconnect();
@@ -537,12 +742,16 @@ const Messenger = () => {
 
         };
 
-    }, [user, selectedUser]);
+    }, [
+        user,
+        selectedUser,
+        soundEnabled
+    ]);
 
 
-    // =====================================================
-    // AUTO SCROLL
-    // =====================================================
+    /* ======================================================
+       AUTO SCROLL
+    ====================================================== */
 
     useEffect(() => {
 
@@ -553,9 +762,9 @@ const Messenger = () => {
     }, [messages, typing]);
 
 
-    // =====================================================
-    // ROOM ID
-    // =====================================================
+    /* ======================================================
+       ROOM ID
+    ====================================================== */
 
     const getRoomId = (
         firstUser,
@@ -563,24 +772,16 @@ const Messenger = () => {
     ) => {
 
         const first =
-            (
-                firstUser?._id ||
-                firstUser?.id
-            )?.toString();
+            getId(firstUser);
 
         const second =
-            (
-                secondUser?._id ||
-                secondUser?.id
-            )?.toString();
+            getId(secondUser);
 
         if (
             !first ||
             !second
         ) {
-
             return null;
-
         }
 
         return [
@@ -593,91 +794,46 @@ const Messenger = () => {
     };
 
 
-    // =====================================================
-    // ONLINE
-    // =====================================================
-
-    const isUserOnline = (
-        targetUser
-    ) => {
-
-        if (!targetUser) {
-            return false;
-        }
-
-        const id =
-            (
-                targetUser._id ||
-                targetUser.id
-            )?.toString();
-
-        return onlineUsers.some(
-            onlineId =>
-                onlineId?.toString() === id
-        );
-
-    };
-
-
-    // =====================================================
-    // SELECT USER
-    // =====================================================
+    /* ======================================================
+       SELECT USER
+    ====================================================== */
 
     const selectUser = async (
-        targetUser
+        selected
     ) => {
 
-        if (!targetUser) {
+        setSelectedUser(
+            selected
+        );
+
+        setMessages([]);
+        setTyping(false);
+        setShowEmoji(false);
+        setShowBackgrounds(false);
+        setSelectedFile(null);
+
+
+        if (
+            !user ||
+            !selected
+        ) {
             return;
         }
 
-        setSelectedUser(targetUser);
 
-        setMobileChatOpen(true);
-
-        setMessages([]);
-
-        setTyping(false);
-
-        setShowEmoji(false);
-
-        setShowBackgrounds(false);
-
-        setShowMenu(false);
-
-
-        const targetUserId =
-            targetUser._id ||
-            targetUser.id;
-
+        const selectedUserId =
+            getId(selected);
 
         const roomId =
             getRoomId(
                 user,
-                targetUser
+                selected
             );
 
 
-        setUnreadUsers(
-            previous => {
-
-                const updated = {
-                    ...previous
-                };
-
-                delete updated[
-                    targetUserId
-                ];
-
-                return updated;
-
-            }
-        );
-
-
         if (
-            socketRef.current &&
-            roomId
+            roomId &&
+            socketRef.current
         ) {
 
             socketRef.current.emit(
@@ -690,41 +846,49 @@ const Messenger = () => {
 
         try {
 
-            setChatLoading(true);
-
             const response =
                 await api.get(
-                    `/messages/conversation/${targetUserId}`
+                    `/messages/conversation/${selectedUserId}`
                 );
 
+
+            const conversation =
+                response.data?.data ||
+                response.data?.messages ||
+                [];
+
+
             setMessages(
-                response.data?.data || []
+                Array.isArray(
+                    conversation
+                )
+                    ? conversation
+                    : []
             );
 
 
             await api.put(
-                `/messages/seen/${targetUserId}`
+                `/messages/seen/${selectedUserId}`
             );
+
 
         } catch (error) {
 
             console.error(
-                "Conversation error:",
+                "Failed to load conversation:",
                 error
             );
 
-        } finally {
-
-            setChatLoading(false);
+            setMessages([]);
 
         }
 
     };
 
 
-    // =====================================================
-    // SEND MESSAGE
-    // =====================================================
+    /* ======================================================
+       SEND MESSAGE
+    ====================================================== */
 
     const sendMessage = async (
         e
@@ -732,23 +896,23 @@ const Messenger = () => {
 
         e.preventDefault();
 
+
         const text =
             message.trim();
+
 
         if (
             !text ||
             !selectedUser ||
-            !user
+            !user ||
+            sending
         ) {
-
             return;
-
         }
 
 
         const receiver =
-            selectedUser._id ||
-            selectedUser.id;
+            getId(selectedUser);
 
 
         const roomId =
@@ -756,6 +920,14 @@ const Messenger = () => {
                 user,
                 selectedUser
             );
+
+
+        if (!receiver) {
+            return;
+        }
+
+
+        setSending(true);
 
 
         try {
@@ -771,8 +943,14 @@ const Messenger = () => {
 
 
             const savedMessage =
-                response.data?.data;
+                response.data?.data ||
+                response.data?.message;
 
+
+            /*
+             * Immediately display our own message.
+             * This prevents waiting for socket echo.
+             */
 
             if (savedMessage) {
 
@@ -803,10 +981,13 @@ const Messenger = () => {
             }
 
 
+            /*
+             * Real-time socket delivery
+             */
+
             if (
                 socketRef.current &&
-                roomId &&
-                savedMessage
+                roomId
             ) {
 
                 socketRef.current.emit(
@@ -821,7 +1002,7 @@ const Messenger = () => {
 
 
             setMessage("");
-
+            setSelectedFile(null);
             setShowEmoji(false);
 
 
@@ -830,31 +1011,35 @@ const Messenger = () => {
                 {
                     roomId,
                     userId:
-                        user._id ||
-                        user.id
+                        getId(user)
                 }
             );
+
 
         } catch (error) {
 
             console.error(
-                "Send message error:",
+                "Failed to send message:",
                 error
             );
 
             alert(
                 error.response?.data?.message ||
-                "Failed to send message"
+                "Message could not be sent."
             );
+
+        } finally {
+
+            setSending(false);
 
         }
 
     };
 
 
-    // =====================================================
-    // TYPING
-    // =====================================================
+    /* ======================================================
+       TYPING
+    ====================================================== */
 
     const handleTyping = (
         e
@@ -871,9 +1056,7 @@ const Messenger = () => {
             !user ||
             !socketRef.current
         ) {
-
             return;
-
         }
 
 
@@ -889,32 +1072,14 @@ const Messenger = () => {
         }
 
 
-        const userId =
-            user._id ||
-            user.id;
-
-
-        if (value.trim()) {
-
-            socketRef.current.emit(
-                "typing",
-                {
-                    roomId,
-                    userId
-                }
-            );
-
-        } else {
-
-            socketRef.current.emit(
-                "stop-typing",
-                {
-                    roomId,
-                    userId
-                }
-            );
-
-        }
+        socketRef.current.emit(
+            "typing",
+            {
+                roomId,
+                userId:
+                    getId(user)
+            }
+        );
 
 
         clearTimeout(
@@ -930,20 +1095,73 @@ const Messenger = () => {
                         "stop-typing",
                         {
                             roomId,
-                            userId
+                            userId:
+                                getId(user)
                         }
                     );
 
                 },
-                1000
+                900
             );
 
     };
 
 
-    // =====================================================
-    // EMOJI
-    // =====================================================
+    /* ======================================================
+       ONLINE
+    ====================================================== */
+
+    const isUserOnline = (
+        selected
+    ) => {
+
+        const id =
+            getId(selected);
+
+        if (!id) {
+            return false;
+        }
+
+        return onlineUsers.some(
+            onlineId =>
+                onlineId?.toString() ===
+                id
+        );
+
+    };
+
+
+    /* ======================================================
+       EMOJI
+    ====================================================== */
+
+    const emojis = [
+        "😀",
+        "😂",
+        "😍",
+        "🥰",
+        "😘",
+        "😎",
+        "🤔",
+        "😭",
+        "😡",
+        "👍",
+        "❤️",
+        "🔥",
+        "🎉",
+        "👏",
+        "🙏",
+        "💯",
+        "🤣",
+        "😊",
+        "😢",
+        "😉",
+        "🥳",
+        "🤝",
+        "💔",
+        "✨"
+    ];
+
 
     const addEmoji = (
         emoji
@@ -957,38 +1175,80 @@ const Messenger = () => {
     };
 
 
-    // =====================================================
-    // BACKGROUND
-    // =====================================================
+    /* ======================================================
+       BACKGROUNDS
+    ====================================================== */
 
-    const changeBackground = (
-        backgroundId
+    const backgrounds = [
+        {
+            id: "default",
+            label: "Default",
+            value: ""
+        },
+        {
+            id: "light",
+            label: "Light",
+            value:
+                "linear-gradient(135deg,#f5f7fa,#c3cfe2)"
+        },
+        {
+            id: "blue",
+            label: "Blue",
+            value:
+                "linear-gradient(135deg,#dbeafe,#93c5fd)"
+        },
+        {
+            id: "purple",
+            label: "Purple",
+            value:
+                "linear-gradient(135deg,#ede9fe,#c4b5fd)"
+        },
+        {
+            id: "sunset",
+            label: "Sunset",
+            value:
+                "linear-gradient(135deg,#fed7aa,#fbcfe8)"
+        },
+        {
+            id: "green",
+            label: "Green",
+            value:
+                "linear-gradient(135deg,#d1fae5,#a7f3d0)"
+        }
+    ];
+
+
+    const activeBackground =
+        backgrounds.find(
+            item =>
+                item.id ===
+                chatBackground
+        );
+
+
+    /* ======================================================
+       FILE
+    ====================================================== */
+
+    const handleFileChange = (
+        e
     ) => {
 
-        setBackground(
-            backgroundId
-        );
+        const file =
+            e.target.files?.[0];
 
-        localStorage.setItem(
-            "jr-chat-background",
-            backgroundId
-        );
+        if (!file) {
+            return;
+        }
 
-        setShowBackgrounds(false);
+        setSelectedFile(file);
 
     };
 
 
-    const currentBackground =
-        CHAT_BACKGROUNDS.find(
-            item =>
-                item.id === background
-        ) || CHAT_BACKGROUNDS[0];
-
-
-    // =====================================================
-    // CALL
-    // =====================================================
+    /* ======================================================
+       CALL
+    ====================================================== */
 
     const startCall = (
         type
@@ -999,9 +1259,7 @@ const Messenger = () => {
             !socketRef.current ||
             !user
         ) {
-
             return;
-
         }
 
 
@@ -1013,36 +1271,73 @@ const Messenger = () => {
 
 
         const callerId =
-            user._id ||
-            user.id;
-
+            getId(user);
 
         const receiverId =
-            selectedUser._id ||
-            selectedUser.id;
+            getId(selectedUser);
+
+
+        const callData = {
+
+            roomId,
+
+            callerId,
+
+            receiverId,
+
+            callerName:
+                getUserName(user),
+
+            receiverName:
+                getUserName(
+                    selectedUser
+                ),
+
+            callType:
+                type
+
+        };
+
+
+        setCallType(type);
+
+        setActiveCall(
+            callData
+        );
+
+        setCallStatus(
+            `Calling ${getUserName(
+                selectedUser
+            )}...`
+        );
 
 
         socketRef.current.emit(
             "call-user",
-            {
-                roomId,
-                callerId,
-                receiverId,
-                callerName:
-                    user.name ||
-                    "User",
-                type
-            }
+            callData
         );
 
 
-        setCallState({
-            type: "outgoing",
-            callType: type,
-            receiverName:
-                selectedUser.name ||
-                "User"
-        });
+        callTimeoutRef.current =
+            setTimeout(
+                () => {
+
+                    if (
+                        socketRef.current
+                    ) {
+
+                        socketRef.current.emit(
+                            "end-call",
+                            callData
+                        );
+
+                    }
+
+                    clearCallState();
+
+                },
+                45000
+            );
 
     };
 
@@ -1050,35 +1345,32 @@ const Messenger = () => {
     const acceptCall = () => {
 
         if (
-            !socketRef.current ||
-            !callState
+            !incomingCall ||
+            !socketRef.current
         ) {
-
             return;
-
         }
 
 
         socketRef.current.emit(
             "accept-call",
-            {
-                roomId:
-                    callState.roomId,
-                callerId:
-                    callState.callerId,
-                receiverId:
-                    user?._id ||
-                    user?.id
-            }
+            incomingCall
         );
 
 
-        setCallState(
-            previous => ({
-                ...(previous || {}),
-                type: "accepted"
-            })
+        setActiveCall(
+            incomingCall
         );
+
+        setCallType(
+            incomingCall.callType
+        );
+
+        setCallStatus(
+            "Call connected"
+        );
+
+        setIncomingCall(null);
 
     };
 
@@ -1086,23 +1378,20 @@ const Messenger = () => {
     const rejectCall = () => {
 
         if (
-            socketRef.current &&
-            callState
+            !incomingCall ||
+            !socketRef.current
         ) {
-
-            socketRef.current.emit(
-                "reject-call",
-                {
-                    roomId:
-                        callState.roomId,
-                    callerId:
-                        callState.callerId
-                }
-            );
-
+            return;
         }
 
-        setCallState(null);
+
+        socketRef.current.emit(
+            "reject-call",
+            incomingCall
+        );
+
+
+        clearCallState();
 
     };
 
@@ -1111,180 +1400,113 @@ const Messenger = () => {
 
         if (
             socketRef.current &&
-            callState
+            activeCall
         ) {
 
             socketRef.current.emit(
                 "end-call",
-                {
-                    roomId:
-                        callState.roomId
-                }
+                activeCall
             );
 
         }
 
-        setCallState(null);
+        clearCallState();
 
     };
 
 
-    // =====================================================
-    // FILE PICKER
-    // =====================================================
+    const clearCallState = () => {
 
-    const handleAttachment = (
-        e
-    ) => {
-
-        const file =
-            e.target.files?.[0];
-
-        if (!file) {
-            return;
-        }
-
-
-        alert(
-            `Selected file: ${file.name}\nAttachment upload can be connected to your storage API next.`
+        clearTimeout(
+            callTimeoutRef.current
         );
 
-
-        e.target.value = "";
+        setIncomingCall(null);
+        setActiveCall(null);
+        setCallType(null);
+        setCallStatus("");
 
     };
 
 
-    // =====================================================
-    // FILTER USERS
-    // =====================================================
+    /* ======================================================
+       FILE PREVIEW
+    ====================================================== */
+
+    const filePreview =
+        selectedFile
+            ? URL.createObjectURL(
+                selectedFile
+            )
+            : null;
+
+
+    useEffect(() => {
+
+        return () => {
+
+            if (filePreview) {
+
+                URL.revokeObjectURL(
+                    filePreview
+                );
+
+            }
+
+        };
+
+    }, [filePreview]);
+
+
+    /* ======================================================
+       FILTER USERS
+    ====================================================== */
 
     const filteredUsers =
-        useMemo(() => {
+        users.filter(
+            item => {
 
-            const query =
-                search
-                    .trim()
-                    .toLowerCase();
+                const currentId =
+                    getId(user);
 
-            if (!query) {
-                return users;
-            }
+                const itemId =
+                    getId(item);
 
-            return users.filter(
-                item =>
-                    (
-                        item.name ||
-                        ""
-                    )
-                        .toLowerCase()
-                        .includes(query)
-                    ||
-                    (
-                        item.email ||
-                        ""
-                    )
-                        .toLowerCase()
-                        .includes(query)
-            );
-
-        }, [
-            users,
-            search
-        ]);
-
-
-    // =====================================================
-    // AVATAR
-    // =====================================================
-
-    const Avatar = ({
-        person,
-        large = false
-    }) => {
-
-        const image =
-            person?.profileImage ||
-            person?.avatar ||
-            person?.image;
-
-
-        return (
-
-            <div
-                className={
-                    large
-                        ? "messenger-avatar large"
-                        : "messenger-avatar"
+                if (
+                    !itemId ||
+                    itemId === currentId
+                ) {
+                    return false;
                 }
-            >
-
-                {image ? (
-
-                    <img
-                        src={image}
-                        alt={
-                            person?.name ||
-                            "User"
-                        }
-                    />
-
-                ) : (
-
-                    <div className="avatar-fallback">
-
-                        {person?.name
-                            ?.charAt(0)
-                            ?.toUpperCase() || "U"}
-
-                    </div>
-
-                )}
 
 
-                {isUserOnline(person) && (
-
-                    <span className="online-dot">
-                        <FaCircle />
-                    </span>
-
-                )}
-
-            </div>
-
-        );
-
-    };
+                const search =
+                    searchUsers
+                        .trim()
+                        .toLowerCase();
 
 
-    // =====================================================
-    // TIME
-    // =====================================================
+                if (!search) {
+                    return true;
+                }
 
-    const formatTime = (
-        date
-    ) => {
 
-        if (!date) {
-            return "";
-        }
+                return (
+                    getUserName(item)
+                        .toLowerCase()
+                        .includes(search) ||
+                    item.email
+                        ?.toLowerCase()
+                        .includes(search)
+                );
 
-        return new Date(
-            date
-        ).toLocaleTimeString(
-            [],
-            {
-                hour: "2-digit",
-                minute: "2-digit"
             }
         );
 
-    };
 
-
-    // =====================================================
-    // LOADING
-    // =====================================================
+    /* ======================================================
+       LOADING
+    ====================================================== */
 
     if (loading) {
 
@@ -1294,11 +1516,7 @@ const Messenger = () => {
 
                 <div className="messenger-loading">
 
-                    <div className="messenger-loader" />
-
-                    <span>
-                        Loading Messenger...
-                    </span>
+                    Loading Messenger...
 
                 </div>
 
@@ -1315,16 +1533,27 @@ const Messenger = () => {
 
 
             {/* =================================================
-                SIDEBAR
+               NOTIFICATION SOUND
             ================================================= */}
 
-            <aside
-                className={
-                    mobileChatOpen
-                        ? "messenger-sidebar mobile-hidden"
-                        : "messenger-sidebar"
+            <audio
+                ref={
+                    notificationSoundRef
                 }
+                preload="auto"
             >
+                <source
+                    src="/notification.mp3"
+                    type="audio/mpeg"
+                />
+            </audio>
+
+
+            {/* =================================================
+               SIDEBAR
+            ================================================= */}
+
+            <aside className="messenger-sidebar">
 
                 <div className="messenger-sidebar-header">
 
@@ -1334,43 +1563,52 @@ const Messenger = () => {
                             Messages
                         </h2>
 
-                        <span>
-                            {users.length} people
-                        </span>
+                        <small>
+                            {users.length} users
+                        </small>
 
                     </div>
+
+
+                    <button
+                        type="button"
+                        className="sound-toggle"
+                        onClick={() =>
+                            setSoundEnabled(
+                                previous =>
+                                    !previous
+                            )
+                        }
+                        title={
+                            soundEnabled
+                                ? "Mute notifications"
+                                : "Enable notifications"
+                        }
+                    >
+
+                        {soundEnabled
+                            ? <FaVolumeUp />
+                            : <FaVolumeMute />
+                        }
+
+                    </button>
 
                 </div>
 
 
-                <div className="messenger-search">
-
-                    <FaSearch />
+                <div className="messenger-user-search">
 
                     <input
                         type="search"
-                        value={search}
+                        placeholder="Search people..."
+                        value={searchUsers}
                         onChange={
                             e =>
-                                setSearch(
+                                setSearchUsers(
                                     e.target.value
                                 )
                         }
-                        placeholder="Search Messenger"
                     />
-
-                    {search && (
-
-                        <button
-                            type="button"
-                            onClick={() =>
-                                setSearch("")
-                            }
-                        >
-                            <FaTimes />
-                        </button>
-
-                    )}
 
                 </div>
 
@@ -1378,27 +1616,15 @@ const Messenger = () => {
                 <div className="user-list">
 
                     {filteredUsers.map(
-                        person => {
+                        item => {
 
                             const id =
-                                person._id ||
-                                person.id;
-
-                            const selectedId =
-                                selectedUser?._id ||
-                                selectedUser?.id;
-
+                                getId(item);
 
                             const active =
-                                selectedId
-                                    ?.toString() ===
-                                id?.toString();
-
-
-                            const unread =
-                                unreadUsers[
-                                    id
-                                ] || 0;
+                                getId(
+                                    selectedUser
+                                ) === id;
 
 
                             return (
@@ -1413,54 +1639,49 @@ const Messenger = () => {
                                     }
                                     onClick={() =>
                                         selectUser(
-                                            person
+                                            item
                                         )
                                     }
                                 >
 
-                                    <Avatar
-                                        person={person}
-                                    />
+                                    <div className="user-avatar">
+
+                                        {getInitial(
+                                            item
+                                        )}
+
+                                        {isUserOnline(
+                                            item
+                                        ) && (
+
+                                            <span className="online-dot" />
+
+                                        )}
+
+                                    </div>
 
 
-                                    <div className="chat-user-content">
+                                    <div className="user-info">
 
-                                        <div className="chat-user-top">
+                                        <strong>
+                                            {
+                                                getUserName(
+                                                    item
+                                                )
+                                            }
+                                        </strong>
 
-                                            <strong>
-                                                {
-                                                    person.name ||
-                                                    "User"
-                                                }
-                                            </strong>
+                                        <span>
 
-                                        </div>
+                                            {
+                                                isUserOnline(
+                                                    item
+                                                )
+                                                    ? "Online"
+                                                    : "Offline"
+                                            }
 
-
-                                        <div className="chat-user-bottom">
-
-                                            <span>
-
-                                                {
-                                                    isUserOnline(
-                                                        person
-                                                    )
-                                                        ? "Active now"
-                                                        : "Offline"
-                                                }
-
-                                            </span>
-
-
-                                            {unread > 0 && (
-
-                                                <b className="unread-badge">
-                                                    {unread}
-                                                </b>
-
-                                            )}
-
-                                        </div>
+                                        </span>
 
                                     </div>
 
@@ -1474,19 +1695,9 @@ const Messenger = () => {
 
                     {filteredUsers.length === 0 && (
 
-                        <div className="no-users">
-
-                            <FaSearch />
-
-                            <p>
-                                No people found
-                            </p>
-
-                            <small>
-                                Try another name or email.
-                            </small>
-
-                        </div>
+                        <p className="no-users">
+                            No users found.
+                        </p>
 
                     )}
 
@@ -1496,33 +1707,35 @@ const Messenger = () => {
 
 
             {/* =================================================
-                CHAT
+               CHAT AREA
             ================================================= */}
 
-            <main
-                className={
-                    mobileChatOpen
-                        ? "messenger-chat mobile-visible"
-                        : "messenger-chat"
-                }
-            >
+            <main className="chat-area">
 
                 {!selectedUser ? (
 
                     <div className="empty-chat">
 
-                        <div className="empty-chat-icon">
-                            💬
+                        <div>
+
+                            <h2>
+                                💬 Welcome to Messenger
+                            </h2>
+
+                            <p>
+                                Select a person to start chatting.
+                            </p>
+
+                            <button
+                                type="button"
+                                onClick={
+                                    requestNotifications
+                                }
+                            >
+                                Enable Notifications
+                            </button>
+
                         </div>
-
-                        <h2>
-                            Your messages
-                        </h2>
-
-                        <p>
-                            Select someone from your chats
-                            to start a conversation.
-                        </p>
 
                     </div>
 
@@ -1530,62 +1743,57 @@ const Messenger = () => {
 
                     <>
 
-                        {/* =====================================
-                            HEADER
-                        ===================================== */}
+                        {/* ======================================
+                           CHAT HEADER
+                        ====================================== */}
 
-                        <header className="chat-header">
+                        <div className="chat-header">
 
-                            <div className="chat-header-left">
+                            <div className="chat-user-avatar">
 
-                                <button
-                                    type="button"
-                                    className="mobile-back-btn"
-                                    onClick={() =>
-                                        setMobileChatOpen(
-                                            false
-                                        )
-                                    }
-                                >
-                                    <FaArrowLeft />
-                                </button>
+                                {getInitial(
+                                    selectedUser
+                                )}
 
+                                {isUserOnline(
+                                    selectedUser
+                                ) && (
 
-                                <Avatar
-                                    person={
-                                        selectedUser
-                                    }
-                                    large
-                                />
+                                    <span className="online-dot" />
 
-
-                                <div className="chat-header-user">
-
-                                    <h2>
-                                        {
-                                            selectedUser.name ||
-                                            "User"
-                                        }
-                                    </h2>
-
-                                    <span>
-
-                                        {typing
-                                            ? "Typing..."
-                                            : isUserOnline(
-                                                selectedUser
-                                            )
-                                                ? "Active now"
-                                                : "Offline"}
-
-                                    </span>
-
-                                </div>
+                                )}
 
                             </div>
 
 
-                            <div className="chat-header-actions">
+                            <div className="chat-header-info">
+
+                                <h3>
+                                    {
+                                        getUserName(
+                                            selectedUser
+                                        )
+                                    }
+                                </h3>
+
+
+                                <span>
+
+                                    {typing
+                                        ? "Typing..."
+                                        : isUserOnline(
+                                            selectedUser
+                                        )
+                                            ? "Active now"
+                                            : "Offline"
+                                    }
+
+                                </span>
+
+                            </div>
+
+
+                            <div className="chat-actions">
 
                                 <button
                                     type="button"
@@ -1615,123 +1823,71 @@ const Messenger = () => {
 
                                 <button
                                     type="button"
-                                    title="Chat info"
+                                    title="Chat background"
                                     onClick={() =>
-                                        setShowMenu(
+                                        setShowBackgrounds(
                                             previous =>
                                                 !previous
                                         )
                                     }
                                 >
-                                    <FaEllipsisH />
+                                    <FaPalette />
                                 </button>
 
                             </div>
 
-
-                            {showMenu && (
-
-                                <div className="chat-options-menu">
-
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setShowBackgrounds(
-                                                previous =>
-                                                    !previous
-                                            )
-                                        }
-                                    >
-                                        <FaPalette />
-                                        Chat Theme
-                                    </button>
+                        </div>
 
 
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setShowMenu(
-                                                false
-                                            )
-                                        }
-                                    >
-                                        <FaInfoCircle />
-                                        Conversation Info
-                                    </button>
-
-                                </div>
-
-                            )}
-
-                        </header>
-
-
-                        {/* =====================================
-                            BACKGROUND PANEL
-                        ===================================== */}
+                        {/* ======================================
+                           BACKGROUND PICKER
+                        ====================================== */}
 
                         {showBackgrounds && (
 
-                            <div className="background-panel">
+                            <div className="chat-background-picker">
 
-                                <div className="background-panel-title">
-
-                                    <strong>
-                                        Chat Theme
-                                    </strong>
-
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setShowBackgrounds(
-                                                false
-                                            )
-                                        }
-                                    >
-                                        <FaTimes />
-                                    </button>
-
-                                </div>
+                                <strong>
+                                    Chat Background
+                                </strong>
 
 
-                                <div className="background-options">
+                                <div>
 
-                                    {CHAT_BACKGROUNDS.map(
-                                        theme => (
+                                    {backgrounds.map(
+                                        background => (
 
                                             <button
                                                 key={
-                                                    theme.id
+                                                    background.id
                                                 }
                                                 type="button"
+                                                title={
+                                                    background.label
+                                                }
                                                 className={
-                                                    background ===
-                                                    theme.id
-                                                        ? "theme-option selected"
-                                                        : "theme-option"
+                                                    chatBackground ===
+                                                    background.id
+                                                        ? "background-option active"
+                                                        : "background-option"
                                                 }
-                                                onClick={() =>
-                                                    changeBackground(
-                                                        theme.id
-                                                    )
-                                                }
-                                            >
+                                                style={{
+                                                    background:
+                                                        background.value ||
+                                                        undefined
+                                                }}
+                                                onClick={() => {
 
-                                                <span
-                                                    style={{
-                                                        background:
-                                                            theme.value ||
-                                                            "#f0f2f5"
-                                                    }}
-                                                />
+                                                    setChatBackground(
+                                                        background.id
+                                                    );
 
-                                                <small>
-                                                    {
-                                                        theme.name
-                                                    }
-                                                </small>
+                                                    setShowBackgrounds(
+                                                        false
+                                                    );
 
-                                            </button>
+                                                }}
+                                            />
 
                                         )
                                     )}
@@ -1743,129 +1899,40 @@ const Messenger = () => {
                         )}
 
 
-                        {/* =====================================
-                            CALL PANEL
-                        ===================================== */}
-
-                        {callState && (
-
-                            <div className="call-overlay">
-
-                                <div className="call-card">
-
-                                    <Avatar
-                                        person={
-                                            selectedUser
-                                        }
-                                        large
-                                    />
-
-
-                                    <h3>
-
-                                        {callState.type ===
-                                        "incoming"
-                                            ? `${callState.callerName || "Someone"} is calling`
-                                            : callState.type ===
-                                              "outgoing"
-                                                ? `Calling ${callState.receiverName || "User"}...`
-                                                : `${callState.callType === "video" ? "Video" : "Voice"} call`}
-
-                                    </h3>
-
-
-                                    {callState.type ===
-                                        "incoming" && (
-
-                                        <div className="call-actions">
-
-                                            <button
-                                                type="button"
-                                                className="call-reject"
-                                                onClick={
-                                                    rejectCall
-                                                }
-                                            >
-                                                Decline
-                                            </button>
-
-
-                                            <button
-                                                type="button"
-                                                className="call-accept"
-                                                onClick={
-                                                    acceptCall
-                                                }
-                                            >
-                                                Accept
-                                            </button>
-
-                                        </div>
-
-                                    )}
-
-
-                                    {(
-                                        callState.type ===
-                                            "outgoing" ||
-                                        callState.type ===
-                                            "accepted"
-                                    ) && (
-
-                                        <button
-                                            type="button"
-                                            className="call-end"
-                                            onClick={
-                                                endCall
-                                            }
-                                        >
-                                            End Call
-                                        </button>
-
-                                    )}
-
-                                </div>
-
-                            </div>
-
-                        )}
-
-
-                        {/* =====================================
-                            MESSAGES
-                        ===================================== */}
+                        {/* ======================================
+                           MESSAGES
+                        ====================================== */}
 
                         <div
                             className="messages-container"
                             style={{
                                 background:
-                                    currentBackground.value ||
+                                    activeBackground?.value ||
                                     undefined
                             }}
                         >
 
-                            {chatLoading ? (
-
-                                <div className="chat-loading">
-
-                                    <div />
-
-                                    <span>
-                                        Loading conversation...
-                                    </span>
-
-                                </div>
-
-                            ) : messages.length === 0 ? (
+                            {messages.length === 0 ? (
 
                                 <div className="no-messages">
 
-                                    <div>
-                                        💬
+                                    <div className="empty-chat-avatar">
+
+                                        {getInitial(
+                                            selectedUser
+                                        )}
+
                                     </div>
 
                                     <p>
-                                        No messages yet
+                                        You are connected with{" "}
+                                        <strong>
+                                            {
+                                                getUserName(
+                                                    selectedUser
+                                                )
+                                            }
+                                        </strong>
                                     </p>
 
                                     <small>
@@ -1884,16 +1951,12 @@ const Messenger = () => {
                                     ) => {
 
                                         const senderId =
-                                            (
-                                                msg.sender?._id ||
+                                            getId(
                                                 msg.sender
-                                            )?.toString();
+                                            );
 
                                         const currentUserId =
-                                            (
-                                                user?._id ||
-                                                user?.id
-                                            )?.toString();
+                                            getId(user);
 
                                         const ownMessage =
                                             senderId ===
@@ -1905,7 +1968,7 @@ const Messenger = () => {
                                             <div
                                                 key={
                                                     msg._id ||
-                                                    index
+                                                    `${senderId}-${index}`
                                                 }
                                                 className={
                                                     ownMessage
@@ -1934,11 +1997,23 @@ const Messenger = () => {
                                                     <div className="message-meta">
 
                                                         <small>
+
                                                             {
-                                                                formatTime(
-                                                                    msg.createdAt
-                                                                )
+                                                                msg.createdAt
+                                                                    ? new Date(
+                                                                        msg.createdAt
+                                                                    ).toLocaleTimeString(
+                                                                        [],
+                                                                        {
+                                                                            hour:
+                                                                                "2-digit",
+                                                                            minute:
+                                                                                "2-digit"
+                                                                        }
+                                                                    )
+                                                                    : ""
                                                             }
+
                                                         </small>
 
 
@@ -1946,11 +2021,10 @@ const Messenger = () => {
 
                                                             <span className="message-status">
 
-                                                                {msg.isSeen ? (
-                                                                    <FaCheckDouble />
-                                                                ) : (
-                                                                    <FaCheck />
-                                                                )}
+                                                                {msg.isSeen
+                                                                    ? <FaCheckDouble />
+                                                                    : <FaCheck />
+                                                                }
 
                                                             </span>
 
@@ -1972,15 +2046,23 @@ const Messenger = () => {
 
                             {typing && (
 
-                                <div className="typing-row">
+                                <div className="typing-indicator">
 
-                                    <div className="typing-bubble">
+                                    <span>
+                                        •
+                                    </span>
 
-                                        <span />
-                                        <span />
-                                        <span />
+                                    <span>
+                                        •
+                                    </span>
 
-                                    </div>
+                                    <span>
+                                        •
+                                    </span>
+
+                                    <em>
+                                        Typing...
+                                    </em>
 
                                 </div>
 
@@ -1996,66 +2078,77 @@ const Messenger = () => {
                         </div>
 
 
-                        {/* =====================================
-                            EMOJI PICKER
-                        ===================================== */}
+                        {/* ======================================
+                           FILE PREVIEW
+                        ====================================== */}
 
-                        {showEmoji && (
+                        {selectedFile && (
 
-                            <div className="emoji-picker">
+                            <div className="attachment-preview">
 
-                                <div className="emoji-header">
+                                <div>
 
-                                    <strong>
-                                        Emojis
-                                    </strong>
+                                    <FaImage />
 
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setShowEmoji(
-                                                false
-                                            )
+                                    <span>
+                                        {
+                                            selectedFile.name
                                         }
-                                    >
-                                        <FaTimes />
-                                    </button>
+                                    </span>
 
                                 </div>
 
 
-                                <div className="emoji-grid">
-
-                                    {EMOJIS.map(
-                                        (emoji, index) => (
-
-                                            <button
-                                                type="button"
-                                                key={
-                                                    `${emoji}-${index}`
-                                                }
-                                                onClick={() =>
-                                                    addEmoji(
-                                                        emoji
-                                                    )
-                                                }
-                                            >
-                                                {emoji}
-                                            </button>
-
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setSelectedFile(
+                                            null
                                         )
-                                    )}
-
-                                </div>
+                                    }
+                                >
+                                    <FaTimes />
+                                </button>
 
                             </div>
 
                         )}
 
 
-                        {/* =====================================
-                            COMPOSER
-                        ===================================== */}
+                        {/* ======================================
+                           EMOJI
+                        ====================================== */}
+
+                        {showEmoji && (
+
+                            <div className="emoji-panel">
+
+                                {emojis.map(
+                                    emoji => (
+
+                                        <button
+                                            key={emoji}
+                                            type="button"
+                                            onClick={() =>
+                                                addEmoji(
+                                                    emoji
+                                                )
+                                            }
+                                        >
+                                            {emoji}
+                                        </button>
+
+                                    )
+                                )}
+
+                            </div>
+
+                        )}
+
+
+                        {/* ======================================
+                           MESSAGE FORM
+                        ====================================== */}
 
                         <form
                             className="message-form"
@@ -2064,86 +2157,79 @@ const Messenger = () => {
                             }
                         >
 
-                            <div className="composer-actions">
-
-                                <button
-                                    type="button"
-                                    title="Emoji"
-                                    onClick={() => {
-
-                                        setShowEmoji(
-                                            previous =>
-                                                !previous
-                                        );
-
-                                        setShowBackgrounds(
-                                            false
-                                        );
-
-                                    }}
-                                >
-                                    <FaSmile />
-                                </button>
+                            <button
+                                type="button"
+                                className="message-tool"
+                                title="Emoji"
+                                onClick={() =>
+                                    setShowEmoji(
+                                        previous =>
+                                            !previous
+                                    )
+                                }
+                            >
+                                <FaSmile />
+                            </button>
 
 
-                                <button
-                                    type="button"
-                                    title="Attachment"
-                                    onClick={() =>
-                                        fileInputRef.current?.click()
-                                    }
-                                >
-                                    <FaPaperclip />
-                                </button>
+                            <button
+                                type="button"
+                                className="message-tool"
+                                title="Attach file"
+                                onClick={() =>
+                                    fileInputRef.current?.click()
+                                }
+                            >
+                                <FaPaperclip />
+                            </button>
 
 
-                                <button
-                                    type="button"
-                                    title="Photo"
-                                    onClick={() =>
-                                        fileInputRef.current?.click()
-                                    }
-                                >
-                                    <FaImage />
-                                </button>
+                            <input
+                                ref={
+                                    fileInputRef
+                                }
+                                type="file"
+                                accept="image/*,.pdf,.doc,.docx,.txt"
+                                hidden
+                                onChange={
+                                    handleFileChange
+                                }
+                            />
 
 
-                                <input
-                                    ref={
-                                        fileInputRef
-                                    }
-                                    type="file"
-                                    hidden
-                                    accept="image/*,.pdf,.doc,.docx,.txt"
-                                    onChange={
-                                        handleAttachment
-                                    }
-                                />
+                            <input
+                                type="text"
+                                placeholder={
+                                    `Message ${getUserName(
+                                        selectedUser
+                                    )}...`
+                                }
+                                value={message}
+                                onChange={
+                                    handleTyping
+                                }
+                                onFocus={
+                                    requestNotifications
+                                }
+                                autoComplete="off"
+                            />
 
-                            </div>
 
-
-                            <div className="message-input-wrapper">
-
-                                <input
-                                    type="text"
-                                    value={message}
-                                    onChange={
-                                        handleTyping
-                                    }
-                                    placeholder="Write a message..."
-                                    autoComplete="off"
-                                    spellCheck="true"
-                                />
-
-                            </div>
+                            <button
+                                type="button"
+                                className="message-tool"
+                                title="Voice message"
+                            >
+                                <FaMicrophone />
+                            </button>
 
 
                             <button
                                 type="submit"
                                 className="send-message-btn"
                                 disabled={
-                                    !message.trim()
+                                    !message.trim() ||
+                                    sending
                                 }
                                 title="Send message"
                             >
@@ -2160,6 +2246,159 @@ const Messenger = () => {
 
             </main>
 
+
+            {/* =================================================
+               INCOMING CALL
+            ================================================= */}
+
+            {incomingCall && (
+
+                <div className="call-overlay">
+
+                    <div className="incoming-call-card">
+
+                        <div className="call-avatar">
+
+                            {(
+                                incomingCall
+                                    .callerName ||
+                                "U"
+                            )
+                                .charAt(0)
+                                .toUpperCase()}
+
+                        </div>
+
+
+                        <h2>
+                            {
+                                incomingCall.callerName ||
+                                "Someone"
+                            }
+                        </h2>
+
+
+                        <p>
+                            Incoming{" "}
+                            {
+                                incomingCall.callType ===
+                                "video"
+                                    ? "video"
+                                    : "voice"
+                            }{" "}
+                            call
+                        </p>
+
+
+                        <div className="call-buttons">
+
+                            <button
+                                type="button"
+                                className="accept-call"
+                                onClick={
+                                    acceptCall
+                                }
+                            >
+                                <FaPhone />
+                                Accept
+                            </button>
+
+
+                            <button
+                                type="button"
+                                className="reject-call"
+                                onClick={
+                                    rejectCall
+                                }
+                            >
+                                <FaTimes />
+                                Decline
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            )}
+
+
+            {/* =================================================
+               ACTIVE CALL
+            ================================================= */}
+
+            {activeCall && (
+
+                <div className="call-overlay">
+
+                    <div className="active-call-card">
+
+                        <div className="call-avatar">
+
+                            {getInitial(
+                                selectedUser
+                            )}
+
+                        </div>
+
+
+                        <h2>
+
+                            {
+                                selectedUser
+                                    ? getUserName(
+                                        selectedUser
+                                    )
+                                    : activeCall.receiverName ||
+                                    activeCall.callerName ||
+                                    "Call"
+                            }
+
+                        </h2>
+
+
+                        <p>
+                            {
+                                callStatus ||
+                                (
+                                    callType ===
+                                    "video"
+                                        ? "Video call"
+                                        : "Voice call"
+                                )
+                            }
+                        </p>
+
+
+                        <div className="call-status">
+
+                            {callType ===
+                            "video"
+                                ? <FaVideo />
+                                : <FaPhone />
+                            }
+
+                        </div>
+
+
+                        <button
+                            type="button"
+                            className="end-call-btn"
+                            onClick={
+                                endCall
+                            }
+                        >
+                            <FaTimes />
+                            End Call
+                        </button>
+
+                    </div>
+
+                </div>
+
+            )}
+
         </div>
 
     );
@@ -2168,3 +2407,4 @@ const Messenger = () => {
 
 
 export default Messenger;
+```
