@@ -1,18 +1,33 @@
-```javascript
-const express = require("express");
+const express =
+    require("express");
 
-const router = express.Router();
+const router =
+    express.Router();
+
 
 const {
     register,
     login,
     me
-} = require("../controllers/authController");
+} =
+    require("../controllers/authController");
 
 
-// ======================================================
-// REGISTER
-// ======================================================
+const auth =
+    require("../middleware/auth");
+
+
+/*
+=========================================================
+AUTH ROUTES
+=========================================================
+*/
+
+
+/*
+REGISTER
+POST /api/auth/register
+*/
 
 router.post(
     "/register",
@@ -20,9 +35,10 @@ router.post(
 );
 
 
-// ======================================================
-// LOGIN
-// ======================================================
+/*
+LOGIN
+POST /api/auth/login
+*/
 
 router.post(
     "/login",
@@ -30,11 +46,13 @@ router.post(
 );
 
 
-// ======================================================
-// CURRENT USER
-// ======================================================
+/*
+CURRENT USER
+GET /api/auth/me
 
-const auth = require("../middleware/auth");
+Requires:
+Authorization: Bearer TOKEN
+*/
 
 router.get(
     "/me",
@@ -43,9 +61,5 @@ router.get(
 );
 
 
-// ======================================================
-// EXPORT
-// ======================================================
-
-module.exports = router;
-```
+module.exports =
+    router;
