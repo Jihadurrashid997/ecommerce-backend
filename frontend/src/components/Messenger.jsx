@@ -1,10 +1,15 @@
-```jsx
 import React, {
     useCallback,
     useEffect,
     useRef,
     useState
 } from "react";
+
+import {
+    FaArrowLeft,
+    FaPaperPlane,
+    FaCircle
+} from "react-icons/fa";
 
 import { io } from "socket.io-client";
 
@@ -13,100 +18,25 @@ import api from "../services/api";
 import "../styles/Messenger.css";
 
 
-/* =========================================================
-   SOCKET SERVER URL
-========================================================= */
-
-const SOCKET_URL =
+const SOCKET_URL = (
     process.env.REACT_APP_API_URL
-        ? process.env.REACT_APP_API_URL
-            .replace(/\/api\/?$/, "")
-        : window.location.origin;
+        ? process.env.REACT_APP_API_URL.replace(/\/api\/?$/, "")
+        : "https://ecommerce-api-9wc9.onrender.com"
+).replace(/\/+$/, "");
 
-
-/* =========================================================
-   HELPERS
-========================================================= */
-
-const getUserId = (user) => {
-    if (!user) {
-        return null;
-    }
-
-    return (
-        user._id ||
-        user.id ||
-        null
-    )?.toString();
-};
-
-
-const getMessageUserId = (value) => {
-    if (!value) {
-        return null;
-    }
-
-    if (typeof value === "object") {
-        return (
-            value._id ||
-            value.id ||
-            null
-        )?.toString();
-    }
-
-    return value.toString();
-};
-
-
-const getRoomId = (
-    firstUser,
-    secondUser
-) => {
-
-    const firstId =
-        getUserId(firstUser);
-
-    const secondId =
-        getUserId(secondUser);
-
-    if (!firstId || !secondId) {
-        return null;
-    }
-
-    return [
-        firstId,
-        secondId
-    ]
-        .sort()
-        .join("_");
-};
-
-
-/* =========================================================
-   COMPONENT
-========================================================= */
 
 const Messenger = () => {
 
-    const socketRef =
-        useRef(null);
+    const socketRef = useRef(null);
 
-    const messagesEndRef =
-        useRef(null);
+    const messagesEndRef = useRef(null);
 
-    const typingTimeoutRef =
-        useRef(null);
+    const typingTimerRef = useRef(null);
 
 
-    /* =====================================================
-       STATE
-    ===================================================== */
+    const [user, setUser] = useState(null);
 
-    const [user, setUser] =
-        useState(null);
-
-    const [users, setUsers] =
-        useState([]);
+    const [users, setUsers] = useState([]);
 
     const [selectedUser, setSelectedUser] =
         useState(null);
@@ -120,22 +50,29 @@ const Messenger = () => {
     const [onlineUsers, setOnlineUsers] =
         useState([]);
 
-    const [typingUserId, setTypingUserId] =
-        useState(null);
+    const [typingUser, setTypingUser] =
+        useState(false);
 
     const [loading, setLoading] =
         useState(true);
 
+    const [conversationLoading, setConversationLoading] =
+        useState(false);
+
     const [sending, setSending] =
+        useState(false);
+
+    const [mobileChatOpen, setMobileChatOpen] =
         useState(false);
 
     const [error, setError] =
         useState("");
 
 
-    /* =====================================================
-       CURRENT USER
-    ===================================================== */
+
+    // ======================================================
+    // CURRENT USER
+    // ======================================================
 
     useEffect(() => {
 
@@ -143,7 +80,6 @@ const Messenger = () => {
             localStorage.getItem("user");
 
         if (!storedUser) {
-            setLoading(false);
             return;
         }
 
@@ -157,26 +93,73 @@ const Messenger = () => {
         } catch (err) {
 
             console.error(
-                "User data error:",
+                "User parse error:",
                 err
             );
-
-            localStorage.removeItem("user");
 
         }
 
     }, []);
 
 
-    /* =====================================================
-       LOAD CHAT USERS
-    ===================================================== */
+
+    // ======================================================
+    // USER ID HELPER
+    // ======================================================
+
+    const getUserId = useCallback((item) => {
+
+        if (!item) {
+            return null;
+        }
+
+        const id =
+            item._id ||
+            item.id ||
+            item.userId;
+
+        return id
+            ? id.toString()
+            : null;
+
+    }, []);
+
+
+
+    // ======================================================
+    // ROOM ID
+    // ======================================================
+
+    const getRoomId = useCallback(
+        (firstUser, secondUser) => {
+
+            const first =
+                getUserId(firstUser);
+
+            const second =
+                getUserId(secondUser);
+
+            if (!first || !second) {
+                return null;
+            }
+
+            return [first, second]
+                .sort()
+                .join("_");
+
+        },
+        [getUserId]
+    );
+
+
+
+    // ======================================================
+    // LOAD CHAT USERS
+    // ======================================================
 
     useEffect(() => {
 
-        if (!user) {
-            return;
-        }
+        let mounted = true;
 
         const fetchUsers = async () => {
 
@@ -184,12 +167,6 @@ const Messenger = () => {
 
                 setLoading(true);
                 setError("");
-
-                /*
-                 * IMPORTANT:
-                 * /chat-users returns:
-                 * { success: true, users: [...] }
-                 */
 
                 const response =
                     await api.get(
@@ -199,14 +176,16 @@ const Messenger = () => {
                 const data =
                     response.data?.users ||
                     response.data?.data ||
-                    response.data ||
                     [];
 
-                setUsers(
-                    Array.isArray(data)
-                        ? data
-                        : []
-                );
+                if (mounted) {
+
+                    setUsers(
+                        Array.isArray(data)
+                            ? data
+                            : []
+                    );
+                }
 
             } catch (err) {
 
@@ -215,72 +194,83 @@ const Messenger = () => {
                     err
                 );
 
-                setError(
-                    err.response?.data?.message ||
-                    "Failed to load users"
-                );
+                if (mounted) {
 
-                setUsers([]);
+                    setUsers([]);
+
+                    setError(
+                        err.response?.data?.message ||
+                        "Unable to load users."
+                    );
+                }
 
             } finally {
 
-                setLoading(false);
+                if (mounted) {
+                    setLoading(false);
+                }
 
             }
 
         };
 
+        if (user) {
+            fetchUsers();
+        }
 
-        fetchUsers();
+        return () => {
+            mounted = false;
+        };
 
     }, [user]);
 
 
-    /* =====================================================
-       SOCKET.IO CONNECTION
-    ===================================================== */
+
+    // ======================================================
+    // SOCKET.IO
+    // ======================================================
 
     useEffect(() => {
 
         if (!user) {
-            return;
+            return undefined;
         }
-
 
         const currentUserId =
             getUserId(user);
 
         if (!currentUserId) {
-            return;
+            return undefined;
         }
 
 
-        const socket =
-            io(SOCKET_URL, {
+        const socket = io(
+            SOCKET_URL,
+            {
                 transports: [
                     "websocket",
                     "polling"
                 ],
                 reconnection: true,
-                reconnectionAttempts: 10,
+                reconnectionAttempts: Infinity,
                 reconnectionDelay: 1000
-            });
+            }
+        );
 
 
-        socketRef.current =
-            socket;
+        socketRef.current = socket;
 
 
-        /* ==========================
-           CONNECT
-        ========================== */
+        // --------------------------------------------------
+        // CONNECT
+        // --------------------------------------------------
 
         socket.on(
             "connect",
             () => {
 
                 console.log(
-                    "🟢 Messenger connected:",
+                    "Socket connected:",
                     socket.id
                 );
 
@@ -289,13 +279,31 @@ const Messenger = () => {
                     currentUserId
                 );
 
+
+                if (selectedUser) {
+
+                    const roomId =
+                        getRoomId(
+                            user,
+                            selectedUser
+                        );
+
+                    if (roomId) {
+
+                        socket.emit(
+                            "join-room",
+                            roomId
+                        );
+                    }
+                }
+
             }
         );
 
 
-        /* ==========================
-           ONLINE USERS
-        ========================== */
+        // --------------------------------------------------
+        // ONLINE USERS
+        // --------------------------------------------------
 
         socket.on(
             "online-users",
@@ -303,7 +311,9 @@ const Messenger = () => {
 
                 setOnlineUsers(
                     Array.isArray(online)
-                        ? online
+                        ? online.map(
+                            id => id.toString()
+                        )
                         : []
                 );
 
@@ -311,215 +321,157 @@ const Messenger = () => {
         );
 
 
-        /* ==========================
-           RECEIVE MESSAGE
-        ========================== */
+        // --------------------------------------------------
+        // RECEIVE MESSAGE
+        // --------------------------------------------------
 
         socket.on(
             "receive-message",
-            (newMessage) => {
+            (incoming) => {
 
-                if (!newMessage) {
+                if (!incoming) {
                     return;
                 }
 
 
                 const senderId =
-                    getMessageUserId(
-                        newMessage.sender
+                    getUserId(
+                        incoming.sender
+                    ) ||
+                    (
+                        incoming.sender
+                            ? incoming.sender.toString()
+                            : null
                     );
+
 
                 const receiverId =
-                    getMessageUserId(
-                        newMessage.receiver
+                    getUserId(
+                        incoming.receiver
+                    ) ||
+                    (
+                        incoming.receiver
+                            ? incoming.receiver.toString()
+                            : null
                     );
 
 
-                /*
-                 * If backend sends a message
-                 * that belongs to this user,
-                 * update the active conversation.
-                 */
-
-                const otherUserId =
+                const selectedId =
                     getUserId(
                         selectedUser
                     );
 
 
-                const belongsToCurrentChat =
-                    otherUserId &&
+                const belongsToChat =
+                    selectedId &&
                     (
                         (
-                            senderId ===
-                                otherUserId &&
-                            receiverId ===
-                                currentUserId
+                            senderId === selectedId &&
+                            receiverId === currentUserId
                         ) ||
                         (
-                            senderId ===
-                                currentUserId &&
-                            receiverId ===
-                                otherUserId
+                            senderId === currentUserId &&
+                            receiverId === selectedId
                         )
                     );
 
 
-                if (!belongsToCurrentChat) {
+                if (!belongsToChat) {
                     return;
                 }
 
 
                 setMessages(
-                    (previousMessages) => {
+                    previous => {
 
-                        const messageId =
-                            newMessage._id;
-
-
-                        /*
-                         * Prevent duplicate messages.
-                         */
-
-                        if (
-                            messageId &&
-                            previousMessages.some(
-                                (item) =>
-                                    item._id ===
-                                    messageId
-                            )
-                        ) {
-
-                            return previousMessages;
-
-                        }
+                        const incomingId =
+                            incoming._id
+                                ? incoming._id.toString()
+                                : null;
 
 
-                        /*
-                         * Prevent duplicate
-                         * temporary/server messages
-                         * when possible.
-                         */
-
-                        const duplicateByContent =
-                            previousMessages.some(
-                                (item) => {
-
-                                    const itemSender =
-                                        getMessageUserId(
-                                            item.sender
-                                        );
-
-                                    return (
-                                        itemSender ===
-                                            senderId &&
-                                        item.message ===
-                                            newMessage.message &&
-                                        item.createdAt ===
-                                            newMessage.createdAt
-                                    );
-
-                                }
+                        const exists =
+                            incomingId &&
+                            previous.some(
+                                item =>
+                                    item._id &&
+                                    item._id.toString() ===
+                                    incomingId
                             );
 
 
-                        if (
-                            duplicateByContent
-                        ) {
-                            return previousMessages;
+                        if (exists) {
+                            return previous;
                         }
 
 
                         return [
-                            ...previousMessages,
-                            newMessage
+                            ...previous,
+                            incoming
                         ];
 
                     }
                 );
 
+
+                setTypingUser(false);
+
             }
         );
 
 
-        /* ==========================
-           TYPING
-        ========================== */
+        // --------------------------------------------------
+        // TYPING
+        // --------------------------------------------------
 
         socket.on(
             "user-typing",
-            ({
-                userId
-            } = {}) => {
+            (data) => {
 
                 if (
-                    userId &&
-                    userId.toString() !==
-                        currentUserId
+                    data?.userId &&
+                    data.userId.toString() !==
+                    currentUserId
                 ) {
 
-                    setTypingUserId(
-                        userId.toString()
-                    );
-
+                    setTypingUser(true);
                 }
 
             }
         );
 
 
-        /* ==========================
-           STOP TYPING
-        ========================== */
+        // --------------------------------------------------
+        // STOP TYPING
+        // --------------------------------------------------
 
         socket.on(
             "user-stop-typing",
-            ({
-                userId
-            } = {}) => {
+            (data) => {
 
                 if (
-                    !userId ||
-                    userId.toString() ===
-                        typingUserId
+                    !data?.userId ||
+                    data.userId.toString() !==
+                    currentUserId
                 ) {
 
-                    setTypingUserId(null);
-
+                    setTypingUser(false);
                 }
 
             }
         );
 
 
-        /* ==========================
-           DISCONNECT
-        ========================== */
+        // --------------------------------------------------
+        // DISCONNECT
+        // --------------------------------------------------
 
         socket.on(
             "disconnect",
-            (reason) => {
+            () => {
 
                 console.log(
-                    "🔴 Messenger disconnected:",
-                    reason
-                );
-
-            }
-        );
-
-
-        /* ==========================
-           CONNECTION ERROR
-        ========================== */
-
-        socket.on(
-            "connect_error",
-            (err) => {
-
-                console.error(
-                    "Socket connection error:",
-                    err.message
+                    "Socket disconnected"
                 );
 
             }
@@ -528,30 +480,30 @@ const Messenger = () => {
 
         return () => {
 
-            if (
-                typingTimeoutRef.current
-            ) {
+            clearTimeout(
+                typingTimerRef.current
+            );
 
-                clearTimeout(
-                    typingTimeoutRef.current
-                );
-
-            }
-
+            socket.removeAllListeners();
 
             socket.disconnect();
 
-            socketRef.current =
-                null;
+            socketRef.current = null;
 
         };
 
-    }, [user, selectedUser, typingUserId]);
+    }, [
+        user,
+        selectedUser,
+        getRoomId,
+        getUserId
+    ]);
 
 
-    /* =====================================================
-       AUTO SCROLL
-    ===================================================== */
+
+    // ======================================================
+    // AUTO SCROLL
+    // ======================================================
 
     useEffect(() => {
 
@@ -559,229 +511,238 @@ const Messenger = () => {
             behavior: "smooth"
         });
 
-    }, [messages, typingUserId]);
+    }, [
+        messages,
+        typingUser
+    ]);
 
 
-    /* =====================================================
-       SELECT USER
-    ===================================================== */
 
-    const selectUser =
-        useCallback(
-            async (selected) => {
+    // ======================================================
+    // ONLINE CHECK
+    // ======================================================
 
-                if (!selected) {
-                    return;
-                }
+    const isUserOnline = useCallback(
+        (selected) => {
 
+            const id =
+                getUserId(selected);
 
-                setSelectedUser(
-                    selected
-                );
-
-                setMessages([]);
-
-                setTypingUserId(null);
-
-                setError("");
-
-
-                if (!user) {
-                    return;
-                }
-
-
-                const selectedUserId =
-                    getUserId(selected);
-
-
-                const roomId =
-                    getRoomId(
-                        user,
-                        selected
-                    );
-
-
-                /*
-                 * Join private Socket.IO room.
-                 */
-
-                if (
-                    roomId &&
-                    socketRef.current
-                ) {
-
-                    socketRef.current.emit(
-                        "join-room",
-                        roomId
-                    );
-
-                }
-
-
-                try {
-
-                    /*
-                     * Load previous messages.
-                     */
-
-                    const response =
-                        await api.get(
-                            `/messages/conversation/${selectedUserId}`
-                        );
-
-
-                    const conversation =
-                        response.data?.data ||
-                        response.data?.messages ||
-                        [];
-
-
-                    setMessages(
-                        Array.isArray(
-                            conversation
-                        )
-                            ? conversation
-                            : []
-                    );
-
-
-                    /*
-                     * Mark received messages
-                     * as seen.
-                     */
-
-                    await api.put(
-                        `/messages/seen/${selectedUserId}`
-                    );
-
-                } catch (err) {
-
-                    console.error(
-                        "Failed to load conversation:",
-                        err
-                    );
-
-                    setError(
-                        err.response?.data?.message ||
-                        "Failed to load conversation"
-                    );
-
-                }
-
-            },
-            [user]
-        );
-
-
-    /* =====================================================
-       SEND MESSAGE
-    ===================================================== */
-
-    const sendMessage =
-        async (event) => {
-
-            event.preventDefault();
-
-
-            const text =
-                message.trim();
-
-
-            if (
-                !text ||
-                !selectedUser ||
-                !user ||
-                sending
-            ) {
-                return;
+            if (!id) {
+                return false;
             }
 
+            return onlineUsers.some(
+                onlineId =>
+                    onlineId.toString() ===
+                    id.toString()
+            );
 
-            const receiver =
-                getUserId(
-                    selectedUser
+        },
+        [
+            onlineUsers,
+            getUserId
+        ]
+    );
+
+
+
+    // ======================================================
+    // SELECT USER
+    // ======================================================
+
+    const selectUser = async (selected) => {
+
+        if (!selected || !user) {
+            return;
+        }
+
+
+        setSelectedUser(selected);
+
+        setMessages([]);
+
+        setTypingUser(false);
+
+        setError("");
+
+        setMobileChatOpen(true);
+
+        setConversationLoading(true);
+
+
+        const selectedId =
+            getUserId(selected);
+
+
+        const roomId =
+            getRoomId(
+                user,
+                selected
+            );
+
+
+        // Join private room
+
+        if (
+            roomId &&
+            socketRef.current
+        ) {
+
+            socketRef.current.emit(
+                "join-room",
+                roomId
+            );
+
+        }
+
+
+        try {
+
+            const response =
+                await api.get(
+                    `/messages/conversation/${selectedId}`
                 );
 
 
-            const currentUserId =
-                getUserId(user);
+            const data =
+                response.data?.data ||
+                response.data?.messages ||
+                [];
 
 
-            const roomId =
-                getRoomId(
-                    user,
-                    selectedUser
+            setMessages(
+                Array.isArray(data)
+                    ? data
+                    : []
+            );
+
+
+            // Mark received messages as seen
+
+            await api.put(
+                `/messages/seen/${selectedId}`
+            );
+
+
+        } catch (err) {
+
+            console.error(
+                "Conversation loading error:",
+                err
+            );
+
+            setMessages([]);
+
+            setError(
+                err.response?.data?.message ||
+                "Unable to load conversation."
+            );
+
+        } finally {
+
+            setConversationLoading(
+                false
+            );
+
+        }
+
+    };
+
+
+
+    // ======================================================
+    // SEND MESSAGE
+    // ======================================================
+
+    const sendMessage = async (event) => {
+
+        event.preventDefault();
+
+
+        const text =
+            message.trim();
+
+
+        if (
+            !text ||
+            !selectedUser ||
+            !user ||
+            sending
+        ) {
+
+            return;
+        }
+
+
+        const receiver =
+            getUserId(
+                selectedUser
+            );
+
+
+        const roomId =
+            getRoomId(
+                user,
+                selectedUser
+            );
+
+
+        if (!receiver) {
+            return;
+        }
+
+
+        setSending(true);
+
+        setError("");
+
+
+        try {
+
+            const response =
+                await api.post(
+                    "/messages/send",
+                    {
+                        receiver,
+                        message: text
+                    }
                 );
 
 
-            if (
-                !receiver ||
-                !currentUserId
-            ) {
-                return;
-            }
+            const savedMessage =
+                response.data?.data ||
+                response.data?.message;
 
 
-            try {
-
-                setSending(true);
-                setError("");
-
-
-                /*
-                 * Save message in MongoDB.
-                 */
-
-                const response =
-                    await api.post(
-                        "/messages/send",
-                        {
-                            receiver,
-                            message: text
-                        }
-                    );
-
-
-                const savedMessage =
-                    response.data?.data;
-
-
-                if (!savedMessage) {
-
-                    throw new Error(
-                        "Server did not return the saved message."
-                    );
-
-                }
-
-
-                /*
-                 * Immediately show the sent message.
-                 *
-                 * This makes the chat feel instant
-                 * even before Socket.IO echoes it back.
-                 */
+            if (savedMessage) {
 
                 setMessages(
-                    (previousMessages) => {
+                    previous => {
 
-                        if (
-                            savedMessage._id &&
-                            previousMessages.some(
-                                (item) =>
-                                    item._id ===
-                                    savedMessage._id
-                            )
-                        ) {
+                        const savedId =
+                            savedMessage._id
+                                ? savedMessage._id.toString()
+                                : null;
 
-                            return previousMessages;
 
+                        const exists =
+                            savedId &&
+                            previous.some(
+                                item =>
+                                    item._id &&
+                                    item._id.toString() ===
+                                    savedId
+                            );
+
+
+                        if (exists) {
+                            return previous;
                         }
 
 
                         return [
-                            ...previousMessages,
+                            ...previous,
                             savedMessage
                         ];
 
@@ -789,15 +750,10 @@ const Messenger = () => {
                 );
 
 
-                /*
-                 * Broadcast through Socket.IO
-                 * so the other user receives it
-                 * instantly.
-                 */
+                // Real-time delivery
 
                 if (
                     socketRef.current &&
-                    socketRef.current.connected &&
                     roomId
                 ) {
 
@@ -811,327 +767,391 @@ const Messenger = () => {
 
                 }
 
-
-                setMessage("");
-
-
-                /*
-                 * Stop typing indicator.
-                 */
-
-                if (
-                    socketRef.current &&
-                    roomId
-                ) {
-
-                    socketRef.current.emit(
-                        "stop-typing",
-                        {
-                            roomId,
-                            userId:
-                                currentUserId
-                        }
-                    );
-
-                }
-
-            } catch (err) {
-
-                console.error(
-                    "Failed to send message:",
-                    err
-                );
-
-                setError(
-                    err.response?.data?.message ||
-                    err.message ||
-                    "Failed to send message"
-                );
-
-            } finally {
-
-                setSending(false);
-
             }
 
-        };
 
-
-    /* =====================================================
-       TYPING
-    ===================================================== */
-
-    const handleTyping =
-        (event) => {
-
-            const value =
-                event.target.value;
-
-
-            setMessage(value);
+            setMessage("");
 
 
             if (
-                typingTimeoutRef.current
+                socketRef.current &&
+                roomId
             ) {
-
-                clearTimeout(
-                    typingTimeoutRef.current
-                );
-
-            }
-
-
-            if (
-                !selectedUser ||
-                !user ||
-                !socketRef.current
-            ) {
-                return;
-            }
-
-
-            const roomId =
-                getRoomId(
-                    user,
-                    selectedUser
-                );
-
-
-            const currentUserId =
-                getUserId(user);
-
-
-            if (!roomId) {
-                return;
-            }
-
-
-            if (value.trim()) {
-
-                socketRef.current.emit(
-                    "typing",
-                    {
-                        roomId,
-                        userId:
-                            currentUserId
-                    }
-                );
-
-
-                /*
-                 * Automatically stop typing
-                 * after the user stops typing.
-                 */
-
-                typingTimeoutRef.current =
-                    setTimeout(
-                        () => {
-
-                            socketRef.current?.emit(
-                                "stop-typing",
-                                {
-                                    roomId,
-                                    userId:
-                                        currentUserId
-                                }
-                            );
-
-                        },
-                        1200
-                    );
-
-            } else {
 
                 socketRef.current.emit(
                     "stop-typing",
                     {
                         roomId,
                         userId:
-                            currentUserId
+                            getUserId(user)
                     }
                 );
 
             }
 
-        };
+        } catch (err) {
 
-
-    /* =====================================================
-       ONLINE CHECK
-    ===================================================== */
-
-    const isUserOnline =
-        (selected) => {
-
-            const id =
-                getUserId(selected);
-
-
-            if (!id) {
-                return false;
-            }
-
-
-            return onlineUsers.some(
-                (onlineId) =>
-                    onlineId?.toString() ===
-                    id
+            console.error(
+                "Send message error:",
+                err
             );
 
-        };
+            setError(
+                err.response?.data?.message ||
+                "Message could not be sent."
+            );
+
+        } finally {
+
+            setSending(false);
+
+        }
+
+    };
 
 
-    /* =====================================================
-       LOADING
-    ===================================================== */
+
+    // ======================================================
+    // TYPING
+    // ======================================================
+
+    const handleTyping = (event) => {
+
+        const value =
+            event.target.value;
+
+
+        setMessage(value);
+
+
+        if (
+            !selectedUser ||
+            !user ||
+            !socketRef.current
+        ) {
+
+            return;
+        }
+
+
+        const roomId =
+            getRoomId(
+                user,
+                selectedUser
+            );
+
+
+        if (!roomId) {
+            return;
+        }
+
+
+        clearTimeout(
+            typingTimerRef.current
+        );
+
+
+        if (value.trim()) {
+
+            socketRef.current.emit(
+                "typing",
+                {
+                    roomId,
+                    userId:
+                        getUserId(user)
+                }
+            );
+
+
+            typingTimerRef.current =
+                setTimeout(
+                    () => {
+
+                        socketRef.current?.emit(
+                            "stop-typing",
+                            {
+                                roomId,
+                                userId:
+                                    getUserId(user)
+                            }
+                        );
+
+                    },
+                    1200
+                );
+
+        } else {
+
+            socketRef.current.emit(
+                "stop-typing",
+                {
+                    roomId,
+                    userId:
+                        getUserId(user)
+                }
+            );
+
+        }
+
+    };
+
+
+
+    // ======================================================
+    // KEYBOARD
+    // ======================================================
+
+    const handleKeyDown = (event) => {
+
+        if (
+            event.key === "Enter" &&
+            !event.shiftKey
+        ) {
+
+            event.preventDefault();
+
+            sendMessage(event);
+
+        }
+
+    };
+
+
+
+    // ======================================================
+    // BACK TO USERS
+    // ======================================================
+
+    const backToUsers = () => {
+
+        setMobileChatOpen(false);
+
+    };
+
+
+
+    // ======================================================
+    // MESSAGE TIME
+    // ======================================================
+
+    const formatTime = (date) => {
+
+        if (!date) {
+            return "";
+        }
+
+
+        const parsed =
+            new Date(date);
+
+
+        if (
+            Number.isNaN(
+                parsed.getTime()
+            )
+        ) {
+
+            return "";
+        }
+
+
+        return parsed.toLocaleTimeString(
+            [],
+            {
+                hour: "numeric",
+                minute: "2-digit"
+            }
+        );
+
+    };
+
+
+
+    // ======================================================
+    // LOADING
+    // ======================================================
 
     if (loading) {
 
         return (
-
             <div className="messenger-page">
 
                 <div className="messenger-loading">
 
-                    Loading Messenger...
+                    <div>
+                        Loading Messenger...
+                    </div>
 
                 </div>
 
             </div>
-
         );
 
     }
 
 
-    /* =====================================================
-       MAIN UI
-    ===================================================== */
+
+    // ======================================================
+    // RENDER
+    // ======================================================
 
     return (
 
-        <div className="messenger-page">
+        <div
+            className={
+                mobileChatOpen
+                    ? "messenger-page mobile-chat-open"
+                    : "messenger-page"
+            }
+        >
 
-
-            {/* =================================================
-               SIDEBAR
-            ================================================= */}
+            {/* ==================================================
+                SIDEBAR
+            ================================================== */}
 
             <aside className="messenger-sidebar">
 
                 <div className="messenger-sidebar-header">
 
-                    <h2>
-                        Messages
-                    </h2>
+                    <div>
+
+                        <h2>
+                            Messages
+                        </h2>
+
+                        <span>
+                            {users.length} people
+                        </span>
+
+                    </div>
 
                 </div>
 
 
+                {error && !selectedUser && (
+
+                    <div className="messenger-error">
+                        {error}
+                    </div>
+
+                )}
+
+
                 <div className="user-list">
 
-                    {users
-                        .filter(
-                            (item) => {
+                    {users.map((item) => {
 
-                                const currentId =
-                                    getUserId(user);
-
-                                const itemId =
-                                    getUserId(item);
-
-                                return (
-                                    itemId &&
-                                    itemId !==
-                                        currentId
-                                );
-
-                            }
-                        )
-                        .map(
-                            (item) => {
-
-                                const id =
-                                    getUserId(item);
+                        const id =
+                            getUserId(item);
 
 
-                                const active =
-                                    selectedUser &&
-                                    getUserId(
-                                        selectedUser
-                                    ) === id;
+                        const selectedId =
+                            getUserId(
+                                selectedUser
+                            );
 
 
-                                return (
+                        const active =
+                            id &&
+                            selectedId &&
+                            id === selectedId;
 
-                                    <button
-                                        key={id}
-                                        type="button"
-                                        className={
-                                            active
-                                                ? "chat-user active"
-                                                : "chat-user"
-                                        }
-                                        onClick={() =>
-                                            selectUser(item)
-                                        }
-                                    >
 
-                                        <div className="user-avatar">
+                        return (
 
-                                            {
-                                                item.name
-                                                    ?.charAt(
-                                                        0
-                                                    )
-                                                    ?.toUpperCase() ||
-                                                "U"
+                            <button
+                                type="button"
+                                key={id}
+                                className={
+                                    active
+                                        ? "chat-user active"
+                                        : "chat-user"
+                                }
+                                onClick={() =>
+                                    selectUser(item)
+                                }
+                            >
+
+                                <div className="user-avatar">
+
+                                    {
+                                        item.profileImage ||
+                                        item.avatar ||
+                                        item.image
+                                    ? (
+
+                                        <img
+                                            src={
+                                                item.profileImage ||
+                                                item.avatar ||
+                                                item.image
                                             }
+                                            alt={
+                                                item.name ||
+                                                "User"
+                                            }
+                                        />
 
-                                        </div>
+                                    ) : (
+
+                                        (
+                                            item.name ||
+                                            "U"
+                                        )
+                                            .charAt(0)
+                                            .toUpperCase()
+
+                                    )}
+
+                                    {isUserOnline(item) && (
+
+                                        <span className="online-dot">
+                                            <FaCircle />
+                                        </span>
+
+                                    )}
+
+                                </div>
 
 
-                                        <div className="user-info">
+                                <div className="user-info">
 
-                                            <strong>
-                                                {
-                                                    item.name ||
-                                                    "User"
-                                                }
-                                            </strong>
+                                    <strong>
+                                        {
+                                            item.name ||
+                                            "User"
+                                        }
+                                    </strong>
 
 
-                                            <span>
+                                    <span>
 
-                                                {
-                                                    isUserOnline(
-                                                        item
-                                                    )
-                                                        ? "🟢 Online"
-                                                        : "Offline"
-                                                }
+                                        {
+                                            isUserOnline(item)
+                                                ? "Active now"
+                                                : "Offline"
+                                        }
 
-                                            </span>
+                                    </span>
 
-                                        </div>
+                                </div>
 
-                                    </button>
+                            </button>
 
-                                );
+                        );
 
-                            }
-                        )
-                    }
+                    })}
 
 
                     {users.length === 0 && (
 
-                        <p className="no-users">
+                        <div className="no-users">
 
-                            No users available.
+                            <p>
+                                No users available.
+                            </p>
 
-                        </p>
+                        </div>
 
                     )}
 
@@ -1140,9 +1160,10 @@ const Messenger = () => {
             </aside>
 
 
-            {/* =================================================
-               CHAT AREA
-            ================================================= */}
+
+            {/* ==================================================
+                CHAT AREA
+            ================================================== */}
 
             <main className="chat-area">
 
@@ -1152,12 +1173,17 @@ const Messenger = () => {
 
                         <div>
 
+                            <div className="empty-chat-icon">
+                                💬
+                            </div>
+
                             <h2>
-                                💬 Welcome to Messenger
+                                Your Messages
                             </h2>
 
                             <p>
-                                Select a user to start chatting.
+                                Select someone to start
+                                a conversation.
                             </p>
 
                         </div>
@@ -1168,26 +1194,64 @@ const Messenger = () => {
 
                     <>
 
-
-                        {/* =================================================
-                           CHAT HEADER
-                        ================================================= */}
+                        {/* ==================================================
+                            CHAT HEADER
+                        ================================================== */}
 
                         <div className="chat-header">
+
+                            <button
+                                type="button"
+                                className="mobile-back-btn"
+                                onClick={backToUsers}
+                            >
+                                <FaArrowLeft />
+                            </button>
+
 
                             <div className="chat-user-avatar">
 
                                 {
-                                    selectedUser.name
-                                        ?.charAt(0)
-                                        ?.toUpperCase() ||
-                                    "U"
-                                }
+                                    selectedUser.profileImage ||
+                                    selectedUser.avatar ||
+                                    selectedUser.image
+                                ? (
+
+                                    <img
+                                        src={
+                                            selectedUser.profileImage ||
+                                            selectedUser.avatar ||
+                                            selectedUser.image
+                                        }
+                                        alt={
+                                            selectedUser.name ||
+                                            "User"
+                                        }
+                                    />
+
+                                ) : (
+
+                                    (
+                                        selectedUser.name ||
+                                        "U"
+                                    )
+                                        .charAt(0)
+                                        .toUpperCase()
+
+                                )}
+
+                                {isUserOnline(selectedUser) && (
+
+                                    <span className="online-dot">
+                                        <FaCircle />
+                                    </span>
+
+                                )}
 
                             </div>
 
 
-                            <div>
+                            <div className="chat-header-info">
 
                                 <h3>
                                     {
@@ -1199,11 +1263,12 @@ const Messenger = () => {
 
                                 <span>
 
-                                    {
-                                        isUserOnline(
+                                    {typingUser
+                                        ? "Typing..."
+                                        : isUserOnline(
                                             selectedUser
                                         )
-                                            ? "🟢 Online"
+                                            ? "Active now"
                                             : "Offline"
                                     }
 
@@ -1214,38 +1279,51 @@ const Messenger = () => {
                         </div>
 
 
-                        {/* =================================================
-                           ERROR
-                        ================================================= */}
+
+                        {/* ==================================================
+                            ERROR
+                        ================================================== */}
 
                         {error && (
 
-                            <div className="messenger-error">
-
+                            <div className="messenger-error chat-error">
                                 {error}
-
                             </div>
 
                         )}
 
 
-                        {/* =================================================
-                           MESSAGES
-                        ================================================= */}
+
+                        {/* ==================================================
+                            MESSAGES
+                        ================================================== */}
 
                         <div className="messages-container">
 
-                            {messages.length === 0 ? (
+                            {conversationLoading ? (
 
                                 <div className="no-messages">
+
+                                    <p>
+                                        Loading conversation...
+                                    </p>
+
+                                </div>
+
+                            ) : messages.length === 0 ? (
+
+                                <div className="no-messages">
+
+                                    <div className="empty-chat-icon">
+                                        👋
+                                    </div>
 
                                     <p>
                                         No messages yet.
                                     </p>
 
                                     <small>
-                                        Send a message to start
-                                        the conversation.
+                                        Start the conversation.
                                     </small>
 
                                 </div>
@@ -1256,8 +1334,13 @@ const Messenger = () => {
                                     (msg, index) => {
 
                                         const senderId =
-                                            getMessageUserId(
+                                            getUserId(
                                                 msg.sender
+                                            ) ||
+                                            (
+                                                msg.sender
+                                                    ? msg.sender.toString()
+                                                    : null
                                             );
 
 
@@ -1270,13 +1353,15 @@ const Messenger = () => {
                                             currentUserId;
 
 
+                                        const messageKey =
+                                            msg._id ||
+                                            `${senderId}-${msg.createdAt}-${index}`;
+
+
                                         return (
 
                                             <div
-                                                key={
-                                                    msg._id ||
-                                                    `message-${index}`
-                                                }
+                                                key={messageKey}
                                                 className={
                                                     ownMessage
                                                         ? "message-row own"
@@ -1301,25 +1386,36 @@ const Messenger = () => {
                                                     </p>
 
 
-                                                    <small>
+                                                    <div className="message-meta">
 
-                                                        {
-                                                            msg.createdAt
-                                                                ? new Date(
+                                                        <small>
+                                                            {
+                                                                formatTime(
                                                                     msg.createdAt
-                                                                ).toLocaleTimeString(
-                                                                    [],
-                                                                    {
-                                                                        hour:
-                                                                            "2-digit",
-                                                                        minute:
-                                                                            "2-digit"
-                                                                    }
                                                                 )
-                                                                : ""
-                                                        }
+                                                            }
+                                                        </small>
 
-                                                    </small>
+
+                                                        {ownMessage && (
+
+                                                            <small
+                                                                className={
+                                                                    msg.isSeen
+                                                                        ? "message-seen"
+                                                                        : ""
+                                                                }
+                                                            >
+                                                                {
+                                                                    msg.isSeen
+                                                                        ? "Seen"
+                                                                        : "Sent"
+                                                                }
+                                                            </small>
+
+                                                        )}
+
+                                                    </div>
 
                                                 </div>
 
@@ -1333,17 +1429,17 @@ const Messenger = () => {
                             )}
 
 
-                            {/* =================================================
-                               TYPING INDICATOR
-                            ================================================= */}
-
-                            {typingUserId && (
+                            {typingUser && (
 
                                 <div className="typing-indicator">
 
-                                    <span>
+                                    <span />
+                                    <span />
+                                    <span />
+
+                                    <small>
                                         Typing...
-                                    </span>
+                                    </small>
 
                                 </div>
 
@@ -1351,33 +1447,28 @@ const Messenger = () => {
 
 
                             <div
-                                ref={
-                                    messagesEndRef
-                                }
+                                ref={messagesEndRef}
                             />
 
                         </div>
 
 
-                        {/* =================================================
-                           MESSAGE FORM
-                        ================================================= */}
+
+                        {/* ==================================================
+                            MESSAGE FORM
+                        ================================================== */}
 
                         <form
                             className="message-form"
-                            onSubmit={
-                                sendMessage
-                            }
+                            onSubmit={sendMessage}
                         >
 
-                            <input
-                                type="text"
+                            <textarea
+                                rows="1"
                                 value={message}
-                                onChange={
-                                    handleTyping
-                                }
+                                onChange={handleTyping}
+                                onKeyDown={handleKeyDown}
                                 placeholder="Write a message..."
-                                autoComplete="off"
                                 disabled={sending}
                             />
 
@@ -1388,11 +1479,14 @@ const Messenger = () => {
                                     !message.trim() ||
                                     sending
                                 }
+                                aria-label="Send message"
                             >
 
-                                {sending
-                                    ? "Sending..."
-                                    : "Send"}
+                                {sending ? (
+                                    "..."
+                                ) : (
+                                    <FaPaperPlane />
+                                )}
 
                             </button>
 
@@ -1412,4 +1506,3 @@ const Messenger = () => {
 
 
 export default Messenger;
-```
