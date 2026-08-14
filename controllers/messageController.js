@@ -1,9 +1,13 @@
-const Message = require("../models/Message");
+const mongoose =
+    require("mongoose");
+
+const Message =
+    require("../models/Message");
 
 
-// ==========================
+// ======================================================
 // SEND MESSAGE
-// ==========================
+// ======================================================
 
 exports.sendMessage = async (
     req,
@@ -18,16 +22,59 @@ exports.sendMessage = async (
         } = req.body;
 
 
+        const text =
+            String(
+                message || ""
+            ).trim();
+
+
         if (
             !receiver ||
-            !message ||
-            !message.trim()
+            !text
         ) {
 
             return res.status(400).json({
+
                 success: false,
+
                 message:
                     "Receiver and message are required"
+
+            });
+
+        }
+
+
+        if (
+            !mongoose.Types.ObjectId.isValid(
+                receiver
+            )
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "Invalid receiver"
+
+            });
+
+        }
+
+
+        if (
+            receiver.toString() ===
+            req.user.id.toString()
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "You cannot message yourself"
+
             });
 
         }
@@ -42,24 +89,23 @@ exports.sendMessage = async (
                 receiver,
 
                 message:
-                    message.trim()
+                    text
 
             });
 
 
         const populatedMessage =
-            await Message
-                .findById(
-                    newMessage._id
-                )
-                .populate(
-                    "sender",
-                    "name email role profileImage avatar image"
-                )
-                .populate(
-                    "receiver",
-                    "name email role profileImage avatar image"
-                );
+            await Message.findById(
+                newMessage._id
+            )
+            .populate(
+                "sender",
+                "name email role profileImage"
+            )
+            .populate(
+                "receiver",
+                "name email role profileImage"
+            );
 
 
         res.status(201).json({
@@ -70,7 +116,6 @@ exports.sendMessage = async (
                 populatedMessage
 
         });
-
 
     } catch (err) {
 
@@ -84,7 +129,7 @@ exports.sendMessage = async (
             success: false,
 
             message:
-                err.message
+                "Unable to send message."
 
         });
 
@@ -93,9 +138,9 @@ exports.sendMessage = async (
 };
 
 
-// ==========================
+// ======================================================
 // GET CONVERSATION
-// ==========================
+// ======================================================
 
 exports.getConversation = async (
     req,
@@ -108,14 +153,18 @@ exports.getConversation = async (
             req.params.userId;
 
 
-        if (!otherUserId) {
+        if (
+            !mongoose.Types.ObjectId.isValid(
+                otherUserId
+            )
+        ) {
 
             return res.status(400).json({
 
                 success: false,
 
                 message:
-                    "User ID is required"
+                    "Invalid user ID"
 
             });
 
@@ -123,44 +172,45 @@ exports.getConversation = async (
 
 
         const messages =
-            await Message
-                .find({
+            await Message.find({
 
-                    $or: [
+                $or: [
 
-                        {
-                            sender:
-                                req.user.id,
+                    {
+                        sender:
+                            req.user.id,
 
-                            receiver:
-                                otherUserId
-                        },
+                        receiver:
+                            otherUserId
 
-                        {
-                            sender:
-                                otherUserId,
+                    },
 
-                            receiver:
-                                req.user.id
-                        }
+                    {
+                        sender:
+                            otherUserId,
 
-                    ]
+                        receiver:
+                            req.user.id
 
-                })
-                .sort({
-                    createdAt: 1
-                })
-                .populate(
-                    "sender",
-                    "name email role profileImage avatar image"
-                )
-                .populate(
-                    "receiver",
-                    "name email role profileImage avatar image"
-                );
+                    }
+
+                ]
+
+            })
+            .sort({
+                createdAt: 1
+            })
+            .populate(
+                "sender",
+                "name email role profileImage"
+            )
+            .populate(
+                "receiver",
+                "name email role profileImage"
+            );
 
 
-        res.json({
+        res.status(200).json({
 
             success: true,
 
@@ -169,11 +219,10 @@ exports.getConversation = async (
 
         });
 
-
     } catch (err) {
 
         console.error(
-            "Get conversation error:",
+            "Conversation error:",
             err
         );
 
@@ -182,7 +231,7 @@ exports.getConversation = async (
             success: false,
 
             message:
-                err.message
+                "Unable to load conversation."
 
         });
 
@@ -191,9 +240,9 @@ exports.getConversation = async (
 };
 
 
-// ==========================
-// MARK MESSAGES SEEN
-// ==========================
+// ======================================================
+// MARK SEEN
+// ======================================================
 
 exports.markSeen = async (
     req,
@@ -206,37 +255,60 @@ exports.markSeen = async (
             req.params.userId;
 
 
-        await Message.updateMany(
+        if (
+            !mongoose.Types.ObjectId.isValid(
+                otherUserId
+            )
+        ) {
 
-            {
-                sender:
-                    otherUserId,
+            return res.status(400).json({
 
-                receiver:
-                    req.user.id,
+                success: false,
 
-                isSeen:
-                    false
-            },
+                message:
+                    "Invalid user ID"
 
-            {
-                $set: {
-                    isSeen: true
+            });
+
+        }
+
+
+        const result =
+            await Message.updateMany(
+
+                {
+
+                    sender:
+                        otherUserId,
+
+                    receiver:
+                        req.user.id,
+
+                    isSeen:
+                        false
+
+                },
+
+                {
+
+                    $set: {
+                        isSeen:
+                            true
+                    }
+
                 }
-            }
 
-        );
+            );
 
 
-        res.json({
+        res.status(200).json({
 
             success: true,
 
-            message:
-                "Messages marked as seen"
+            modifiedCount:
+                result.modifiedCount || 0
 
         });
-
 
     } catch (err) {
 
@@ -250,7 +322,7 @@ exports.markSeen = async (
             success: false,
 
             message:
-                err.message
+                "Unable to mark messages as seen."
 
         });
 
