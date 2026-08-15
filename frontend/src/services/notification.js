@@ -1,5 +1,3 @@
-// frontend/src/services/notification.js
-
 const NOTIFICATION_SOUND_URL =
     "/sounds/message-notification.mp3";
 
