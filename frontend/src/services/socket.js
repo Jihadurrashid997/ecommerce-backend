@@ -5,7 +5,7 @@ const SOCKET_URL =
 
 const socket = io(SOCKET_URL, {
     transports: ["websocket", "polling"],
-    autoConnect: true,
+    autoConnect: false,
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
@@ -13,24 +13,71 @@ const socket = io(SOCKET_URL, {
     timeout: 20000
 });
 
-export const connectSocket = (userId) => {
-    if (!socket.connected) {
-        socket.connect();
+let currentUserId = null;
+
+const registerUser = () => {
+    if (!socket.connected || !currentUserId) {
+        return;
     }
 
+    socket.emit(
+        "user-online",
+        String(currentUserId)
+    );
+};
+
+socket.on("connect", () => {
+    console.log(
+        "🟢 Messenger socket connected:",
+        socket.id
+    );
+
+    registerUser();
+});
+
+socket.on("disconnect", (reason) => {
+    console.log(
+        "🔴 Messenger socket disconnected:",
+        reason
+    );
+});
+
+socket.on("connect_error", (error) => {
+    console.error(
+        "❌ Messenger socket error:",
+        error?.message || error
+    );
+});
+
+socket.on("reconnect", () => {
+    registerUser();
+});
+
+export const connectSocket = (userId) => {
     if (userId) {
-        socket.emit("user-online", String(userId));
+        currentUserId = String(userId);
+    }
+
+    if (!socket.connected) {
+        socket.connect();
+    } else {
+        registerUser();
     }
 
     return socket;
 };
 
 export const disconnectSocket = () => {
+    currentUserId = null;
+
     if (socket.connected) {
         socket.disconnect();
     }
 };
 
 export const getSocket = () => socket;
+
+export const getCurrentSocketUserId = () =>
+    currentUserId;
 
 export default socket;
