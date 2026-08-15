@@ -1,5 +1,3 @@
-// frontend/src/services/api.js
-
 import axios from "axios";
 
 const API_BASE_URL =
