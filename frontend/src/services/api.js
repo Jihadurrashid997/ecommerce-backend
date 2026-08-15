@@ -1,15 +1,14 @@
+// frontend/src/services/api.js
+
 import axios from "axios";
 
-/* =========================================================
-   JR STORE - CENTRAL API
-========================================================= */
-
-const API_URL =
+const API_BASE_URL =
     "https://ecommerce-api-9wc9.onrender.com/api";
 
 const api = axios.create({
-    baseURL: API_URL,
+    baseURL: API_BASE_URL,
     timeout: 30000,
+
     headers: {
         "Content-Type": "application/json"
     }
@@ -23,24 +22,40 @@ const api = axios.create({
 api.interceptors.request.use(
     (config) => {
 
-        const token =
-            localStorage.getItem("token");
+        try {
 
-        if (token) {
+            const token =
+                localStorage.getItem("token");
 
-            config.headers =
-                config.headers || {};
+            if (token) {
 
-            config.headers.Authorization =
-                `Bearer ${token}`;
+                config.headers =
+                    config.headers || {};
+
+                config.headers.Authorization =
+                    `Bearer ${token}`;
+            }
+
+        } catch (error) {
+
+            console.warn(
+                "Auth token read error:",
+                error
+            );
 
         }
 
         return config;
 
     },
-    (error) =>
-        Promise.reject(error)
+
+    (error) => {
+
+        return Promise.reject(
+            error
+        );
+
+    }
 );
 
 
@@ -49,119 +64,187 @@ api.interceptors.request.use(
 ========================================================= */
 
 api.interceptors.response.use(
-    (response) =>
-        response,
+    (response) => {
 
-    (error) => {
+        return response;
+
+    },
+
+    async (error) => {
 
         const status =
-            error.response?.status;
+            error?.response?.status;
 
-        const url =
-            error.config?.url || "";
+        if (status === 401) {
 
-        const isLogin =
-            url.includes("/auth/login");
+            /*
+             * Do not immediately remove authentication
+             * because some protected requests may fail
+             * temporarily.
+             */
 
-        const isRegister =
-            url.includes("/auth/register");
-
-        /*
-         * Never remove authentication data while
-         * login/register is being processed.
-         */
-        if (
-            status === 401 &&
-            !isLogin &&
-            !isRegister
-        ) {
-
-            localStorage.removeItem(
-                "token"
+            console.warn(
+                "Authentication failed:",
+                error?.response?.data
             );
+        }
 
-            localStorage.removeItem(
-                "user"
+        if (!error.response) {
+
+            console.error(
+                "Network error:",
+                error?.message
             );
 
         }
 
-        return Promise.reject(error);
+        return Promise.reject(
+            error
+        );
 
     }
 );
 
 
 /* =========================================================
-   AUTH HELPERS
+   API URL HELPER
 ========================================================= */
 
-export const getStoredToken = () =>
-    localStorage.getItem("token");
+export const getApiUrl = (
+    endpoint = ""
+) => {
+
+    const cleanEndpoint =
+        String(endpoint)
+            .replace(/^\/+/, "");
+
+    return `${API_BASE_URL}/${cleanEndpoint}`;
+
+};
 
 
-export const getStoredUser = () => {
+/* =========================================================
+   UPLOAD URL HELPER
+========================================================= */
 
-    try {
+export const getUploadUrl = (
+    filePath = ""
+) => {
 
-        const user =
-            localStorage.getItem("user");
-
-        return user
-            ? JSON.parse(user)
-            : null;
-
-    } catch {
-
-        return null;
-
+    if (!filePath) {
+        return "";
     }
 
-};
+    const value =
+        String(filePath);
 
-
-/* =========================================================
-   USER ID HELPER
-========================================================= */
-
-export const getUserId = (user = null) => {
-
-    const currentUser =
-        user || getStoredUser();
-
-    if (!currentUser) {
-        return null;
+    if (
+        value.startsWith("http://") ||
+        value.startsWith("https://") ||
+        value.startsWith("blob:") ||
+        value.startsWith("data:")
+    ) {
+        return value;
     }
 
-    return String(
-        currentUser._id ||
-        currentUser.id ||
-        currentUser.userId ||
-        ""
-    ) || null;
+    const cleanPath =
+        value.replace(/^\/+/, "");
+
+    return `https://ecommerce-api-9wc9.onrender.com/${cleanPath}`;
 
 };
 
 
 /* =========================================================
-   LOGOUT
+   MESSAGE API
 ========================================================= */
 
-export const clearAuth = () => {
+export const getMessages = async ({
+    userId,
+    receiverId,
+    roomId,
+    page = 1,
+    limit = 50
+} = {}) => {
 
-    localStorage.removeItem(
-        "token"
+    const params = {
+        page,
+        limit
+    };
+
+    if (userId) {
+        params.userId =
+            String(userId);
+    }
+
+    if (receiverId) {
+        params.receiverId =
+            String(receiverId);
+    }
+
+    if (roomId) {
+        params.roomId =
+            String(roomId);
+    }
+
+    return api.get(
+        "/messages",
+        {
+            params
+        }
     );
 
-    localStorage.removeItem(
-        "user"
+};
+
+
+export const sendMessage = async (
+    messageData
+) => {
+
+    return api.post(
+        "/messages",
+        messageData
+    );
+
+};
+
+
+export const markMessageSeen = async (
+    messageId
+) => {
+
+    if (!messageId) {
+        throw new Error(
+            "messageId is required"
+        );
+    }
+
+    return api.patch(
+        `/messages/${messageId}/seen`
+    );
+
+};
+
+
+export const deleteMessage = async (
+    messageId
+) => {
+
+    if (!messageId) {
+        throw new Error(
+            "messageId is required"
+        );
+    }
+
+    return api.delete(
+        `/messages/${messageId}`
     );
 
 };
 
 
 /* =========================================================
-   EXPORT
+   DEFAULT EXPORT
 ========================================================= */
 
 export default api;
