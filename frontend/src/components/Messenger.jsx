@@ -26,6 +26,7 @@ import {
 } from "react-icons/fa";
 
 import api from "../services/api";
+
 import socket, {
     connectSocket
 } from "../services/socket";
@@ -38,10 +39,21 @@ import {
     stopMediaStream
 } from "../services/webrtc";
 
+import {
+    requestNotificationPermission,
+    showMessageNotification,
+    showIncomingCallNotification,
+    showMissedCallNotification
+} from "../services/notification";
+
 import CallModal from "./CallModal";
 
 import "../styles/Messenger.css";
 
+
+/* =========================================================
+   EMOJIS
+========================================================= */
 
 const EMOJIS = [
     "😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣",
@@ -57,6 +69,10 @@ const EMOJIS = [
     "👍", "👎", "👏", "🙌", "🙏", "🔥", "🎉", "💯"
 ];
 
+
+/* =========================================================
+   CHAT BACKGROUNDS
+========================================================= */
 
 const CHAT_BACKGROUNDS = [
     {
@@ -92,18 +108,25 @@ const CHAT_BACKGROUNDS = [
 ];
 
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
 const getId = (value) => {
+
     if (!value) {
         return null;
     }
 
     if (typeof value === "object") {
+
         return String(
             value._id ||
             value.id ||
             value.userId ||
             ""
         ) || null;
+
     }
 
     return String(value);
@@ -111,6 +134,7 @@ const getId = (value) => {
 
 
 const getUserName = (target) => {
+
     if (!target) {
         return "User";
     }
@@ -128,6 +152,7 @@ const getUserName = (target) => {
 
 
 const getAvatar = (target) => {
+
     if (!target) {
         return "";
     }
@@ -144,22 +169,42 @@ const getAvatar = (target) => {
 
 
 const getMessageSenderId = (item) => {
+
     return getId(
         item?.sender?._id ||
         item?.sender?.id ||
         item?.sender
     );
+
 };
 
 
 const getMessageReceiverId = (item) => {
+
     return getId(
         item?.receiver?._id ||
         item?.receiver?.id ||
         item?.receiver
     );
+
 };
 
+
+const getMessageId = (item) => {
+
+    return (
+        item?._id ||
+        item?.id ||
+        item?.messageId ||
+        null
+    );
+
+};
+
+
+/* =========================================================
+   COMPONENT
+========================================================= */
 
 const Messenger = () => {
 
@@ -194,9 +239,6 @@ const Messenger = () => {
         useRef([]);
 
     const callRef =
-        useRef(null);
-
-    const notificationSoundRef =
         useRef(null);
 
 
@@ -263,6 +305,10 @@ const Messenger = () => {
         useState(null);
 
 
+    /* =====================================================
+       REFS
+    ===================================================== */
+
     useEffect(() => {
 
         currentUserRef.current =
@@ -279,21 +325,22 @@ const Messenger = () => {
     }, [selectedUser]);
 
 
+    /* =====================================================
+       LOAD USER
+    ===================================================== */
+
     useEffect(() => {
 
         try {
 
             const saved =
-                localStorage.getItem(
-                    "user"
-                );
+                localStorage.getItem("user");
 
             if (saved) {
 
-                const parsed =
-                    JSON.parse(saved);
-
-                setUser(parsed);
+                setUser(
+                    JSON.parse(saved)
+                );
 
             }
 
@@ -311,156 +358,111 @@ const Messenger = () => {
 
     const currentUserId =
         useMemo(
-            () =>
-                getId(user),
+            () => getId(user),
             [user]
         );
 
 
-    const getRoomId = useCallback(
-        (
-            first,
-            second
-        ) => {
+    /* =====================================================
+       ROOM ID
+    ===================================================== */
 
-            const firstId =
-                getId(first);
+    const getRoomId =
+        useCallback(
+            (first, second) => {
 
-            const secondId =
-                getId(second);
+                const firstId =
+                    getId(first);
 
-            if (
-                !firstId ||
-                !secondId
-            ) {
-                return null;
-            }
-
-            return [
-                firstId,
-                secondId
-            ]
-                .sort()
-                .join("_");
-
-        },
-        []
-    );
-
-
-    const isOnline = useCallback(
-        (target) => {
-
-            const id =
-                getId(target);
-
-            if (!id) {
-                return false;
-            }
-
-            return onlineUsers.some(
-                item =>
-                    getId(item) === id
-            );
-
-        },
-        [onlineUsers]
-    );
-
-
-    const notify = useCallback(
-        (
-            title,
-            body
-        ) => {
-
-            try {
+                const secondId =
+                    getId(second);
 
                 if (
-                    typeof Notification !==
-                    "undefined" &&
-                    Notification.permission ===
-                    "granted"
+                    !firstId ||
+                    !secondId
                 ) {
-
-                    new Notification(
-                        title,
-                        {
-                            body,
-                            icon:
-                                getAvatar(
-                                    selectedUserRef.current
-                                ) || undefined
-                        }
-                    );
-
+                    return null;
                 }
 
-            } catch (error) {
+                return [
+                    firstId,
+                    secondId
+                ]
+                    .sort()
+                    .join("_");
 
-                console.error(
-                    "Notification error:",
-                    error
+            },
+            []
+        );
+
+
+    /* =====================================================
+       ONLINE
+    ===================================================== */
+
+    const isOnline =
+        useCallback(
+            (target) => {
+
+                const id =
+                    getId(target);
+
+                return Boolean(
+                    id &&
+                    onlineUsers.some(
+                        item =>
+                            getId(item) === id
+                    )
                 );
 
-            }
+            },
+            [onlineUsers]
+        );
 
-        },
-        []
-    );
 
+    /* =====================================================
+       NOTIFICATION
+    ===================================================== */
 
     useEffect(() => {
 
-        if (
-            typeof Notification ===
-            "undefined"
-        ) {
-            return;
-        }
-
-        if (
-            Notification.permission ===
-            "default"
-        ) {
-
-            Notification.requestPermission()
-                .catch(() => {});
-
-        }
+        requestNotificationPermission()
+            .catch(() => {});
 
     }, []);
 
 
-    const playNotificationSound =
-        useCallback(() => {
+    /* =====================================================
+       SCROLL
+    ===================================================== */
 
-            try {
+    const scrollToBottom =
+        useCallback(
+            (smooth = true) => {
 
-                if (
-                    notificationSoundRef.current
-                ) {
+                setTimeout(
+                    () => {
 
-                    notificationSoundRef.current
-                        .currentTime = 0;
+                        messagesEndRef.current
+                            ?.scrollIntoView({
+                                behavior:
+                                    smooth
+                                        ? "smooth"
+                                        : "auto"
+                            });
 
-                    notificationSoundRef.current
-                        .play()
-                        .catch(() => {});
-
-                }
-
-            } catch (error) {
-
-                console.error(
-                    "Notification sound error:",
-                    error
+                    },
+                    50
                 );
 
-            }
+            },
+            []
+        );
 
-        }, []);
 
+    /* =====================================================
+       LOAD USERS
+    ===================================================== */
 
     const loadUsers =
         useCallback(
@@ -485,18 +487,16 @@ const Messenger = () => {
                         response.data ||
                         [];
 
-                    const filtered =
+                    const list =
                         Array.isArray(data)
                             ? data.filter(
                                   item =>
-                                      getId(
-                                          item
-                                      ) !==
+                                      getId(item) !==
                                       currentUserId
                               )
                             : [];
 
-                    setUsers(filtered);
+                    setUsers(list);
 
                 } catch (error) {
 
@@ -526,6 +526,86 @@ const Messenger = () => {
     }, [loadUsers]);
 
 
+    /* =====================================================
+       ADD MESSAGE WITHOUT DUPLICATE
+    ===================================================== */
+
+    const appendMessage =
+        useCallback(
+            (incoming) => {
+
+                if (!incoming) {
+                    return;
+                }
+
+                setMessages(
+                    previous => {
+
+                        const incomingId =
+                            getMessageId(
+                                incoming
+                            );
+
+                        if (
+                            incomingId &&
+                            previous.some(
+                                item =>
+                                    getMessageId(
+                                        item
+                                    ) ===
+                                    incomingId
+                            )
+                        ) {
+                            return previous;
+                        }
+
+                        const sameMessage =
+                            previous.some(
+                                item =>
+                                    !incomingId &&
+                                    item.message ===
+                                        incoming.message &&
+                                    getMessageSenderId(
+                                        item
+                                    ) ===
+                                        getMessageSenderId(
+                                            incoming
+                                        ) &&
+                                    Math.abs(
+                                        new Date(
+                                            item.createdAt ||
+                                            item.timestamp ||
+                                            Date.now()
+                                        ).getTime() -
+                                        new Date(
+                                            incoming.createdAt ||
+                                            incoming.timestamp ||
+                                            Date.now()
+                                        ).getTime()
+                                    ) < 5000
+                            );
+
+                        if (sameMessage) {
+                            return previous;
+                        }
+
+                        return [
+                            ...previous,
+                            incoming
+                        ];
+
+                    }
+                );
+
+            },
+            []
+        );
+
+
+    /* =====================================================
+       CLEAN CALL
+    ===================================================== */
+
     const cleanupCall =
         useCallback(
             () => {
@@ -533,8 +613,7 @@ const Messenger = () => {
                 try {
 
                     if (
-                        currentRoomRef.current &&
-                        socket
+                        currentRoomRef.current
                     ) {
 
                         socket.emit(
@@ -544,14 +623,8 @@ const Messenger = () => {
 
                     }
 
-                } catch (error) {
+                } catch (_) {}
 
-                    console.error(
-                        "Call room cleanup error:",
-                        error
-                    );
-
-                }
 
                 closePeerConnection(
                     peerRef.current
@@ -560,6 +633,7 @@ const Messenger = () => {
                 peerRef.current =
                     null;
 
+
                 stopMediaStream(
                     localStreamRef.current
                 );
@@ -567,6 +641,7 @@ const Messenger = () => {
                 stopMediaStream(
                     remoteStreamRef.current
                 );
+
 
                 localStreamRef.current =
                     null;
@@ -577,6 +652,7 @@ const Messenger = () => {
                 pendingCandidatesRef.current =
                     [];
 
+
                 setLocalStream(null);
 
                 setRemoteStream(null);
@@ -586,114 +662,21 @@ const Messenger = () => {
                 callRef.current =
                     null;
 
-            },
-            []
-        );
-
-
-    const addRemoteCandidate =
-        useCallback(
-            async (
-                candidate
-            ) => {
-
-                const peer =
-                    peerRef.current;
-
-                if (!peer || !candidate) {
-                    return;
-                }
-
-                try {
-
-                    if (
-                        peer.remoteDescription
-                    ) {
-
-                        await peer.addIceCandidate(
-                            new RTCIceCandidate(
-                                candidate
-                            )
-                        );
-
-                    } else {
-
-                        pendingCandidatesRef.current
-                            .push(candidate);
-
-                    }
-
-                } catch (error) {
-
-                    console.error(
-                        "ICE candidate error:",
-                        error
-                    );
-
-                }
+                currentRoomRef.current =
+                    null;
 
             },
             []
         );
 
 
-    const flushPendingCandidates =
-        useCallback(
-            async () => {
-
-                const peer =
-                    peerRef.current;
-
-                if (
-                    !peer ||
-                    !peer.remoteDescription
-                ) {
-                    return;
-                }
-
-                const pending =
-                    [
-                        ...pendingCandidatesRef.current
-                    ];
-
-                pendingCandidatesRef.current =
-                    [];
-
-                for (
-                    const candidate
-                    of pending
-                ) {
-
-                    try {
-
-                        await peer.addIceCandidate(
-                            new RTCIceCandidate(
-                                candidate
-                            )
-                        );
-
-                    } catch (error) {
-
-                        console.error(
-                            "Pending ICE error:",
-                            error
-                        );
-
-                    }
-
-                }
-
-            },
-            []
-        );
-
+    /* =====================================================
+       PEER
+    ===================================================== */
 
     const createPeer =
         useCallback(
-            (
-                receiverId,
-                type
-            ) => {
+            (receiverId) => {
 
                 const peer =
                     createPeerConnection({
@@ -706,20 +689,15 @@ const Messenger = () => {
                                     {
                                         receiverId,
                                         callerId:
-                                            currentUserRef
-                                                .current
-                                                ?._id ||
-                                            currentUserRef
-                                                .current
-                                                ?.id,
+                                            currentUserId,
                                         candidate,
                                         roomId:
-                                            currentRoomRef
-                                                .current
+                                            currentRoomRef.current
                                     }
                                 );
 
                             },
+
 
                         onTrack:
                             event => {
@@ -741,6 +719,7 @@ const Messenger = () => {
 
                             },
 
+
                         onConnectionStateChange:
                             state => {
 
@@ -757,25 +736,15 @@ const Messenger = () => {
                                         () => {
 
                                             if (
-                                                callRef
-                                                    .current
+                                                callRef.current
                                             ) {
 
-                                                socket.emit(
-                                                    "end-call",
-                                                    {
-                                                        roomId:
-                                                            currentRoomRef
-                                                                .current
-                                                    }
-                                                );
-
-                                                cleanupCall();
+                                                endCall();
 
                                             }
 
                                         },
-                                        1500
+                                        1000
                                     );
 
                                 }
@@ -784,8 +753,10 @@ const Messenger = () => {
 
                     });
 
+
                 peerRef.current =
                     peer;
+
 
                 if (
                     localStreamRef.current
@@ -798,20 +769,23 @@ const Messenger = () => {
 
                 }
 
+
                 return peer;
 
             },
             [
-                cleanupCall
+                currentUserId
             ]
         );
 
 
+    /* =====================================================
+       START CALL
+    ===================================================== */
+
     const startCall =
         useCallback(
-            async (
-                type
-            ) => {
+            async (type) => {
 
                 const target =
                     selectedUserRef.current;
@@ -826,6 +800,7 @@ const Messenger = () => {
                     return;
                 }
 
+
                 const receiverId =
                     getId(target);
 
@@ -838,6 +813,7 @@ const Messenger = () => {
                         target
                     );
 
+
                 if (
                     !receiverId ||
                     !callerId ||
@@ -845,6 +821,7 @@ const Messenger = () => {
                 ) {
                     return;
                 }
+
 
                 try {
 
@@ -856,6 +833,7 @@ const Messenger = () => {
                                 "video"
                         });
 
+
                     localStreamRef.current =
                         stream;
 
@@ -863,8 +841,10 @@ const Messenger = () => {
                         stream
                     );
 
+
                     currentRoomRef.current =
                         roomId;
+
 
                     callRef.current = {
                         callerId,
@@ -873,10 +853,12 @@ const Messenger = () => {
                         type
                     };
 
+
                     socket.emit(
                         "join-room",
                         roomId
                     );
+
 
                     setCallState({
                         mode: "outgoing",
@@ -889,6 +871,7 @@ const Messenger = () => {
                         callerAvatar:
                             getAvatar(me)
                     });
+
 
                     socket.emit(
                         "call-user",
@@ -928,6 +911,10 @@ const Messenger = () => {
         );
 
 
+    /* =====================================================
+       ACCEPT CALL
+    ===================================================== */
+
     const acceptCall =
         useCallback(
             async () => {
@@ -940,6 +927,7 @@ const Messenger = () => {
                     return;
                 }
 
+
                 try {
 
                     const stream =
@@ -950,6 +938,7 @@ const Messenger = () => {
                                 "video"
                         });
 
+
                     localStreamRef.current =
                         stream;
 
@@ -957,18 +946,22 @@ const Messenger = () => {
                         stream
                     );
 
+
                     currentRoomRef.current =
                         call.roomId;
+
 
                     callRef.current = {
                         ...call,
                         accepted: true
                     };
 
+
                     socket.emit(
                         "join-room",
                         call.roomId
                     );
+
 
                     socket.emit(
                         "accept-call",
@@ -978,15 +971,14 @@ const Messenger = () => {
                             callerId:
                                 call.callerId,
                             receiverId:
-                                call.receiverId ||
                                 getId(
-                                    currentUserRef
-                                        .current
+                                    currentUserRef.current
                                 ),
                             type:
                                 call.type
                         }
                     );
+
 
                     setCallState({
                         ...call,
@@ -1000,16 +992,15 @@ const Messenger = () => {
                         error
                     );
 
-                    alert(
-                        error?.message ||
-                        "Microphone/camera permission is required."
-                    );
-
                     socket.emit(
                         "reject-call",
                         {
                             callerId:
                                 call.callerId,
+                            receiverId:
+                                getId(
+                                    currentUserRef.current
+                                ),
                             roomId:
                                 call.roomId
                         }
@@ -1027,6 +1018,10 @@ const Messenger = () => {
         );
 
 
+    /* =====================================================
+       REJECT CALL
+    ===================================================== */
+
     const rejectCall =
         useCallback(
             () => {
@@ -1035,7 +1030,9 @@ const Messenger = () => {
                     callRef.current ||
                     callState;
 
-                if (call?.callerId) {
+                if (
+                    call?.callerId
+                ) {
 
                     socket.emit(
                         "reject-call",
@@ -1044,8 +1041,7 @@ const Messenger = () => {
                                 call.callerId,
                             receiverId:
                                 getId(
-                                    currentUserRef
-                                        .current
+                                    currentUserRef.current
                                 ),
                             roomId:
                                 call.roomId
@@ -1053,6 +1049,23 @@ const Messenger = () => {
                     );
 
                 }
+
+
+                if (
+                    call?.mode ===
+                    "incoming"
+                ) {
+
+                    showMissedCallNotification({
+                        callerName:
+                            call.callerName ||
+                            "User",
+                        type:
+                            call.type
+                    });
+
+                }
+
 
                 cleanupCall();
 
@@ -1064,6 +1077,10 @@ const Messenger = () => {
         );
 
 
+    /* =====================================================
+       END CALL
+    ===================================================== */
+
     const endCall =
         useCallback(
             () => {
@@ -1072,7 +1089,9 @@ const Messenger = () => {
                     callRef.current ||
                     callState;
 
-                if (call?.roomId) {
+                if (
+                    call?.roomId
+                ) {
 
                     socket.emit(
                         "end-call",
@@ -1094,18 +1113,25 @@ const Messenger = () => {
         );
 
 
+    /* =====================================================
+       SOCKET EVENTS
+    ===================================================== */
+
     useEffect(() => {
 
         if (!user) {
             return undefined;
         }
 
+
         const currentId =
             getId(user);
+
 
         connectSocket(
             currentId
         );
+
 
         const onConnect =
             () => {
@@ -1116,6 +1142,7 @@ const Messenger = () => {
                 );
 
             };
+
 
         const onOnlineUsers =
             data => {
@@ -1128,12 +1155,29 @@ const Messenger = () => {
 
             };
 
-        const onReceiveMessage =
-            newMessage => {
 
-                if (!newMessage) {
+        /* -------------------------------------------------
+           MESSAGE RECEIVED
+        ------------------------------------------------- */
+
+        const onReceiveMessage =
+            incoming => {
+
+                if (!incoming) {
                     return;
                 }
+
+
+                const newMessage =
+                    incoming.data &&
+                    typeof incoming.data ===
+                        "object"
+                        ? {
+                              ...incoming.data,
+                              ...incoming
+                          }
+                        : incoming;
+
 
                 const senderId =
                     getMessageSenderId(
@@ -1145,11 +1189,21 @@ const Messenger = () => {
                         newMessage
                     );
 
-                const activeUser =
+
+                if (
+                    senderId ===
+                    currentId
+                ) {
+                    return;
+                }
+
+
+                const active =
                     selectedUserRef.current;
 
                 const activeId =
-                    getId(activeUser);
+                    getId(active);
+
 
                 const belongs =
                     activeId &&
@@ -1168,103 +1222,84 @@ const Messenger = () => {
                         )
                     );
 
+
                 if (belongs) {
 
-                    setMessages(
-                        previous => {
+                    appendMessage(
+                        newMessage
+                    );
 
-                            const messageId =
-                                newMessage._id ||
-                                newMessage.id;
+                    scrollToBottom();
 
-                            if (
-                                messageId &&
-                                previous.some(
-                                    item =>
-                                        (
-                                            item._id ||
-                                            item.id
-                                        ) ===
-                                        messageId
-                                )
-                            ) {
-                                return previous;
-                            }
 
-                            return [
-                                ...previous,
-                                newMessage
-                            ];
-
+                    socket.emit(
+                        "message-seen",
+                        {
+                            roomId:
+                                currentRoomRef.current,
+                            messageId:
+                                getMessageId(
+                                    newMessage
+                                ),
+                            senderId,
+                            receiverId:
+                                currentId
                         }
                     );
 
-                    if (
-                        senderId &&
-                        senderId !==
-                            currentId
-                    ) {
+                } else {
 
-                        socket.emit(
-                            "message-seen",
-                            {
-                                roomId:
-                                    currentRoomRef
-                                        .current,
-                                messageId:
-                                    newMessage._id ||
-                                    newMessage.id,
-                                userId:
-                                    currentId
-                            }
+                    if (senderId) {
+
+                        setUnreadUsers(
+                            previous => ({
+                                ...previous,
+                                [senderId]:
+                                    (
+                                        previous[
+                                            senderId
+                                        ] || 0
+                                    ) + 1
+                            })
                         );
 
                     }
 
-                } else if (
-                    senderId &&
-                    senderId !==
-                        currentId
-                ) {
 
-                    setUnreadUsers(
-                        previous => ({
-                            ...previous,
-                            [senderId]:
-                                (
-                                    previous[
-                                        senderId
-                                    ] || 0
-                                ) + 1
-                        })
-                    );
-
-                    playNotificationSound();
-
-                    notify(
-                        getUserName(
-                            newMessage.sender
-                        ),
-                        newMessage.message ||
-                        "New message"
-                    );
+                    showMessageNotification({
+                        senderName:
+                            getUserName(
+                                newMessage.sender
+                            ),
+                        message:
+                            newMessage.message ||
+                            newMessage.text ||
+                            "New message"
+                    });
 
                 }
 
             };
 
 
+        /* -------------------------------------------------
+           DIRECT MESSAGE
+        ------------------------------------------------- */
+
         const onDirectMessage =
             onReceiveMessage;
 
+
+        /* -------------------------------------------------
+           TYPING
+        ------------------------------------------------- */
 
         const onTyping =
             data => {
 
                 const activeId =
                     getId(
-                        selectedUserRef
-                            .current
+                        selectedUserRef.current
                     );
 
                 if (
@@ -1273,7 +1308,7 @@ const Messenger = () => {
                         data?.userId ||
                         data
                     ) ===
-                        activeId
+                    activeId
                 ) {
 
                     setTyping(true);
@@ -1288,8 +1323,7 @@ const Messenger = () => {
 
                 const activeId =
                     getId(
-                        selectedUserRef
-                            .current
+                        selectedUserRef.current
                     );
 
                 if (
@@ -1298,7 +1332,7 @@ const Messenger = () => {
                         data?.userId ||
                         data
                     ) ===
-                        activeId
+                    activeId
                 ) {
 
                     setTyping(false);
@@ -1307,6 +1341,10 @@ const Messenger = () => {
 
             };
 
+
+        /* -------------------------------------------------
+           SEEN
+        ------------------------------------------------- */
 
         const onSeen =
             data => {
@@ -1317,18 +1355,22 @@ const Messenger = () => {
                             item => {
 
                                 if (
-                                    !data?.messageId ||
-                                    item._id !==
-                                        data.messageId
+                                    data?.messageId &&
+                                    getMessageId(
+                                        item
+                                    ) ===
+                                    data.messageId
                                 ) {
-                                    return item;
+
+                                    return {
+                                        ...item,
+                                        seen: true,
+                                        isSeen: true
+                                    };
+
                                 }
 
-                                return {
-                                    ...item,
-                                    seen: true,
-                                    isSeen: true
-                                };
+                                return item;
 
                             }
                         )
@@ -1337,6 +1379,10 @@ const Messenger = () => {
             };
 
 
+        /* -------------------------------------------------
+           INCOMING CALL
+        ------------------------------------------------- */
+
         const onIncomingCall =
             data => {
 
@@ -1344,12 +1390,13 @@ const Messenger = () => {
                     return;
                 }
 
-                const incoming =
-                    {
-                        ...data,
-                        mode:
-                            "incoming"
-                    };
+
+                const incoming = {
+                    ...data,
+                    mode:
+                        "incoming"
+                };
+
 
                 callRef.current =
                     incoming;
@@ -1357,24 +1404,26 @@ const Messenger = () => {
                 currentRoomRef.current =
                     data.roomId;
 
+
                 setCallState(
                     incoming
                 );
 
-                playNotificationSound();
 
-                notify(
-                    `${data.callerName || "User"} is calling`,
-                    `Incoming ${
-                        data.type ===
-                        "video"
-                            ? "video"
-                            : "voice"
-                    } call`
-                );
+                showIncomingCallNotification({
+                    callerName:
+                        data.callerName ||
+                        "User",
+                    type:
+                        data.type
+                });
 
             };
 
+
+        /* -------------------------------------------------
+           CALL RINGING
+        ------------------------------------------------- */
 
         const onCallRinging =
             data => {
@@ -1391,6 +1440,10 @@ const Messenger = () => {
             };
 
 
+        /* -------------------------------------------------
+           CALL ACCEPTED
+        ------------------------------------------------- */
+
         const onCallAccepted =
             async data => {
 
@@ -1400,39 +1453,46 @@ const Messenger = () => {
                         callRef.current ||
                         data;
 
+
                     const receiverId =
                         getId(
                             call.receiverId ||
                             data.receiverId
                         );
 
+
                     if (!receiverId) {
                         return;
                     }
+
 
                     currentRoomRef.current =
                         call.roomId ||
                         data.roomId;
 
+
                     const peer =
                         createPeer(
-                            receiverId,
-                            call.type ||
-                            data.type
+                            receiverId
                         );
+
 
                     const offer =
                         await peer.createOffer({
                             offerToReceiveAudio:
                                 true,
                             offerToReceiveVideo:
-                                call.type ===
-                                "video"
+                                (
+                                    call.type ||
+                                    data.type
+                                ) === "video"
                         });
+
 
                     await peer.setLocalDescription(
                         offer
                     );
+
 
                     socket.emit(
                         "webrtc-offer",
@@ -1441,14 +1501,14 @@ const Messenger = () => {
                             callerId:
                                 currentId,
                             roomId:
-                                currentRoomRef
-                                    .current,
+                                currentRoomRef.current,
                             type:
                                 call.type ||
                                 data.type,
                             offer
                         }
                     );
+
 
                     setCallState(
                         previous => ({
@@ -1463,7 +1523,7 @@ const Messenger = () => {
                 } catch (error) {
 
                     console.error(
-                        "Offer creation error:",
+                        "Offer error:",
                         error
                     );
 
@@ -1474,6 +1534,10 @@ const Messenger = () => {
             };
 
 
+        /* -------------------------------------------------
+           WEBRTC OFFER
+        ------------------------------------------------- */
+
         const onOffer =
             async data => {
 
@@ -1483,20 +1547,19 @@ const Messenger = () => {
                         return;
                     }
 
-                    const receiverId =
-                        getId(
-                            data.callerId
-                        );
 
                     currentRoomRef.current =
                         data.roomId;
 
+
                     const peer =
                         peerRef.current ||
                         createPeer(
-                            receiverId,
-                            data.type
+                            getId(
+                                data.callerId
+                            )
                         );
+
 
                     await peer.setRemoteDescription(
                         new RTCSessionDescription(
@@ -1504,20 +1567,23 @@ const Messenger = () => {
                         )
                     );
 
-                    await flushPendingCandidates();
 
                     const answer =
                         await peer.createAnswer();
+
 
                     await peer.setLocalDescription(
                         answer
                     );
 
+
                     socket.emit(
                         "webrtc-answer",
                         {
                             receiverId:
-                                data.callerId,
+                                getId(
+                                    data.callerId
+                                ),
                             callerId:
                                 currentId,
                             roomId:
@@ -1525,6 +1591,7 @@ const Messenger = () => {
                             answer
                         }
                     );
+
 
                     setCallState(
                         previous => ({
@@ -1538,7 +1605,7 @@ const Messenger = () => {
                 } catch (error) {
 
                     console.error(
-                        "Offer handling error:",
+                        "WebRTC offer error:",
                         error
                     );
 
@@ -1546,6 +1613,10 @@ const Messenger = () => {
 
             };
 
+
+        /* -------------------------------------------------
+           WEBRTC ANSWER
+        ------------------------------------------------- */
 
         const onAnswer =
             async data => {
@@ -1559,6 +1630,7 @@ const Messenger = () => {
                         return;
                     }
 
+
                     await peerRef.current
                         .setRemoteDescription(
                             new RTCSessionDescription(
@@ -1566,12 +1638,10 @@ const Messenger = () => {
                             )
                         );
 
-                    await flushPendingCandidates();
-
                 } catch (error) {
 
                     console.error(
-                        "Answer handling error:",
+                        "WebRTC answer error:",
                         error
                     );
 
@@ -1580,15 +1650,65 @@ const Messenger = () => {
             };
 
 
-        const onIce =
-            data => {
+        /* -------------------------------------------------
+           ICE
+        ------------------------------------------------- */
 
-                addRemoteCandidate(
-                    data?.candidate
-                );
+        const onIceCandidate =
+            async data => {
+
+                if (
+                    !data?.candidate
+                ) {
+                    return;
+                }
+
+
+                const peer =
+                    peerRef.current;
+
+
+                if (!peer) {
+                    return;
+                }
+
+
+                try {
+
+                    if (
+                        peer.remoteDescription
+                    ) {
+
+                        await peer.addIceCandidate(
+                            new RTCIceCandidate(
+                                data.candidate
+                            )
+                        );
+
+                    } else {
+
+                        pendingCandidatesRef.current
+                            .push(
+                                data.candidate
+                            );
+
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        "ICE error:",
+                        error
+                    );
+
+                }
 
             };
 
+
+        /* -------------------------------------------------
+           REJECTED
+        ------------------------------------------------- */
 
         const onCallRejected =
             () => {
@@ -1602,6 +1722,10 @@ const Messenger = () => {
             };
 
 
+        /* -------------------------------------------------
+           ENDED
+        ------------------------------------------------- */
+
         const onCallEnded =
             () => {
 
@@ -1609,6 +1733,10 @@ const Messenger = () => {
 
             };
 
+
+        /* -------------------------------------------------
+           BUSY
+        ------------------------------------------------- */
 
         const onCallBusy =
             () => {
@@ -1621,6 +1749,10 @@ const Messenger = () => {
 
             };
 
+
+        /* -------------------------------------------------
+           MISSED
+        ------------------------------------------------- */
 
         const onCallMissed =
             () => {
@@ -1712,7 +1844,7 @@ const Messenger = () => {
 
         socket.on(
             "webrtc-ice-candidate",
-            onIce
+            onIceCandidate
         );
 
 
@@ -1800,32 +1932,39 @@ const Messenger = () => {
 
             socket.off(
                 "webrtc-ice-candidate",
-                onIce
+                onIceCandidate
             );
 
         };
 
     }, [
         user,
-        addRemoteCandidate,
+        appendMessage,
         cleanupCall,
         createPeer,
         endCall,
-        flushPendingCandidates,
-        notify,
-        playNotificationSound
+        scrollToBottom
     ]);
 
 
+    /* =====================================================
+       SELECT USER
+    ===================================================== */
+
     const selectUser =
         useCallback(
-            async (
-                target
-            ) => {
+            async target => {
 
-                if (!target || !user) {
+                if (
+                    !target ||
+                    !user
+                ) {
                     return;
                 }
+
+
+                const targetId =
+                    getId(target);
 
                 const roomId =
                     getRoomId(
@@ -1833,14 +1972,13 @@ const Messenger = () => {
                         target
                     );
 
-                const targetId =
-                    getId(target);
 
                 currentRoomRef.current =
                     roomId;
 
                 selectedUserRef.current =
                     target;
+
 
                 setSelectedUser(
                     target
@@ -1854,25 +1992,21 @@ const Messenger = () => {
 
                 setTyping(false);
 
-                setShowEmoji(
-                    false
-                );
+                setShowEmoji(false);
 
                 setShowBackgrounds(
                     false
                 );
 
-                setShowMenu(
-                    false
-                );
+                setShowMenu(false);
+
 
                 setUnreadUsers(
                     previous => {
 
-                        const updated =
-                            {
-                                ...previous
-                            };
+                        const updated = {
+                            ...previous
+                        };
 
                         delete updated[
                             targetId
@@ -1900,15 +2034,18 @@ const Messenger = () => {
                         true
                     );
 
+
                     const response =
                         await api.get(
                             `/messages/conversation/${targetId}`
                         );
 
+
                     const data =
                         response.data?.data ||
                         response.data?.messages ||
                         [];
+
 
                     setMessages(
                         Array.isArray(data)
@@ -1923,16 +2060,12 @@ const Messenger = () => {
                             `/messages/seen/${targetId}`
                         );
 
-                    } catch (
-                        seenError
-                    ) {
+                    } catch (_) {}
 
-                        console.warn(
-                            "Seen API unavailable:",
-                            seenError
-                        );
 
-                    }
+                    scrollToBottom(
+                        false
+                    );
 
                 } catch (error) {
 
@@ -1952,18 +2085,25 @@ const Messenger = () => {
             },
             [
                 getRoomId,
+                scrollToBottom,
                 user
             ]
         );
 
+
+    /* =====================================================
+       SEND MESSAGE
+    ===================================================== */
 
     const sendMessage =
         async event => {
 
             event.preventDefault();
 
+
             const text =
                 message.trim();
+
 
             if (
                 !text ||
@@ -1973,14 +2113,21 @@ const Messenger = () => {
                 return;
             }
 
-            const receiver =
-                getId(
-                    selectedUser
-                );
 
-            if (!receiver) {
+            const sender =
+                getId(user);
+
+            const receiver =
+                getId(selectedUser);
+
+
+            if (
+                !sender ||
+                !receiver
+            ) {
                 return;
             }
+
 
             const roomId =
                 currentRoomRef.current ||
@@ -1989,81 +2136,149 @@ const Messenger = () => {
                     selectedUser
                 );
 
+
+            /*
+             * IMPORTANT:
+             * Show message immediately.
+             */
+
+            const temporaryId =
+                `temp-${Date.now()}-${Math.random()
+                    .toString(36)
+                    .slice(2)}`;
+
+
+            const optimisticMessage = {
+                _id:
+                    temporaryId,
+                id:
+                    temporaryId,
+                sender:
+                    user,
+                receiver:
+                    selectedUser,
+                message:
+                    text,
+                createdAt:
+                    new Date().toISOString(),
+                seen:
+                    false,
+                optimistic:
+                    true
+            };
+
+
+            appendMessage(
+                optimisticMessage
+            );
+
+            scrollToBottom();
+
+            setMessage("");
+
+            setShowEmoji(false);
+
+
+            socket.emit(
+                "stop-typing",
+                {
+                    roomId,
+                    userId:
+                        sender
+                }
+            );
+
+
             try {
+
+                /*
+                 * Save to MongoDB.
+                 */
 
                 const response =
                     await api.post(
                         "/messages/send",
                         {
                             receiver,
-                            message: text
+                            message:
+                                text
                         }
                     );
+
 
                 const saved =
                     response.data?.data ||
                     response.data?.message ||
                     null;
 
+
+                /*
+                 * Replace optimistic message.
+                 */
+
                 if (saved) {
 
                     setMessages(
-                        previous => {
+                        previous =>
+                            previous.map(
+                                item =>
+                                    item._id ===
+                                    temporaryId
+                                        ? saved
+                                        : item
+                            )
+                    );
 
-                            const savedId =
+
+                    /*
+                     * Send saved message through
+                     * Socket.IO immediately after DB save.
+                     */
+
+                    socket.emit(
+                        "send-message",
+                        {
+                            roomId,
+                            sender,
+                            receiver,
+                            message:
+                                saved.message ||
+                                text,
+                            _id:
                                 saved._id ||
-                                saved.id;
+                                saved.id,
+                            id:
+                                saved._id ||
+                                saved.id,
+                            createdAt:
+                                saved.createdAt ||
+                                new Date()
+                                    .toISOString()
+                        }
+                    );
 
-                            if (
-                                savedId &&
-                                previous.some(
-                                    item =>
-                                        (
-                                            item._id ||
-                                            item.id
-                                        ) ===
-                                        savedId
-                                )
-                            ) {
-                                return previous;
-                            }
+                } else {
 
-                            return [
-                                ...previous,
-                                saved
-                            ];
+                    /*
+                     * If API returned no object,
+                     * still notify receiver.
+                     */
 
+                    socket.emit(
+                        "send-message",
+                        {
+                            roomId,
+                            sender,
+                            receiver,
+                            message:
+                                text,
+                            createdAt:
+                                new Date()
+                                    .toISOString()
                         }
                     );
 
                 }
-
-                socket.emit(
-                    "send-message",
-                    {
-                        roomId,
-                        sender:
-                            getId(user),
-                        receiver,
-                        message: text,
-                        data: saved
-                    }
-                );
-
-                setMessage("");
-
-                setShowEmoji(
-                    false
-                );
-
-                socket.emit(
-                    "stop-typing",
-                    {
-                        roomId,
-                        userId:
-                            getId(user)
-                    }
-                );
 
             } catch (error) {
 
@@ -2071,6 +2286,21 @@ const Messenger = () => {
                     "Send message error:",
                     error
                 );
+
+
+                /*
+                 * Remove failed optimistic message.
+                 */
+
+                setMessages(
+                    previous =>
+                        previous.filter(
+                            item =>
+                                item._id !==
+                                temporaryId
+                        )
+                );
+
 
                 alert(
                     error.response?.data
@@ -2083,6 +2313,10 @@ const Messenger = () => {
         };
 
 
+    /* =====================================================
+       TYPING
+    ===================================================== */
+
     const handleTyping =
         event => {
 
@@ -2091,6 +2325,7 @@ const Messenger = () => {
 
             setMessage(value);
 
+
             if (
                 !selectedUser ||
                 !user
@@ -2098,12 +2333,14 @@ const Messenger = () => {
                 return;
             }
 
+
             const roomId =
                 currentRoomRef.current ||
                 getRoomId(
                     user,
                     selectedUser
                 );
+
 
             socket.emit(
                 "typing",
@@ -2114,9 +2351,11 @@ const Messenger = () => {
                 }
             );
 
+
             clearTimeout(
                 typingTimeoutRef.current
             );
+
 
             typingTimeoutRef.current =
                 setTimeout(
@@ -2137,6 +2376,127 @@ const Messenger = () => {
 
         };
 
+
+    /* =====================================================
+       FILE
+    ===================================================== */
+
+    const handleFile =
+        async event => {
+
+            const file =
+                event.target.files?.[0];
+
+
+            if (!file) {
+                return;
+            }
+
+
+            if (
+                !selectedUser ||
+                !user
+            ) {
+
+                event.target.value =
+                    "";
+
+                return;
+
+            }
+
+
+            if (
+                file.size >
+                10 * 1024 * 1024
+            ) {
+
+                alert(
+                    "Maximum file size is 10MB."
+                );
+
+                event.target.value =
+                    "";
+
+                return;
+
+            }
+
+
+            try {
+
+                const formData =
+                    new FormData();
+
+
+                formData.append(
+                    "file",
+                    file
+                );
+
+
+                formData.append(
+                    "receiver",
+                    getId(
+                        selectedUser
+                    )
+                );
+
+
+                const response =
+                    await api.post(
+                        "/messages/send",
+                        formData,
+                        {
+                            headers: {
+                                "Content-Type":
+                                    "multipart/form-data"
+                            }
+                        }
+                    );
+
+
+                const saved =
+                    response.data?.data ||
+                    response.data?.message;
+
+
+                if (saved) {
+
+                    appendMessage(
+                        saved
+                    );
+
+                    scrollToBottom();
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "File send error:",
+                    error
+                );
+
+                alert(
+                    error.response?.data
+                        ?.message ||
+                    "File could not be sent."
+                );
+
+            } finally {
+
+                event.target.value =
+                    "";
+
+            }
+
+        };
+
+
+    /* =====================================================
+       UI HELPERS
+    ===================================================== */
 
     const addEmoji =
         emoji => {
@@ -2175,9 +2535,11 @@ const Messenger = () => {
                         .trim()
                         .toLowerCase();
 
+
                 if (!term) {
                     return users;
                 }
+
 
                 return users.filter(
                     target => {
@@ -2185,22 +2547,20 @@ const Messenger = () => {
                         const name =
                             getUserName(
                                 target
-                            )
-                                .toLowerCase();
+                            ).toLowerCase();
 
                         const email =
                             (
                                 target.email ||
                                 ""
-                            )
-                                .toLowerCase();
+                            ).toLowerCase();
 
                         const username =
                             (
                                 target.username ||
                                 ""
-                            )
-                                .toLowerCase();
+                            ).toLowerCase();
+
 
                         return (
                             name.includes(
@@ -2225,7 +2585,7 @@ const Messenger = () => {
         );
 
 
-    const getBackground =
+    const currentBackground =
         useMemo(
             () =>
                 CHAT_BACKGROUNDS.find(
@@ -2245,8 +2605,10 @@ const Messenger = () => {
                 return "";
             }
 
+
             const date =
                 new Date(value);
+
 
             if (
                 Number.isNaN(
@@ -2256,107 +2618,57 @@ const Messenger = () => {
                 return "";
             }
 
+
             return date.toLocaleTimeString(
                 [],
                 {
-                    hour: "2-digit",
-                    minute: "2-digit"
+                    hour:
+                        "2-digit",
+                    minute:
+                        "2-digit"
                 }
             );
 
         };
 
 
-    const handleFile =
-        async event => {
+    const renderAvatar =
+        target => {
 
-            const file =
-                event.target.files?.[0];
+            const avatar =
+                getAvatar(target);
 
-            if (!file) {
-                return;
-            }
 
-            if (
-                file.size >
-                10 * 1024 * 1024
-            ) {
+            if (avatar) {
 
-                alert(
-                    "Maximum file size is 10MB."
+                return (
+                    <img
+                        src={avatar}
+                        alt=""
+                    />
                 );
-
-                event.target.value =
-                    "";
-
-                return;
 
             }
 
-            try {
 
-                const formData =
-                    new FormData();
+            return (
+                <div className="avatar-fallback">
 
-                formData.append(
-                    "file",
-                    file
-                );
-
-                formData.append(
-                    "receiver",
-                    getId(
-                        selectedUser
+                    {getUserName(
+                        target
                     )
-                );
+                        .charAt(0)
+                        .toUpperCase()}
 
-
-                const response =
-                    await api.post(
-                        "/messages/send",
-                        formData,
-                        {
-                            headers: {
-                                "Content-Type":
-                                    "multipart/form-data"
-                            }
-                        }
-                    );
-
-                const saved =
-                    response.data?.data;
-
-                if (saved) {
-
-                    setMessages(
-                        previous => [
-                            ...previous,
-                            saved
-                        ]
-                    );
-
-                }
-
-            } catch (error) {
-
-                console.error(
-                    "File send error:",
-                    error
-                );
-
-                alert(
-                    "File could not be sent."
-                );
-
-            } finally {
-
-                event.target.value =
-                    "";
-
-            }
+                </div>
+            );
 
         };
 
+
+    /* =====================================================
+       CLEANUP
+    ===================================================== */
 
     useEffect(() => {
 
@@ -2373,65 +2685,33 @@ const Messenger = () => {
     }, [cleanupCall]);
 
 
-    const renderAvatar =
-        target => {
-
-            const avatar =
-                getAvatar(target);
-
-            if (avatar) {
-
-                return (
-                    <img
-                        src={avatar}
-                        alt=""
-                    />
-                );
-
-            }
-
-            return (
-                <div className="avatar-fallback">
-                    {getUserName(
-                        target
-                    )
-                        .charAt(0)
-                        .toUpperCase()}
-                </div>
-            );
-
-        };
-
+    /* =====================================================
+       LOADING
+    ===================================================== */
 
     if (loading) {
 
         return (
             <div className="messenger-loading">
+
                 <div className="messenger-loader" />
+
                 <span>
                     Loading Messenger...
                 </span>
+
             </div>
         );
 
     }
 
 
+    /* =====================================================
+       RENDER
+    ===================================================== */
+
     return (
         <div className="messenger-page">
-
-            <audio
-                ref={
-                    notificationSoundRef
-                }
-                preload="auto"
-            >
-                <source
-                    src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA="
-                    type="audio/wav"
-                />
-            </audio>
-
 
             <aside
                 className={
@@ -2446,6 +2726,7 @@ const Messenger = () => {
                 <div className="messenger-sidebar-header">
 
                     <div>
+
                         <h2>
                             Messenger
                         </h2>
@@ -2453,6 +2734,7 @@ const Messenger = () => {
                         <span>
                             {users.length} contacts
                         </span>
+
                     </div>
 
                 </div>
@@ -2467,12 +2749,12 @@ const Messenger = () => {
                         onChange={
                             event =>
                                 setSearch(
-                                    event.target
-                                        .value
+                                    event.target.value
                                 )
                         }
                         placeholder="Search people..."
                     />
+
 
                     {search && (
                         <button
@@ -2513,9 +2795,7 @@ const Messenger = () => {
                             target => {
 
                                 const id =
-                                    getId(
-                                        target
-                                    );
+                                    getId(target);
 
                                 const unread =
                                     unreadUsers[
@@ -2526,6 +2806,7 @@ const Messenger = () => {
                                     getId(
                                         selectedUser
                                     ) === id;
+
 
                                 return (
                                     <button
@@ -2551,11 +2832,14 @@ const Messenger = () => {
                                                 target
                                             )}
 
+
                                             {isOnline(
                                                 target
                                             ) && (
                                                 <span className="online-dot">
+
                                                     <FaCircle />
+
                                                 </span>
                                             )}
 
@@ -2585,13 +2869,16 @@ const Messenger = () => {
                                                         : "Offline"}
                                                 </span>
 
+
                                                 {unread >
                                                     0 && (
                                                     <span className="unread-badge">
+
                                                         {unread >
                                                         99
                                                             ? "99+"
                                                             : unread}
+
                                                     </span>
                                                 )}
 
@@ -2652,14 +2939,18 @@ const Messenger = () => {
                                     type="button"
                                     className="mobile-back-btn"
                                     onClick={() => {
+
                                         setMobileChatOpen(
                                             false
                                         );
+
                                         setSelectedUser(
                                             null
                                         );
+
                                         selectedUserRef.current =
                                             null;
+
                                     }}
                                 >
                                     <FaArrowLeft />
@@ -2672,11 +2963,14 @@ const Messenger = () => {
                                         selectedUser
                                     )}
 
+
                                     {isOnline(
                                         selectedUser
                                     ) && (
                                         <span className="online-dot">
+
                                             <FaCircle />
+
                                         </span>
                                     )}
 
@@ -2691,7 +2985,9 @@ const Messenger = () => {
                                         )}
                                     </h2>
 
+
                                     <span>
+
                                         {typing
                                             ? "typing..."
                                             : isOnline(
@@ -2699,6 +2995,7 @@ const Messenger = () => {
                                               )
                                             ? "Active now"
                                             : "Offline"}
+
                                     </span>
 
                                 </div>
@@ -2738,13 +3035,16 @@ const Messenger = () => {
                                     type="button"
                                     title="Chat background"
                                     onClick={() => {
+
                                         setShowBackgrounds(
                                             value =>
                                                 !value
                                         );
+
                                         setShowMenu(
                                             false
                                         );
+
                                     }}
                                 >
                                     <FaPalette />
@@ -2755,13 +3055,16 @@ const Messenger = () => {
                                     type="button"
                                     title="More"
                                     onClick={() => {
+
                                         setShowMenu(
                                             value =>
                                                 !value
                                         );
+
                                         setShowBackgrounds(
                                             false
                                         );
+
                                     }}
                                 >
                                     <FaEllipsisH />
@@ -2776,25 +3079,24 @@ const Messenger = () => {
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            notify(
-                                                "JR Messenger",
-                                                "Browser notifications are enabled."
-                                            )
+                                            requestNotificationPermission()
                                         }
                                     >
                                         <FaInfoCircle />
                                         Notifications
                                     </button>
 
+
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            setMessages(
-                                                []
-                                            );
+
+                                            setMessages([]);
+
                                             setShowMenu(
                                                 false
                                             );
+
                                         }}
                                     >
                                         <FaTimes />
@@ -2813,6 +3115,7 @@ const Messenger = () => {
                                         <strong>
                                             Chat theme
                                         </strong>
+
 
                                         <button
                                             type="button"
@@ -2882,7 +3185,7 @@ const Messenger = () => {
                             className="messages-container"
                             style={{
                                 background:
-                                    getBackground.value ||
+                                    currentBackground.value ||
                                     undefined
                             }}
                         >
@@ -2890,8 +3193,11 @@ const Messenger = () => {
                             {chatLoading ? (
 
                                 <div className="chat-loading">
+
                                     <div />
+
                                     Loading messages...
+
                                 </div>
 
                             ) : messages.length ===
@@ -2930,25 +3236,30 @@ const Messenger = () => {
                                             senderId ===
                                             currentUserId;
 
+
                                         const text =
                                             item.message ||
                                             item.text ||
                                             item.content ||
                                             "";
 
+
                                         const time =
                                             item.createdAt ||
                                             item.timestamp;
+
 
                                         const seen =
                                             item.seen ||
                                             item.isSeen;
 
+
                                         return (
                                             <div
                                                 key={
-                                                    item._id ||
-                                                    item.id ||
+                                                    getMessageId(
+                                                        item
+                                                    ) ||
                                                     index
                                                 }
                                                 className={
@@ -2982,6 +3293,7 @@ const Messenger = () => {
                                                                 time
                                                             )}
                                                         </small>
+
 
                                                         {own && (
                                                             <span className="message-status">
@@ -3131,6 +3443,7 @@ const Messenger = () => {
                                         <strong>
                                             Emoji
                                         </strong>
+
 
                                         <button
                                             type="button"
