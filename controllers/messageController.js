@@ -10,8 +10,11 @@ const getUserId = (req) => {
     );
 };
 
-const populateMessage = (query) => {
-    return query
+const isValidObjectId = (id) =>
+    mongoose.Types.ObjectId.isValid(id);
+
+const populateMessage = (query) =>
+    query
         .populate(
             "sender",
             "name email role profileImage avatar username fullName displayName firstName"
@@ -20,431 +23,269 @@ const populateMessage = (query) => {
             "receiver",
             "name email role profileImage avatar username fullName displayName firstName"
         );
-};
 
-const isValidObjectId = (id) => {
-    return mongoose.Types.ObjectId.isValid(id);
-};
-
-
-// ======================================================
-// SEND MESSAGE
-// ======================================================
+/* =========================================================
+   SEND MESSAGE
+========================================================= */
 
 exports.sendMessage = async (req, res) => {
-
     try {
-
         const sender = getUserId(req);
+        const receiver = req.body?.receiver;
 
-        const receiver =
-            req.body?.receiver;
-
-        const text =
-            String(
-                req.body?.message || ""
-            ).trim();
+        const text = String(
+            req.body?.message ?? req.body?.text ?? ""
+        ).trim();
 
         if (!sender) {
-
             return res.status(401).json({
                 success: false,
-                message:
-                    "Authentication required"
+                message: "Authentication required"
             });
-
         }
 
         if (!receiver || !text) {
-
             return res.status(400).json({
                 success: false,
-                message:
-                    "Receiver and message are required"
+                message: "Receiver and message are required"
             });
-
         }
 
         if (!isValidObjectId(receiver)) {
-
             return res.status(400).json({
                 success: false,
-                message:
-                    "Invalid receiver"
+                message: "Invalid receiver"
             });
-
         }
 
-        if (
-            String(sender) ===
-            String(receiver)
-        ) {
-
+        if (String(sender) === String(receiver)) {
             return res.status(400).json({
                 success: false,
-                message:
-                    "You cannot message yourself"
+                message: "You cannot message yourself"
             });
-
         }
 
         if (text.length > 5000) {
-
             return res.status(400).json({
                 success: false,
-                message:
-                    "Message is too long"
+                message: "Message is too long"
             });
-
         }
 
-        const created =
-            await Message.create({
-                sender,
-                receiver,
-                message: text,
-                isSeen: false
-            });
+        const created = await Message.create({
+            sender,
+            receiver,
+            message: text,
+            isSeen: false
+        });
 
-        const populated =
-            await populateMessage(
-                Message.findById(
-                    created._id
-                )
-            );
+        const populated = await populateMessage(
+            Message.findById(created._id)
+        );
 
         return res.status(201).json({
             success: true,
-            message:
-                "Message sent successfully",
+            message: "Message sent successfully",
             data: populated
         });
-
     } catch (error) {
-
-        console.error(
-            "SEND MESSAGE ERROR:",
-            error
-        );
+        console.error("SEND MESSAGE ERROR:", error);
 
         return res.status(500).json({
             success: false,
-            message:
-                "Unable to send message."
+            message: "Unable to send message."
         });
-
     }
-
 };
 
+/* =========================================================
+   GET CONVERSATION
+========================================================= */
 
-// ======================================================
-// GET CONVERSATION
-// ======================================================
-
-exports.getConversation = async (
-    req,
-    res
-) => {
-
+exports.getConversation = async (req, res) => {
     try {
-
-        const currentUser =
-            getUserId(req);
-
-        const otherUserId =
-            req.params.userId;
+        const currentUser = getUserId(req);
+        const otherUserId = req.params.userId;
 
         if (!currentUser) {
-
             return res.status(401).json({
                 success: false,
-                message:
-                    "Authentication required"
+                message: "Authentication required"
             });
-
         }
 
-        if (
-            !isValidObjectId(
-                otherUserId
-            )
-        ) {
-
+        if (!isValidObjectId(otherUserId)) {
             return res.status(400).json({
                 success: false,
-                message:
-                    "Invalid user ID"
+                message: "Invalid user ID"
             });
-
         }
 
-        const messages =
-            await populateMessage(
-                Message.find({
-                    $or: [
-                        {
-                            sender:
-                                currentUser,
-                            receiver:
-                                otherUserId
-                        },
-                        {
-                            sender:
-                                otherUserId,
-                            receiver:
-                                currentUser
-                        }
-                    ]
-                })
-                    .sort({
-                        createdAt: 1
-                    })
-                    .limit(1000)
-            );
+        const messages = await populateMessage(
+            Message.find({
+                $or: [
+                    {
+                        sender: currentUser,
+                        receiver: otherUserId
+                    },
+                    {
+                        sender: otherUserId,
+                        receiver: currentUser
+                    }
+                ]
+            })
+                .sort({ createdAt: 1 })
+                .limit(1000)
+        );
 
         return res.status(200).json({
             success: true,
             data: messages
         });
-
     } catch (error) {
-
-        console.error(
-            "GET CONVERSATION ERROR:",
-            error
-        );
+        console.error("GET CONVERSATION ERROR:", error);
 
         return res.status(500).json({
             success: false,
-            message:
-                "Unable to load conversation."
+            message: "Unable to load conversation."
         });
-
     }
-
 };
 
+/* =========================================================
+   MARK CONVERSATION AS SEEN
+========================================================= */
 
-// ======================================================
-// MARK CONVERSATION SEEN
-// ======================================================
-
-exports.markSeen = async (
-    req,
-    res
-) => {
-
+exports.markSeen = async (req, res) => {
     try {
-
-        const currentUser =
-            getUserId(req);
-
-        const otherUserId =
-            req.params.userId;
+        const currentUser = getUserId(req);
+        const otherUserId = req.params.userId;
 
         if (!currentUser) {
-
             return res.status(401).json({
                 success: false,
-                message:
-                    "Authentication required"
+                message: "Authentication required"
             });
-
         }
 
-        if (
-            !isValidObjectId(
-                otherUserId
-            )
-        ) {
-
+        if (!isValidObjectId(otherUserId)) {
             return res.status(400).json({
                 success: false,
-                message:
-                    "Invalid user ID"
+                message: "Invalid user ID"
             });
-
         }
 
-        const result =
-            await Message.updateMany(
-                {
-                    sender:
-                        otherUserId,
-
-                    receiver:
-                        currentUser,
-
-                    isSeen:
-                        false
-                },
-                {
-                    $set: {
-                        isSeen:
-                            true
-                    }
+        const result = await Message.updateMany(
+            {
+                sender: otherUserId,
+                receiver: currentUser,
+                isSeen: false
+            },
+            {
+                $set: {
+                    isSeen: true
                 }
-            );
-
-        return res.status(200).json({
-            success: true,
-            modifiedCount:
-                result.modifiedCount || 0
-        });
-
-    } catch (error) {
-
-        console.error(
-            "MARK SEEN ERROR:",
-            error
-        );
-
-        return res.status(500).json({
-            success: false,
-            message:
-                "Unable to mark messages as seen."
-        });
-
-    }
-
-};
-
-
-// ======================================================
-// UNREAD MESSAGE COUNT
-// ======================================================
-
-exports.getUnreadCount = async (
-    req,
-    res
-) => {
-
-    try {
-
-        const currentUser =
-            getUserId(req);
-
-        if (!currentUser) {
-
-            return res.status(401).json({
-                success: false,
-                message:
-                    "Authentication required"
-            });
-
-        }
-
-        const count =
-            await Message.countDocuments({
-                receiver:
-                    currentUser,
-
-                isSeen:
-                    false
-            });
-
-        return res.status(200).json({
-            success: true,
-            count
-        });
-
-    } catch (error) {
-
-        console.error(
-            "UNREAD COUNT ERROR:",
-            error
-        );
-
-        return res.status(500).json({
-            success: false,
-            message:
-                "Unable to load unread count."
-        });
-
-    }
-
-};
-
-
-// ======================================================
-// UNREAD COUNT BY USER
-// ======================================================
-
-exports.getUnreadByUser = async (
-    req,
-    res
-) => {
-
-    try {
-
-        const currentUser =
-            getUserId(req);
-
-        if (!currentUser) {
-
-            return res.status(401).json({
-                success: false,
-                message:
-                    "Authentication required"
-            });
-
-        }
-
-        const rows =
-            await Message.aggregate([
-                {
-                    $match: {
-                        receiver:
-                            new mongoose.Types.ObjectId(
-                                currentUser
-                            ),
-                        isSeen:
-                            false
-                    }
-                },
-                {
-                    $group: {
-                        _id:
-                            "$sender",
-                        count:
-                            {
-                                $sum: 1
-                            }
-                    }
-                }
-            ]);
-
-        const unread = {};
-
-        rows.forEach(
-            (row) => {
-
-                unread[
-                    String(row._id)
-                ] = row.count;
-
             }
         );
 
         return res.status(200).json({
             success: true,
-            unread
+            modifiedCount: result.modifiedCount || 0
         });
-
     } catch (error) {
-
-        console.error(
-            "UNREAD BY USER ERROR:",
-            error
-        );
+        console.error("MARK SEEN ERROR:", error);
 
         return res.status(500).json({
             success: false,
-            message:
-                "Unable to load unread messages."
+            message: "Unable to mark messages as seen."
+        });
+    }
+};
+
+/* =========================================================
+   TOTAL UNREAD COUNT
+========================================================= */
+
+exports.getUnreadCount = async (req, res) => {
+    try {
+        const currentUser = getUserId(req);
+
+        if (!currentUser) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        const count = await Message.countDocuments({
+            receiver: currentUser,
+            isSeen: false
         });
 
-    }
+        return res.status(200).json({
+            success: true,
+            count
+        });
+    } catch (error) {
+        console.error("UNREAD COUNT ERROR:", error);
 
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load unread count."
+        });
+    }
+};
+
+/* =========================================================
+   UNREAD COUNT BY USER
+========================================================= */
+
+exports.getUnreadByUser = async (req, res) => {
+    try {
+        const currentUser = getUserId(req);
+
+        if (!currentUser) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        const rows = await Message.aggregate([
+            {
+                $match: {
+                    receiver: new mongoose.Types.ObjectId(
+                        String(currentUser)
+                    ),
+                    isSeen: false
+                }
+            },
+            {
+                $group: {
+                    _id: "$sender",
+                    count: {
+                        $sum: 1
+                    }
+                }
+            }
+        ]);
+
+        const unread = {};
+
+        rows.forEach((row) => {
+            unread[String(row._id)] = row.count;
+        });
+
+        return res.status(200).json({
+            success: true,
+            unread
+        });
+    } catch (error) {
+        console.error("UNREAD BY USER ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load unread messages."
+        });
+    }
 };
