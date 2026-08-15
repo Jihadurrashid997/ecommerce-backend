@@ -1,60 +1,80 @@
-const DEFAULT_ICON =
-    "/favicon.ico";
-
-export const requestNotificationPermission =
-    async () => {
-
-        if (
-            typeof window === "undefined" ||
-            !("Notification" in window)
-        ) {
-            return "unsupported";
-        }
-
-        if (
-            Notification.permission ===
-            "granted"
-        ) {
-            return "granted";
-        }
-
-        if (
-            Notification.permission ===
-            "denied"
-        ) {
-            return "denied";
-        }
-
-        try {
-
-            return await Notification.requestPermission();
-
-        } catch (error) {
-
-            console.error(
-                "Notification permission error:",
-                error
-            );
-
-            return "denied";
-
-        }
-
-    };
+const DEFAULT_ICON = "/favicon.ico";
 
 
-export const showNotification = ({
-    title = "JR Store",
-    body = "",
-    icon = DEFAULT_ICON,
-    tag,
-    data = {}
-} = {}) => {
+/* =========================================================
+   JR STORE - NOTIFICATION SERVICE
+========================================================= */
+
+
+/* =========================================================
+   CHECK SUPPORT
+========================================================= */
+
+export const isNotificationSupported = () => {
+    return (
+        typeof window !== "undefined" &&
+        "Notification" in window
+    );
+};
+
+
+/* =========================================================
+   PERMISSION
+========================================================= */
+
+export const getNotificationPermission = () => {
+
+    if (!isNotificationSupported()) {
+        return "unsupported";
+    }
+
+    return Notification.permission;
+};
+
+
+/* =========================================================
+   REQUEST PERMISSION
+========================================================= */
+
+export const requestNotificationPermission = async () => {
+
+    if (!isNotificationSupported()) {
+        return "unsupported";
+    }
 
     if (
-        typeof window === "undefined" ||
-        !("Notification" in window)
+        Notification.permission ===
+        "granted"
     ) {
+        return "granted";
+    }
+
+    try {
+
+        return await Notification.requestPermission();
+
+    } catch (error) {
+
+        console.error(
+            "Notification permission error:",
+            error
+        );
+
+        return "denied";
+    }
+};
+
+
+/* =========================================================
+   SHOW NOTIFICATION
+========================================================= */
+
+export const showNotification = (
+    title,
+    options = {}
+) => {
+
+    if (!isNotificationSupported()) {
         return null;
     }
 
@@ -71,30 +91,61 @@ export const showNotification = ({
             new Notification(
                 title,
                 {
-                    body,
-                    icon,
-                    tag,
-                    data,
-                    badge: icon,
-                    renotify: true
+                    icon:
+                        options.icon ||
+                        DEFAULT_ICON,
+
+                    badge:
+                        options.badge ||
+                        DEFAULT_ICON,
+
+                    body:
+                        options.body ||
+                        "",
+
+                    tag:
+                        options.tag ||
+                        "jr-store",
+
+                    renotify:
+                        options.renotify ??
+                        true,
+
+                    requireInteraction:
+                        options.requireInteraction ??
+                        false,
+
+                    silent:
+                        options.silent ??
+                        false,
+
+                    data:
+                        options.data ||
+                        {}
                 }
             );
 
-        notification.onclick =
-            () => {
 
-                window.focus();
+        if (
+            options.onClick
+        ) {
 
-                notification.close();
+            notification.onclick =
+                (event) => {
 
-                if (
-                    data?.url
-                ) {
-                    window.location.href =
-                        data.url;
-                }
+                    event.preventDefault();
 
-            };
+                    options.onClick(
+                        event,
+                        notification
+                    );
+
+                    window.focus();
+
+                };
+
+        }
+
 
         return notification;
 
@@ -106,89 +157,179 @@ export const showNotification = ({
         );
 
         return null;
-
     }
-
 };
 
 
-export const notifyNewMessage = ({
+/* =========================================================
+   MESSAGE NOTIFICATION
+========================================================= */
+
+export const showMessageNotification = ({
     senderName = "New message",
     message = "",
-    userId = null
+    onClick
 } = {}) => {
 
-    return showNotification({
-        title:
-            `${senderName} sent you a message`,
-        body:
-            message || "You received a new message.",
-        tag:
-            userId
-                ? `message-${userId}`
-                : "new-message",
-        data: {
-            type: "message",
-            userId
-        }
-    });
+    return showNotification(
+        senderName,
+        {
+            body:
+                message ||
+                "You have a new message.",
 
+            tag:
+                "jr-message",
+
+            data: {
+                type:
+                    "message"
+            },
+
+            onClick
+        }
+    );
 };
 
 
-export const notifyIncomingCall = ({
-    callerName = "Someone",
+/* =========================================================
+   INCOMING CALL NOTIFICATION
+========================================================= */
+
+export const showIncomingCallNotification = ({
+    callerName = "Incoming call",
     type = "audio",
-    callerId = null
+    onClick
 } = {}) => {
 
-    return showNotification({
-        title:
-            `Incoming ${type === "video" ? "video" : "voice"} call`,
-        body:
-            `${callerName} is calling you`,
-        tag:
-            callerId
-                ? `call-${callerId}`
-                : "incoming-call",
-        data: {
-            type: "call",
-            callType: type,
-            callerId
-        }
-    });
+    const callType =
+        type === "video"
+            ? "Video call"
+            : "Voice call";
 
+    return showNotification(
+        `📞 ${callerName}`,
+        {
+            body:
+                `Incoming ${callType}`,
+
+            tag:
+                "jr-incoming-call",
+
+            requireInteraction:
+                true,
+
+            silent:
+                false,
+
+            data: {
+                type:
+                    "incoming-call",
+                callType
+            },
+
+            onClick
+        }
+    );
 };
 
 
-export const notifyMissedCall = ({
-    callerName = "Someone",
+/* =========================================================
+   MISSED CALL NOTIFICATION
+========================================================= */
+
+export const showMissedCallNotification = ({
+    callerName = "Unknown caller",
     type = "audio",
-    callerId = null
+    onClick
 } = {}) => {
 
-    return showNotification({
-        title: "Missed call",
-        body:
-            `You missed a ${type === "video" ? "video" : "voice"} call from ${callerName}.`,
-        tag:
-            callerId
-                ? `missed-call-${callerId}`
-                : "missed-call",
-        data: {
-            type: "missed-call",
-            callType: type,
-            callerId
-        }
-    });
+    const callType =
+        type === "video"
+            ? "video"
+            : "voice";
 
+    return showNotification(
+        `📵 Missed ${callType} call`,
+        {
+            body:
+                `You missed a call from ${callerName}.`,
+
+            tag:
+                "jr-missed-call",
+
+            data: {
+                type:
+                    "missed-call"
+            },
+
+            onClick
+        }
+    );
 };
 
+
+/* =========================================================
+   CALL ENDED NOTIFICATION
+========================================================= */
+
+export const showCallEndedNotification = ({
+    callerName = "Call",
+    onClick
+} = {}) => {
+
+    return showNotification(
+        "📞 Call ended",
+        {
+            body:
+                `Your call with ${callerName} has ended.`,
+
+            tag:
+                "jr-call-ended",
+
+            data: {
+                type:
+                    "call-ended"
+            },
+
+            onClick
+        }
+    );
+};
+
+
+/* =========================================================
+   CLOSE NOTIFICATION
+========================================================= */
+
+export const closeNotification = (
+    notification
+) => {
+
+    if (
+        notification &&
+        typeof notification.close ===
+            "function"
+    ) {
+
+        notification.close();
+
+    }
+};
+
+
+/* =========================================================
+   DEFAULT EXPORT
+========================================================= */
 
 export default {
+    isNotificationSupported,
+    getNotificationPermission,
     requestNotificationPermission,
     showNotification,
-    notifyNewMessage,
-    notifyIncomingCall,
-    notifyMissedCall
+    showMessageNotification,
+    showIncomingCallNotification,
+    showMissedCallNotification,
+    showCallEndedNotification,
+    closeNotification
 };
