@@ -1,243 +1,573 @@
-import axios from "axios";
+// frontend/src/services/socket.js
 
-const API_BASE_URL =
-    "https://ecommerce-api-9wc9.onrender.com/api";
+import { io } from "socket.io-client";
 
-const api = axios.create({
-    baseURL: API_BASE_URL,
-    timeout: 30000,
+/* =========================================================
+   JR STORE - SOCKET SERVICE
+   Production-ready Messenger + WebRTC socket service
+========================================================= */
 
-    headers: {
-        "Content-Type": "application/json"
-    }
-});
+const SOCKET_URL =
+    "https://ecommerce-api-9wc9.onrender.com";
+
+let socket = null;
+let currentUserId = null;
 
 
 /* =========================================================
-   REQUEST INTERCEPTOR
+   CONNECT SOCKET
 ========================================================= */
 
-api.interceptors.request.use(
-    (config) => {
+export const connectSocket = (userId) => {
 
-        try {
+    if (!userId) {
+        return null;
+    }
 
-            const token =
-                localStorage.getItem("token");
+    currentUserId = String(userId);
 
-            if (token) {
+    /* Already connected */
+    if (socket?.connected) {
 
-                config.headers =
-                    config.headers || {};
+        socket.emit(
+            "user-online",
+            currentUserId
+        );
 
-                config.headers.Authorization =
-                    `Bearer ${token}`;
+        return socket;
+    }
+
+
+    /* Existing socket but reconnecting */
+    if (socket) {
+
+        socket.auth = {
+            userId: currentUserId
+        };
+
+        if (!socket.connected) {
+            socket.connect();
+        }
+
+        return socket;
+    }
+
+
+    socket = io(
+        SOCKET_URL,
+        {
+            transports: [
+                "websocket",
+                "polling"
+            ],
+
+            auth: {
+                userId: currentUserId
+            },
+
+            reconnection: true,
+
+            reconnectionAttempts: Infinity,
+
+            reconnectionDelay: 1000,
+
+            reconnectionDelayMax: 5000,
+
+            randomizationFactor: 0.5,
+
+            timeout: 20000,
+
+            autoConnect: true,
+
+            forceNew: false
+        }
+    );
+
+
+    /* =====================================================
+       CONNECT
+    ===================================================== */
+
+    socket.on(
+        "connect",
+        () => {
+
+            console.log(
+                "🟢 JR Store socket connected:",
+                socket.id
+            );
+
+            socket.emit(
+                "user-online",
+                currentUserId
+            );
+
+        }
+    );
+
+
+    /* =====================================================
+       RECONNECT
+    ===================================================== */
+
+    socket.io.on(
+        "reconnect",
+        () => {
+
+            console.log(
+                "🔄 JR Store socket reconnected"
+            );
+
+            if (currentUserId) {
+
+                socket.emit(
+                    "user-online",
+                    currentUserId
+                );
+
             }
 
-        } catch (error) {
+        }
+    );
 
-            console.warn(
-                "Auth token read error:",
-                error
+
+    /* =====================================================
+       DISCONNECT
+    ===================================================== */
+
+    socket.on(
+        "disconnect",
+        (reason) => {
+
+            console.log(
+                "🔴 JR Store socket disconnected:",
+                reason
             );
 
         }
-
-        return config;
-
-    },
-
-    (error) => {
-
-        return Promise.reject(
-            error
-        );
-
-    }
-);
+    );
 
 
-/* =========================================================
-   RESPONSE INTERCEPTOR
-========================================================= */
+    /* =====================================================
+       CONNECT ERROR
+    ===================================================== */
 
-api.interceptors.response.use(
-    (response) => {
-
-        return response;
-
-    },
-
-    async (error) => {
-
-        const status =
-            error?.response?.status;
-
-        if (status === 401) {
-
-            /*
-             * Do not immediately remove authentication
-             * because some protected requests may fail
-             * temporarily.
-             */
-
-            console.warn(
-                "Authentication failed:",
-                error?.response?.data
-            );
-        }
-
-        if (!error.response) {
+    socket.on(
+        "connect_error",
+        (error) => {
 
             console.error(
-                "Network error:",
-                error?.message
+                "❌ JR Store socket connection error:",
+                error?.message || error
             );
 
         }
+    );
 
-        return Promise.reject(
+
+    return socket;
+};
+
+
+/* =========================================================
+   GET SOCKET
+========================================================= */
+
+export const getSocket = () => {
+
+    return socket;
+
+};
+
+
+/* =========================================================
+   IS CONNECTED
+========================================================= */
+
+export const isSocketConnected = () => {
+
+    return Boolean(
+        socket?.connected
+    );
+
+};
+
+
+/* =========================================================
+   DISCONNECT SOCKET
+========================================================= */
+
+export const disconnectSocket = () => {
+
+    if (!socket) {
+        return;
+    }
+
+    try {
+
+        socket.removeAllListeners();
+
+        socket.disconnect();
+
+    } catch (error) {
+
+        console.error(
+            "Socket disconnect error:",
             error
         );
 
     }
-);
 
+    socket = null;
 
-/* =========================================================
-   API URL HELPER
-========================================================= */
-
-export const getApiUrl = (
-    endpoint = ""
-) => {
-
-    const cleanEndpoint =
-        String(endpoint)
-            .replace(/^\/+/, "");
-
-    return `${API_BASE_URL}/${cleanEndpoint}`;
-
+    currentUserId = null;
 };
 
 
 /* =========================================================
-   UPLOAD URL HELPER
+   EMIT
 ========================================================= */
 
-export const getUploadUrl = (
-    filePath = ""
+export const emitSocket = (
+    event,
+    payload
 ) => {
 
-    if (!filePath) {
-        return "";
+    if (!socket) {
+        return false;
     }
 
-    const value =
-        String(filePath);
-
-    if (
-        value.startsWith("http://") ||
-        value.startsWith("https://") ||
-        value.startsWith("blob:") ||
-        value.startsWith("data:")
-    ) {
-        return value;
+    if (!socket.connected) {
+        return false;
     }
 
-    const cleanPath =
-        value.replace(/^\/+/, "");
+    try {
 
-    return `https://ecommerce-api-9wc9.onrender.com/${cleanPath}`;
+        socket.emit(
+            event,
+            payload
+        );
 
+        return true;
+
+    } catch (error) {
+
+        console.error(
+            `Socket emit error [${event}]:`,
+            error
+        );
+
+        return false;
+    }
 };
 
 
 /* =========================================================
-   MESSAGE API
+   LISTEN
 ========================================================= */
 
-export const getMessages = async ({
-    userId,
-    receiverId,
-    roomId,
-    page = 1,
-    limit = 50
-} = {}) => {
+export const onSocket = (
+    event,
+    callback
+) => {
 
-    const params = {
-        page,
-        limit
+    if (!socket || typeof callback !== "function") {
+        return () => {};
+    }
+
+    socket.on(
+        event,
+        callback
+    );
+
+    return () => {
+
+        socket?.off(
+            event,
+            callback
+        );
+
     };
-
-    if (userId) {
-        params.userId =
-            String(userId);
-    }
-
-    if (receiverId) {
-        params.receiverId =
-            String(receiverId);
-    }
-
-    if (roomId) {
-        params.roomId =
-            String(roomId);
-    }
-
-    return api.get(
-        "/messages",
-        {
-            params
-        }
-    );
-
 };
 
 
-export const sendMessage = async (
-    messageData
+/* =========================================================
+   LISTEN ONCE
+========================================================= */
+
+export const onceSocket = (
+    event,
+    callback
 ) => {
 
-    return api.post(
-        "/messages",
-        messageData
+    if (!socket || typeof callback !== "function") {
+        return () => {};
+    }
+
+    socket.once(
+        event,
+        callback
     );
 
-};
+    return () => {
 
-
-export const markMessageSeen = async (
-    messageId
-) => {
-
-    if (!messageId) {
-        throw new Error(
-            "messageId is required"
+        socket?.off(
+            event,
+            callback
         );
-    }
 
-    return api.patch(
-        `/messages/${messageId}/seen`
-    );
-
+    };
 };
 
 
-export const deleteMessage = async (
-    messageId
+/* =========================================================
+   REMOVE LISTENER
+========================================================= */
+
+export const offSocket = (
+    event,
+    callback
 ) => {
 
-    if (!messageId) {
-        throw new Error(
-            "messageId is required"
-        );
+    if (!socket) {
+        return;
     }
 
-    return api.delete(
-        `/messages/${messageId}`
-    );
+    if (callback) {
 
+        socket.off(
+            event,
+            callback
+        );
+
+    } else {
+
+        socket.off(
+            event
+        );
+
+    }
+};
+
+
+/* =========================================================
+   JOIN ROOM
+========================================================= */
+
+export const joinRoom = (
+    roomId
+) => {
+
+    if (!roomId) {
+        return false;
+    }
+
+    return emitSocket(
+        "join-room",
+        String(roomId)
+    );
+};
+
+
+/* =========================================================
+   LEAVE ROOM
+========================================================= */
+
+export const leaveRoom = (
+    roomId
+) => {
+
+    if (!roomId) {
+        return false;
+    }
+
+    return emitSocket(
+        "leave-room",
+        String(roomId)
+    );
+};
+
+
+/* =========================================================
+   SEND MESSAGE
+========================================================= */
+
+export const sendSocketMessage = (
+    payload
+) => {
+
+    if (!payload) {
+        return false;
+    }
+
+    return emitSocket(
+        "send-message",
+        payload
+    );
+};
+
+
+/* =========================================================
+   TYPING
+========================================================= */
+
+export const startTyping = (
+    payload
+) => {
+
+    return emitSocket(
+        "typing",
+        payload
+    );
+};
+
+
+export const stopTyping = (
+    payload
+) => {
+
+    return emitSocket(
+        "stop-typing",
+        payload
+    );
+};
+
+
+/* =========================================================
+   MESSAGE SEEN
+========================================================= */
+
+export const markMessagesSeen = (
+    payload
+) => {
+
+    return emitSocket(
+        "message-seen",
+        payload
+    );
+};
+
+
+/* =========================================================
+   CALL
+========================================================= */
+
+export const callUser = (
+    payload
+) => {
+
+    return emitSocket(
+        "call-user",
+        payload
+    );
+};
+
+
+export const acceptCall = (
+    payload
+) => {
+
+    return emitSocket(
+        "accept-call",
+        payload
+    );
+};
+
+
+export const rejectCall = (
+    payload
+) => {
+
+    return emitSocket(
+        "reject-call",
+        payload
+    );
+};
+
+
+export const endCall = (
+    payload
+) => {
+
+    return emitSocket(
+        "end-call",
+        payload
+    );
+};
+
+
+/* =========================================================
+   WEBRTC OFFER
+========================================================= */
+
+export const sendWebRTCOffer = (
+    payload
+) => {
+
+    return emitSocket(
+        "webrtc-offer",
+        payload
+    );
+};
+
+
+/* =========================================================
+   WEBRTC ANSWER
+========================================================= */
+
+export const sendWebRTCAnswer = (
+    payload
+) => {
+
+    return emitSocket(
+        "webrtc-answer",
+        payload
+    );
+};
+
+
+/* =========================================================
+   ICE CANDIDATE
+========================================================= */
+
+export const sendICECandidate = (
+    payload
+) => {
+
+    return emitSocket(
+        "webrtc-ice-candidate",
+        payload
+    );
+};
+
+
+/* =========================================================
+   CALL BUSY
+========================================================= */
+
+export const sendCallBusy = (
+    payload
+) => {
+
+    return emitSocket(
+        "call-busy",
+        payload
+    );
+};
+
+
+/* =========================================================
+   CALL MISSED
+========================================================= */
+
+export const sendCallMissed = (
+    payload
+) => {
+
+    return emitSocket(
+        "call-missed",
+        payload
+    );
 };
 
 
@@ -245,4 +575,52 @@ export const deleteMessage = async (
    DEFAULT EXPORT
 ========================================================= */
 
-export default api;
+export default {
+
+    connectSocket,
+
+    getSocket,
+
+    isSocketConnected,
+
+    disconnectSocket,
+
+    emitSocket,
+
+    onSocket,
+
+    onceSocket,
+
+    offSocket,
+
+    joinRoom,
+
+    leaveRoom,
+
+    sendSocketMessage,
+
+    startTyping,
+
+    stopTyping,
+
+    markMessagesSeen,
+
+    callUser,
+
+    acceptCall,
+
+    rejectCall,
+
+    endCall,
+
+    sendWebRTCOffer,
+
+    sendWebRTCAnswer,
+
+    sendICECandidate,
+
+    sendCallBusy,
+
+    sendCallMissed
+
+};
