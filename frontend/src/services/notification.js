@@ -1,96 +1,181 @@
-import React, {
-    useEffect,
-    useState
-} from "react";
+// frontend/src/services/notification.js
 
-import {
-    FiBell,
-    FiBellOff
-} from "react-icons/fi";
+const NOTIFICATION_SOUND_URL =
+    "/sounds/message-notification.mp3";
 
-import {
-    requestNotificationPermission
-} from "../services/notification";
+let audio = null;
 
-const NotificationPermission = () => {
-
-    const [permission, setPermission] =
-        useState(
-            typeof Notification !==
-                "undefined"
-                ? Notification.permission
-                : "unsupported"
+const getAudio = () => {
+    if (!audio) {
+        audio = new Audio(
+            NOTIFICATION_SOUND_URL
         );
 
-    useEffect(() => {
-
-        if (
-            typeof Notification ===
-            "undefined"
-        ) {
-            return;
-        }
-
-        setPermission(
-            Notification.permission
-        );
-
-    }, []);
-
-    const enableNotifications =
-        async () => {
-
-            const result =
-                await requestNotificationPermission();
-
-            setPermission(result);
-
-        };
-
-    if (
-        permission === "granted" ||
-        permission === "unsupported"
-    ) {
-        return null;
+        audio.preload = "auto";
     }
 
-    return (
-        <button
-            type="button"
-            onClick={
-                enableNotifications
-            }
-            title="Enable message and call notifications"
-            style={{
-                position: "fixed",
-                right: 20,
-                bottom: 20,
-                zIndex: 9999,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                border: "none",
-                borderRadius: 24,
-                padding: "11px 17px",
-                background: "#1877f2",
-                color: "#fff",
-                cursor: "pointer",
-                fontWeight: 700,
-                boxShadow:
-                    "0 8px 25px rgba(24,119,242,.3)"
-            }}
-        >
-            {permission === "denied" ? (
-                <FiBellOff />
-            ) : (
-                <FiBell />
-            )}
-
-            {permission === "denied"
-                ? "Enable notifications in browser"
-                : "Enable notifications"}
-        </button>
-    );
+    return audio;
 };
 
-export default NotificationPermission;
+export const playMessageNotification = async () => {
+    try {
+        const sound = getAudio();
+
+        sound.currentTime = 0;
+
+        await sound.play();
+
+        return true;
+    } catch (error) {
+        console.warn(
+            "Notification sound could not be played:",
+            error
+        );
+
+        return false;
+    }
+};
+
+export const showBrowserNotification = ({
+    title = "JR Store",
+    body = "You have a new message.",
+    icon = "/favicon.ico",
+    tag = "jr-store-message"
+} = {}) => {
+
+    if (
+        typeof window === "undefined" ||
+        !("Notification" in window)
+    ) {
+        return false;
+    }
+
+    if (Notification.permission !== "granted") {
+        return false;
+    }
+
+    try {
+
+        new Notification(
+            title,
+            {
+                body,
+                icon,
+                tag
+            }
+        );
+
+        return true;
+
+    } catch (error) {
+
+        console.warn(
+            "Browser notification error:",
+            error
+        );
+
+        return false;
+    }
+};
+
+export const requestNotificationPermission = async () => {
+
+    if (
+        typeof window === "undefined" ||
+        !("Notification" in window)
+    ) {
+        return "unsupported";
+    }
+
+    if (
+        Notification.permission ===
+        "granted"
+    ) {
+        return "granted";
+    }
+
+    if (
+        Notification.permission ===
+        "denied"
+    ) {
+        return "denied";
+    }
+
+    try {
+
+        return await Notification.requestPermission();
+
+    } catch (error) {
+
+        console.warn(
+            "Notification permission error:",
+            error
+        );
+
+        return "denied";
+    }
+};
+
+export const notifyIncomingMessage = async ({
+    senderName = "New message",
+    message = "You received a new message.",
+    enabled = true
+} = {}) => {
+
+    if (!enabled) {
+        return;
+    }
+
+    await playMessageNotification();
+
+    showBrowserNotification({
+        title: senderName,
+        body: message
+    });
+};
+
+export const notifyIncomingCall = async ({
+    callerName = "Incoming call",
+    type = "audio"
+} = {}) => {
+
+    const callType =
+        type === "video"
+            ? "Video call"
+            : "Voice call";
+
+    await playMessageNotification();
+
+    showBrowserNotification({
+        title: `📞 ${callerName}`,
+        body: `Incoming ${callType}`
+    });
+};
+
+export const cleanupNotificationAudio = () => {
+
+    if (!audio) {
+        return;
+    }
+
+    try {
+
+        audio.pause();
+
+        audio.currentTime = 0;
+
+        audio.src = "";
+
+    } catch (_) {}
+
+    audio = null;
+};
+
+export default {
+    playMessageNotification,
+    showBrowserNotification,
+    requestNotificationPermission,
+    notifyIncomingMessage,
+    notifyIncomingCall,
+    cleanupNotificationAudio
+};
