@@ -1,17 +1,21 @@
+// frontend/src/services/socket.js
+
 import { io } from "socket.io-client";
 
 /* =========================================================
    JR STORE - SOCKET SERVICE
+   Production-ready Messenger + WebRTC socket service
 ========================================================= */
 
 const SOCKET_URL =
     "https://ecommerce-api-9wc9.onrender.com";
 
 let socket = null;
+let currentUserId = null;
 
 
 /* =========================================================
-   CONNECT
+   CONNECT SOCKET
 ========================================================= */
 
 export const connectSocket = (userId) => {
@@ -20,14 +24,34 @@ export const connectSocket = (userId) => {
         return null;
     }
 
+    currentUserId = String(userId);
+
+    /* Already connected */
     if (socket?.connected) {
+
         socket.emit(
             "user-online",
-            String(userId)
+            currentUserId
         );
 
         return socket;
     }
+
+
+    /* Existing socket but reconnecting */
+    if (socket) {
+
+        socket.auth = {
+            userId: currentUserId
+        };
+
+        if (!socket.connected) {
+            socket.connect();
+        }
+
+        return socket;
+    }
+
 
     socket = io(
         SOCKET_URL,
@@ -37,6 +61,10 @@ export const connectSocket = (userId) => {
                 "polling"
             ],
 
+            auth: {
+                userId: currentUserId
+            },
+
             reconnection: true,
 
             reconnectionAttempts: Infinity,
@@ -45,37 +73,74 @@ export const connectSocket = (userId) => {
 
             reconnectionDelayMax: 5000,
 
+            randomizationFactor: 0.5,
+
             timeout: 20000,
 
-            autoConnect: true
+            autoConnect: true,
+
+            forceNew: false
         }
     );
 
+
+    /* =====================================================
+       CONNECT
+    ===================================================== */
 
     socket.on(
         "connect",
         () => {
 
             console.log(
-                "🟢 Messenger socket connected:",
+                "🟢 JR Store socket connected:",
                 socket.id
             );
 
             socket.emit(
                 "user-online",
-                String(userId)
+                currentUserId
             );
 
         }
     );
 
 
+    /* =====================================================
+       RECONNECT
+    ===================================================== */
+
+    socket.io.on(
+        "reconnect",
+        () => {
+
+            console.log(
+                "🔄 JR Store socket reconnected"
+            );
+
+            if (currentUserId) {
+
+                socket.emit(
+                    "user-online",
+                    currentUserId
+                );
+
+            }
+
+        }
+    );
+
+
+    /* =====================================================
+       DISCONNECT
+    ===================================================== */
+
     socket.on(
         "disconnect",
         (reason) => {
 
             console.log(
-                "🔴 Messenger socket disconnected:",
+                "🔴 JR Store socket disconnected:",
                 reason
             );
 
@@ -83,12 +148,16 @@ export const connectSocket = (userId) => {
     );
 
 
+    /* =====================================================
+       CONNECT ERROR
+    ===================================================== */
+
     socket.on(
         "connect_error",
         (error) => {
 
             console.error(
-                "❌ Messenger socket error:",
+                "❌ JR Store socket connection error:",
                 error?.message || error
             );
 
@@ -105,12 +174,27 @@ export const connectSocket = (userId) => {
 ========================================================= */
 
 export const getSocket = () => {
+
     return socket;
+
 };
 
 
 /* =========================================================
-   DISCONNECT
+   IS CONNECTED
+========================================================= */
+
+export const isSocketConnected = () => {
+
+    return Boolean(
+        socket?.connected
+    );
+
+};
+
+
+/* =========================================================
+   DISCONNECT SOCKET
 ========================================================= */
 
 export const disconnectSocket = () => {
@@ -119,9 +203,24 @@ export const disconnectSocket = () => {
         return;
     }
 
-    socket.disconnect();
+    try {
+
+        socket.removeAllListeners();
+
+        socket.disconnect();
+
+    } catch (error) {
+
+        console.error(
+            "Socket disconnect error:",
+            error
+        );
+
+    }
 
     socket = null;
+
+    currentUserId = null;
 };
 
 
@@ -134,19 +233,32 @@ export const emitSocket = (
     payload
 ) => {
 
-    if (
-        !socket ||
-        !socket.connected
-    ) {
+    if (!socket) {
         return false;
     }
 
-    socket.emit(
-        event,
-        payload
-    );
+    if (!socket.connected) {
+        return false;
+    }
 
-    return true;
+    try {
+
+        socket.emit(
+            event,
+            payload
+        );
+
+        return true;
+
+    } catch (error) {
+
+        console.error(
+            `Socket emit error [${event}]:`,
+            error
+        );
+
+        return false;
+    }
 };
 
 
@@ -159,7 +271,7 @@ export const onSocket = (
     callback
 ) => {
 
-    if (!socket) {
+    if (!socket || typeof callback !== "function") {
         return () => {};
     }
 
@@ -170,7 +282,36 @@ export const onSocket = (
 
     return () => {
 
-        socket.off(
+        socket?.off(
+            event,
+            callback
+        );
+
+    };
+};
+
+
+/* =========================================================
+   LISTEN ONCE
+========================================================= */
+
+export const onceSocket = (
+    event,
+    callback
+) => {
+
+    if (!socket || typeof callback !== "function") {
+        return () => {};
+    }
+
+    socket.once(
+        event,
+        callback
+    );
+
+    return () => {
+
+        socket?.off(
             event,
             callback
         );
@@ -218,10 +359,10 @@ export const joinRoom = (
 ) => {
 
     if (!roomId) {
-        return;
+        return false;
     }
 
-    emitSocket(
+    return emitSocket(
         "join-room",
         String(roomId)
     );
@@ -237,10 +378,10 @@ export const leaveRoom = (
 ) => {
 
     if (!roomId) {
-        return;
+        return false;
     }
 
-    emitSocket(
+    return emitSocket(
         "leave-room",
         String(roomId)
     );
@@ -254,6 +395,10 @@ export const leaveRoom = (
 export const sendSocketMessage = (
     payload
 ) => {
+
+    if (!payload) {
+        return false;
+    }
 
     return emitSocket(
         "send-message",
@@ -352,7 +497,7 @@ export const endCall = (
 
 
 /* =========================================================
-   WEBRTC SIGNALING
+   WEBRTC OFFER
 ========================================================= */
 
 export const sendWebRTCOffer = (
@@ -366,6 +511,10 @@ export const sendWebRTCOffer = (
 };
 
 
+/* =========================================================
+   WEBRTC ANSWER
+========================================================= */
+
 export const sendWebRTCAnswer = (
     payload
 ) => {
@@ -376,6 +525,10 @@ export const sendWebRTCAnswer = (
     );
 };
 
+
+/* =========================================================
+   ICE CANDIDATE
+========================================================= */
 
 export const sendICECandidate = (
     payload
@@ -389,7 +542,7 @@ export const sendICECandidate = (
 
 
 /* =========================================================
-   CALL STATUS
+   CALL BUSY
 ========================================================= */
 
 export const sendCallBusy = (
@@ -403,6 +556,10 @@ export const sendCallBusy = (
 };
 
 
+/* =========================================================
+   CALL MISSED
+========================================================= */
+
 export const sendCallMissed = (
     payload
 ) => {
@@ -414,26 +571,56 @@ export const sendCallMissed = (
 };
 
 
+/* =========================================================
+   DEFAULT EXPORT
+========================================================= */
+
 export default {
+
     connectSocket,
+
     getSocket,
+
+    isSocketConnected,
+
     disconnectSocket,
+
     emitSocket,
+
     onSocket,
+
+    onceSocket,
+
     offSocket,
+
     joinRoom,
+
     leaveRoom,
+
     sendSocketMessage,
+
     startTyping,
+
     stopTyping,
+
     markMessagesSeen,
+
     callUser,
+
     acceptCall,
+
     rejectCall,
+
     endCall,
+
     sendWebRTCOffer,
+
     sendWebRTCAnswer,
+
     sendICECandidate,
+
     sendCallBusy,
+
     sendCallMissed
+
 };
