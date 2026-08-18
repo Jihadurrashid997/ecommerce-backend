@@ -5,8 +5,15 @@ const NOTIFICATION_SOUND_URL =
 
 let audio = null;
 
+
+/* =========================================================
+   AUDIO
+========================================================= */
+
 const getAudio = () => {
+
     if (!audio) {
+
         audio = new Audio(
             NOTIFICATION_SOUND_URL
         );
@@ -17,30 +24,42 @@ const getAudio = () => {
     return audio;
 };
 
-export const playMessageNotification = async () => {
-    try {
-        const sound = getAudio();
 
-        sound.currentTime = 0;
+export const playMessageNotification =
+    async () => {
 
-        await sound.play();
+        try {
 
-        return true;
-    } catch (error) {
-        console.warn(
-            "Notification sound could not be played:",
-            error
-        );
+            const sound =
+                getAudio();
 
-        return false;
-    }
-};
+            sound.currentTime = 0;
+
+            await sound.play();
+
+            return true;
+
+        } catch (error) {
+
+            console.warn(
+                "Notification sound could not be played:",
+                error
+            );
+
+            return false;
+        }
+    };
+
+
+/* =========================================================
+   BROWSER NOTIFICATION
+========================================================= */
 
 export const showBrowserNotification = ({
     title = "JR Store",
-    body = "You have a new message.",
+    body = "You have a new notification.",
     icon = "/favicon.ico",
-    tag = "jr-store-message"
+    tag = "jr-store-notification"
 } = {}) => {
 
     if (
@@ -50,7 +69,10 @@ export const showBrowserNotification = ({
         return false;
     }
 
-    if (Notification.permission !== "granted") {
+    if (
+        Notification.permission !==
+        "granted"
+    ) {
         return false;
     }
 
@@ -78,104 +100,187 @@ export const showBrowserNotification = ({
     }
 };
 
-export const requestNotificationPermission = async () => {
 
-    if (
-        typeof window === "undefined" ||
-        !("Notification" in window)
-    ) {
-        return "unsupported";
-    }
+/* =========================================================
+   PERMISSION
+========================================================= */
 
-    if (
-        Notification.permission ===
-        "granted"
-    ) {
-        return "granted";
-    }
+export const requestNotificationPermission =
+    async () => {
 
-    if (
-        Notification.permission ===
-        "denied"
-    ) {
-        return "denied";
-    }
+        if (
+            typeof window === "undefined" ||
+            !("Notification" in window)
+        ) {
+            return "unsupported";
+        }
 
-    try {
+        if (
+            Notification.permission ===
+            "granted"
+        ) {
+            return "granted";
+        }
 
-        return await Notification.requestPermission();
+        if (
+            Notification.permission ===
+            "denied"
+        ) {
+            return "denied";
+        }
 
-    } catch (error) {
+        try {
 
-        console.warn(
-            "Notification permission error:",
-            error
-        );
+            return await Notification.requestPermission();
 
-        return "denied";
-    }
-};
+        } catch (error) {
 
-export const notifyIncomingMessage = async ({
-    senderName = "New message",
-    message = "You received a new message.",
-    enabled = true
-} = {}) => {
+            console.warn(
+                "Notification permission error:",
+                error
+            );
 
-    if (!enabled) {
-        return;
-    }
+            return "denied";
+        }
+    };
 
-    await playMessageNotification();
 
-    showBrowserNotification({
-        title: senderName,
-        body: message
-    });
-};
+/* =========================================================
+   MESSAGE NOTIFICATION
+========================================================= */
 
-export const notifyIncomingCall = async ({
-    callerName = "Incoming call",
-    type = "audio"
-} = {}) => {
+export const showMessageNotification =
+    async ({
+        senderName = "New message",
+        message = "You received a new message.",
+        enabled = true
+    } = {}) => {
 
-    const callType =
-        type === "video"
-            ? "Video call"
-            : "Voice call";
+        if (!enabled) {
+            return false;
+        }
 
-    await playMessageNotification();
+        await playMessageNotification();
 
-    showBrowserNotification({
-        title: `📞 ${callerName}`,
-        body: `Incoming ${callType}`
-    });
-};
+        return showBrowserNotification({
+            title: senderName,
+            body: message,
+            tag: "jr-store-message"
+        });
+    };
 
-export const cleanupNotificationAudio = () => {
 
-    if (!audio) {
-        return;
-    }
+/* =========================================================
+   INCOMING CALL
+========================================================= */
 
-    try {
+export const showIncomingCallNotification =
+    async ({
+        callerName = "Incoming call",
+        type = "audio"
+    } = {}) => {
 
-        audio.pause();
+        await playMessageNotification();
 
-        audio.currentTime = 0;
+        const callType =
+            type === "video"
+                ? "Video call"
+                : "Voice call";
 
-        audio.src = "";
+        return showBrowserNotification({
+            title:
+                `📞 ${callerName}`,
+            body:
+                `Incoming ${callType}`,
+            tag:
+                "jr-store-incoming-call"
+        });
+    };
 
-    } catch (_) {}
 
-    audio = null;
-};
+/* =========================================================
+   MISSED CALL
+========================================================= */
+
+export const showMissedCallNotification =
+    async ({
+        callerName = "User",
+        type = "audio"
+    } = {}) => {
+
+        const callType =
+            type === "video"
+                ? "video"
+                : "voice";
+
+        return showBrowserNotification({
+            title:
+                `📞 Missed ${callType} call`,
+            body:
+                `You missed a call from ${callerName}.`,
+            tag:
+                "jr-store-missed-call"
+        });
+    };
+
+
+/* =========================================================
+   BACKWARD COMPATIBILITY
+========================================================= */
+
+export const notifyIncomingMessage =
+    showMessageNotification;
+
+export const notifyIncomingCall =
+    showIncomingCallNotification;
+
+
+/* =========================================================
+   CLEANUP
+========================================================= */
+
+export const cleanupNotificationAudio =
+    () => {
+
+        if (!audio) {
+            return;
+        }
+
+        try {
+
+            audio.pause();
+
+            audio.currentTime = 0;
+
+            audio.src = "";
+
+        } catch (_) {}
+
+        audio = null;
+    };
+
+
+/* =========================================================
+   DEFAULT EXPORT
+========================================================= */
 
 export default {
+
     playMessageNotification,
+
     showBrowserNotification,
+
     requestNotificationPermission,
+
+    showMessageNotification,
+
+    showIncomingCallNotification,
+
+    showMissedCallNotification,
+
     notifyIncomingMessage,
+
     notifyIncomingCall,
+
     cleanupNotificationAudio
 };
