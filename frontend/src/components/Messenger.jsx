@@ -3859,45 +3859,58 @@ for (const candidate of pending) {
 
 
             <CallModal
-                visible={
-                    Boolean(callState)
-                }
-                type={
-                    callState?.type ||
-                    "audio"
-                }
-                mode={
-                    callState?.mode ||
-                    "outgoing"
-                }
-                callerName={
-                    callState?.callerName ||
-                    getUserName(
-                        selectedUser
-                    )
-                }
-                callerAvatar={
-                    callState?.callerAvatar ||
-                    getAvatar(
-                        selectedUser
-                    )
-                }
-                localStream={
-                    localStream
-                }
-                remoteStream={
-                    remoteStream
-                }
-                onAccept={
-                    acceptCall
-                }
-                onReject={
-                    rejectCall
-                }
-                onEnd={
-                    endCall
-                }
-            />
+    visible={
+        Boolean(callState)
+    }
+
+    type={
+        callState?.type ||
+        "audio"
+    }
+
+    mode={
+        callState?.mode ||
+        "outgoing"
+    }
+
+    callerName={
+        callState?.callerName ||
+        getUserName(
+            selectedUser
+        )
+    }
+
+    callerAvatar={
+        callState?.callerAvatar ||
+        getAvatar(
+            selectedUser
+        )
+    }
+
+    localStream={
+        localStream
+    }
+
+    remoteStream={
+        remoteStream
+    }
+
+    callDuration={
+        callDuration
+    }
+
+    onAccept={
+        acceptCall
+    }
+
+    onReject={
+        rejectCall
+    }
+
+    onEnd={
+        endCall
+    }
+/>
 
         </div>
     );
