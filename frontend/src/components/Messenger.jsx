@@ -720,36 +720,66 @@ const Messenger = () => {
                             },
 
 
-                        onConnectionStateChange:
-                            state => {
+                     onConnectionStateChange:
+    state => {
 
-                                if (
-                                    state ===
-                                        "failed" ||
-                                    state ===
-                                        "closed" ||
-                                    state ===
-                                        "disconnected"
-                                ) {
+        console.log(
+            "📞 WebRTC connection state:",
+            state
+        );
 
-                                    setTimeout(
-                                        () => {
+        /*
+         * Do NOT end the call immediately when
+         * connection becomes disconnected.
+         *
+         * Mobile networks / Wi-Fi can temporarily
+         * disconnect and reconnect.
+         */
 
-                                            if (
-                                                callRef.current
-                                            ) {
+        if (state === "failed") {
 
-                                                endCall();
+            console.error(
+                "❌ WebRTC connection failed"
+            );
 
-                                            }
+            setTimeout(
+                () => {
 
-                                        },
-                                        1000
-                                    );
+                    if (
+                        callRef.current &&
+                        peerRef.current
+                    ) {
 
-                                }
+                        if (
+                            peerRef.current
+                                .connectionState ===
+                            "failed"
+                        ) {
 
-                            }
+                            endCall();
+
+                        }
+
+                    }
+
+                },
+                5000
+            );
+
+        }
+
+        /*
+         * Ignore temporary:
+         * disconnected
+         *
+         * Ignore:
+         * closed
+         *
+         * cleanupCall() will handle
+         * intentional call ending.
+         */
+
+    }
 
                     });
 
