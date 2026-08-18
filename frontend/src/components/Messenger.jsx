@@ -298,6 +298,9 @@ const Messenger = () => {
     const [callState, setCallState] =
         useState(null);
 
+    const [callDuration, setCallDuration] =
+        useState(0);
+
     const [localStream, setLocalStream] =
         useState(null);
 
