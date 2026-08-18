@@ -700,24 +700,100 @@ const Messenger = () => {
 
 
                         onTrack:
-                            event => {
+    event => {
 
-                                const stream =
-                                    event
-                                        .streams?.[0];
+        console.log(
+            "📡 Remote track received:",
+            event.track?.kind
+        );
 
-                                if (!stream) {
-                                    return;
-                                }
 
-                                remoteStreamRef.current =
-                                    stream;
+        let stream =
+            event.streams?.[0];
 
-                                setRemoteStream(
-                                    stream
-                                );
 
-                            },
+        /*
+         * Some browsers may not provide
+         * event.streams[0].
+         *
+         * Build a MediaStream manually
+         * in that case.
+         */
+
+        if (!stream) {
+
+            stream =
+                remoteStreamRef.current ||
+                new MediaStream();
+
+            if (
+                event.track &&
+                !stream
+                    .getTracks()
+                    .some(
+                        track =>
+                            track.id ===
+                            event.track.id
+                    )
+            ) {
+
+                stream.addTrack(
+                    event.track
+                );
+
+            }
+
+        }
+
+
+        if (!stream) {
+            return;
+        }
+
+
+        /*
+         * If a new track arrives separately,
+         * make sure it is added.
+         */
+
+        if (
+            event.track &&
+            !stream
+                .getTracks()
+                .some(
+                    track =>
+                        track.id ===
+                        event.track.id
+                )
+        ) {
+
+            stream.addTrack(
+                event.track
+            );
+
+        }
+
+
+        console.log(
+            "🎧 Remote stream tracks:",
+            stream
+                .getTracks()
+                .map(
+                    track =>
+                        track.kind
+                )
+        );
+
+
+        remoteStreamRef.current =
+            stream;
+
+
+        setRemoteStream(
+            stream
+        );
+
+    },
 
 
                      onConnectionStateChange:
