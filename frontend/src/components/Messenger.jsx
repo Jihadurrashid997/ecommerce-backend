@@ -889,35 +889,219 @@ const Messenger = () => {
        START CALL
     ===================================================== */
 
-    const startCall =
-        useCallback(
-            async (type) => {
+const startCall =
+    useCallback(
+        async (type) => {
 
-                const target =
-                    selectedUserRef.current;
+            const target =
+                selectedUserRef.current;
 
-                const me =
-                    currentUserRef.current;
-
-                if (
-                    !target ||
-                    !me
-                ) {
-                    return;
-                }
+            const me =
+                currentUserRef.current;
 
 
-                const receiverId =
-                    getId(target);
+            if (
+                !target ||
+                !me
+            ) {
+                return;
+            }
 
-                const callerId =
-                    getId(me);
 
-                const roomId =
-                    getRoomId(
-                        me,
-                        target
-                    );
+            const receiverId =
+                getId(target);
+
+            const callerId =
+                getId(me);
+
+            const roomId =
+                getRoomId(
+                    me,
+                    target
+                );
+
+
+            if (
+                !receiverId ||
+                !callerId ||
+                !roomId
+            ) {
+                return;
+            }
+
+
+            /*
+            ============================================
+            IMPORTANT:
+            Target user's name is used for OUTGOING UI
+            ============================================
+            */
+
+            const receiverName =
+                getUserName(target);
+
+            const receiverAvatar =
+                getAvatar(target);
+
+            const callerName =
+                getUserName(me);
+
+            const callerAvatar =
+                getAvatar(me);
+
+
+            try {
+
+                const stream =
+                    await getUserMedia({
+                        audio: true,
+                        video:
+                            type ===
+                            "video"
+                    });
+
+
+                localStreamRef.current =
+                    stream;
+
+                setLocalStream(
+                    stream
+                );
+
+
+                currentRoomRef.current =
+                    roomId;
+
+
+                callRef.current = {
+
+                    callerId,
+
+                    receiverId,
+
+                    roomId,
+
+                    type,
+
+                    callerName,
+
+                    callerAvatar,
+
+                    receiverName,
+
+                    receiverAvatar,
+
+                    accepted: false
+
+                };
+
+
+                socket.emit(
+                    "join-room",
+                    roomId
+                );
+
+
+                /*
+                ========================================
+                OUTGOING CALL
+                ========================================
+                */
+
+                setCallState({
+
+                    mode:
+                        "outgoing",
+
+                    status:
+                        "calling",
+
+                    type,
+
+                    callerId,
+
+                    receiverId,
+
+                    roomId,
+
+                    /*
+                    Show the PERSON we are calling
+                    */
+
+                    callerName:
+                        receiverName,
+
+                    callerAvatar:
+                        receiverAvatar,
+
+                    receiverName:
+                        receiverName,
+
+                    receiverAvatar:
+                        receiverAvatar
+
+                });
+
+
+                /*
+                ========================================
+                SEND CALL
+                ========================================
+                */
+
+                socket.emit(
+                    "call-user",
+                    {
+
+                        roomId,
+
+                        callerId,
+
+                        receiverId,
+
+                        callerName,
+
+                        callerAvatar,
+
+                        receiverName,
+
+                        receiverAvatar,
+
+                        type,
+
+                        status:
+                            "calling"
+
+                    }
+                );
+
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Call start error:",
+                    error
+                );
+
+
+                alert(
+                    error?.message ||
+                    "Microphone/camera permission is required."
+                );
+
+
+                cleanupCall();
+
+            }
+
+        },
+        [
+            cleanupCall,
+            getRoomId
+        ]
+    );
 
 
                 if (
