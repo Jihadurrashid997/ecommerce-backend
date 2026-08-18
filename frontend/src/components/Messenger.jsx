@@ -1111,108 +1111,148 @@ const startCall =
        ACCEPT CALL
     ===================================================== */
 
-    const acceptCall =
-        useCallback(
-            async () => {
+   const acceptCall =
+    useCallback(
+        async () => {
 
-                const call =
-                    callRef.current ||
-                    callState;
-
-                if (!call) {
-                    return;
-                }
+            const call =
+                callRef.current ||
+                callState;
 
 
-                try {
-
-                    const stream =
-                        await getUserMedia({
-                            audio: true,
-                            video:
-                                call.type ===
-                                "video"
-                        });
+            if (!call) {
+                return;
+            }
 
 
-                    localStreamRef.current =
-                        stream;
+            try {
 
-                    setLocalStream(
-                        stream
-                    );
-
-
-                    currentRoomRef.current =
-                        call.roomId;
-
-
-                    callRef.current = {
-                        ...call,
-                        accepted: true
-                    };
-
-
-                    socket.emit(
-                        "join-room",
-                        call.roomId
-                    );
-
-
-                    socket.emit(
-                        "accept-call",
-                        {
-                            roomId:
-                                call.roomId,
-                            callerId:
-                                call.callerId,
-                            receiverId:
-                                getId(
-                                    currentUserRef.current
-                                ),
-                            type:
-                                call.type
-                        }
-                    );
-
-
-                    setCallState({
-                        ...call,
-                        mode: "accepted"
+                const stream =
+                    await getUserMedia({
+                        audio: true,
+                        video:
+                            call.type ===
+                            "video"
                     });
 
-                } catch (error) {
 
-                    console.error(
-                        "Accept call error:",
-                        error
-                    );
+                localStreamRef.current =
+                    stream;
 
-                    socket.emit(
-                        "reject-call",
-                        {
-                            callerId:
-                                call.callerId,
-                            receiverId:
-                                getId(
-                                    currentUserRef.current
-                                ),
-                            roomId:
-                                call.roomId
-                        }
-                    );
+                setLocalStream(
+                    stream
+                );
 
-                    cleanupCall();
 
-                }
+                currentRoomRef.current =
+                    call.roomId;
 
-            },
-            [
-                callState,
-                cleanupCall
-            ]
-        );
 
+                const acceptedCall = {
+
+                    ...call,
+
+                    mode:
+                        "accepted",
+
+                    status:
+                        "connected",
+
+                    accepted:
+                        true,
+
+                    connectedAt:
+                        Date.now()
+
+                };
+
+
+                callRef.current =
+                    acceptedCall;
+
+
+                socket.emit(
+                    "join-room",
+                    call.roomId
+                );
+
+
+                socket.emit(
+                    "accept-call",
+                    {
+
+                        roomId:
+                            call.roomId,
+
+                        callerId:
+                            call.callerId,
+
+                        receiverId:
+                            getId(
+                                currentUserRef.current
+                            ),
+
+                        type:
+                            call.type,
+
+                        status:
+                            "connected"
+
+                    }
+                );
+
+
+                /*
+                ==========================================
+                CALL CONNECTED
+                Timer should start only from this point
+                ==========================================
+                */
+
+                setCallState(
+                    acceptedCall
+                );
+
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Accept call error:",
+                    error
+                );
+
+
+                socket.emit(
+                    "reject-call",
+                    {
+
+                        callerId:
+                            call.callerId,
+
+                        receiverId:
+                            getId(
+                                currentUserRef.current
+                            ),
+
+                        roomId:
+                            call.roomId
+
+                    }
+                );
+
+
+                cleanupCall();
+
+            }
+
+        },
+        [
+            callState,
+            cleanupCall
+        ]
+    );
 
     /* =====================================================
        REJECT CALL
