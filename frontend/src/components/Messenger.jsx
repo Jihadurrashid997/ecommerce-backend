@@ -1566,6 +1566,33 @@ const Messenger = () => {
                             data.offer
                         )
                     );
+                    
+                    /* Flush ICE candidates received
+   before remote description */
+const pending =
+    pendingCandidatesRef.current;
+
+pendingCandidatesRef.current = [];
+
+for (const candidate of pending) {
+
+    try {
+
+        await peer.addIceCandidate(
+            new RTCIceCandidate(
+                candidate
+            )
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Pending ICE candidate error:",
+            error
+        );
+
+    }
+}
 
 
                     const answer =
@@ -1637,6 +1664,33 @@ const Messenger = () => {
                                 data.answer
                             )
                         );
+                    /* Flush pending ICE candidates */
+
+const pending =
+    pendingCandidatesRef.current;
+
+pendingCandidatesRef.current = [];
+
+for (const candidate of pending) {
+
+    try {
+
+        await peerRef.current.addIceCandidate(
+            new RTCIceCandidate(
+                candidate
+            )
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Pending ICE candidate error:",
+            error
+        );
+
+    }
+
+}
 
                 } catch (error) {
 
