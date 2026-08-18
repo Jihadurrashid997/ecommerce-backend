@@ -36,6 +36,9 @@ const CallModal = ({
     const remoteVideoRef =
         useRef(null);
 
+    const remoteAudioRef =
+        useRef(null);
+
 
     const [muted, setMuted] =
         useState(false);
@@ -47,12 +50,14 @@ const CallModal = ({
         useState(0);
 
 
-    /*
-     * Timer MUST start only after
-     * the call is accepted.
-     */
+    const isIncoming =
+        mode === "incoming";
+
     const isActiveCall =
         mode === "accepted";
+
+    const isVideo =
+        type === "video";
 
 
     /* =====================================================
@@ -93,7 +98,7 @@ const CallModal = ({
 
 
     /* =====================================================
-       LOCAL VIDEO
+       LOCAL STREAM
     ===================================================== */
 
     useEffect(() => {
@@ -105,6 +110,7 @@ const CallModal = ({
 
             localVideoRef.current.srcObject =
                 localStream;
+
         }
 
     }, [
@@ -125,7 +131,58 @@ const CallModal = ({
 
             remoteVideoRef.current.srcObject =
                 remoteStream;
+
         }
+
+    }, [
+        remoteStream
+    ]);
+
+
+    /* =====================================================
+       REMOTE AUDIO
+       IMPORTANT FOR VOICE CALL
+    ===================================================== */
+
+    useEffect(() => {
+
+        if (
+            !remoteAudioRef.current ||
+            !remoteStream
+        ) {
+            return;
+        }
+
+
+        remoteAudioRef.current.srcObject =
+            remoteStream;
+
+
+        const audio =
+            remoteAudioRef.current;
+
+
+        const playAudio =
+            async () => {
+
+                try {
+
+                    await audio.play();
+
+                } catch (error) {
+
+                    console.warn(
+                        "Remote audio autoplay blocked:",
+                        error
+                    );
+
+                }
+
+            };
+
+
+        playAudio();
+
 
     }, [
         remoteStream
@@ -162,6 +219,7 @@ const CallModal = ({
 
             });
 
+
     }, [
         localStream,
         muted,
@@ -169,20 +227,8 @@ const CallModal = ({
     ]);
 
 
-    if (!visible) {
-        return null;
-    }
-
-
-    const isIncoming =
-        mode === "incoming";
-
-    const isVideo =
-        type === "video";
-
-
     /* =====================================================
-       TIMER FORMAT
+       FORMAT TIMER
     ===================================================== */
 
     const formatTime = () => {
@@ -207,6 +253,11 @@ const CallModal = ({
     };
 
 
+    if (!visible) {
+        return null;
+    }
+
+
     const avatarLetter =
         callerName
             ?.charAt(0)
@@ -229,6 +280,23 @@ const CallModal = ({
                 padding: 16
             }}
         >
+
+            {/* =================================================
+                HIDDEN REMOTE AUDIO
+            ================================================= */}
+
+            <audio
+                ref={
+                    remoteAudioRef
+                }
+                autoPlay
+                playsInline
+                controls={false}
+                style={{
+                    display: "none"
+                }}
+            />
+
 
             <div
                 style={{
@@ -358,12 +426,10 @@ const CallModal = ({
                                               ? "Video"
                                               : "Voice"
                                       } call`
-                                    : `Calling...`
+                                    : "Calling..."
                             }
                         </p>
 
-
-                        {/* Timer ONLY after accepted */}
 
                         {isActiveCall && (
 
@@ -379,6 +445,7 @@ const CallModal = ({
                         )}
 
                     </div>
+
                 )}
 
 
@@ -416,7 +483,7 @@ const CallModal = ({
 
 
                 {/* =================================================
-                    INCOMING CALL HEADER
+                    INCOMING HEADER
                 ================================================= */}
 
                 {isIncoming && (
@@ -460,34 +527,6 @@ const CallModal = ({
 
 
                 {/* =================================================
-                    ACTIVE CALL TIMER
-                ================================================= */}
-
-                {!isIncoming &&
-                    isActiveCall && (
-
-                    <div
-                        style={{
-                            position:
-                                "absolute",
-                            top: 20,
-                            left: 20,
-                            padding:
-                                "7px 13px",
-                            borderRadius: 20,
-                            background:
-                                "rgba(0,0,0,.42)",
-                            backdropFilter:
-                                "blur(8px)"
-                        }}
-                    >
-                        {formatTime()}
-                    </div>
-
-                )}
-
-
-                {/* =================================================
                     CONTROLS
                 ================================================= */}
 
@@ -512,8 +551,6 @@ const CallModal = ({
 
                         <>
 
-                            {/* REJECT */}
-
                             <button
                                 type="button"
                                 onClick={
@@ -536,9 +573,7 @@ const CallModal = ({
                                     alignItems:
                                         "center",
                                     justifyContent:
-                                        "center",
-                                    boxShadow:
-                                        "0 8px 25px rgba(239,68,68,.35)"
+                                        "center"
                                 }}
                             >
                                 <FiPhoneOff
@@ -546,8 +581,6 @@ const CallModal = ({
                                 />
                             </button>
 
-
-                            {/* ACCEPT */}
 
                             <button
                                 type="button"
@@ -571,9 +604,7 @@ const CallModal = ({
                                     alignItems:
                                         "center",
                                     justifyContent:
-                                        "center",
-                                    boxShadow:
-                                        "0 8px 25px rgba(34,197,94,.35)"
+                                        "center"
                                 }}
                             >
                                 <FiPhone
@@ -586,8 +617,6 @@ const CallModal = ({
                     ) : (
 
                         <>
-
-                            {/* MUTE */}
 
                             <button
                                 type="button"
@@ -632,8 +661,6 @@ const CallModal = ({
                                 )}
                             </button>
 
-
-                            {/* CAMERA */}
 
                             {isVideo && (
 
@@ -683,8 +710,6 @@ const CallModal = ({
                             )}
 
 
-                            {/* END CALL */}
-
                             <button
                                 type="button"
                                 onClick={
@@ -707,9 +732,7 @@ const CallModal = ({
                                     alignItems:
                                         "center",
                                     justifyContent:
-                                        "center",
-                                    boxShadow:
-                                        "0 8px 25px rgba(239,68,68,.35)"
+                                        "center"
                                 }}
                             >
                                 <FiPhoneOff
