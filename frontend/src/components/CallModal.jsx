@@ -1,3 +1,5 @@
+// frontend/src/components/CallModal.jsx
+
 import React, {
     useEffect,
     useRef,
@@ -13,6 +15,7 @@ import {
     FiPhone,
     FiVolume2
 } from "react-icons/fi";
+
 
 const CallModal = ({
     visible,
@@ -33,6 +36,7 @@ const CallModal = ({
     const remoteVideoRef =
         useRef(null);
 
+
     const [muted, setMuted] =
         useState(false);
 
@@ -42,12 +46,31 @@ const CallModal = ({
     const [seconds, setSeconds] =
         useState(0);
 
+
+    /*
+     * Timer MUST start only after
+     * the call is accepted.
+     */
+    const isActiveCall =
+        mode === "accepted";
+
+
+    /* =====================================================
+       TIMER
+    ===================================================== */
+
     useEffect(() => {
 
-        if (!visible) {
+        if (
+            !visible ||
+            !isActiveCall
+        ) {
+
             setSeconds(0);
+
             return undefined;
         }
+
 
         const timer =
             setInterval(() => {
@@ -59,10 +82,19 @@ const CallModal = ({
 
             }, 1000);
 
+
         return () =>
             clearInterval(timer);
 
-    }, [visible]);
+    }, [
+        visible,
+        isActiveCall
+    ]);
+
+
+    /* =====================================================
+       LOCAL VIDEO
+    ===================================================== */
 
     useEffect(() => {
 
@@ -70,11 +102,19 @@ const CallModal = ({
             localVideoRef.current &&
             localStream
         ) {
+
             localVideoRef.current.srcObject =
                 localStream;
         }
 
-    }, [localStream]);
+    }, [
+        localStream
+    ]);
+
+
+    /* =====================================================
+       REMOTE VIDEO
+    ===================================================== */
 
     useEffect(() => {
 
@@ -82,11 +122,19 @@ const CallModal = ({
             remoteVideoRef.current &&
             remoteStream
         ) {
+
             remoteVideoRef.current.srcObject =
                 remoteStream;
         }
 
-    }, [remoteStream]);
+    }, [
+        remoteStream
+    ]);
+
+
+    /* =====================================================
+       MUTE / CAMERA
+    ===================================================== */
 
     useEffect(() => {
 
@@ -94,18 +142,24 @@ const CallModal = ({
             return;
         }
 
+
         localStream
             .getAudioTracks()
             .forEach(track => {
+
                 track.enabled =
                     !muted;
+
             });
+
 
         localStream
             .getVideoTracks()
             .forEach(track => {
+
                 track.enabled =
                     !cameraOff;
+
             });
 
     }, [
@@ -114,15 +168,22 @@ const CallModal = ({
         cameraOff
     ]);
 
+
     if (!visible) {
         return null;
     }
+
 
     const isIncoming =
         mode === "incoming";
 
     const isVideo =
         type === "video";
+
+
+    /* =====================================================
+       TIMER FORMAT
+    ===================================================== */
 
     const formatTime = () => {
 
@@ -133,20 +194,28 @@ const CallModal = ({
                 .toString()
                 .padStart(2, "0");
 
+
         const remaining =
-            (seconds % 60)
+            (
+                seconds % 60
+            )
                 .toString()
                 .padStart(2, "0");
+
 
         return `${minutes}:${remaining}`;
     };
 
+
     const avatarLetter =
         callerName
             ?.charAt(0)
-            ?.toUpperCase() || "U";
+            ?.toUpperCase() ||
+        "U";
+
 
     return (
+
         <div
             style={{
                 position: "fixed",
@@ -179,8 +248,13 @@ const CallModal = ({
                 }}
             >
 
+                {/* =================================================
+                    REMOTE VIDEO
+                ================================================= */}
+
                 {isVideo &&
                 remoteStream ? (
+
                     <video
                         ref={
                             remoteVideoRef
@@ -194,7 +268,9 @@ const CallModal = ({
                             background: "#000"
                         }}
                     />
+
                 ) : (
+
                     <div
                         style={{
                             width: "100%",
@@ -210,6 +286,7 @@ const CallModal = ({
                     >
 
                         {callerAvatar ? (
+
                             <img
                                 src={
                                     callerAvatar
@@ -226,7 +303,9 @@ const CallModal = ({
                                         "4px solid rgba(255,255,255,.25)"
                                 }}
                             />
+
                         ) : (
+
                             <div
                                 style={{
                                     width: 120,
@@ -247,7 +326,9 @@ const CallModal = ({
                             >
                                 {avatarLetter}
                             </div>
+
                         )}
+
 
                         <h2
                             style={{
@@ -257,6 +338,7 @@ const CallModal = ({
                         >
                             {callerName}
                         </h2>
+
 
                         <p
                             style={{
@@ -270,53 +352,75 @@ const CallModal = ({
                                           ? "video"
                                           : "voice"
                                   } call`
-                                : `${
-                                      isVideo
-                                          ? "Video"
-                                          : "Voice"
-                                  } call`}
+                                : isActiveCall
+                                    ? `${
+                                          isVideo
+                                              ? "Video"
+                                              : "Voice"
+                                      } call`
+                                    : `Calling...`
+                            }
                         </p>
 
-                        <span
-                            style={{
-                                marginTop: 9,
-                                opacity: .6
-                            }}
-                        >
-                            {formatTime()}
-                        </span>
+
+                        {/* Timer ONLY after accepted */}
+
+                        {isActiveCall && (
+
+                            <span
+                                style={{
+                                    marginTop: 9,
+                                    opacity: .6
+                                }}
+                            >
+                                {formatTime()}
+                            </span>
+
+                        )}
 
                     </div>
                 )}
 
+
+                {/* =================================================
+                    LOCAL VIDEO
+                ================================================= */}
+
                 {isVideo &&
                     localStream && (
-                        <video
-                            ref={
-                                localVideoRef
-                            }
-                            autoPlay
-                            muted
-                            playsInline
-                            style={{
-                                position:
-                                    "absolute",
-                                top: 18,
-                                right: 18,
-                                width: 130,
-                                height: 175,
-                                objectFit:
-                                    "cover",
-                                borderRadius: 16,
-                                background:
-                                    "#000",
-                                border:
-                                    "2px solid rgba(255,255,255,.35)"
-                            }}
-                        />
-                    )}
+
+                    <video
+                        ref={
+                            localVideoRef
+                        }
+                        autoPlay
+                        muted
+                        playsInline
+                        style={{
+                            position:
+                                "absolute",
+                            top: 18,
+                            right: 18,
+                            width: 130,
+                            height: 175,
+                            objectFit:
+                                "cover",
+                            borderRadius: 16,
+                            background: "#000",
+                            border:
+                                "2px solid rgba(255,255,255,.35)"
+                        }}
+                    />
+
+                )}
+
+
+                {/* =================================================
+                    INCOMING CALL HEADER
+                ================================================= */}
 
                 {isIncoming && (
+
                     <div
                         style={{
                             position:
@@ -334,6 +438,7 @@ const CallModal = ({
                                 "blur(8px)"
                         }}
                     >
+
                         <FiVolume2
                             size={22}
                         />
@@ -344,13 +449,23 @@ const CallModal = ({
                                 fontWeight: 700
                             }}
                         >
-                            {callerName} is
-                            calling...
+                            {callerName}
+                            {" "}
+                            is calling...
                         </div>
+
                     </div>
+
                 )}
 
-                {!isIncoming && (
+
+                {/* =================================================
+                    ACTIVE CALL TIMER
+                ================================================= */}
+
+                {!isIncoming &&
+                    isActiveCall && (
+
                     <div
                         style={{
                             position:
@@ -368,7 +483,13 @@ const CallModal = ({
                     >
                         {formatTime()}
                     </div>
+
                 )}
+
+
+                {/* =================================================
+                    CONTROLS
+                ================================================= */}
 
                 <div
                     style={{
@@ -388,7 +509,11 @@ const CallModal = ({
                 >
 
                     {isIncoming ? (
+
                         <>
+
+                            {/* REJECT */}
+
                             <button
                                 type="button"
                                 onClick={
@@ -421,6 +546,9 @@ const CallModal = ({
                                 />
                             </button>
 
+
+                            {/* ACCEPT */}
+
                             <button
                                 type="button"
                                 onClick={
@@ -452,9 +580,15 @@ const CallModal = ({
                                     size={25}
                                 />
                             </button>
+
                         </>
+
                     ) : (
+
                         <>
+
+                            {/* MUTE */}
+
                             <button
                                 type="button"
                                 onClick={() =>
@@ -498,7 +632,11 @@ const CallModal = ({
                                 )}
                             </button>
 
+
+                            {/* CAMERA */}
+
                             {isVideo && (
+
                                 <button
                                     type="button"
                                     onClick={() =>
@@ -541,7 +679,11 @@ const CallModal = ({
                                         />
                                     )}
                                 </button>
+
                             )}
+
+
+                            {/* END CALL */}
 
                             <button
                                 type="button"
@@ -574,7 +716,9 @@ const CallModal = ({
                                     size={25}
                                 />
                             </button>
+
                         </>
+
                     )}
 
                 </div>
@@ -584,5 +728,6 @@ const CallModal = ({
         </div>
     );
 };
+
 
 export default CallModal;
