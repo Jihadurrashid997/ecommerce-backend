@@ -796,21 +796,78 @@ io.on(
                 /*
                  * Receiver gets incoming call.
                  */
-                sendToUser(
-                    receiverId,
-                    "incoming-call",
-                    callData
-                );
+                socket.on(
+    "call-user",
+    (payload) => {
+
+        if (!payload) {
+            return;
+        }
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            ) ||
+            socket.userId;
+
+        if (
+            !receiverId ||
+            !callerId
+        ) {
+            return;
+        }
+
+        const callData = {
+            ...payload,
+
+            callerId,
+
+            receiverId,
+
+            type:
+                payload.type === "video"
+                    ? "video"
+                    : "audio",
+
+            status: "calling"
+        };
 
 
-                /*
-                 * Caller gets ringing state.
-                 */
-                sendToUser(
-                    callerId,
-                    "call-ringing",
-                    callData
-                );
+        /*
+        ================================================
+        SEND CALL TO RECEIVER
+        ================================================
+        */
+
+        sendToUser(
+            receiverId,
+            "incoming-call",
+            callData
+        );
+
+
+        /*
+        ================================================
+        RECEIVER DEVICE IS RINGING
+        ================================================
+        */
+
+        sendToUser(
+            receiverId,
+            "call-ringing",
+            {
+                ...callData,
+                status: "ringing"
+            }
+        );
+
+    }
+);
 
             }
         );
