@@ -30,6 +30,7 @@ import Messenger from "./components/Messenger";
 import Dashboard from "./components/Dashboard";
 import PrivateRoute from "./components/PrivateRoute";
 import LoadingScreen from "./components/LoadingScreen";
+import GlobalCallManager from "./components/GlobalCallManager";
 
 
 // ======================================================
@@ -138,24 +139,31 @@ function AppLayout() {
         location.pathname === "/register";
 
 
-    return (
+  return (
 
-        <>
+    <>
 
-            {/* ==================================================
-                NAVBAR
-            ================================================== */}
+        {/* ==================================================
+            NAVBAR
+        ================================================== */}
 
-            {!authPage && (
-                <Navbar />
-            )}
+        {!authPage && (
+            <Navbar />
+        )}
 
 
-            {/* ==================================================
-                ROUTES
-            ================================================== */}
+        {/* ==================================================
+            GLOBAL INCOMING CALL
+        ================================================== */}
 
-            <Routes>
+        <GlobalCallManager />
+
+
+        {/* ==================================================
+            ROUTES
+        ================================================== */}
+
+        <Routes>
 
 
                 {/* =================================================
