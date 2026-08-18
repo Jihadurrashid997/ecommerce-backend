@@ -305,62 +305,132 @@ const Messenger = () => {
         useState(null);
 
 
-    /* =====================================================
-       REFS
-    ===================================================== */
+   /* =====================================================
+   REFS
+===================================================== */
 
-    useEffect(() => {
+useEffect(() => {
 
-        currentUserRef.current =
-            user;
+    currentUserRef.current =
+        user;
 
-    }, [user]);
-
-
-    useEffect(() => {
-
-        selectedUserRef.current =
-            selectedUser;
-
-    }, [selectedUser]);
+}, [user]);
 
 
-    /* =====================================================
-       LOAD USER
-    ===================================================== */
+useEffect(() => {
 
-    useEffect(() => {
+    selectedUserRef.current =
+        selectedUser;
 
-        try {
+}, [selectedUser]);
 
-            const saved =
-                localStorage.getItem("user");
 
-            if (saved) {
+/* =====================================================
+   LOAD USER
+===================================================== */
 
-                setUser(
-                    JSON.parse(saved)
-                );
+useEffect(() => {
 
-            }
+    try {
 
-        } catch (error) {
+        const saved =
+            localStorage.getItem("user");
 
-            console.error(
-                "Messenger user error:",
-                error
+        if (saved) {
+
+            setUser(
+                JSON.parse(saved)
             );
 
         }
 
-    }, []);
+    } catch (error) {
 
-
-    const currentUserId =
-        useMemo(
-            () => getId(user),
-            [user]
+        console.error(
+            "Messenger user error:",
+            error
         );
+
+    }
+
+}, []);
+
+
+const currentUserId =
+    useMemo(
+        () => getId(user),
+        [user]
+    );
+
+
+/* =====================================================
+   CALL TIMER
+   Starts only after call is connected
+===================================================== */
+
+useEffect(() => {
+
+    if (
+        !callState ||
+        callState.status !==
+            "connected"
+    ) {
+
+        setCallDuration(0);
+
+        return undefined;
+
+    }
+
+
+    const connectedAt =
+        callState.connectedAt ||
+        Date.now();
+
+
+    const updateTimer = () => {
+
+        const elapsed =
+            Math.floor(
+                (
+                    Date.now() -
+                    connectedAt
+                ) / 1000
+            );
+
+
+        setCallDuration(
+            Math.max(
+                0,
+                elapsed
+            )
+        );
+
+    };
+
+
+    updateTimer();
+
+
+    const timer =
+        setInterval(
+            updateTimer,
+            1000
+        );
+
+
+    return () => {
+
+        clearInterval(
+            timer
+        );
+
+    };
+
+}, [
+    callState?.status,
+    callState?.connectedAt
+]);
 
 
     /* =====================================================
