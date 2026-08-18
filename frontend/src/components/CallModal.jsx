@@ -25,6 +25,7 @@ const CallModal = ({
     callerAvatar = "",
     localStream,
     remoteStream,
+    callDuration = 0,
     onAccept,
     onReject,
     onEnd
@@ -46,55 +47,16 @@ const CallModal = ({
     const [cameraOff, setCameraOff] =
         useState(type !== "video");
 
-    const [seconds, setSeconds] =
-        useState(0);
-
 
     const isIncoming =
         mode === "incoming";
 
     const isActiveCall =
-        mode === "accepted";
+        mode === "accepted" ||
+        mode === "connected";
 
     const isVideo =
         type === "video";
-
-
-    /* =====================================================
-       TIMER
-    ===================================================== */
-
-    useEffect(() => {
-
-        if (
-            !visible ||
-            !isActiveCall
-        ) {
-
-            setSeconds(0);
-
-            return undefined;
-        }
-
-
-        const timer =
-            setInterval(() => {
-
-                setSeconds(
-                    value =>
-                        value + 1
-                );
-
-            }, 1000);
-
-
-        return () =>
-            clearInterval(timer);
-
-    }, [
-        visible,
-        isActiveCall
-    ]);
 
 
     /* =====================================================
@@ -141,7 +103,6 @@ const CallModal = ({
 
     /* =====================================================
        REMOTE AUDIO
-       IMPORTANT FOR VOICE CALL
     ===================================================== */
 
     useEffect(() => {
@@ -183,7 +144,6 @@ const CallModal = ({
 
         playAudio();
 
-
     }, [
         remoteStream
     ]);
@@ -219,7 +179,6 @@ const CallModal = ({
 
             });
 
-
     }, [
         localStream,
         muted,
@@ -233,23 +192,32 @@ const CallModal = ({
 
     const formatTime = () => {
 
+        const totalSeconds =
+            Math.max(
+                0,
+                Number(
+                    callDuration
+                ) || 0
+            );
+
+
         const minutes =
             Math.floor(
-                seconds / 60
+                totalSeconds / 60
             )
                 .toString()
                 .padStart(2, "0");
 
 
-        const remaining =
+        const seconds =
             (
-                seconds % 60
+                totalSeconds % 60
             )
                 .toString()
                 .padStart(2, "0");
 
 
-        return `${minutes}:${remaining}`;
+        return `${minutes}:${seconds}`;
     };
 
 
@@ -282,7 +250,7 @@ const CallModal = ({
         >
 
             {/* =================================================
-                HIDDEN REMOTE AUDIO
+                REMOTE AUDIO
             ================================================= */}
 
             <audio
@@ -431,12 +399,20 @@ const CallModal = ({
                         </p>
 
 
+                        {/* =================================================
+                            CALL TIMER
+                        ================================================= */}
+
                         {isActiveCall && (
 
                             <span
                                 style={{
                                     marginTop: 9,
-                                    opacity: .6
+                                    opacity: .85,
+                                    fontSize: 18,
+                                    fontWeight: 700,
+                                    letterSpacing:
+                                        "1px"
                                 }}
                             >
                                 {formatTime()}
