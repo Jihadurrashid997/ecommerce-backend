@@ -43,7 +43,8 @@ import {
     requestNotificationPermission,
     showMessageNotification,
     showIncomingCallNotification,
-    showMissedCallNotification
+    showMissedCallNotification,
+    stopCallRingtone
 } from "../services/notification";
 
 import CallModal from "./CallModal";
@@ -682,6 +683,7 @@ useEffect(() => {
     const cleanupCall =
         useCallback(
             () => {
+                stopCallRingtone();
 
                 try {
 
@@ -1184,9 +1186,11 @@ const startCall =
        ACCEPT CALL
     ===================================================== */
 
-   const acceptCall =
+const acceptCall =
     useCallback(
         async () => {
+
+            stopCallRingtone();
 
             const call =
                 callRef.current ||
@@ -1331,13 +1335,15 @@ const startCall =
        REJECT CALL
     ===================================================== */
 
-    const rejectCall =
-        useCallback(
-            () => {
+   const rejectCall =
+    useCallback(
+        () => {
 
-                const call =
-                    callRef.current ||
-                    callState;
+            stopCallRingtone();
+
+            const call =
+                callRef.current ||
+                callState;
 
                 if (
                     call?.callerId
@@ -1391,13 +1397,14 @@ const startCall =
     ===================================================== */
 
     const endCall =
-        useCallback(
-            () => {
+    useCallback(
+        () => {
 
-                const call =
-                    callRef.current ||
-                    callState;
+            stopCallRingtone();
 
+            const call =
+                callRef.current ||
+                callState;
                 if (
                     call?.roomId
                 ) {
