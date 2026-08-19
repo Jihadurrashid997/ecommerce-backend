@@ -308,7 +308,9 @@ const Messenger = () => {
     const [remoteStream, setRemoteStream] =
         useState(null);
 
-
+const [cameraFacing, setCameraFacing] =
+    useState("user");
+    
    /* =====================================================
    REFS
 ===================================================== */
@@ -1185,7 +1187,116 @@ const startCall =
     /* =====================================================
        ACCEPT CALL
     ===================================================== */
+    
+const switchCamera =
+    useCallback(
+        async () => {
 
+            if (!localStreamRef.current) {
+                return;
+            }
+
+            const videoTracks =
+                localStreamRef.current
+                    .getVideoTracks();
+
+            if (!videoTracks.length) {
+                return;
+            }
+
+            const nextFacing =
+                cameraFacing === "user"
+                    ? "environment"
+                    : "user";
+
+            try {
+
+                const newStream =
+                    await navigator.mediaDevices
+                        .getUserMedia({
+                            audio: false,
+                            video: {
+                                facingMode:
+                                    {
+                                        ideal:
+                                            nextFacing
+                                    }
+                            }
+                        });
+
+                const newVideoTrack =
+                    newStream.getVideoTracks()[0];
+
+                if (!newVideoTrack) {
+                    return;
+                }
+
+                const peer =
+                    peerRef.current;
+
+                if (peer) {
+
+                    const sender =
+                        peer
+                            .getSenders()
+                            .find(
+                                item =>
+                                    item.track?.kind ===
+                                    "video"
+                            );
+
+                    if (sender) {
+
+                        await sender.replaceTrack(
+                            newVideoTrack
+                        );
+
+                    }
+                }
+
+                videoTracks.forEach(
+                    track => track.stop()
+                );
+
+                const currentStream =
+                    localStreamRef.current;
+
+                const audioTracks =
+                    currentStream
+                        .getAudioTracks();
+
+                const updatedStream =
+                    new MediaStream([
+                        ...audioTracks,
+                        newVideoTrack
+                    ]);
+
+                localStreamRef.current =
+                    updatedStream;
+
+                setLocalStream(
+                    updatedStream
+                );
+
+                setCameraFacing(
+                    nextFacing
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Camera switch error:",
+                    error
+                );
+
+            }
+
+        },
+        [
+            cameraFacing
+        ]
+    );
+    
 const acceptCall =
     useCallback(
         async () => {
