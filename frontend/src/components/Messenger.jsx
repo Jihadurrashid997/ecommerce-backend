@@ -4028,6 +4028,9 @@ for (const candidate of pending) {
     onEnd={
         endCall
     }
+    onSwitchCamera={
+    switchCamera
+    }
 />
 
         </div>
