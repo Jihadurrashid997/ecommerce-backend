@@ -13,7 +13,8 @@ import {
     FiVideoOff,
     FiPhoneOff,
     FiPhone,
-    FiVolume2
+    FiVolume2,
+    FiRefreshCw
 } from "react-icons/fi";
 
 
@@ -28,7 +29,8 @@ const CallModal = ({
     callDuration = 0,
     onAccept,
     onReject,
-    onEnd
+    onEnd,
+    onSwitchCamera
 }) => {
 
     const localVideoRef =
@@ -45,7 +47,9 @@ const CallModal = ({
         useState(false);
 
     const [cameraOff, setCameraOff] =
-        useState(type !== "video");
+        useState(
+            type !== "video"
+        );
 
 
     const isIncoming =
@@ -60,7 +64,7 @@ const CallModal = ({
 
 
     /* =====================================================
-       LOCAL STREAM
+       LOCAL VIDEO
     ===================================================== */
 
     useEffect(() => {
@@ -162,22 +166,26 @@ const CallModal = ({
 
         localStream
             .getAudioTracks()
-            .forEach(track => {
+            .forEach(
+                track => {
 
-                track.enabled =
-                    !muted;
+                    track.enabled =
+                        !muted;
 
-            });
+                }
+            );
 
 
         localStream
             .getVideoTracks()
-            .forEach(track => {
+            .forEach(
+                track => {
 
-                track.enabled =
-                    !cameraOff;
+                    track.enabled =
+                        !cameraOff;
 
-            });
+                }
+            );
 
     }, [
         localStream,
@@ -206,7 +214,10 @@ const CallModal = ({
                 totalSeconds / 60
             )
                 .toString()
-                .padStart(2, "0");
+                .padStart(
+                    2,
+                    "0"
+                );
 
 
         const seconds =
@@ -214,12 +225,20 @@ const CallModal = ({
                 totalSeconds % 60
             )
                 .toString()
-                .padStart(2, "0");
+                .padStart(
+                    2,
+                    "0"
+                );
 
 
         return `${minutes}:${seconds}`;
+
     };
 
+
+    /* =====================================================
+       HIDDEN
+    ===================================================== */
 
     if (!visible) {
         return null;
@@ -382,25 +401,28 @@ const CallModal = ({
                                 opacity: .72
                             }}
                         >
+
                             {isIncoming
                                 ? `Incoming ${
                                       isVideo
                                           ? "video"
                                           : "voice"
                                   } call`
+
                                 : isActiveCall
                                     ? `${
                                           isVideo
                                               ? "Video"
                                               : "Voice"
                                       } call`
-                                    : "Calling..."
-                            }
+
+                                    : "Calling..."}
+
                         </p>
 
 
                         {/* =================================================
-                            CALL TIMER
+                            TIMER
                         ================================================= */}
 
                         {isActiveCall && (
@@ -486,6 +508,7 @@ const CallModal = ({
                             size={22}
                         />
 
+
                         <div
                             style={{
                                 marginTop: 6,
@@ -519,13 +542,21 @@ const CallModal = ({
                             "center",
                         justifyContent:
                             "center",
-                        gap: 14
+                        gap: 14,
+                        flexWrap:
+                            "wrap"
                     }}
                 >
+
+                    {/* =================================================
+                        INCOMING CALL
+                    ================================================= */}
 
                     {isIncoming ? (
 
                         <>
+
+                            {/* REJECT */}
 
                             <button
                                 type="button"
@@ -557,6 +588,8 @@ const CallModal = ({
                                 />
                             </button>
 
+
+                            {/* ACCEPT */}
 
                             <button
                                 type="button"
@@ -594,6 +627,10 @@ const CallModal = ({
 
                         <>
 
+                            {/* =================================================
+                                MUTE
+                            ================================================= */}
+
                             <button
                                 type="button"
                                 onClick={() =>
@@ -626,17 +663,27 @@ const CallModal = ({
                                         "center"
                                 }}
                             >
+
                                 {muted ? (
+
                                     <FiMicOff
                                         size={21}
                                     />
+
                                 ) : (
+
                                     <FiMic
                                         size={21}
                                     />
+
                                 )}
+
                             </button>
 
+
+                            {/* =================================================
+                                CAMERA ON / OFF
+                            ================================================= */}
 
                             {isVideo && (
 
@@ -660,6 +707,61 @@ const CallModal = ({
                                         borderRadius:
                                             "50%",
                                         background:
+                                            cameraOff
+                                                ? "#374151"
+                                                : "rgba(255,255,255,.16)",
+                                        color: "#fff",
+                                        cursor:
+                                            "pointer",
+                                        display:
+                                            "flex",
+                                        alignItems:
+                                            "center",
+                                        justifyContent:
+                                            "center"
+                                    }}
+                                >
+
+                                    {cameraOff ? (
+
+                                        <FiVideoOff
+                                            size={21}
+                                        />
+
+                                    ) : (
+
+                                        <FiVideo
+                                            size={21}
+                                        />
+
+                                    )}
+
+                                </button>
+
+                            )}
+
+
+                            {/* =================================================
+                                SWITCH FRONT / BACK CAMERA
+                            ================================================= */}
+
+                            {isVideo &&
+                                !cameraOff && (
+
+                                <button
+                                    type="button"
+                                    onClick={
+                                        onSwitchCamera
+                                    }
+                                    aria-label="Switch front and back camera"
+                                    title="Switch camera"
+                                    style={{
+                                        width: 52,
+                                        height: 52,
+                                        border: "none",
+                                        borderRadius:
+                                            "50%",
+                                        background:
                                             "rgba(255,255,255,.16)",
                                         color: "#fff",
                                         cursor:
@@ -672,19 +774,19 @@ const CallModal = ({
                                             "center"
                                     }}
                                 >
-                                    {cameraOff ? (
-                                        <FiVideoOff
-                                            size={21}
-                                        />
-                                    ) : (
-                                        <FiVideo
-                                            size={21}
-                                        />
-                                    )}
+
+                                    <FiRefreshCw
+                                        size={21}
+                                    />
+
                                 </button>
 
                             )}
 
+
+                            {/* =================================================
+                                END CALL
+                            ================================================= */}
 
                             <button
                                 type="button"
@@ -711,9 +813,11 @@ const CallModal = ({
                                         "center"
                                 }}
                             >
+
                                 <FiPhoneOff
                                     size={25}
                                 />
+
                             </button>
 
                         </>
@@ -725,6 +829,7 @@ const CallModal = ({
             </div>
 
         </div>
+
     );
 };
 
