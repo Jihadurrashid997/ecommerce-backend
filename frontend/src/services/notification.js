@@ -1,27 +1,34 @@
 // frontend/src/services/notification.js
 
-const NOTIFICATION_SOUND_URL =
+const MESSAGE_SOUND_URL =
     "/sounds/message-notification.mp3";
 
-let audio = null;
+const CALL_SOUND_URL =
+    "/sounds/call-ringtone.mp3";
+
+
+let messageAudio = null;
+let callAudio = null;
 
 
 /* =========================================================
-   AUDIO
+   MESSAGE AUDIO
 ========================================================= */
 
-const getAudio = () => {
+const getMessageAudio = () => {
 
-    if (!audio) {
+    if (!messageAudio) {
 
-        audio = new Audio(
-            NOTIFICATION_SOUND_URL
-        );
+        messageAudio =
+            new Audio(
+                MESSAGE_SOUND_URL
+            );
 
-        audio.preload = "auto";
+        messageAudio.preload =
+            "auto";
     }
 
-    return audio;
+    return messageAudio;
 };
 
 
@@ -31,7 +38,7 @@ export const playMessageNotification =
         try {
 
             const sound =
-                getAudio();
+                getMessageAudio();
 
             sound.currentTime = 0;
 
@@ -42,12 +49,83 @@ export const playMessageNotification =
         } catch (error) {
 
             console.warn(
-                "Notification sound could not be played:",
+                "Message notification sound could not be played:",
                 error
             );
 
             return false;
         }
+    };
+
+
+/* =========================================================
+   CALL RINGTONE
+========================================================= */
+
+const getCallAudio = () => {
+
+    if (!callAudio) {
+
+        callAudio =
+            new Audio(
+                CALL_SOUND_URL
+            );
+
+        callAudio.preload =
+            "auto";
+
+        callAudio.loop =
+            true;
+    }
+
+    return callAudio;
+};
+
+
+export const playCallRingtone =
+    async () => {
+
+        try {
+
+            const sound =
+                getCallAudio();
+
+            sound.currentTime = 0;
+
+            sound.loop = true;
+
+            await sound.play();
+
+            return true;
+
+        } catch (error) {
+
+            console.warn(
+                "Call ringtone could not be played:",
+                error
+            );
+
+            return false;
+        }
+    };
+
+
+export const stopCallRingtone =
+    () => {
+
+        if (!callAudio) {
+            return;
+        }
+
+        try {
+
+            callAudio.pause();
+
+            callAudio.currentTime =
+                0;
+
+        } catch (_) {}
+
     };
 
 
@@ -69,12 +147,14 @@ export const showBrowserNotification = ({
         return false;
     }
 
+
     if (
         Notification.permission !==
         "granted"
     ) {
         return false;
     }
+
 
     try {
 
@@ -115,12 +195,14 @@ export const requestNotificationPermission =
             return "unsupported";
         }
 
+
         if (
             Notification.permission ===
             "granted"
         ) {
             return "granted";
         }
+
 
         if (
             Notification.permission ===
@@ -129,9 +211,11 @@ export const requestNotificationPermission =
             return "denied";
         }
 
+
         try {
 
-            return await Notification.requestPermission();
+            return await
+                Notification.requestPermission();
 
         } catch (error) {
 
@@ -160,13 +244,18 @@ export const showMessageNotification =
             return false;
         }
 
-        await playMessageNotification();
 
-        return showBrowserNotification({
-            title: senderName,
-            body: message,
-            tag: "jr-store-message"
-        });
+        await
+            playMessageNotification();
+
+
+        return
+            showBrowserNotification({
+                title: senderName,
+                body: message,
+                tag: "jr-store-message"
+            });
+
     };
 
 
@@ -180,21 +269,30 @@ export const showIncomingCallNotification =
         type = "audio"
     } = {}) => {
 
-        await playMessageNotification();
+        await
+            playCallRingtone();
+
 
         const callType =
             type === "video"
                 ? "Video call"
                 : "Voice call";
 
-        return showBrowserNotification({
-            title:
-                `📞 ${callerName}`,
-            body:
-                `Incoming ${callType}`,
-            tag:
-                "jr-store-incoming-call"
-        });
+
+        return
+            showBrowserNotification({
+
+                title:
+                    `📞 ${callerName}`,
+
+                body:
+                    `Incoming ${callType}`,
+
+                tag:
+                    "jr-store-incoming-call"
+
+            });
+
     };
 
 
@@ -208,19 +306,29 @@ export const showMissedCallNotification =
         type = "audio"
     } = {}) => {
 
+        stopCallRingtone();
+
+
         const callType =
             type === "video"
                 ? "video"
                 : "voice";
 
-        return showBrowserNotification({
-            title:
-                `📞 Missed ${callType} call`,
-            body:
-                `You missed a call from ${callerName}.`,
-            tag:
-                "jr-store-missed-call"
-        });
+
+        return
+            showBrowserNotification({
+
+                title:
+                    `📞 Missed ${callType} call`,
+
+                body:
+                    `You missed a call from ${callerName}.`,
+
+                tag:
+                    "jr-store-missed-call"
+
+            });
+
     };
 
 
@@ -242,21 +350,39 @@ export const notifyIncomingCall =
 export const cleanupNotificationAudio =
     () => {
 
-        if (!audio) {
-            return;
-        }
-
         try {
 
-            audio.pause();
+            if (messageAudio) {
 
-            audio.currentTime = 0;
+                messageAudio.pause();
 
-            audio.src = "";
+                messageAudio.currentTime =
+                    0;
+
+                messageAudio.src = "";
+
+            }
+
+
+            if (callAudio) {
+
+                callAudio.pause();
+
+                callAudio.currentTime =
+                    0;
+
+                callAudio.src = "";
+
+            }
 
         } catch (_) {}
 
-        audio = null;
+
+        messageAudio =
+            null;
+
+        callAudio =
+            null;
     };
 
 
@@ -267,6 +393,10 @@ export const cleanupNotificationAudio =
 export default {
 
     playMessageNotification,
+
+    playCallRingtone,
+
+    stopCallRingtone,
 
     showBrowserNotification,
 
