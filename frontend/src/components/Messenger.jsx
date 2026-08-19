@@ -1806,47 +1806,53 @@ const acceptCall =
             };
 
 
-        /* -------------------------------------------------
-           INCOMING CALL
-        ------------------------------------------------- */
+       /* -------------------------------------------------
+   INCOMING CALL
+------------------------------------------------- */
 
-        const onIncomingCall =
-            data => {
+const onIncomingCall =
+    data => {
 
-                if (!data) {
-                    return;
-                }
+        if (!data) {
+            return;
+        }
 
+        const incoming = {
 
-                const incoming = {
-                    ...data,
-                    mode:
-                        "incoming"
-                };
+            ...data,
 
+            mode:
+                "incoming",
 
-                callRef.current =
-                    incoming;
+            status:
+                "ringing"
 
-                currentRoomRef.current =
-                    data.roomId;
+        };
 
+        callRef.current =
+            incoming;
 
-                setCallState(
-                    incoming
-                );
+        currentRoomRef.current =
+            data.roomId;
 
+        setCallState(
+            incoming
+        );
 
-                showIncomingCallNotification({
-                    callerName:
-                        data.callerName ||
-                        "User",
-                    type:
-                        data.type
-                });
+        showIncomingCallNotification({
 
-            };
+            callerName:
+                data.callerName ||
+                data.senderName ||
+                "User",
 
+            type:
+                data.type ||
+                "audio"
+
+        });
+
+    };
 
         /* -------------------------------------------------
            CALL RINGING
@@ -2232,15 +2238,50 @@ for (const candidate of pending) {
 
 
         /* -------------------------------------------------
-           MISSED
-        ------------------------------------------------- */
+   MISSED
+------------------------------------------------- */
 
-        const onCallMissed =
-            () => {
+const onCallMissed =
+    () => {
 
-                cleanupCall();
+        const call =
+            callRef.current ||
+            callState;
 
-            };
+
+        /*
+        ==========================================
+        MISSED CALL NOTIFICATION
+        ==========================================
+        */
+
+        if (call) {
+
+            showMissedCallNotification({
+
+                callerName:
+                    call.callerName ||
+                    call.senderName ||
+                    "User",
+
+                type:
+                    call.type ||
+                    "audio"
+
+            });
+
+        }
+
+
+        /*
+        ==========================================
+        CLEANUP
+        ==========================================
+        */
+
+        cleanupCall();
+
+    };
 
 
         socket.on(
