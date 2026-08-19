@@ -607,76 +607,147 @@ useEffect(() => {
     ===================================================== */
 
     const appendMessage =
-        useCallback(
-            (incoming) => {
+    useCallback(
+        (incoming) => {
 
-                if (!incoming) {
-                    return;
-                }
+            if (!incoming) {
+                return;
+            }
 
-                setMessages(
-                    previous => {
 
-                        const incomingId =
-                            getMessageId(
-                                incoming
-                            );
+            /*
+            ==========================================
+            MISSED / CALL MESSAGE NORMALIZATION
+            ==========================================
+            */
 
-                        if (
-                            incomingId &&
-                            previous.some(
-                                item =>
-                                    getMessageId(
-                                        item
-                                    ) ===
-                                    incomingId
-                            )
-                        ) {
-                            return previous;
-                        }
+            const normalizedMessage = {
 
-                        const sameMessage =
-                            previous.some(
-                                item =>
-                                    !incomingId &&
-                                    item.message ===
-                                        incoming.message &&
-                                    getMessageSenderId(
-                                        item
-                                    ) ===
-                                        getMessageSenderId(
-                                            incoming
-                                        ) &&
-                                    Math.abs(
-                                        new Date(
-                                            item.createdAt ||
-                                            item.timestamp ||
-                                            Date.now()
-                                        ).getTime() -
-                                        new Date(
-                                            incoming.createdAt ||
-                                            incoming.timestamp ||
-                                            Date.now()
-                                        ).getTime()
-                                    ) < 5000
-                            );
+                ...incoming,
 
-                        if (sameMessage) {
-                            return previous;
-                        }
+                message:
+                    incoming.message ||
+                    (
+                        incoming.type ===
+                        "missed-call"
 
-                        return [
-                            ...previous,
-                            incoming
-                        ];
+                            ? `📞 Missed ${
+                                  incoming.callType ===
+                                  "video"
+                                      ? "video"
+                                      : "voice"
+                              } call`
+                            : incoming.message
+                    ),
+
+                createdAt:
+                    incoming.createdAt ||
+                    incoming.timestamp ||
+                    new Date().toISOString()
+
+            };
+
+
+            setMessages(
+                previous => {
+
+                    /*
+                    ==================================
+                    MESSAGE ID DUPLICATE CHECK
+                    ==================================
+                    */
+
+                    const incomingId =
+                        getMessageId(
+                            normalizedMessage
+                        );
+
+
+                    if (
+                        incomingId &&
+                        previous.some(
+                            item =>
+                                getMessageId(
+                                    item
+                                ) ===
+                                incomingId
+                        )
+                    ) {
+
+                        return previous;
 
                     }
-                );
 
-            },
-            []
-        );
 
+                    /*
+                    ==================================
+                    SAME MESSAGE DUPLICATE CHECK
+                    ==================================
+                    */
+
+                    const sameMessage =
+                        previous.some(
+                            item =>
+
+                                !incomingId &&
+
+                                item.message ===
+                                    normalizedMessage.message &&
+
+                                getMessageSenderId(
+                                    item
+                                ) ===
+                                    getMessageSenderId(
+                                        normalizedMessage
+                                    ) &&
+
+                                Math.abs(
+
+                                    new Date(
+                                        item.createdAt ||
+                                        item.timestamp ||
+                                        Date.now()
+                                    ).getTime()
+
+                                    -
+
+                                    new Date(
+                                        normalizedMessage.createdAt ||
+                                        normalizedMessage.timestamp ||
+                                        Date.now()
+                                    ).getTime()
+
+                                ) < 5000
+                        );
+
+
+                    if (sameMessage) {
+
+                        return previous;
+
+                    }
+
+
+                    /*
+                    ==================================
+                    APPEND
+                    ==================================
+                    */
+
+                    return [
+
+                        ...previous,
+
+                        normalizedMessage
+
+                    ];
+
+                }
+            );
+
+        },
+        []
+    );
 
     /* =====================================================
        CLEAN CALL
