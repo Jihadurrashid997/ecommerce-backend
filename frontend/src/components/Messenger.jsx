@@ -1654,131 +1654,207 @@ const acceptCall =
             };
 
 
-        /* -------------------------------------------------
-           MESSAGE RECEIVED
-        ------------------------------------------------- */
+       /* -------------------------------------------------
+   MESSAGE RECEIVED
+------------------------------------------------- */
 
-        const onReceiveMessage =
-            incoming => {
+const onReceiveMessage =
+    incoming => {
 
-                if (!incoming) {
-                    return;
-                }
-
-
-                const newMessage =
-                    incoming.data &&
-                    typeof incoming.data ===
-                        "object"
-                        ? {
-                              ...incoming.data,
-                              ...incoming
-                          }
-                        : incoming;
+        if (!incoming) {
+            return;
+        }
 
 
-                const senderId =
-                    getMessageSenderId(
-                        newMessage
-                    );
+        const newMessage =
+            incoming.data &&
+            typeof incoming.data ===
+                "object"
 
-                const receiverId =
-                    getMessageReceiverId(
-                        newMessage
-                    );
+                ? {
+                      ...incoming.data,
+                      ...incoming
+                  }
+
+                : incoming;
 
 
-                if (
+        const senderId =
+            getMessageSenderId(
+                newMessage
+            );
+
+
+        const receiverId =
+            getMessageReceiverId(
+                newMessage
+            );
+
+
+        /*
+        ==========================================
+        IGNORE OWN MESSAGE
+        ==========================================
+        */
+
+        if (
+            senderId ===
+            currentId
+        ) {
+
+            return;
+
+        }
+
+
+        const active =
+            selectedUserRef.current;
+
+
+        const activeId =
+            getId(active);
+
+
+        const belongs =
+            activeId &&
+            (
+                (
                     senderId ===
-                    currentId
-                ) {
-                    return;
-                }
+                        activeId &&
+
+                    receiverId ===
+                        currentId
+                )
+
+                ||
+
+                (
+                    senderId ===
+                        currentId &&
+
+                    receiverId ===
+                        activeId
+                )
+            );
 
 
-                const active =
-                    selectedUserRef.current;
+        /*
+        ==========================================
+        MESSAGE IS OPEN
+        ==========================================
+        */
 
-                const activeId =
-                    getId(active);
+        if (belongs) {
 
-
-                const belongs =
-                    activeId &&
-                    (
-                        (
-                            senderId ===
-                                activeId &&
-                            receiverId ===
-                                currentId
-                        ) ||
-                        (
-                            senderId ===
-                                currentId &&
-                            receiverId ===
-                                activeId
-                        )
-                    );
+            appendMessage(
+                newMessage
+            );
 
 
-                if (belongs) {
-
-                    appendMessage(
-                        newMessage
-                    );
-
-                    scrollToBottom();
+            scrollToBottom();
 
 
-                    socket.emit(
-                        "message-seen",
-                        {
-                            roomId:
-                                currentRoomRef.current,
-                            messageId:
-                                getMessageId(
-                                    newMessage
-                                ),
-                            senderId,
-                            receiverId:
-                                currentId
-                        }
-                    );
+            /*
+            --------------------------------------
+            MARK AS SEEN
+            --------------------------------------
+            */
 
-                } else {
+            socket.emit(
+                "message-seen",
+                {
 
-                    if (senderId) {
+                    roomId:
+                        currentRoomRef.current,
 
-                        setUnreadUsers(
-                            previous => ({
-                                ...previous,
-                                [senderId]:
-                                    (
-                                        previous[
-                                            senderId
-                                        ] || 0
-                                    ) + 1
-                            })
-                        );
+                    messageId:
+                        getMessageId(
+                            newMessage
+                        ),
 
-                    }
+                    senderId,
 
-
-                    showMessageNotification({
-                        senderName:
-                            getUserName(
-                                newMessage.sender
-                            ),
-                        message:
-                            newMessage.message ||
-                            newMessage.text ||
-                            "New message"
-                    });
+                    receiverId:
+                        currentId
 
                 }
+            );
 
-            };
 
+            /*
+            --------------------------------------
+            MESSAGE SOUND
+            --------------------------------------
+            */
+
+            showMessageNotification({
+
+                senderName:
+                    getUserName(
+                        newMessage.sender
+                    ),
+
+                message:
+                    newMessage.message ||
+                    newMessage.text ||
+                    "New message"
+
+            });
+
+        }
+
+        /*
+        ==========================================
+        MESSAGE IS NOT OPEN
+        ==========================================
+        */
+
+        else {
+
+            if (senderId) {
+
+                setUnreadUsers(
+                    previous => ({
+
+                        ...previous,
+
+                        [senderId]:
+                            (
+                                previous[
+                                    senderId
+                                ] || 0
+                            ) + 1
+
+                    })
+                );
+
+            }
+
+
+            /*
+            --------------------------------------
+            MESSAGE SOUND + BROWSER NOTIFICATION
+            --------------------------------------
+            */
+
+            showMessageNotification({
+
+                senderName:
+                    getUserName(
+                        newMessage.sender
+                    ) ||
+                    "New message",
+
+                message:
+                    newMessage.message ||
+                    newMessage.text ||
+                    "New message"
+
+            });
+
+        }
+
+    };
 
         /* -------------------------------------------------
            DIRECT MESSAGE
@@ -1877,7 +1953,7 @@ const acceptCall =
             };
 
 
-       /* -------------------------------------------------
+/* -------------------------------------------------
    INCOMING CALL
 ------------------------------------------------- */
 
@@ -1887,6 +1963,7 @@ const onIncomingCall =
         if (!data) {
             return;
         }
+
 
         const incoming = {
 
@@ -1900,21 +1977,32 @@ const onIncomingCall =
 
         };
 
+
         callRef.current =
             incoming;
+
 
         currentRoomRef.current =
             data.roomId;
 
+
         setCallState(
             incoming
         );
+
+
+        /*
+        ==========================================
+        INCOMING CALL SOUND + NOTIFICATION
+        ==========================================
+        */
 
         showIncomingCallNotification({
 
             callerName:
                 data.callerName ||
                 data.senderName ||
+                data.caller?.name ||
                 "User",
 
             type:
