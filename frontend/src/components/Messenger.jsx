@@ -2308,52 +2308,76 @@ for (const candidate of pending) {
             };
 
 
-        /* -------------------------------------------------
-   MISSED
+
+/* -------------------------------------------------
+   MISSED CALL
 ------------------------------------------------- */
 
 const onCallMissed =
-    () => {
+    data => {
 
         const call =
             callRef.current ||
-            callState;
+            data ||
+            {};
+
+        const callerName =
+            call.callerName ||
+            call.receiverName ||
+            "User";
+
+        const callType =
+            call.type ||
+            "audio";
 
 
         /*
         ==========================================
-        MISSED CALL NOTIFICATION
+        SHOW MISSED CALL IN CHAT
         ==========================================
         */
 
-        if (call) {
+        appendMessage({
 
-            showMissedCallNotification({
+            id:
+                `missed-call-${Date.now()}`,
 
-                callerName:
-                    call.callerName ||
-                    call.senderName ||
-                    "User",
+            type:
+                "missed-call",
 
-                type:
-                    call.type ||
-                    "audio"
+            message:
+                `📞 Missed ${
+                    callType === "video"
+                        ? "video"
+                        : "voice"
+                } call`,
 
-            });
+            callType,
 
-        }
+            callerName,
+
+            senderId:
+                call.callerId ||
+                call.receiverId,
+
+            createdAt:
+                new Date().toISOString(),
+
+            timestamp:
+                Date.now()
+
+        });
 
 
         /*
         ==========================================
-        CLEANUP
+        CLEANUP CALL
         ==========================================
         */
 
         cleanupCall();
 
     };
-
 
         socket.on(
             "connect",
