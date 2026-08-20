@@ -2351,17 +2351,100 @@ for (const candidate of pending) {
 
             };
 
-
         /* -------------------------------------------------
            REJECTED
         ------------------------------------------------- */
 
         const onCallRejected =
-            () => {
+            data => {
 
-                alert(
-                    "Call was declined."
+                stopCallRingtone();
+
+                const call =
+                    callRef.current ||
+                    callState ||
+                    data;
+
+
+                const callerName =
+                    call?.callerName ||
+                    call?.senderName ||
+                    getUserName(
+                        call?.caller
+                    ) ||
+                    "User";
+
+
+                const callType =
+                    call?.type === "video"
+                        ? "video"
+                        : "voice";
+
+
+                /*
+                ==========================================
+                CALL REJECTED
+                ==========================================
+                */
+
+                console.log(
+                    "Call rejected:",
+                    call
                 );
+
+
+                /*
+                ==========================================
+                ADD CALL EVENT TO CHAT
+                ==========================================
+                */
+
+                const rejectedMessage = {
+
+                    id:
+                        `call-rejected-${Date.now()}`,
+
+                    message:
+                        `📞 ${callType === "video"
+                            ? "Video"
+                            : "Voice"
+                        } call declined`,
+
+                    text:
+                        `📞 ${callType === "video"
+                            ? "Video"
+                            : "Voice"
+                        } call declined`,
+
+                    type:
+                        "call-rejected",
+
+                    callType,
+
+                    senderId:
+                        currentUserId,
+
+                    receiverId:
+                        getId(
+                            selectedUserRef.current
+                        ),
+
+                    createdAt:
+                        new Date().toISOString(),
+
+                    timestamp:
+                        new Date().toISOString(),
+
+                    seen:
+                        true
+
+                };
+
+
+                appendMessage(
+                    rejectedMessage
+                );
+
 
                 cleanupCall();
 
@@ -2373,7 +2456,119 @@ for (const candidate of pending) {
         ------------------------------------------------- */
 
         const onCallEnded =
-            () => {
+            data => {
+
+                stopCallRingtone();
+
+                const call =
+                    callRef.current ||
+                    callState ||
+                    data;
+
+
+                if (!call) {
+
+                    cleanupCall();
+
+                    return;
+
+                }
+
+
+                const callType =
+                    call?.type === "video"
+                        ? "video"
+                        : "voice";
+
+
+                /*
+                ==========================================
+                CALL DURATION
+                ==========================================
+                */
+
+                const duration =
+    Number(
+        call?.duration ||
+        call?.callDuration ||
+        0
+    );
+
+const minutes =
+    Math.floor(
+        duration / 60
+    )
+        .toString()
+        .padStart(2, "0");
+
+const seconds =
+    (
+        duration % 60
+    )
+        .toString()
+        .padStart(2, "0");
+
+const durationText =
+    duration > 0
+        ? ` • ${minutes}:${seconds}`
+        : "";
+
+                /*
+                ==========================================
+                ADD CALL HISTORY TO CHAT
+                ==========================================
+                */
+
+                const endedMessage = {
+
+                    id:
+                        `call-ended-${Date.now()}`,
+
+                    message:
+                        `📞 ${
+                            callType === "video"
+                                ? "Video"
+                                : "Voice"
+                        } call ended${durationText}`,
+
+                    text:
+                        `📞 ${
+                            callType === "video"
+                                ? "Video"
+                                : "Voice"
+                        } call ended${durationText}`,
+
+                    type:
+                        "call-ended",
+
+                    callType,
+
+                    duration,
+
+                    senderId:
+                        currentUserId,
+
+                    receiverId:
+                        getId(
+                            selectedUserRef.current
+                        ),
+
+                    createdAt:
+                        new Date().toISOString(),
+
+                    timestamp:
+                        new Date().toISOString(),
+
+                    seen:
+                        true
+
+                };
+
+
+                appendMessage(
+                    endedMessage
+                );
+
 
                 cleanupCall();
 
@@ -2385,11 +2580,71 @@ for (const candidate of pending) {
         ------------------------------------------------- */
 
         const onCallBusy =
-            () => {
+            data => {
 
-                alert(
-                    "User is busy on another call."
+                stopCallRingtone();
+
+
+                const call =
+                    callRef.current ||
+                    callState ||
+                    data;
+
+
+                const callType =
+                    call?.type === "video"
+                        ? "video"
+                        : "voice";
+
+
+                const busyMessage = {
+
+                    id:
+                        `call-busy-${Date.now()}`,
+
+                    message:
+                        `📞 ${
+                            callType === "video"
+                                ? "Video"
+                                : "Voice"
+                        } call — User is busy`,
+
+                    text:
+                        `📞 ${
+                            callType === "video"
+                                ? "Video"
+                                : "Voice"
+                        } call — User is busy`,
+
+                    type:
+                        "call-busy",
+
+                    callType,
+
+                    senderId:
+                        currentUserId,
+
+                    receiverId:
+                        getId(
+                            selectedUserRef.current
+                        ),
+
+                    createdAt:
+                        new Date().toISOString(),
+
+                    timestamp:
+                        new Date().toISOString(),
+
+                    seen:
+                        true
+
+                };
+
+
+                appendMessage(
+                    busyMessage
                 );
+
 
                 cleanupCall();
 
