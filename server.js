@@ -735,63 +735,101 @@ io.on(
 
 
         /* ==================================================
-           CALL USER
-        ================================================== */
+   CALL USER
+================================================== */
 
-        socket.on(
-            "call-user",
-            (payload) => {
+socket.on(
+    "call-user",
+    (payload) => {
 
-                if (!payload) {
-                    return;
-                }
+        if (!payload) {
+            return;
+        }
 
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    );
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
 
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    ) ||
-                    socket.userId;
+        const callerId =
+            normalizeId(
+                payload.callerId
+            ) ||
+            socket.userId;
 
-                if (
-                    !receiverId ||
-                    !callerId
-                ) {
-                    return;
-                }
+        if (
+            !receiverId ||
+            !callerId
+        ) {
+            return;
+        }
 
-                const callData = {
+        const callData = {
 
-                    roomId:
-                        payload.roomId ||
-                        null,
+            roomId:
+                payload.roomId ||
+                null,
 
-                    callerId,
+            callerId,
 
-                    receiverId,
+            receiverId,
 
-                    callerName:
-                        payload.callerName ||
-                        "User",
+            callerName:
+                payload.callerName ||
+                "User",
 
-                    callerAvatar:
-                        payload.callerAvatar ||
-                        "",
+            callerAvatar:
+                payload.callerAvatar ||
+                "",
 
-                    type:
-                        payload.type === "video"
-                            ? "video"
-                            : "audio",
+            receiverName:
+                payload.receiverName ||
+                "User",
 
-                    timestamp:
-                        Date.now()
+            receiverAvatar:
+                payload.receiverAvatar ||
+                "",
 
-                };
+            type:
+                payload.type === "video"
+                    ? "video"
+                    : "audio",
 
+            status:
+                "ringing",
+
+            timestamp:
+                Date.now()
+
+        };
+
+
+        /* ------------------------------------------
+           SEND INCOMING CALL TO RECEIVER
+        ------------------------------------------ */
+
+        sendToUser(
+            receiverId,
+            "incoming-call",
+            callData
+        );
+
+
+        /* ------------------------------------------
+           CALL IS RINGING
+        ------------------------------------------ */
+
+        sendToUser(
+            receiverId,
+            "call-ringing",
+            {
+                ...callData,
+                status: "ringing"
+            }
+        );
+
+    }
+);
 
                 /*
                  * Receiver gets incoming call.
