@@ -4455,33 +4455,45 @@ const onCallMissed =
             </main>
 
 
-            <CallModal
-    visible={
-        Boolean(callState)
-    }
+           <CallModal
+    visible={Boolean(callState)}
 
     type={
-        callState?.type ||
-        "audio"
+        callState?.type || "audio"
     }
 
     mode={
-        callState?.mode ||
-        "outgoing"
+        callState?.mode || "outgoing"
     }
 
     callerName={
-        callState?.callerName ||
-        getUserName(
-            selectedUser
-        )
+        callState?.mode === "incoming"
+            ? (
+                callState?.callerName ||
+                callState?.senderName ||
+                "User"
+            )
+            : (
+                callState?.receiverName ||
+                callState?.calleeName ||
+                getUserName(selectedUser) ||
+                "User"
+            )
     }
 
     callerAvatar={
-        callState?.callerAvatar ||
-        getAvatar(
-            selectedUser
-        )
+        callState?.mode === "incoming"
+            ? (
+                callState?.callerAvatar ||
+                callState?.senderAvatar ||
+                ""
+            )
+            : (
+                callState?.receiverAvatar ||
+                callState?.calleeAvatar ||
+                getAvatar(selectedUser) ||
+                ""
+            )
     }
 
     localStream={
@@ -4507,8 +4519,9 @@ const onCallMissed =
     onEnd={
         endCall
     }
+
     onSwitchCamera={
-    switchCamera
+        switchCamera
     }
 />
 
