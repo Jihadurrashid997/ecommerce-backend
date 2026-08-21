@@ -733,8 +733,7 @@ io.on(
             }
         );
 
-
-        /* ==================================================
+         /* ==================================================
    CALL USER
 ================================================== */
 
@@ -763,6 +762,7 @@ socket.on(
         ) {
             return;
         }
+
 
         const callData = {
 
@@ -805,7 +805,7 @@ socket.on(
 
 
         /* ------------------------------------------
-           SEND INCOMING CALL TO RECEIVER
+           RECEIVER
         ------------------------------------------ */
 
         sendToUser(
@@ -816,7 +816,7 @@ socket.on(
 
 
         /* ------------------------------------------
-           CALL IS RINGING
+           RINGING
         ------------------------------------------ */
 
         sendToUser(
@@ -831,370 +831,242 @@ socket.on(
     }
 );
 
-                /*
-                 * Receiver gets incoming call.
-                 */
-                socket.on(
-    "call-user",
+
+/* ==================================================
+   ACCEPT CALL
+================================================== */
+
+socket.on(
+    "accept-call",
     (payload) => {
-
-        if (!payload) {
-            return;
-        }
-
-        const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
 
         const callerId =
             normalizeId(
-                payload.callerId
-            ) ||
-            socket.userId;
+                payload?.callerId
+            );
 
-        if (
-            !receiverId ||
-            !callerId
-        ) {
+        if (!callerId) {
             return;
         }
 
-        const callData = {
-            ...payload,
 
+        sendToUser(
             callerId,
-
-            receiverId,
-
-            type:
-                payload.type === "video"
-                    ? "video"
-                    : "audio",
-
-            status: "calling"
-        };
-
-
-        /*
-        ================================================
-        SEND CALL TO RECEIVER
-        ================================================
-        */
-
-        sendToUser(
-            receiverId,
-            "incoming-call",
-            callData
-        );
-
-
-        /*
-        ================================================
-        RECEIVER DEVICE IS RINGING
-        ================================================
-        */
-
-        sendToUser(
-            receiverId,
-            "call-ringing",
+            "call-accepted",
             {
-                ...callData,
-                status: "ringing"
+
+                ...payload,
+
+                receiverId:
+                    normalizeId(
+                        payload?.receiverId
+                    ) ||
+                    socket.userId,
+
+                status:
+                    "connected"
+
             }
         );
 
     }
 );
 
+
+/* ==================================================
+   REJECT CALL
+================================================== */
+
+socket.on(
+    "reject-call",
+    (payload) => {
+
+        const callerId =
+            normalizeId(
+                payload?.callerId
+            );
+
+        if (!callerId) {
+            return;
+        }
+
+
+        sendToUser(
+            callerId,
+            "call-rejected",
+            {
+
+                ...payload,
+
+                receiverId:
+                    socket.userId,
+
+                status:
+                    "rejected"
+
             }
         );
 
+    }
+);
 
-        /* ==================================================
-           ACCEPT CALL
-        ================================================== */
 
-        socket.on(
-            "accept-call",
-            (payload) => {
+/* ==================================================
+   END CALL
+================================================== */
 
-                const callerId =
-                    normalizeId(
-                        payload?.callerId
-                    );
+socket.on(
+    "end-call",
+    (payload) => {
 
-                if (!callerId) {
-                    return;
-                }
+        const roomId =
+            payload?.roomId;
 
-                sendToUser(
-                    callerId,
-                    "call-accepted",
-                    {
-                        ...payload,
+        const callerId =
+            normalizeId(
+                payload?.callerId
+            );
 
-                        receiverId:
-                            normalizeId(
-                                payload.receiverId
-                            ) ||
-                            socket.userId
-                    }
+        const receiverId =
+            normalizeId(
+                payload?.receiverId
+            );
+
+
+        const endedData = {
+
+            roomId:
+                roomId || null,
+
+            callerId:
+                callerId || null,
+
+            receiverId:
+                receiverId ||
+                socket.userId,
+
+            endedBy:
+                socket.userId,
+
+            timestamp:
+                Date.now()
+
+        };
+
+
+        if (roomId) {
+
+            io
+                .to(
+                    String(roomId)
+                )
+                .emit(
+                    "call-ended",
+                    endedData
                 );
 
-            }
-        );
+        }
 
 
-        /* ==================================================
-           REJECT CALL
-        ================================================== */
+        if (callerId) {
 
-        socket.on(
-            "reject-call",
-            (payload) => {
+            sendToUser(
+                callerId,
+                "call-ended",
+                endedData
+            );
 
-                const callerId =
-                    normalizeId(
-                        payload?.callerId
-                    );
-
-                if (!callerId) {
-                    return;
-                }
-
-                sendToUser(
-                    callerId,
-                    "call-rejected",
-                    {
-                        ...payload,
-
-                        receiverId:
-                            socket.userId
-                    }
-                );
-
-            }
-        );
+        }
 
 
-        /* ==================================================
-           END CALL
-        ================================================== */
+        if (receiverId) {
 
-        socket.on(
-            "end-call",
-            (payload) => {
+            sendToUser(
+                receiverId,
+                "call-ended",
+                endedData
+            );
 
-                const roomId =
-                    payload?.roomId;
+        }
 
-                const receiverId =
-                    normalizeId(
-                        payload?.receiverId
-                    );
+    }
+);
 
 
-                if (roomId) {
+/* ==================================================
+   CALL BUSY
+================================================== */
 
-                    io
-                        .to(
-                            String(roomId)
-                        )
-                        .emit(
-                            "call-ended",
-                            {
-                                roomId
-                            }
-                        );
+socket.on(
+    "call-busy",
+    (payload) => {
 
-                }
+        const callerId =
+            normalizeId(
+                payload?.callerId
+            );
 
-
-                if (receiverId) {
-
-                    sendToUser(
-                        receiverId,
-                        "call-ended",
-                        {
-                            roomId:
-                                roomId || null
-                        }
-                    );
-
-                }
-
-            }
-        );
+        if (!callerId) {
+            return;
+        }
 
 
-        /* ==================================================
-           WEBRTC OFFER
-        ================================================== */
-
-        socket.on(
-            "webrtc-offer",
-            (payload) => {
-
-                const receiverId =
-                    normalizeId(
-                        payload?.receiverId
-                    );
-
-                if (!receiverId) {
-                    return;
-                }
-
-                sendToUser(
-                    receiverId,
-                    "webrtc-offer",
-                    {
-                        ...payload,
-
-                        senderId:
-                            normalizeId(
-                                payload.senderId
-                            ) ||
-                            socket.userId
-                    }
-                );
-
-            }
-        );
-
-
-        /* ==================================================
-           WEBRTC ANSWER
-        ================================================== */
-
-        socket.on(
-            "webrtc-answer",
-            (payload) => {
-
-                const receiverId =
-                    normalizeId(
-                        payload?.receiverId
-                    );
-
-                if (!receiverId) {
-                    return;
-                }
-
-                sendToUser(
-                    receiverId,
-                    "webrtc-answer",
-                    {
-                        ...payload,
-
-                        senderId:
-                            normalizeId(
-                                payload.senderId
-                            ) ||
-                            socket.userId
-                    }
-                );
-
-            }
-        );
-
-
-        /* ==================================================
-           ICE CANDIDATE
-        ================================================== */
-
-        socket.on(
-            "webrtc-ice-candidate",
-            (payload) => {
-
-                const receiverId =
-                    normalizeId(
-                        payload?.receiverId
-                    );
-
-                if (!receiverId) {
-                    return;
-                }
-
-                sendToUser(
-                    receiverId,
-                    "webrtc-ice-candidate",
-                    {
-                        ...payload,
-
-                        senderId:
-                            normalizeId(
-                                payload.senderId
-                            ) ||
-                            socket.userId
-                    }
-                );
-
-            }
-        );
-
-
-        /* ==================================================
-           CALL BUSY
-        ================================================== */
-
-        socket.on(
+        sendToUser(
+            callerId,
             "call-busy",
-            (payload) => {
+            {
 
-                const callerId =
-                    normalizeId(
-                        payload?.callerId
-                    );
+                ...payload,
 
-                if (!callerId) {
-                    return;
-                }
+                receiverId:
+                    socket.userId,
 
-                sendToUser(
-                    callerId,
-                    "call-busy",
-                    {
-                        ...payload,
-
-                        receiverId:
-                            socket.userId
-                    }
-                );
+                timestamp:
+                    Date.now()
 
             }
         );
 
+    }
+);
 
-        /* ==================================================
-           CALL MISSED
-        ================================================== */
 
-        socket.on(
+/* ==================================================
+   CALL MISSED
+================================================== */
+
+socket.on(
+    "call-missed",
+    (payload) => {
+
+        const callerId =
+            normalizeId(
+                payload?.callerId
+            );
+
+        if (!callerId) {
+            return;
+        }
+
+
+        sendToUser(
+            callerId,
             "call-missed",
-            (payload) => {
+            {
 
-                const callerId =
-                    normalizeId(
-                        payload?.callerId
-                    );
+                ...payload,
 
-                if (!callerId) {
-                    return;
-                }
+                receiverId:
+                    socket.userId,
 
-                sendToUser(
-                    callerId,
-                    "call-missed",
-                    {
-                        ...payload,
-
-                        receiverId:
-                            socket.userId
-                    }
-                );
+                timestamp:
+                    Date.now()
 
             }
         );
+
+    }
+);
 
 
         /* ==================================================
