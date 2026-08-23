@@ -1252,10 +1252,6 @@ const startCall =
         ]
     );
 
-
-              
-
-
 /* =====================================================
    ACCEPT CALL
 ===================================================== */
@@ -1266,50 +1262,38 @@ const acceptCall =
 
             stopCallRingtone();
 
-
             const call =
                 callRef.current ||
                 callState;
-
 
             if (!call) {
                 return;
             }
 
-
             try {
 
                 const stream =
                     await getUserMedia({
-
-                        audio:
-                            true,
-
+                        audio: true,
                         video:
                             call.type ===
                             "video"
-
                     });
-
 
                 localStreamRef.current =
                     stream;
-
 
                 setLocalStream(
                     stream
                 );
 
-
                 currentRoomRef.current =
                     call.roomId;
-
 
                 socket.emit(
                     "join-room",
                     call.roomId
                 );
-
 
                 const acceptedCall = {
 
@@ -1329,15 +1313,12 @@ const acceptCall =
 
                 };
 
-
                 callRef.current =
                     acceptedCall;
-
 
                 setCallState(
                     acceptedCall
                 );
-
 
                 socket.emit(
                     "accept-call",
@@ -1370,7 +1351,6 @@ const acceptCall =
                     error
                 );
 
-
                 socket.emit(
                     "reject-call",
                     {
@@ -1389,7 +1369,6 @@ const acceptCall =
                     }
                 );
 
-
                 cleanupCall();
 
             }
@@ -1399,8 +1378,7 @@ const acceptCall =
             callState,
             cleanupCall
         ]
-    );
-
+    ); 
 
                 /*
                 ==========================================
