@@ -1079,10 +1079,11 @@ const startCall =
             }
 
 
+
+
             /*
             ============================================
-            IMPORTANT:
-            Target user's name is used for OUTGOING UI
+            TARGET USER
             ============================================
             */
 
@@ -1091,6 +1092,7 @@ const startCall =
 
             const receiverAvatar =
                 getAvatar(target);
+
 
             const callerName =
                 getUserName(me);
@@ -1101,12 +1103,18 @@ const startCall =
 
             try {
 
+                const roomId =
+                    getRoomId(
+                        callerId,
+                        receiverId
+                    );
+
+
                 const stream =
                     await getUserMedia({
                         audio: true,
                         video:
-                            type ===
-                            "video"
+                            type === "video"
                     });
 
 
@@ -1122,7 +1130,7 @@ const startCall =
                     roomId;
 
 
-                callRef.current = {
+                const callData = {
 
                     callerId,
 
@@ -1140,9 +1148,40 @@ const startCall =
 
                     receiverAvatar,
 
-                    accepted: false
+                    accepted: false,
+
+                    status:
+                        "calling"
 
                 };
+
+
+                callRef.current =
+                    callData;
+
+
+                /*
+                ========================================
+                OUTGOING UI
+                IMPORTANT:
+                Show target user's name
+                ========================================
+                */
+
+                setCallState({
+
+                    ...callData,
+
+                    mode:
+                        "outgoing",
+
+                    callerName:
+                        receiverName,
+
+                    callerAvatar:
+                        receiverAvatar
+
+                });
 
 
                 socket.emit(
@@ -1153,75 +1192,13 @@ const startCall =
 
                 /*
                 ========================================
-                OUTGOING CALL
-                ========================================
-                */
-
-                setCallState({
-
-                    mode:
-                        "outgoing",
-
-                    status:
-                        "calling",
-
-                    type,
-
-                    callerId,
-
-                    receiverId,
-
-                    roomId,
-
-                    /*
-                    Show the PERSON we are calling
-                    */
-
-                    callerName:
-                        receiverName,
-
-                    callerAvatar:
-                        receiverAvatar,
-
-                    receiverName:
-                        receiverName,
-
-                    receiverAvatar:
-                        receiverAvatar
-
-                });
-
-
-                /*
-                ========================================
                 SEND CALL
                 ========================================
                 */
 
                 socket.emit(
                     "call-user",
-                    {
-
-                        roomId,
-
-                        callerId,
-
-                        receiverId,
-
-                        callerName,
-
-                        callerAvatar,
-
-                        receiverName,
-
-                        receiverAvatar,
-
-                        type,
-
-                        status:
-                            "calling"
-
-                    }
+                    callData
                 );
 
 
@@ -1247,14 +1224,18 @@ const startCall =
 
         },
         [
+            user,
             cleanupCall,
             getRoomId
         ]
     );
 
-/* =====================================================
-   ACCEPT CALL
-===================================================== */
+
+/*
+=====================================================
+ACCEPT CALL
+=====================================================
+*/
 
 const acceptCall =
     useCallback(
@@ -1262,13 +1243,16 @@ const acceptCall =
 
             stopCallRingtone();
 
+
             const call =
                 callRef.current ||
                 callState;
 
+
             if (!call) {
                 return;
             }
+
 
             try {
 
@@ -1276,9 +1260,9 @@ const acceptCall =
                     await getUserMedia({
                         audio: true,
                         video:
-                            call.type ===
-                            "video"
+                            call.type === "video"
                     });
+
 
                 localStreamRef.current =
                     stream;
@@ -1287,13 +1271,16 @@ const acceptCall =
                     stream
                 );
 
+
                 currentRoomRef.current =
                     call.roomId;
+
 
                 socket.emit(
                     "join-room",
                     call.roomId
                 );
+
 
                 const acceptedCall = {
 
@@ -1313,12 +1300,15 @@ const acceptCall =
 
                 };
 
+
                 callRef.current =
                     acceptedCall;
+
 
                 setCallState(
                     acceptedCall
                 );
+
 
                 socket.emit(
                     "accept-call",
@@ -1344,12 +1334,16 @@ const acceptCall =
                     }
                 );
 
-            } catch (error) {
+
+            } catch (
+                error
+            ) {
 
                 console.error(
                     "Accept call error:",
                     error
                 );
+
 
                 socket.emit(
                     "reject-call",
@@ -1369,6 +1363,7 @@ const acceptCall =
                     }
                 );
 
+
                 cleanupCall();
 
             }
@@ -1378,12 +1373,14 @@ const acceptCall =
             callState,
             cleanupCall
         ]
-    ); 
+    );
 
-               
-/* =====================================================
-   REJECT CALL
-===================================================== */
+
+/*
+=====================================================
+REJECT CALL
+=====================================================
+*/
 
 const rejectCall =
     useCallback(
@@ -1430,42 +1427,48 @@ const rejectCall =
         ]
     );
 
-    /* =====================================================
-       END CALL
-    ===================================================== */
 
-    const endCall =
+/*
+=====================================================
+END CALL
+=====================================================
+*/
+
+const endCall =
     useCallback(
         () => {
 
             stopCallRingtone();
 
+
             const call =
                 callRef.current ||
                 callState;
-                if (
-                    call?.roomId
-                ) {
 
-                    socket.emit(
-                        "end-call",
-                        {
-                            roomId:
-                                call.roomId
-                        }
-                    );
 
-                }
+            if (
+                call?.roomId
+            ) {
 
-                cleanupCall();
+                socket.emit(
+                    "end-call",
+                    {
+                        roomId:
+                            call.roomId
+                    }
+                );
 
-            },
-            [
-                callState,
-                cleanupCall
-            ]
-        );
+            }
 
+
+            cleanupCall();
+
+        },
+        [
+            callState,
+            cleanupCall
+        ]
+    );
 
     /* =====================================================
        SOCKET EVENTS
