@@ -1820,78 +1820,35 @@ const onIncomingCall =
             return;
         }
 
-
         const incoming = {
-
             ...data,
-
-            mode:
-                "incoming",
-
-            status:
-                "ringing",
-
-            callerName:
-                data.callerName ||
-                data.senderName ||
-                "User",
-
-            callerAvatar:
-                data.callerAvatar ||
-                data.senderAvatar ||
-                ""
-
+            mode: "incoming",
+            status: "ringing"
         };
-
 
         callRef.current =
             incoming;
 
-
         currentRoomRef.current =
             incoming.roomId;
-
 
         setCallState(
             incoming
         );
 
-
         showIncomingCallNotification({
-
             callerName:
-                incoming.callerName,
-
+                incoming.callerName ||
+                incoming.senderName ||
+                incoming.caller?.name ||
+                "User",
             type:
                 incoming.type ||
                 "audio"
-
         });
 
     };
 
-
-        /*
-        ==========================================
-        INCOMING CALL SOUND + NOTIFICATION
-        ==========================================
-        */
-
-        showIncomingCallNotification({
-
-            callerName:
-                data.callerName ||
-                data.senderName ||
-                data.caller?.name ||
-                "User",
-
-            type:
-                data.type ||
-                "audio"
-
-        });
-
-    };
 
        /* -------------------------------------------------
    CALL RINGING
