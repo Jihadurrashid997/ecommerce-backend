@@ -1380,58 +1380,7 @@ const acceptCall =
         ]
     ); 
 
-                /*
-                ==========================================
-                CALL CONNECTED
-                Timer should start only from this point
-                ==========================================
-                */
-
-                setCallState(
-                    acceptedCall
-                );
-
-
-            } catch (
-                error
-            ) {
-
-                console.error(
-                    "Accept call error:",
-                    error
-                );
-
-
-                socket.emit(
-                    "reject-call",
-                    {
-
-                        callerId:
-                            call.callerId,
-
-                        receiverId:
-                            getId(
-                                currentUserRef.current
-                            ),
-
-                        roomId:
-                            call.roomId
-
-                    }
-                );
-
-
-                cleanupCall();
-
-            }
-
-        },
-        [
-            callState,
-            cleanupCall
-        ]
-    );
-
+               
 /* =====================================================
    REJECT CALL
 ===================================================== */
