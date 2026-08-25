@@ -1882,72 +1882,183 @@ const onIncomingCall =
             return;
         }
 
+        const callerId =
+            getId(
+                data.callerId ||
+                data.senderId ||
+                data.caller
+            );
+
+        const receiverId =
+            getId(
+                data.receiverId ||
+                currentId
+            );
 
         const incoming = {
 
             ...data,
 
-            mode:
-                "incoming",
+            mode: "incoming",
 
-            status:
-                "ringing"
+            status: "ringing",
+
+            callerId,
+
+            receiverId,
+
+            type:
+                data.type ||
+                "audio",
+
+            callerName:
+                data.callerName ||
+                data.senderName ||
+                getUserName(data.caller) ||
+                "User",
+
+            callerAvatar:
+                data.callerAvatar ||
+                data.senderAvatar ||
+                getAvatar(data.caller) ||
+                ""
 
         };
 
+        console.log(
+            "📞 INCOMING CALL:",
+            incoming
+        );
+
+        /*
+         * Save incoming call
+         */
 
         callRef.current =
             incoming;
 
-
         currentRoomRef.current =
-            data.roomId;
+            incoming.roomId || null;
 
+        /*
+         * VERY IMPORTANT:
+         * Incoming call must ALWAYS
+         * have mode = incoming.
+         */
 
         setCallState(
             incoming
         );
 
-
         /*
-        ==========================================
-        INCOMING CALL SOUND + NOTIFICATION
-        ==========================================
-        */
+         * Play ringtone + browser notification
+         */
 
         showIncomingCallNotification({
 
             callerName:
-                data.callerName ||
-                data.senderName ||
-                data.caller?.name ||
-                "User",
+                incoming.callerName,
 
             type:
-                data.type ||
-                "audio"
+                incoming.type
 
         });
 
     };
 
-        /* -------------------------------------------------
-           CALL RINGING
-        ------------------------------------------------- */
 
-        const onCallRinging =
-            data => {
+/* -------------------------------------------------
+   CALL RINGING
+------------------------------------------------- */
 
-                setCallState(
-                    previous => ({
-                        ...(previous || {}),
-                        ...data,
-                        mode:
-                            "outgoing"
-                    })
-                );
+const onCallRinging =
+    data => {
 
-            };
+        if (!data) {
+            return;
+        }
+
+        const currentCall =
+            callRef.current;
+
+        /*
+         * If this user already has an
+         * incoming call, NEVER change
+         * mode from incoming -> outgoing.
+         */
+
+        if (
+            currentCall?.mode ===
+            "incoming"
+        ) {
+
+            console.log(
+                "📞 Ignoring call-ringing for incoming call"
+            );
+
+            setCallState(
+                previous => ({
+
+                    ...(previous || {}),
+                    ...data,
+
+                    /*
+                     * Keep incoming mode
+                     */
+
+                    mode:
+                        "incoming",
+
+                    status:
+                        previous?.status ||
+                        "ringing"
+
+                })
+            );
+
+            return;
+        }
+
+
+        /*
+         * Outgoing caller side
+         */
+
+        const updatedCall = {
+
+            ...(currentCall || {}),
+            ...data,
+
+            mode:
+                "outgoing",
+
+            status:
+                data.status ||
+                "calling"
+
+        };
+
+
+        callRef.current =
+            updatedCall;
+
+
+        currentRoomRef.current =
+            updatedCall.roomId ||
+            currentRoomRef.current;
+
+
+        setCallState(
+            updatedCall
+        );
+
+
+        console.log(
+            "📞 OUTGOING CALL RINGING:",
+            updatedCall
+        );
+
+    };
 
 
         /* -------------------------------------------------
