@@ -847,62 +847,28 @@ useEffect(() => {
                             },
 
 
-                        onTrack:
+
+onTrack:
     event => {
 
         console.log(
-            "📡 Remote track received:",
+            "📡 Remote track:",
             event.track?.kind
         );
 
 
         let stream =
-            event.streams?.[0];
+            remoteStreamRef.current;
 
-
-        /*
-         * Some browsers may not provide
-         * event.streams[0].
-         *
-         * Build a MediaStream manually
-         * in that case.
-         */
 
         if (!stream) {
 
             stream =
-                remoteStreamRef.current ||
+                event.streams?.[0] ||
                 new MediaStream();
 
-            if (
-                event.track &&
-                !stream
-                    .getTracks()
-                    .some(
-                        track =>
-                            track.id ===
-                            event.track.id
-                    )
-            ) {
-
-                stream.addTrack(
-                    event.track
-                );
-
-            }
-
         }
 
-
-        if (!stream) {
-            return;
-        }
-
-
-        /*
-         * If a new track arrives separately,
-         * make sure it is added.
-         */
 
         if (
             event.track &&
@@ -922,17 +888,6 @@ useEffect(() => {
         }
 
 
-        console.log(
-            "🎧 Remote stream tracks:",
-            stream
-                .getTracks()
-                .map(
-                    track =>
-                        track.kind
-                )
-        );
-
-
         remoteStreamRef.current =
             stream;
 
@@ -941,10 +896,20 @@ useEffect(() => {
             stream
         );
 
+
+        console.log(
+            "📡 Remote tracks:",
+            stream
+                .getTracks()
+                .map(
+                    track =>
+                        `${track.kind}:${track.readyState}`
+                )
+        );
+
     },
-
-
-                     onConnectionStateChange:
+                        
+onConnectionStateChange:
     state => {
 
         console.log(
@@ -1263,47 +1228,61 @@ const switchCamera =
     useCallback(
         async () => {
 
-            if (!localStreamRef.current) {
+            if (
+                !localStreamRef.current
+            ) {
                 return;
             }
 
-            const videoTracks =
-                localStreamRef.current
+
+            const oldStream =
+                localStreamRef.current;
+
+
+            const oldVideoTracks =
+                oldStream
                     .getVideoTracks();
 
-            if (!videoTracks.length) {
+
+            if (
+                !oldVideoTracks.length
+            ) {
                 return;
             }
+
 
             const nextFacing =
                 cameraFacing === "user"
                     ? "environment"
                     : "user";
 
+
             try {
 
                 const newStream =
-                    await navigator.mediaDevices
-                        .getUserMedia({
-                            audio: false,
-                            video: {
-                                facingMode:
-                                    {
-                                        ideal:
-                                            nextFacing
-                                    }
-                            }
-                        });
+                    await getUserMedia({
+                        audio: false,
+                        video: true,
+                        facingMode:
+                            nextFacing
+                    });
+
 
                 const newVideoTrack =
-                    newStream.getVideoTracks()[0];
+                    newStream
+                        .getVideoTracks()[0];
 
-                if (!newVideoTrack) {
+
+                if (
+                    !newVideoTrack
+                ) {
                     return;
                 }
 
+
                 const peer =
                     peerRef.current;
+
 
                 if (peer) {
 
@@ -1316,6 +1295,7 @@ const switchCamera =
                                     "video"
                             );
 
+
                     if (sender) {
 
                         await sender.replaceTrack(
@@ -1323,18 +1303,20 @@ const switchCamera =
                         );
 
                     }
+
                 }
 
-                videoTracks.forEach(
-                    track => track.stop()
+
+                oldVideoTracks.forEach(
+                    track =>
+                        track.stop()
                 );
 
-                const currentStream =
-                    localStreamRef.current;
 
                 const audioTracks =
-                    currentStream
+                    oldStream
                         .getAudioTracks();
+
 
                 const updatedStream =
                     new MediaStream([
@@ -1342,16 +1324,20 @@ const switchCamera =
                         newVideoTrack
                     ]);
 
+
                 localStreamRef.current =
                     updatedStream;
+
 
                 setLocalStream(
                     updatedStream
                 );
 
+
                 setCameraFacing(
                     nextFacing
                 );
+
 
             } catch (error) {
 
@@ -2159,33 +2145,40 @@ const onIncomingCall =
                         )
                     );
                     
-                    /* Flush ICE candidates received
+  /* Flush ICE candidates received
    before remote description */
+                    
 const pending =
     pendingCandidatesRef.current;
 
 pendingCandidatesRef.current = [];
 
-for (const candidate of pending) {
+
+for (
+    const candidate of pending
+) {
 
     try {
 
-        await peer.addIceCandidate(
-            new RTCIceCandidate(
-                candidate
-            )
-        );
+        await peerRef.current
+            .addIceCandidate(
+                new RTCIceCandidate(
+                    candidate
+                )
+            );
 
     } catch (error) {
 
         console.error(
-            "Pending ICE candidate error:",
+            "Pending ICE answer error:",
             error
         );
 
     }
+
 }
 
+                    
 
                     const answer =
                         await peer.createAnswer();
@@ -2256,18 +2249,22 @@ for (const candidate of pending) {
                                 data.answer
                             )
                         );
-                    /* Flush pending ICE candidates */
+            
+/* Flush pending ICE candidates */
 
 const pending =
     pendingCandidatesRef.current;
 
 pendingCandidatesRef.current = [];
 
-for (const candidate of pending) {
+
+for (
+    const candidate of pending
+) {
 
     try {
 
-        await peerRef.current.addIceCandidate(
+        await peer.addIceCandidate(
             new RTCIceCandidate(
                 candidate
             )
@@ -2276,7 +2273,7 @@ for (const candidate of pending) {
     } catch (error) {
 
         console.error(
-            "Pending ICE candidate error:",
+            "Pending ICE error:",
             error
         );
 
@@ -2284,73 +2281,70 @@ for (const candidate of pending) {
 
 }
 
-                } catch (error) {
-
-                    console.error(
-                        "WebRTC answer error:",
-                        error
-                    );
-
-                }
-
-            };
-
 
         /* -------------------------------------------------
            ICE
         ------------------------------------------------- */
 
-        const onIceCandidate =
-            async data => {
+const onIceCandidate =
+    async data => {
 
-                if (
-                    !data?.candidate
-                ) {
-                    return;
-                }
-
-
-                const peer =
-                    peerRef.current;
+        if (
+            !data?.candidate
+        ) {
+            return;
+        }
 
 
-                if (!peer) {
-                    return;
-                }
+        const peer =
+            peerRef.current;
 
 
-                try {
+        if (!peer) {
 
-                    if (
-                        peer.remoteDescription
-                    ) {
+            pendingCandidatesRef.current
+                .push(
+                    data.candidate
+                );
 
-                        await peer.addIceCandidate(
-                            new RTCIceCandidate(
-                                data.candidate
-                            )
-                        );
+            return;
 
-                    } else {
+        }
 
-                        pendingCandidatesRef.current
-                            .push(
-                                data.candidate
-                            );
 
-                    }
+        try {
 
-                } catch (error) {
+            if (
+                peer.remoteDescription &&
+                peer.remoteDescription.type
+            ) {
 
-                    console.error(
-                        "ICE error:",
-                        error
+                await peer.addIceCandidate(
+                    new RTCIceCandidate(
+                        data.candidate
+                    )
+                );
+
+            } else {
+
+                pendingCandidatesRef.current
+                    .push(
+                        data.candidate
                     );
 
-                }
+            }
 
-            };
+        } catch (error) {
 
+            console.error(
+                "ICE candidate error:",
+                error
+            );
+
+        }
+
+    };
+        
         /* -------------------------------------------------
            REJECTED
         ------------------------------------------------- */
