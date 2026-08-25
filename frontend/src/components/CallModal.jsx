@@ -52,63 +52,46 @@ const CallModal = ({
     const isVideo = type === "video";
 
 
-    useEffect(() => {
+useEffect(() => {
+    if (!localVideoRef.current || !localStream) {
+        return;
+    }
 
-        if (
-            localVideoRef.current &&
-            localStream
-        ) {
-            localVideoRef.current.srcObject =
-                localStream;
-        }
+    localVideoRef.current.srcObject = localStream;
 
-    }, [localStream]);
+    localVideoRef.current.play().catch(() => {});
 
-
-    useEffect(() => {
-
-        if (
-            remoteVideoRef.current &&
-            remoteStream
-        ) {
-            remoteVideoRef.current.srcObject =
-                remoteStream;
-        }
-
-    }, [remoteStream]);
+}, [localStream]);
 
 
-    useEffect(() => {
+useEffect(() => {
+    if (!remoteStream) {
+        return;
+    }
 
-        if (
-            !remoteAudioRef.current ||
-            !remoteStream
-        ) {
-            return;
-        }
+    if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStream;
 
-        remoteAudioRef.current.srcObject =
-            remoteStream;
+        remoteVideoRef.current.play().catch(error => {
+            console.warn(
+                "Remote video autoplay blocked:",
+                error
+            );
+        });
+    }
 
-        const audio =
-            remoteAudioRef.current;
+    if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream;
 
-        const playAudio = async () => {
+        remoteAudioRef.current.play().catch(error => {
+            console.warn(
+                "Remote audio autoplay blocked:",
+                error
+            );
+        });
+    }
 
-            try {
-                await audio.play();
-            } catch (error) {
-                console.warn(
-                    "Remote audio autoplay blocked:",
-                    error
-                );
-            }
-
-        };
-
-        playAudio();
-
-    }, [remoteStream]);
+}, [remoteStream]);
 
 
     useEffect(() => {
