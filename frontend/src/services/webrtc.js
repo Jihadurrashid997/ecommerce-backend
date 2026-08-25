@@ -4,13 +4,24 @@ const ICE_SERVERS = {
             urls: [
                 "stun:stun.l.google.com:19302",
                 "stun:stun1.l.google.com:19302",
-                "stun:stun2.l.google.com:19302",
-                "stun:stun3.l.google.com:19302",
-                "stun:stun4.l.google.com:19302"
+                "stun:stun2.l.google.com:19302"
             ]
         }
-    ]
+
+        /*
+        TURN server থাকলে এখানে add করবে:
+
+        {
+            urls: "turn:YOUR_TURN_SERVER:3478",
+            username: "YOUR_USERNAME",
+            credential: "YOUR_PASSWORD"
+        }
+        */
+    ],
+
+    iceCandidatePoolSize: 10
 };
+
 
 export const createPeerConnection = ({
     onIceCandidate,
@@ -25,273 +36,448 @@ export const createPeerConnection = ({
             ICE_SERVERS
         );
 
-    peer.onicecandidate = (event) => {
 
-        if (
-            event.candidate &&
-            typeof onIceCandidate === "function"
-        ) {
-            onIceCandidate(
-                event.candidate
-            );
-        }
-    };
+    peer.onicecandidate =
+        event => {
 
-    peer.ontrack = (event) => {
+            if (
+                event.candidate &&
+                typeof onIceCandidate ===
+                    "function"
+            ) {
 
-        if (
-            typeof onTrack === "function"
-        ) {
-            onTrack(event);
-        }
-    };
+                onIceCandidate(
+                    event.candidate
+                );
 
-    peer.onconnectionstatechange = () => {
+            }
 
-        if (
-            typeof onConnectionStateChange ===
-            "function"
-        ) {
-            onConnectionStateChange(
-                peer.connectionState
-            );
-        }
-    };
+        };
 
-    peer.oniceconnectionstatechange = () => {
 
-        if (
-            typeof onIceConnectionStateChange ===
-            "function"
-        ) {
-            onIceConnectionStateChange(
-                peer.iceConnectionState
-            );
-        }
-    };
+    peer.ontrack =
+        event => {
 
-    peer.onnegotiationneeded = () => {
+            if (
+                typeof onTrack ===
+                "function"
+            ) {
 
-        if (
-            typeof onNegotiationNeeded ===
-            "function"
-        ) {
-            onNegotiationNeeded(peer);
-        }
-    };
+                onTrack(event);
+
+            }
+
+        };
+
+
+    peer.onconnectionstatechange =
+        () => {
+
+            if (
+                typeof onConnectionStateChange ===
+                "function"
+            ) {
+
+                onConnectionStateChange(
+                    peer.connectionState
+                );
+
+            }
+
+        };
+
+
+    peer.oniceconnectionstatechange =
+        () => {
+
+            if (
+                typeof onIceConnectionStateChange ===
+                "function"
+            ) {
+
+                onIceConnectionStateChange(
+                    peer.iceConnectionState
+                );
+
+            }
+
+        };
+
+
+    peer.onnegotiationneeded =
+        () => {
+
+            if (
+                typeof onNegotiationNeeded ===
+                "function"
+            ) {
+
+                onNegotiationNeeded(
+                    peer
+                );
+
+            }
+
+        };
+
 
     return peer;
 };
 
-export const getUserMedia = async ({
-    audio = true,
-    video = false
-} = {}) => {
 
-    if (
-        !navigator.mediaDevices ||
-        !navigator.mediaDevices.getUserMedia
-    ) {
-        throw new Error(
-            "Your browser does not support microphone/camera access."
-        );
-    }
+export const getUserMedia =
+    async ({
+        audio = true,
+        video = false,
+        facingMode = "user"
+    } = {}) => {
 
-    return navigator.mediaDevices.getUserMedia({
-        audio: Boolean(audio),
-        video: Boolean(video)
-    });
-};
+        if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+        ) {
 
-export const addLocalTracks = (
-    peer,
-    stream
-) => {
-
-    if (!peer || !stream) {
-        return;
-    }
-
-    stream
-        .getTracks()
-        .forEach((track) => {
-
-            const alreadyAdded =
-                peer
-                    .getSenders()
-                    .some(
-                        (sender) =>
-                            sender.track === track
-                    );
-
-            if (!alreadyAdded) {
-
-                peer.addTrack(
-                    track,
-                    stream
-                );
-
-            }
-
-        });
-};
-
-export const replaceVideoTrack = (
-    peer,
-    track
-) => {
-
-    if (!peer || !track) {
-        return false;
-    }
-
-    const sender =
-        peer
-            .getSenders()
-            .find(
-                (item) =>
-                    item.track?.kind ===
-                    "video"
+            throw new Error(
+                "Your browser does not support microphone/camera access."
             );
 
-    if (!sender) {
-        return false;
-    }
+        }
 
-    sender.replaceTrack(track);
 
-    return true;
-};
+        const constraints = {
 
-export const replaceAudioTrack = (
-    peer,
-    track
-) => {
+            audio: Boolean(audio),
 
-    if (!peer || !track) {
-        return false;
-    }
+            video:
+                video
+                    ? {
+                          facingMode: {
+                              ideal:
+                                  facingMode
+                          },
 
-    const sender =
-        peer
-            .getSenders()
-            .find(
-                (item) =>
-                    item.track?.kind ===
-                    "audio"
+                          width: {
+                              ideal: 1280
+                          },
+
+                          height: {
+                              ideal: 720
+                          },
+
+                          frameRate: {
+                              ideal: 30,
+                              max: 30
+                          }
+                      }
+                    : false
+
+        };
+
+
+        return navigator.mediaDevices
+            .getUserMedia(
+                constraints
             );
 
-    if (!sender) {
-        return false;
-    }
+    };
 
-    sender.replaceTrack(track);
 
-    return true;
-};
+export const addLocalTracks =
+    (
+        peer,
+        stream
+    ) => {
 
-export const addIceCandidate = async (
-    peer,
-    candidate
-) => {
+        if (
+            !peer ||
+            !stream
+        ) {
+            return;
+        }
 
-    if (
-        !peer ||
-        !candidate
-    ) {
-        return;
-    }
 
-    try {
+        stream
+            .getTracks()
+            .forEach(
+                track => {
 
-        await peer.addIceCandidate(
-            candidate
-        );
+                    const exists =
+                        peer
+                            .getSenders()
+                            .some(
+                                sender =>
+                                    sender.track &&
+                                    sender.track.id ===
+                                        track.id
+                            );
 
-    } catch (error) {
 
-        console.error(
-            "WebRTC ICE candidate error:",
-            error
-        );
+                    if (!exists) {
 
-    }
-};
+                        peer.addTrack(
+                            track,
+                            stream
+                        );
 
-export const closePeerConnection = (
-    peer
-) => {
+                    }
 
-    if (!peer) {
-        return;
-    }
+                }
+            );
 
-    try {
+    };
 
-        peer.onicecandidate = null;
-        peer.ontrack = null;
-        peer.onconnectionstatechange = null;
-        peer.oniceconnectionstatechange = null;
-        peer.onnegotiationneeded = null;
 
-        peer
-            .getSenders()
-            .forEach((sender) => {
+export const replaceVideoTrack =
+    async (
+        peer,
+        track
+    ) => {
 
-                try {
-                    sender.replaceTrack(null);
-                } catch (_) {}
+        if (
+            !peer ||
+            !track
+        ) {
+            return false;
+        }
 
-            });
 
-        peer.close();
-
-    } catch (error) {
-
-        console.error(
-            "WebRTC close error:",
-            error
-        );
-
-    }
-};
-
-export const stopMediaStream = (
-    stream
-) => {
-
-    if (!stream) {
-        return;
-    }
-
-    stream
-        .getTracks()
-        .forEach((track) => {
-
-            try {
-
-                track.stop();
-
-            } catch (error) {
-
-                console.error(
-                    "Media track stop error:",
-                    error
+        const sender =
+            peer
+                .getSenders()
+                .find(
+                    item =>
+                        item.track?.kind ===
+                        "video"
                 );
 
-            }
 
-        });
+        if (!sender) {
 
-};
+            console.warn(
+                "No video sender found."
+            );
+
+            return false;
+
+        }
+
+
+        try {
+
+            await sender.replaceTrack(
+                track
+            );
+
+            return true;
+
+        } catch (error) {
+
+            console.error(
+                "Video track replace error:",
+                error
+            );
+
+            return false;
+
+        }
+
+    };
+
+
+export const replaceAudioTrack =
+    async (
+        peer,
+        track
+    ) => {
+
+        if (
+            !peer ||
+            !track
+        ) {
+            return false;
+        }
+
+
+        const sender =
+            peer
+                .getSenders()
+                .find(
+                    item =>
+                        item.track?.kind ===
+                        "audio"
+                );
+
+
+        if (!sender) {
+
+            return false;
+
+        }
+
+
+        try {
+
+            await sender.replaceTrack(
+                track
+            );
+
+            return true;
+
+        } catch (error) {
+
+            console.error(
+                "Audio track replace error:",
+                error
+            );
+
+            return false;
+
+        }
+
+    };
+
+
+export const addIceCandidate =
+    async (
+        peer,
+        candidate
+    ) => {
+
+        if (
+            !peer ||
+            !candidate
+        ) {
+            return false;
+        }
+
+
+        try {
+
+            await peer.addIceCandidate(
+                new RTCIceCandidate(
+                    candidate
+                )
+            );
+
+            return true;
+
+        } catch (error) {
+
+            console.error(
+                "WebRTC ICE candidate error:",
+                error
+            );
+
+            return false;
+
+        }
+
+    };
+
+
+export const closePeerConnection =
+    peer => {
+
+        if (!peer) {
+            return;
+        }
+
+
+        try {
+
+            peer.onicecandidate = null;
+
+            peer.ontrack = null;
+
+            peer.onconnectionstatechange =
+                null;
+
+            peer.oniceconnectionstatechange =
+                null;
+
+            peer.onnegotiationneeded =
+                null;
+
+
+            peer
+                .getSenders()
+                .forEach(
+                    sender => {
+
+                        try {
+
+                            sender.replaceTrack(
+                                null
+                            );
+
+                        } catch (_) {}
+
+                    }
+                );
+
+
+            peer.close();
+
+        } catch (error) {
+
+            console.error(
+                "WebRTC close error:",
+                error
+            );
+
+        }
+
+    };
+
+
+export const stopMediaStream =
+    stream => {
+
+        if (!stream) {
+            return;
+        }
+
+
+        stream
+            .getTracks()
+            .forEach(
+                track => {
+
+                    try {
+
+                        track.stop();
+
+                    } catch (error) {
+
+                        console.error(
+                            "Media track stop error:",
+                            error
+                        );
+
+                    }
+
+                }
+            );
+
+    };
+
 
 export default {
+
     createPeerConnection,
+
     getUserMedia,
+
     addLocalTracks,
+
     replaceVideoTrack,
+
     replaceAudioTrack,
+
     addIceCandidate,
+
     closePeerConnection,
+
     stopMediaStream
+
 };
