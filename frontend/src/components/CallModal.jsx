@@ -33,39 +33,24 @@ const CallModal = ({
     onSwitchCamera
 }) => {
 
-    const localVideoRef =
-        useRef(null);
+    const localVideoRef = useRef(null);
+    const remoteVideoRef = useRef(null);
+    const remoteAudioRef = useRef(null);
 
-    const remoteVideoRef =
-        useRef(null);
+    const [muted, setMuted] = useState(false);
 
-    const remoteAudioRef =
-        useRef(null);
+    const [cameraOff, setCameraOff] = useState(
+        type !== "video"
+    );
 
-
-    const [muted, setMuted] =
-        useState(false);
-
-    const [cameraOff, setCameraOff] =
-        useState(
-            type !== "video"
-        );
-
-
-    const isIncoming =
-        mode === "incoming";
+    const isIncoming = mode === "incoming";
 
     const isActiveCall =
         mode === "accepted" ||
         mode === "connected";
 
-    const isVideo =
-        type === "video";
+    const isVideo = type === "video";
 
-
-    /* =====================================================
-       LOCAL VIDEO
-    ===================================================== */
 
     useEffect(() => {
 
@@ -73,20 +58,12 @@ const CallModal = ({
             localVideoRef.current &&
             localStream
         ) {
-
             localVideoRef.current.srcObject =
                 localStream;
-
         }
 
-    }, [
-        localStream
-    ]);
+    }, [localStream]);
 
-
-    /* =====================================================
-       REMOTE VIDEO
-    ===================================================== */
 
     useEffect(() => {
 
@@ -94,20 +71,12 @@ const CallModal = ({
             remoteVideoRef.current &&
             remoteStream
         ) {
-
             remoteVideoRef.current.srcObject =
                 remoteStream;
-
         }
 
-    }, [
-        remoteStream
-    ]);
+    }, [remoteStream]);
 
-
-    /* =====================================================
-       REMOTE AUDIO
-    ===================================================== */
 
     useEffect(() => {
 
@@ -118,44 +87,29 @@ const CallModal = ({
             return;
         }
 
-
         remoteAudioRef.current.srcObject =
             remoteStream;
-
 
         const audio =
             remoteAudioRef.current;
 
+        const playAudio = async () => {
 
-        const playAudio =
-            async () => {
+            try {
+                await audio.play();
+            } catch (error) {
+                console.warn(
+                    "Remote audio autoplay blocked:",
+                    error
+                );
+            }
 
-                try {
-
-                    await audio.play();
-
-                } catch (error) {
-
-                    console.warn(
-                        "Remote audio autoplay blocked:",
-                        error
-                    );
-
-                }
-
-            };
-
+        };
 
         playAudio();
 
-    }, [
-        remoteStream
-    ]);
+    }, [remoteStream]);
 
-
-    /* =====================================================
-       MUTE / CAMERA
-    ===================================================== */
 
     useEffect(() => {
 
@@ -163,29 +117,17 @@ const CallModal = ({
             return;
         }
 
-
         localStream
             .getAudioTracks()
-            .forEach(
-                track => {
-
-                    track.enabled =
-                        !muted;
-
-                }
-            );
-
+            .forEach(track => {
+                track.enabled = !muted;
+            });
 
         localStream
             .getVideoTracks()
-            .forEach(
-                track => {
-
-                    track.enabled =
-                        !cameraOff;
-
-                }
-            );
+            .forEach(track => {
+                track.enabled = !cameraOff;
+            });
 
     }, [
         localStream,
@@ -194,51 +136,28 @@ const CallModal = ({
     ]);
 
 
-    /* =====================================================
-       FORMAT TIMER
-    ===================================================== */
-
     const formatTime = () => {
 
         const totalSeconds =
             Math.max(
                 0,
-                Number(
-                    callDuration
-                ) || 0
+                Number(callDuration) || 0
             );
 
-
         const minutes =
-            Math.floor(
-                totalSeconds / 60
-            )
+            Math.floor(totalSeconds / 60)
                 .toString()
-                .padStart(
-                    2,
-                    "0"
-                );
-
+                .padStart(2, "0");
 
         const seconds =
-            (
-                totalSeconds % 60
-            )
+            (totalSeconds % 60)
                 .toString()
-                .padStart(
-                    2,
-                    "0"
-                );
-
+                .padStart(2, "0");
 
         return `${minutes}:${seconds}`;
 
     };
 
-
-    /* =====================================================
-       HIDDEN
-    ===================================================== */
 
     if (!visible) {
         return null;
@@ -259,8 +178,7 @@ const CallModal = ({
                 position: "fixed",
                 inset: 0,
                 zIndex: 99999,
-                background:
-                    "rgba(0,0,0,.84)",
+                background: "rgba(0,0,0,.84)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -268,14 +186,8 @@ const CallModal = ({
             }}
         >
 
-            {/* =================================================
-                REMOTE AUDIO
-            ================================================= */}
-
             <audio
-                ref={
-                    remoteAudioRef
-                }
+                ref={remoteAudioRef}
                 autoPlay
                 playsInline
                 controls={false}
@@ -287,10 +199,8 @@ const CallModal = ({
 
             <div
                 style={{
-                    width:
-                        "min(560px,100%)",
-                    height:
-                        "min(720px,92vh)",
+                    width: "min(560px,100%)",
+                    height: "min(720px,92vh)",
                     minHeight: 480,
                     position: "relative",
                     overflow: "hidden",
@@ -303,17 +213,11 @@ const CallModal = ({
                 }}
             >
 
-                {/* =================================================
-                    REMOTE VIDEO
-                ================================================= */}
 
-                {isVideo &&
-                remoteStream ? (
+                {isVideo && remoteStream ? (
 
                     <video
-                        ref={
-                            remoteVideoRef
-                        }
+                        ref={remoteVideoRef}
                         autoPlay
                         playsInline
                         style={{
@@ -331,29 +235,22 @@ const CallModal = ({
                             width: "100%",
                             height: "100%",
                             display: "flex",
-                            flexDirection:
-                                "column",
-                            alignItems:
-                                "center",
-                            justifyContent:
-                                "center"
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center"
                         }}
                     >
 
                         {callerAvatar ? (
 
                             <img
-                                src={
-                                    callerAvatar
-                                }
+                                src={callerAvatar}
                                 alt=""
                                 style={{
                                     width: 120,
                                     height: 120,
-                                    borderRadius:
-                                        "50%",
-                                    objectFit:
-                                        "cover",
+                                    borderRadius: "50%",
+                                    objectFit: "cover",
                                     border:
                                         "4px solid rgba(255,255,255,.25)"
                                 }}
@@ -365,16 +262,12 @@ const CallModal = ({
                                 style={{
                                     width: 120,
                                     height: 120,
-                                    borderRadius:
-                                        "50%",
+                                    borderRadius: "50%",
                                     background:
                                         "linear-gradient(135deg,#1877f2,#6366f1)",
-                                    display:
-                                        "flex",
-                                    alignItems:
-                                        "center",
-                                    justifyContent:
-                                        "center",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
                                     fontSize: 46,
                                     fontWeight: 800
                                 }}
@@ -387,8 +280,7 @@ const CallModal = ({
 
                         <h2
                             style={{
-                                margin:
-                                    "20px 0 7px"
+                                margin: "20px 0 7px"
                             }}
                         >
                             {callerName}
@@ -401,29 +293,21 @@ const CallModal = ({
                                 opacity: .72
                             }}
                         >
-
                             {isIncoming
                                 ? `Incoming ${
                                       isVideo
                                           ? "video"
                                           : "voice"
                                   } call`
-
                                 : isActiveCall
                                     ? `${
                                           isVideo
                                               ? "Video"
                                               : "Voice"
                                       } call`
-
                                     : "Calling..."}
-
                         </p>
 
-
-                        {/* =================================================
-                            TIMER
-                        ================================================= */}
 
                         {isActiveCall && (
 
@@ -433,8 +317,7 @@ const CallModal = ({
                                     opacity: .85,
                                     fontSize: 18,
                                     fontWeight: 700,
-                                    letterSpacing:
-                                        "1px"
+                                    letterSpacing: "1px"
                                 }}
                             >
                                 {formatTime()}
@@ -447,29 +330,20 @@ const CallModal = ({
                 )}
 
 
-                {/* =================================================
-                    LOCAL VIDEO
-                ================================================= */}
-
-                {isVideo &&
-                    localStream && (
+                {isVideo && localStream && (
 
                     <video
-                        ref={
-                            localVideoRef
-                        }
+                        ref={localVideoRef}
                         autoPlay
                         muted
                         playsInline
                         style={{
-                            position:
-                                "absolute",
+                            position: "absolute",
                             top: 18,
                             right: 18,
                             width: 130,
                             height: 175,
-                            objectFit:
-                                "cover",
+                            objectFit: "cover",
                             borderRadius: 16,
                             background: "#000",
                             border:
@@ -480,34 +354,24 @@ const CallModal = ({
                 )}
 
 
-                {/* =================================================
-                    INCOMING HEADER
-                ================================================= */}
-
                 {isIncoming && (
 
                     <div
                         style={{
-                            position:
-                                "absolute",
+                            position: "absolute",
                             top: 20,
                             left: 20,
                             right: 20,
-                            textAlign:
-                                "center",
+                            textAlign: "center",
                             padding: 12,
                             borderRadius: 14,
                             background:
                                 "rgba(0,0,0,.28)",
-                            backdropFilter:
-                                "blur(8px)"
+                            backdropFilter: "blur(8px)"
                         }}
                     >
 
-                        <FiVolume2
-                            size={22}
-                        />
-
+                        <FiVolume2 size={22} />
 
                         <div
                             style={{
@@ -515,9 +379,7 @@ const CallModal = ({
                                 fontWeight: 700
                             }}
                         >
-                            {callerName}
-                            {" "}
-                            is calling...
+                            {callerName} is calling...
                         </div>
 
                     </div>
@@ -525,32 +387,20 @@ const CallModal = ({
                 )}
 
 
-                {/* =================================================
-                    CONTROLS
-                ================================================= */}
-
                 <div
                     style={{
-                        position:
-                            "absolute",
+                        position: "absolute",
                         left: 0,
                         right: 0,
                         bottom: 28,
-                        display:
-                            "flex",
-                        alignItems:
-                            "center",
-                        justifyContent:
-                            "center",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
                         gap: 14,
-                        flexWrap:
-                            "wrap"
+                        flexWrap: "wrap"
                     }}
                 >
 
-                    {/* =================================================
-                        INCOMING CALL
-                    ================================================= */}
 
                     {isIncoming ? (
 
@@ -560,32 +410,22 @@ const CallModal = ({
 
                             <button
                                 type="button"
-                                onClick={
-                                    onReject
-                                }
+                                onClick={onReject}
                                 aria-label="Reject call"
                                 style={{
                                     width: 62,
                                     height: 62,
                                     border: "none",
-                                    borderRadius:
-                                        "50%",
-                                    background:
-                                        "#ef4444",
+                                    borderRadius: "50%",
+                                    background: "#ef4444",
                                     color: "#fff",
-                                    cursor:
-                                        "pointer",
-                                    display:
-                                        "flex",
-                                    alignItems:
-                                        "center",
-                                    justifyContent:
-                                        "center"
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
                                 }}
                             >
-                                <FiPhoneOff
-                                    size={25}
-                                />
+                                <FiPhoneOff size={25} />
                             </button>
 
 
@@ -593,32 +433,22 @@ const CallModal = ({
 
                             <button
                                 type="button"
-                                onClick={
-                                    onAccept
-                                }
+                                onClick={onAccept}
                                 aria-label="Accept call"
                                 style={{
                                     width: 62,
                                     height: 62,
                                     border: "none",
-                                    borderRadius:
-                                        "50%",
-                                    background:
-                                        "#22c55e",
+                                    borderRadius: "50%",
+                                    background: "#22c55e",
                                     color: "#fff",
-                                    cursor:
-                                        "pointer",
-                                    display:
-                                        "flex",
-                                    alignItems:
-                                        "center",
-                                    justifyContent:
-                                        "center"
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
                                 }}
                             >
-                                <FiPhone
-                                    size={25}
-                                />
+                                <FiPhone size={25} />
                             </button>
 
                         </>
@@ -627,16 +457,13 @@ const CallModal = ({
 
                         <>
 
-                            {/* =================================================
-                                MUTE
-                            ================================================= */}
+                            {/* MUTE */}
 
                             <button
                                 type="button"
                                 onClick={() =>
                                     setMuted(
-                                        value =>
-                                            !value
+                                        value => !value
                                     )
                                 }
                                 aria-label={
@@ -648,42 +475,27 @@ const CallModal = ({
                                     width: 52,
                                     height: 52,
                                     border: "none",
-                                    borderRadius:
-                                        "50%",
+                                    borderRadius: "50%",
                                     background:
                                         "rgba(255,255,255,.16)",
                                     color: "#fff",
-                                    cursor:
-                                        "pointer",
-                                    display:
-                                        "flex",
-                                    alignItems:
-                                        "center",
-                                    justifyContent:
-                                        "center"
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
                                 }}
                             >
 
                                 {muted ? (
-
-                                    <FiMicOff
-                                        size={21}
-                                    />
-
+                                    <FiMicOff size={21} />
                                 ) : (
-
-                                    <FiMic
-                                        size={21}
-                                    />
-
+                                    <FiMic size={21} />
                                 )}
 
                             </button>
 
 
-                            {/* =================================================
-                                CAMERA ON / OFF
-                            ================================================= */}
+                            {/* CAMERA */}
 
                             {isVideo && (
 
@@ -691,8 +503,7 @@ const CallModal = ({
                                     type="button"
                                     onClick={() =>
                                         setCameraOff(
-                                            value =>
-                                                !value
+                                            value => !value
                                         )
                                     }
                                     aria-label={
@@ -704,36 +515,23 @@ const CallModal = ({
                                         width: 52,
                                         height: 52,
                                         border: "none",
-                                        borderRadius:
-                                            "50%",
+                                        borderRadius: "50%",
                                         background:
                                             cameraOff
                                                 ? "#374151"
                                                 : "rgba(255,255,255,.16)",
                                         color: "#fff",
-                                        cursor:
-                                            "pointer",
-                                        display:
-                                            "flex",
-                                        alignItems:
-                                            "center",
-                                        justifyContent:
-                                            "center"
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
                                     }}
                                 >
 
                                     {cameraOff ? (
-
-                                        <FiVideoOff
-                                            size={21}
-                                        />
-
+                                        <FiVideoOff size={21} />
                                     ) : (
-
-                                        <FiVideo
-                                            size={21}
-                                        />
-
+                                        <FiVideo size={21} />
                                     )}
 
                                 </button>
@@ -741,83 +539,56 @@ const CallModal = ({
                             )}
 
 
-                            {/* =================================================
-                                SWITCH FRONT / BACK CAMERA
-                            ================================================= */}
+                            {/* SWITCH CAMERA */}
 
                             {isVideo &&
                                 !cameraOff && (
 
                                 <button
                                     type="button"
-                                    onClick={
-                                        onSwitchCamera
-                                    }
-                                    aria-label="Switch front and back camera"
+                                    onClick={onSwitchCamera}
+                                    aria-label="Switch camera"
                                     title="Switch camera"
                                     style={{
                                         width: 52,
                                         height: 52,
                                         border: "none",
-                                        borderRadius:
-                                            "50%",
+                                        borderRadius: "50%",
                                         background:
                                             "rgba(255,255,255,.16)",
                                         color: "#fff",
-                                        cursor:
-                                            "pointer",
-                                        display:
-                                            "flex",
-                                        alignItems:
-                                            "center",
-                                        justifyContent:
-                                            "center"
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
                                     }}
                                 >
-
-                                    <FiRefreshCw
-                                        size={21}
-                                    />
-
+                                    <FiRefreshCw size={21} />
                                 </button>
 
                             )}
 
 
-                            {/* =================================================
-                                END CALL
-                            ================================================= */}
+                            {/* END CALL */}
 
                             <button
                                 type="button"
-                                onClick={
-                                    onEnd
-                                }
+                                onClick={onEnd}
                                 aria-label="End call"
                                 style={{
                                     width: 62,
                                     height: 62,
                                     border: "none",
-                                    borderRadius:
-                                        "50%",
-                                    background:
-                                        "#ef4444",
+                                    borderRadius: "50%",
+                                    background: "#ef4444",
                                     color: "#fff",
-                                    cursor:
-                                        "pointer",
-                                    display:
-                                        "flex",
-                                    alignItems:
-                                        "center",
-                                    justifyContent:
-                                        "center"
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
                                 }}
                             >
-
-                                <FiPhoneOff
-                                    size={25}
-                                />
-
+                                <FiPhoneOff size={25} />
                             </button>
 
                         </>
