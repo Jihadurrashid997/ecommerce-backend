@@ -997,10 +997,9 @@ onConnectionStateChange:
             ]
         );
 
-
-    /* =====================================================
-       START CALL
-    ===================================================== */
+/* =====================================================
+   START CALL
+===================================================== */
 
 const startCall =
     useCallback(
@@ -1012,14 +1011,12 @@ const startCall =
             const me =
                 currentUserRef.current;
 
-
             if (
                 !target ||
                 !me
             ) {
                 return;
             }
-
 
             const receiverId =
                 getId(target);
@@ -1033,7 +1030,6 @@ const startCall =
                     target
                 );
 
-
             if (
                 !receiverId ||
                 !callerId ||
@@ -1041,14 +1037,6 @@ const startCall =
             ) {
                 return;
             }
-
-
-            /*
-            ============================================
-            IMPORTANT:
-            Target user's name is used for OUTGOING UI
-            ============================================
-            */
 
             const receiverName =
                 getUserName(target);
@@ -1062,17 +1050,16 @@ const startCall =
             const callerAvatar =
                 getAvatar(me);
 
-
             try {
 
                 const stream =
                     await getUserMedia({
                         audio: true,
                         video:
-                            type ===
-                            "video"
+                            type === "video",
+                        facingMode:
+                            "user"
                     });
-
 
                 localStreamRef.current =
                     stream;
@@ -1081,10 +1068,8 @@ const startCall =
                     stream
                 );
 
-
                 currentRoomRef.current =
                     roomId;
-
 
                 callRef.current = {
 
@@ -1108,18 +1093,10 @@ const startCall =
 
                 };
 
-
                 socket.emit(
                     "join-room",
                     roomId
                 );
-
-
-                /*
-                ========================================
-                OUTGOING CALL
-                ========================================
-                */
 
                 setCallState({
 
@@ -1137,30 +1114,17 @@ const startCall =
 
                     roomId,
 
-                    /*
-                    Show the PERSON we are calling
-                    */
-
                     callerName:
                         receiverName,
 
                     callerAvatar:
                         receiverAvatar,
 
-                    receiverName:
-                        receiverName,
+                    receiverName,
 
-                    receiverAvatar:
-                        receiverAvatar
+                    receiverAvatar
 
                 });
-
-
-                /*
-                ========================================
-                SEND CALL
-                ========================================
-                */
 
                 socket.emit(
                     "call-user",
@@ -1188,22 +1152,17 @@ const startCall =
                     }
                 );
 
-
-            } catch (
-                error
-            ) {
+            } catch (error) {
 
                 console.error(
                     "Call start error:",
                     error
                 );
 
-
                 alert(
                     error?.message ||
                     "Microphone/camera permission is required."
                 );
-
 
                 cleanupCall();
 
@@ -1217,13 +1176,10 @@ const startCall =
     );
 
 
-              
+/* =====================================================
+   SWITCH CAMERA
+===================================================== */
 
-
-    /* =====================================================
-       ACCEPT CALL
-    ===================================================== */
-    
 const switchCamera =
     useCallback(
         async () => {
@@ -1234,15 +1190,12 @@ const switchCamera =
                 return;
             }
 
-
             const oldStream =
                 localStreamRef.current;
-
 
             const oldVideoTracks =
                 oldStream
                     .getVideoTracks();
-
 
             if (
                 !oldVideoTracks.length
@@ -1250,12 +1203,10 @@ const switchCamera =
                 return;
             }
 
-
             const nextFacing =
                 cameraFacing === "user"
                     ? "environment"
                     : "user";
-
 
             try {
 
@@ -1267,11 +1218,9 @@ const switchCamera =
                             nextFacing
                     });
 
-
                 const newVideoTrack =
                     newStream
                         .getVideoTracks()[0];
-
 
                 if (
                     !newVideoTrack
@@ -1279,10 +1228,8 @@ const switchCamera =
                     return;
                 }
 
-
                 const peer =
                     peerRef.current;
-
 
                 if (peer) {
 
@@ -1295,7 +1242,6 @@ const switchCamera =
                                     "video"
                             );
 
-
                     if (sender) {
 
                         await sender.replaceTrack(
@@ -1306,17 +1252,17 @@ const switchCamera =
 
                 }
 
-
                 oldVideoTracks.forEach(
-                    track =>
-                        track.stop()
+                    track => {
+                        try {
+                            track.stop();
+                        } catch (_) {}
+                    }
                 );
-
 
                 const audioTracks =
                     oldStream
                         .getAudioTracks();
-
 
                 const updatedStream =
                     new MediaStream([
@@ -1324,20 +1270,16 @@ const switchCamera =
                         newVideoTrack
                     ]);
 
-
                 localStreamRef.current =
                     updatedStream;
-
 
                 setLocalStream(
                     updatedStream
                 );
 
-
                 setCameraFacing(
                     nextFacing
                 );
-
 
             } catch (error) {
 
@@ -1353,7 +1295,12 @@ const switchCamera =
             cameraFacing
         ]
     );
-    
+
+
+/* =====================================================
+   ACCEPT CALL
+===================================================== */
+
 const acceptCall =
     useCallback(
         async () => {
@@ -1364,22 +1311,25 @@ const acceptCall =
                 callRef.current ||
                 callState;
 
-
             if (!call) {
                 return;
             }
-
 
             try {
 
                 const stream =
                     await getUserMedia({
+
                         audio: true,
+
                         video:
                             call.type ===
-                            "video"
-                    });
+                            "video",
 
+                        facingMode:
+                            "user"
+
+                    });
 
                 localStreamRef.current =
                     stream;
@@ -1388,10 +1338,13 @@ const acceptCall =
                     stream
                 );
 
-
                 currentRoomRef.current =
                     call.roomId;
 
+                socket.emit(
+                    "join-room",
+                    call.roomId
+                );
 
                 const acceptedCall = {
 
@@ -1411,16 +1364,12 @@ const acceptCall =
 
                 };
 
-
                 callRef.current =
                     acceptedCall;
 
-
-                socket.emit(
-                    "join-room",
-                    call.roomId
+                setCallState(
+                    acceptedCall
                 );
-
 
                 socket.emit(
                     "accept-call",
@@ -1446,28 +1395,12 @@ const acceptCall =
                     }
                 );
 
-
-                /*
-                ==========================================
-                CALL CONNECTED
-                Timer should start only from this point
-                ==========================================
-                */
-
-                setCallState(
-                    acceptedCall
-                );
-
-
-            } catch (
-                error
-            ) {
+            } catch (error) {
 
                 console.error(
                     "Accept call error:",
                     error
                 );
-
 
                 socket.emit(
                     "reject-call",
@@ -1486,7 +1419,6 @@ const acceptCall =
 
                     }
                 );
-
 
                 cleanupCall();
 
