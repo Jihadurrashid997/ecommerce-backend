@@ -1184,49 +1184,82 @@ const switchCamera =
     useCallback(
         async () => {
 
-            if (
-                !localStreamRef.current
-            ) {
-                return;
-            }
-
-            const oldStream =
-                localStreamRef.current;
-
-            const oldVideoTracks =
-                oldStream
-                    .getVideoTracks();
-
-            if (
-                !oldVideoTracks.length
-            ) {
-                return;
-            }
-
-            const nextFacing =
-                cameraFacing === "user"
-                    ? "environment"
-                    : "user";
-
             try {
 
+                const currentStream =
+                    localStreamRef.current;
+
+                if (!currentStream) {
+                    console.warn(
+                        "No local stream available"
+                    );
+                    return;
+                }
+
+                const currentVideoTrack =
+                    currentStream
+                        .getVideoTracks()[0];
+
+                if (!currentVideoTrack) {
+                    console.warn(
+                        "No video track available"
+                    );
+                    return;
+                }
+
+                const nextFacing =
+                    cameraFacing === "user"
+                        ? "environment"
+                        : "user";
+
+                console.log(
+                    "📷 Switching camera:",
+                    cameraFacing,
+                    "→",
+                    nextFacing
+                );
+
+                /*
+                 * Get new camera
+                 */
+
                 const newStream =
-                    await getUserMedia({
+                    await navigator.mediaDevices.getUserMedia({
+
                         audio: false,
-                        video: true,
-                        facingMode:
-                            nextFacing
+
+                        video: {
+                            facingMode: {
+                                ideal:
+                                    nextFacing
+                            }
+                        }
+
                     });
 
                 const newVideoTrack =
                     newStream
                         .getVideoTracks()[0];
 
-                if (
-                    !newVideoTrack
-                ) {
+                if (!newVideoTrack) {
+
+                    console.error(
+                        "❌ New camera track not found"
+                    );
+
+                    newStream
+                        .getTracks()
+                        .forEach(
+                            track =>
+                                track.stop()
+                        );
+
                     return;
                 }
+
+                /*
+                 * Replace WebRTC video track
+                 */
 
                 const peer =
                     peerRef.current;
@@ -1238,7 +1271,8 @@ const switchCamera =
                             .getSenders()
                             .find(
                                 item =>
-                                    item.track?.kind ===
+                                    item.track &&
+                                    item.track.kind ===
                                     "video"
                             );
 
@@ -1248,20 +1282,32 @@ const switchCamera =
                             newVideoTrack
                         );
 
+                        console.log(
+                            "✅ WebRTC video track replaced"
+                        );
+
+                    } else {
+
+                        console.warn(
+                            "⚠️ Video sender not found"
+                        );
+
                     }
 
                 }
 
-                oldVideoTracks.forEach(
-                    track => {
-                        try {
-                            track.stop();
-                        } catch (_) {}
-                    }
-                );
+                /*
+                 * Stop old camera
+                 */
+
+                currentVideoTrack.stop();
+
+                /*
+                 * Keep existing audio track
+                 */
 
                 const audioTracks =
-                    oldStream
+                    currentStream
                         .getAudioTracks();
 
                 const updatedStream =
@@ -1269,6 +1315,10 @@ const switchCamera =
                         ...audioTracks,
                         newVideoTrack
                     ]);
+
+                /*
+                 * Update refs + React state
+                 */
 
                 localStreamRef.current =
                     updatedStream;
@@ -1281,11 +1331,25 @@ const switchCamera =
                     nextFacing
                 );
 
+                console.log(
+                    "📷 Camera switched successfully:",
+                    nextFacing
+                );
+
             } catch (error) {
 
                 console.error(
-                    "Camera switch error:",
+                    "❌ Camera switch error:",
                     error
+                );
+
+                /*
+                 * Some devices/browsers don't support
+                 * facingMode switching.
+                 */
+
+                alert(
+                    "Back camera could not be opened. Please check camera permission or device camera support."
                 );
 
             }
@@ -1295,7 +1359,6 @@ const switchCamera =
             cameraFacing
         ]
     );
-
 
 /* =====================================================
    ACCEPT CALL
@@ -1882,6 +1945,11 @@ const onIncomingCall =
             return;
         }
 
+        console.log(
+            "📞 Incoming call received:",
+            data
+        );
+
         const callerId =
             getId(
                 data.callerId ||
@@ -1899,9 +1967,11 @@ const onIncomingCall =
 
             ...data,
 
-            mode: "incoming",
+            mode:
+                "incoming",
 
-            status: "ringing",
+            status:
+                "ringing",
 
             callerId,
 
@@ -1914,21 +1984,20 @@ const onIncomingCall =
             callerName:
                 data.callerName ||
                 data.senderName ||
-                getUserName(data.caller) ||
+                getUserName(
+                    data.caller
+                ) ||
                 "User",
 
             callerAvatar:
                 data.callerAvatar ||
                 data.senderAvatar ||
-                getAvatar(data.caller) ||
+                getAvatar(
+                    data.caller
+                ) ||
                 ""
 
         };
-
-        console.log(
-            "📞 INCOMING CALL:",
-            incoming
-        );
 
         /*
          * Save incoming call
@@ -1938,12 +2007,13 @@ const onIncomingCall =
             incoming;
 
         currentRoomRef.current =
-            incoming.roomId || null;
+            incoming.roomId ||
+            null;
 
         /*
-         * VERY IMPORTANT:
-         * Incoming call must ALWAYS
-         * have mode = incoming.
+         * IMPORTANT
+         *
+         * This MUST remain "incoming"
          */
 
         setCallState(
@@ -1951,18 +2021,29 @@ const onIncomingCall =
         );
 
         /*
-         * Play ringtone + browser notification
+         * Start incoming ringtone
          */
 
-        showIncomingCallNotification({
+        try {
 
-            callerName:
-                incoming.callerName,
+            showIncomingCallNotification({
 
-            type:
-                incoming.type
+                callerName:
+                    incoming.callerName,
 
-        });
+                type:
+                    incoming.type
+
+            });
+
+        } catch (error) {
+
+            console.error(
+                "Incoming ringtone error:",
+                error
+            );
+
+        }
 
     };
 
@@ -1978,22 +2059,18 @@ const onCallRinging =
             return;
         }
 
-        const currentCall =
-            callRef.current;
-
         /*
-         * If this user already has an
-         * incoming call, NEVER change
-         * mode from incoming -> outgoing.
+         * Incoming receiver হলে
+         * mode কখনো outgoing করা যাবে না.
          */
 
         if (
-            currentCall?.mode ===
+            callRef.current?.mode ===
             "incoming"
         ) {
 
             console.log(
-                "📞 Ignoring call-ringing for incoming call"
+                "📞 Keeping incoming call state"
             );
 
             setCallState(
@@ -2002,15 +2079,10 @@ const onCallRinging =
                     ...(previous || {}),
                     ...data,
 
-                    /*
-                     * Keep incoming mode
-                     */
-
                     mode:
                         "incoming",
 
                     status:
-                        previous?.status ||
                         "ringing"
 
                 })
@@ -2019,14 +2091,13 @@ const onCallRinging =
             return;
         }
 
-
         /*
-         * Outgoing caller side
+         * Caller side
          */
 
         const updatedCall = {
 
-            ...(currentCall || {}),
+            ...(callRef.current || {}),
             ...data,
 
             mode:
@@ -2038,23 +2109,14 @@ const onCallRinging =
 
         };
 
-
         callRef.current =
             updatedCall;
-
 
         currentRoomRef.current =
             updatedCall.roomId ||
             currentRoomRef.current;
 
-
         setCallState(
-            updatedCall
-        );
-
-
-        console.log(
-            "📞 OUTGOING CALL RINGING:",
             updatedCall
         );
 
