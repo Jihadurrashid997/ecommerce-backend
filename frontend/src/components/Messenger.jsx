@@ -1654,131 +1654,207 @@ const acceptCall =
             };
 
 
-        /* -------------------------------------------------
-           MESSAGE RECEIVED
-        ------------------------------------------------- */
+       /* -------------------------------------------------
+   MESSAGE RECEIVED
+------------------------------------------------- */
 
-        const onReceiveMessage =
-            incoming => {
+const onReceiveMessage =
+    incoming => {
 
-                if (!incoming) {
-                    return;
-                }
-
-
-                const newMessage =
-                    incoming.data &&
-                    typeof incoming.data ===
-                        "object"
-                        ? {
-                              ...incoming.data,
-                              ...incoming
-                          }
-                        : incoming;
+        if (!incoming) {
+            return;
+        }
 
 
-                const senderId =
-                    getMessageSenderId(
-                        newMessage
-                    );
+        const newMessage =
+            incoming.data &&
+            typeof incoming.data ===
+                "object"
 
-                const receiverId =
-                    getMessageReceiverId(
-                        newMessage
-                    );
+                ? {
+                      ...incoming.data,
+                      ...incoming
+                  }
+
+                : incoming;
 
 
-                if (
+        const senderId =
+            getMessageSenderId(
+                newMessage
+            );
+
+
+        const receiverId =
+            getMessageReceiverId(
+                newMessage
+            );
+
+
+        /*
+        ==========================================
+        IGNORE OWN MESSAGE
+        ==========================================
+        */
+
+        if (
+            senderId ===
+            currentId
+        ) {
+
+            return;
+
+        }
+
+
+        const active =
+            selectedUserRef.current;
+
+
+        const activeId =
+            getId(active);
+
+
+        const belongs =
+            activeId &&
+            (
+                (
                     senderId ===
-                    currentId
-                ) {
-                    return;
-                }
+                        activeId &&
+
+                    receiverId ===
+                        currentId
+                )
+
+                ||
+
+                (
+                    senderId ===
+                        currentId &&
+
+                    receiverId ===
+                        activeId
+                )
+            );
 
 
-                const active =
-                    selectedUserRef.current;
+        /*
+        ==========================================
+        MESSAGE IS OPEN
+        ==========================================
+        */
 
-                const activeId =
-                    getId(active);
+        if (belongs) {
 
-
-                const belongs =
-                    activeId &&
-                    (
-                        (
-                            senderId ===
-                                activeId &&
-                            receiverId ===
-                                currentId
-                        ) ||
-                        (
-                            senderId ===
-                                currentId &&
-                            receiverId ===
-                                activeId
-                        )
-                    );
+            appendMessage(
+                newMessage
+            );
 
 
-                if (belongs) {
-
-                    appendMessage(
-                        newMessage
-                    );
-
-                    scrollToBottom();
+            scrollToBottom();
 
 
-                    socket.emit(
-                        "message-seen",
-                        {
-                            roomId:
-                                currentRoomRef.current,
-                            messageId:
-                                getMessageId(
-                                    newMessage
-                                ),
-                            senderId,
-                            receiverId:
-                                currentId
-                        }
-                    );
+            /*
+            --------------------------------------
+            MARK AS SEEN
+            --------------------------------------
+            */
 
-                } else {
+            socket.emit(
+                "message-seen",
+                {
 
-                    if (senderId) {
+                    roomId:
+                        currentRoomRef.current,
 
-                        setUnreadUsers(
-                            previous => ({
-                                ...previous,
-                                [senderId]:
-                                    (
-                                        previous[
-                                            senderId
-                                        ] || 0
-                                    ) + 1
-                            })
-                        );
+                    messageId:
+                        getMessageId(
+                            newMessage
+                        ),
 
-                    }
+                    senderId,
 
-
-                    showMessageNotification({
-                        senderName:
-                            getUserName(
-                                newMessage.sender
-                            ),
-                        message:
-                            newMessage.message ||
-                            newMessage.text ||
-                            "New message"
-                    });
+                    receiverId:
+                        currentId
 
                 }
+            );
 
-            };
 
+            /*
+            --------------------------------------
+            MESSAGE SOUND
+            --------------------------------------
+            */
+
+            showMessageNotification({
+
+                senderName:
+                    getUserName(
+                        newMessage.sender
+                    ),
+
+                message:
+                    newMessage.message ||
+                    newMessage.text ||
+                    "New message"
+
+            });
+
+        }
+
+        /*
+        ==========================================
+        MESSAGE IS NOT OPEN
+        ==========================================
+        */
+
+        else {
+
+            if (senderId) {
+
+                setUnreadUsers(
+                    previous => ({
+
+                        ...previous,
+
+                        [senderId]:
+                            (
+                                previous[
+                                    senderId
+                                ] || 0
+                            ) + 1
+
+                    })
+                );
+
+            }
+
+
+            /*
+            --------------------------------------
+            MESSAGE SOUND + BROWSER NOTIFICATION
+            --------------------------------------
+            */
+
+            showMessageNotification({
+
+                senderName:
+                    getUserName(
+                        newMessage.sender
+                    ) ||
+                    "New message",
+
+                message:
+                    newMessage.message ||
+                    newMessage.text ||
+                    "New message"
+
+            });
+
+        }
+
+    };
 
         /* -------------------------------------------------
            DIRECT MESSAGE
@@ -1877,7 +1953,7 @@ const acceptCall =
             };
 
 
-       /* -------------------------------------------------
+/* -------------------------------------------------
    INCOMING CALL
 ------------------------------------------------- */
 
@@ -1887,6 +1963,7 @@ const onIncomingCall =
         if (!data) {
             return;
         }
+
 
         const incoming = {
 
@@ -1900,21 +1977,32 @@ const onIncomingCall =
 
         };
 
+
         callRef.current =
             incoming;
+
 
         currentRoomRef.current =
             data.roomId;
 
+
         setCallState(
             incoming
         );
+
+
+        /*
+        ==========================================
+        INCOMING CALL SOUND + NOTIFICATION
+        ==========================================
+        */
 
         showIncomingCallNotification({
 
             callerName:
                 data.callerName ||
                 data.senderName ||
+                data.caller?.name ||
                 "User",
 
             type:
@@ -2263,17 +2351,100 @@ for (const candidate of pending) {
 
             };
 
-
         /* -------------------------------------------------
            REJECTED
         ------------------------------------------------- */
 
         const onCallRejected =
-            () => {
+            data => {
 
-                alert(
-                    "Call was declined."
+                stopCallRingtone();
+
+                const call =
+                    callRef.current ||
+                    callState ||
+                    data;
+
+
+                const callerName =
+                    call?.callerName ||
+                    call?.senderName ||
+                    getUserName(
+                        call?.caller
+                    ) ||
+                    "User";
+
+
+                const callType =
+                    call?.type === "video"
+                        ? "video"
+                        : "voice";
+
+
+                /*
+                ==========================================
+                CALL REJECTED
+                ==========================================
+                */
+
+                console.log(
+                    "Call rejected:",
+                    call
                 );
+
+
+                /*
+                ==========================================
+                ADD CALL EVENT TO CHAT
+                ==========================================
+                */
+
+                const rejectedMessage = {
+
+                    id:
+                        `call-rejected-${Date.now()}`,
+
+                    message:
+                        `📞 ${callType === "video"
+                            ? "Video"
+                            : "Voice"
+                        } call declined`,
+
+                    text:
+                        `📞 ${callType === "video"
+                            ? "Video"
+                            : "Voice"
+                        } call declined`,
+
+                    type:
+                        "call-rejected",
+
+                    callType,
+
+                    senderId:
+                        currentUserId,
+
+                    receiverId:
+                        getId(
+                            selectedUserRef.current
+                        ),
+
+                    createdAt:
+                        new Date().toISOString(),
+
+                    timestamp:
+                        new Date().toISOString(),
+
+                    seen:
+                        true
+
+                };
+
+
+                appendMessage(
+                    rejectedMessage
+                );
+
 
                 cleanupCall();
 
@@ -2285,7 +2456,119 @@ for (const candidate of pending) {
         ------------------------------------------------- */
 
         const onCallEnded =
-            () => {
+            data => {
+
+                stopCallRingtone();
+
+                const call =
+                    callRef.current ||
+                    callState ||
+                    data;
+
+
+                if (!call) {
+
+                    cleanupCall();
+
+                    return;
+
+                }
+
+
+                const callType =
+                    call?.type === "video"
+                        ? "video"
+                        : "voice";
+
+
+                /*
+                ==========================================
+                CALL DURATION
+                ==========================================
+                */
+
+                const duration =
+    Number(
+        call?.duration ||
+        call?.callDuration ||
+        0
+    );
+
+const minutes =
+    Math.floor(
+        duration / 60
+    )
+        .toString()
+        .padStart(2, "0");
+
+const seconds =
+    (
+        duration % 60
+    )
+        .toString()
+        .padStart(2, "0");
+
+const durationText =
+    duration > 0
+        ? ` • ${minutes}:${seconds}`
+        : "";
+
+                /*
+                ==========================================
+                ADD CALL HISTORY TO CHAT
+                ==========================================
+                */
+
+                const endedMessage = {
+
+                    id:
+                        `call-ended-${Date.now()}`,
+
+                    message:
+                        `📞 ${
+                            callType === "video"
+                                ? "Video"
+                                : "Voice"
+                        } call ended${durationText}`,
+
+                    text:
+                        `📞 ${
+                            callType === "video"
+                                ? "Video"
+                                : "Voice"
+                        } call ended${durationText}`,
+
+                    type:
+                        "call-ended",
+
+                    callType,
+
+                    duration,
+
+                    senderId:
+                        currentUserId,
+
+                    receiverId:
+                        getId(
+                            selectedUserRef.current
+                        ),
+
+                    createdAt:
+                        new Date().toISOString(),
+
+                    timestamp:
+                        new Date().toISOString(),
+
+                    seen:
+                        true
+
+                };
+
+
+                appendMessage(
+                    endedMessage
+                );
+
 
                 cleanupCall();
 
@@ -2297,11 +2580,71 @@ for (const candidate of pending) {
         ------------------------------------------------- */
 
         const onCallBusy =
-            () => {
+            data => {
 
-                alert(
-                    "User is busy on another call."
+                stopCallRingtone();
+
+
+                const call =
+                    callRef.current ||
+                    callState ||
+                    data;
+
+
+                const callType =
+                    call?.type === "video"
+                        ? "video"
+                        : "voice";
+
+
+                const busyMessage = {
+
+                    id:
+                        `call-busy-${Date.now()}`,
+
+                    message:
+                        `📞 ${
+                            callType === "video"
+                                ? "Video"
+                                : "Voice"
+                        } call — User is busy`,
+
+                    text:
+                        `📞 ${
+                            callType === "video"
+                                ? "Video"
+                                : "Voice"
+                        } call — User is busy`,
+
+                    type:
+                        "call-busy",
+
+                    callType,
+
+                    senderId:
+                        currentUserId,
+
+                    receiverId:
+                        getId(
+                            selectedUserRef.current
+                        ),
+
+                    createdAt:
+                        new Date().toISOString(),
+
+                    timestamp:
+                        new Date().toISOString(),
+
+                    seen:
+                        true
+
+                };
+
+
+                appendMessage(
+                    busyMessage
                 );
+
 
                 cleanupCall();
 
@@ -4112,33 +4455,45 @@ const onCallMissed =
             </main>
 
 
-            <CallModal
-    visible={
-        Boolean(callState)
-    }
+           <CallModal
+    visible={Boolean(callState)}
 
     type={
-        callState?.type ||
-        "audio"
+        callState?.type || "audio"
     }
 
     mode={
-        callState?.mode ||
-        "outgoing"
+        callState?.mode || "outgoing"
     }
 
     callerName={
-        callState?.callerName ||
-        getUserName(
-            selectedUser
-        )
+        callState?.mode === "incoming"
+            ? (
+                callState?.callerName ||
+                callState?.senderName ||
+                "User"
+            )
+            : (
+                callState?.receiverName ||
+                callState?.calleeName ||
+                getUserName(selectedUser) ||
+                "User"
+            )
     }
 
     callerAvatar={
-        callState?.callerAvatar ||
-        getAvatar(
-            selectedUser
-        )
+        callState?.mode === "incoming"
+            ? (
+                callState?.callerAvatar ||
+                callState?.senderAvatar ||
+                ""
+            )
+            : (
+                callState?.receiverAvatar ||
+                callState?.calleeAvatar ||
+                getAvatar(selectedUser) ||
+                ""
+            )
     }
 
     localStream={
@@ -4164,8 +4519,9 @@ const onCallMissed =
     onEnd={
         endCall
     }
+
     onSwitchCamera={
-    switchCamera
+        switchCamera
     }
 />
 
