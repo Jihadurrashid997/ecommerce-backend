@@ -2157,66 +2157,80 @@ for (
 
             };
 
+/* -------------------------------------------------
+   WEBRTC ANSWER
+------------------------------------------------- */
 
-        /* -------------------------------------------------
-           WEBRTC ANSWER
-        ------------------------------------------------- */
+const onAnswer =
+    async data => {
 
-        const onAnswer =
-            async data => {
+        try {
+
+            if (
+                !data?.answer ||
+                !peerRef.current
+            ) {
+                return;
+            }
+
+            const peer =
+                peerRef.current;
+
+            await peer.setRemoteDescription(
+                new RTCSessionDescription(
+                    data.answer
+                )
+            );
+
+
+            /* -----------------------------------------
+               FLUSH PENDING ICE CANDIDATES
+            ----------------------------------------- */
+
+            const pending =
+                pendingCandidatesRef.current || [];
+
+            pendingCandidatesRef.current = [];
+
+
+            for (
+                const candidate of pending
+            ) {
 
                 try {
 
-                    if (
-                        !data?.answer ||
-                        !peerRef.current
-                    ) {
-                        return;
-                    }
+                    await peer.addIceCandidate(
+                        new RTCIceCandidate(
+                            candidate
+                        )
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "Pending ICE candidate error:",
+                        error
+                    );
+
+                }
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                "WebRTC answer error:",
+                error
+            );
+
+        }
+
+    };
 
 
-                    await peerRef.current
-                        .setRemoteDescription(
-                            new RTCSessionDescription(
-                                data.answer
-                            )
-                        );
-            
-/* Flush pending ICE candidates */
-
-const pending =
-    pendingCandidatesRef.current;
-
-pendingCandidatesRef.current = [];
-
-
-for (
-    const candidate of pending
-) {
-
-    try {
-
-        await peer.addIceCandidate(
-            new RTCIceCandidate(
-                candidate
-            )
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Pending ICE error:",
-            error
-        );
-
-    }
-
-}
-
-
-        /* -------------------------------------------------
-           ICE
-        ------------------------------------------------- */
+/* -------------------------------------------------
+   ICE
+------------------------------------------------- */
 
 const onIceCandidate =
     async data => {
@@ -2276,6 +2290,7 @@ const onIceCandidate =
         }
 
     };
+
         
         /* -------------------------------------------------
            REJECTED
