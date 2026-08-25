@@ -1068,7 +1068,185 @@ socket.on(
     }
 );
 
+/* ==================================================
+   WEBRTC OFFER
+================================================== */
 
+socket.on(
+    "webrtc-offer",
+    payload => {
+
+        if (
+            !payload ||
+            !payload.receiverId ||
+            !payload.offer
+        ) {
+            return;
+        }
+
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
+
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            ) ||
+            socket.userId;
+
+
+        if (
+            !receiverId ||
+            !callerId
+        ) {
+            return;
+        }
+
+
+        sendToUser(
+            receiverId,
+            "webrtc-offer",
+            {
+
+                ...payload,
+
+                callerId,
+
+                receiverId,
+
+                roomId:
+                    payload.roomId ||
+                    null
+
+            }
+        );
+
+    }
+);
+
+
+/* ==================================================
+   WEBRTC ANSWER
+================================================== */
+
+socket.on(
+    "webrtc-answer",
+    payload => {
+
+        if (
+            !payload ||
+            !payload.receiverId ||
+            !payload.answer
+        ) {
+            return;
+        }
+
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
+
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            ) ||
+            socket.userId;
+
+
+        if (
+            !receiverId ||
+            !callerId
+        ) {
+            return;
+        }
+
+
+        sendToUser(
+            receiverId,
+            "webrtc-answer",
+            {
+
+                ...payload,
+
+                callerId,
+
+                receiverId,
+
+                roomId:
+                    payload.roomId ||
+                    null
+
+            }
+        );
+
+    }
+);
+
+
+/* ==================================================
+   WEBRTC ICE CANDIDATE
+================================================== */
+
+socket.on(
+    "webrtc-ice-candidate",
+    payload => {
+
+        if (
+            !payload ||
+            !payload.receiverId ||
+            !payload.candidate
+        ) {
+            return;
+        }
+
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
+
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            ) ||
+            socket.userId;
+
+
+        if (
+            !receiverId ||
+            !callerId
+        ) {
+            return;
+        }
+
+
+        sendToUser(
+            receiverId,
+            "webrtc-ice-candidate",
+            {
+
+                ...payload,
+
+                callerId,
+
+                receiverId,
+
+                roomId:
+                    payload.roomId ||
+                    null
+
+            }
+        );
+
+    }
+);
+       
         /* ==================================================
            DISCONNECT
         ================================================== */
