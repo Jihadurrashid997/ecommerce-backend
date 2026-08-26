@@ -1,6 +1,5 @@
-// frontend/src/components/CallModal.jsx
-
 import React, {
+    useCallback,
     useEffect,
     useRef,
     useState
@@ -24,8 +23,8 @@ const CallModal = ({
     mode = "outgoing",
     callerName = "User",
     callerAvatar = "",
-    localStream,
-    remoteStream,
+    localStream = null,
+    remoteStream = null,
     callDuration = 0,
     onAccept,
     onReject,
@@ -33,66 +32,286 @@ const CallModal = ({
     onSwitchCamera
 }) => {
 
-    const localVideoRef = useRef(null);
-    const remoteVideoRef = useRef(null);
-    const remoteAudioRef = useRef(null);
+    const localVideoRef =
+        useRef(null);
 
-    const [muted, setMuted] = useState(false);
+    const remoteVideoRef =
+        useRef(null);
 
-    const [cameraOff, setCameraOff] = useState(
-        type !== "video"
-    );
+    const remoteAudioRef =
+        useRef(null);
 
-    const isIncoming = mode === "incoming";
+    const [muted, setMuted] =
+        useState(false);
+
+    const [cameraOff, setCameraOff] =
+        useState(type !== "video");
+
+    const isIncoming =
+        mode === "incoming";
 
     const isActiveCall =
         mode === "accepted" ||
         mode === "connected";
 
-    const isVideo = type === "video";
+    const isVideo =
+        type === "video";
 
 
-useEffect(() => {
-    if (!localVideoRef.current || !localStream) {
-        return;
-    }
+    /*
+    =========================================================
+    LOCAL MEDIA
+    =========================================================
+    */
 
-    localVideoRef.current.srcObject = localStream;
+    useEffect(() => {
 
-    localVideoRef.current.play().catch(() => {});
+        const video =
+            localVideoRef.current;
 
-}, [localStream]);
+        if (
+            !video ||
+            !localStream ||
+            !isVideo
+        ) {
+            return;
+        }
+
+        if (
+            video.srcObject !==
+            localStream
+        ) {
+            video.srcObject =
+                localStream;
+        }
+
+        const play =
+            async () => {
+
+                try {
+                    await video.play();
+                } catch (_) {}
+
+            };
+
+        play();
+
+        return () => {
+
+            if (
+                video.srcObject ===
+                localStream
+            ) {
+                video.srcObject = null;
+            }
+
+        };
+
+    }, [
+        localStream,
+        isVideo
+    ]);
 
 
-useEffect(() => {
-    if (!remoteStream) {
-        return;
-    }
+    /*
+    =========================================================
+    REMOTE MEDIA
+    =========================================================
+    */
 
-    if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
+    useEffect(() => {
 
-        remoteVideoRef.current.play().catch(error => {
-            console.warn(
-                "Remote video autoplay blocked:",
-                error
+        if (!remoteStream) {
+            return;
+        }
+
+
+        const video =
+            remoteVideoRef.current;
+
+        const audio =
+            remoteAudioRef.current;
+
+
+        /*
+        Video calls:
+        video element carries both video + audio.
+        */
+
+        if (
+            isVideo &&
+            video
+        ) {
+
+            video.srcObject =
+                remoteStream;
+
+
+            const playVideo =
+                async () => {
+
+                    try {
+
+                        await video.play();
+
+                    } catch (error) {
+
+                        console.warn(
+                            "Remote video play failed:",
+                            error
+                        );
+
+                    }
+
+                };
+
+            playVideo();
+
+        }
+
+
+        /*
+        Audio calls:
+        dedicated audio element.
+        */
+
+        if (
+            !isVideo &&
+            audio
+        ) {
+
+            audio.srcObject =
+                remoteStream;
+
+
+            const playAudio =
+                async () => {
+
+                    try {
+
+                        await audio.play();
+
+                    } catch (error) {
+
+                        console.warn(
+                            "Remote audio play failed:",
+                            error
+                        );
+
+                    }
+
+                };
+
+            playAudio();
+
+        }
+
+
+        return () => {
+
+            if (
+                video &&
+                video.srcObject ===
+                    remoteStream
+            ) {
+                video.srcObject = null;
+            }
+
+            if (
+                audio &&
+                audio.srcObject ===
+                    remoteStream
+            ) {
+                audio.srcObject = null;
+            }
+
+        };
+
+    }, [
+        remoteStream,
+        isVideo
+    ]);
+
+
+    /*
+    =========================================================
+    REMOTE TRACK CHANGES
+    =========================================================
+    */
+
+    useEffect(() => {
+
+        if (!remoteStream) {
+            return;
+        }
+
+
+        const handleTrack =
+            () => {
+
+                const video =
+                    remoteVideoRef.current;
+
+                const audio =
+                    remoteAudioRef.current;
+
+
+                if (
+                    isVideo &&
+                    video
+                ) {
+
+                    video.srcObject =
+                        remoteStream;
+
+                    video.play()
+                        .catch(() => {});
+
+                }
+
+
+                if (
+                    !isVideo &&
+                    audio
+                ) {
+
+                    audio.srcObject =
+                        remoteStream;
+
+                    audio.play()
+                        .catch(() => {});
+
+                }
+
+            };
+
+
+        remoteStream.addEventListener(
+            "addtrack",
+            handleTrack
+        );
+
+
+        return () => {
+
+            remoteStream.removeEventListener(
+                "addtrack",
+                handleTrack
             );
-        });
-    }
 
-    if (remoteAudioRef.current) {
-        remoteAudioRef.current.srcObject = remoteStream;
+        };
 
-        remoteAudioRef.current.play().catch(error => {
-            console.warn(
-                "Remote audio autoplay blocked:",
-                error
-            );
-        });
-    }
+    }, [
+        remoteStream,
+        isVideo
+    ]);
 
-}, [remoteStream]);
 
+    /*
+    =========================================================
+    MUTE / CAMERA
+    =========================================================
+    */
 
     useEffect(() => {
 
@@ -100,17 +319,29 @@ useEffect(() => {
             return;
         }
 
+
         localStream
             .getAudioTracks()
-            .forEach(track => {
-                track.enabled = !muted;
-            });
+            .forEach(
+                track => {
+
+                    track.enabled =
+                        !muted;
+
+                }
+            );
+
 
         localStream
             .getVideoTracks()
-            .forEach(track => {
-                track.enabled = !cameraOff;
-            });
+            .forEach(
+                track => {
+
+                    track.enabled =
+                        !cameraOff;
+
+                }
+            );
 
     }, [
         localStream,
@@ -119,28 +350,172 @@ useEffect(() => {
     ]);
 
 
-    const formatTime = () => {
+    /*
+    =========================================================
+    RESET CAMERA STATE WHEN CALL TYPE CHANGES
+    =========================================================
+    */
 
-        const totalSeconds =
-            Math.max(
-                0,
-                Number(callDuration) || 0
-            );
+    useEffect(() => {
 
-        const minutes =
-            Math.floor(totalSeconds / 60)
-                .toString()
-                .padStart(2, "0");
+        setCameraOff(
+            type !== "video"
+        );
 
-        const seconds =
-            (totalSeconds % 60)
-                .toString()
-                .padStart(2, "0");
+    }, [
+        type
+    ]);
 
-        return `${minutes}:${seconds}`;
 
-    };
+    /*
+    =========================================================
+    ACCEPT
+    =========================================================
+    */
 
+    const handleAccept =
+        useCallback(
+            event => {
+
+                event?.preventDefault?.();
+
+                if (
+                    typeof onAccept ===
+                    "function"
+                ) {
+                    onAccept();
+                }
+
+            },
+            [onAccept]
+        );
+
+
+    /*
+    =========================================================
+    REJECT
+    =========================================================
+    */
+
+    const handleReject =
+        useCallback(
+            event => {
+
+                event?.preventDefault?.();
+
+                if (
+                    typeof onReject ===
+                    "function"
+                ) {
+                    onReject();
+                }
+
+            },
+            [onReject]
+        );
+
+
+    /*
+    =========================================================
+    END
+    =========================================================
+    */
+
+    const handleEnd =
+        useCallback(
+            event => {
+
+                event?.preventDefault?.();
+
+                if (
+                    typeof onEnd ===
+                    "function"
+                ) {
+                    onEnd();
+                }
+
+            },
+            [onEnd]
+        );
+
+
+    /*
+    =========================================================
+    SWITCH CAMERA
+    =========================================================
+    */
+
+    const handleSwitchCamera =
+        useCallback(
+            event => {
+
+                event?.preventDefault?.();
+
+                if (
+                    typeof onSwitchCamera ===
+                    "function"
+                ) {
+                    onSwitchCamera();
+                }
+
+            },
+            [onSwitchCamera]
+        );
+
+
+    /*
+    =========================================================
+    TIMER
+    =========================================================
+    */
+
+    const formatTime =
+        useCallback(
+            () => {
+
+                const total =
+                    Math.max(
+                        0,
+                        Number(
+                            callDuration
+                        ) || 0
+                    );
+
+
+                const minutes =
+                    Math.floor(
+                        total / 60
+                    )
+                        .toString()
+                        .padStart(
+                            2,
+                            "0"
+                        );
+
+
+                const seconds =
+                    (
+                        total % 60
+                    )
+                        .toString()
+                        .padStart(
+                            2,
+                            "0"
+                        );
+
+
+                return `${minutes}:${seconds}`;
+
+            },
+            [callDuration]
+        );
+
+
+    /*
+    =========================================================
+    HIDDEN
+    =========================================================
+    */
 
     if (!visible) {
         return null;
@@ -161,7 +536,8 @@ useEffect(() => {
                 position: "fixed",
                 inset: 0,
                 zIndex: 99999,
-                background: "rgba(0,0,0,.84)",
+                background:
+                    "rgba(0,0,0,.88)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -169,21 +545,29 @@ useEffect(() => {
             }}
         >
 
+            {/* AUDIO OUTPUT */}
+
             <audio
                 ref={remoteAudioRef}
                 autoPlay
                 playsInline
-                controls={false}
+                preload="auto"
                 style={{
-                    display: "none"
+                    position: "absolute",
+                    width: 1,
+                    height: 1,
+                    opacity: 0,
+                    pointerEvents: "none"
                 }}
             />
 
 
             <div
                 style={{
-                    width: "min(560px,100%)",
-                    height: "min(720px,92vh)",
+                    width:
+                        "min(560px,100%)",
+                    height:
+                        "min(720px,92vh)",
                     minHeight: 480,
                     position: "relative",
                     overflow: "hidden",
@@ -192,17 +576,32 @@ useEffect(() => {
                         "linear-gradient(145deg,#111827,#1f2937)",
                     color: "#fff",
                     boxShadow:
-                        "0 30px 100px rgba(0,0,0,.55)"
+                        "0 30px 100px rgba(0,0,0,.65)"
                 }}
             >
 
+                {/* =================================================
+                    REMOTE VIDEO
+                ================================================= */}
 
-                {isVideo && remoteStream ? (
+                {isVideo &&
+                remoteStream ? (
 
                     <video
-                        ref={remoteVideoRef}
+                        ref={
+                            remoteVideoRef
+                        }
                         autoPlay
                         playsInline
+                        controls={false}
+                        muted={false}
+                        onLoadedMetadata={event => {
+
+                            event.currentTarget
+                                .play()
+                                .catch(() => {});
+
+                        }}
                         style={{
                             width: "100%",
                             height: "100%",
@@ -218,22 +617,29 @@ useEffect(() => {
                             width: "100%",
                             height: "100%",
                             display: "flex",
-                            flexDirection: "column",
-                            alignItems: "center",
-                            justifyContent: "center"
+                            flexDirection:
+                                "column",
+                            alignItems:
+                                "center",
+                            justifyContent:
+                                "center"
                         }}
                     >
 
                         {callerAvatar ? (
 
                             <img
-                                src={callerAvatar}
+                                src={
+                                    callerAvatar
+                                }
                                 alt=""
                                 style={{
                                     width: 120,
                                     height: 120,
-                                    borderRadius: "50%",
-                                    objectFit: "cover",
+                                    borderRadius:
+                                        "50%",
+                                    objectFit:
+                                        "cover",
                                     border:
                                         "4px solid rgba(255,255,255,.25)"
                                 }}
@@ -245,12 +651,16 @@ useEffect(() => {
                                 style={{
                                     width: 120,
                                     height: 120,
-                                    borderRadius: "50%",
+                                    borderRadius:
+                                        "50%",
                                     background:
                                         "linear-gradient(135deg,#1877f2,#6366f1)",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
+                                    display:
+                                        "flex",
+                                    alignItems:
+                                        "center",
+                                    justifyContent:
+                                        "center",
                                     fontSize: 46,
                                     fontWeight: 800
                                 }}
@@ -263,7 +673,8 @@ useEffect(() => {
 
                         <h2
                             style={{
-                                margin: "20px 0 7px"
+                                margin:
+                                    "20px 0 7px"
                             }}
                         >
                             {callerName}
@@ -273,22 +684,29 @@ useEffect(() => {
                         <p
                             style={{
                                 margin: 0,
-                                opacity: .72
+                                opacity: .72,
+                                textAlign: "center"
                             }}
                         >
+
                             {isIncoming
+
                                 ? `Incoming ${
                                       isVideo
                                           ? "video"
                                           : "voice"
                                   } call`
+
                                 : isActiveCall
+
                                     ? `${
                                           isVideo
                                               ? "Video"
                                               : "Voice"
                                       } call`
+
                                     : "Calling..."}
+
                         </p>
 
 
@@ -300,7 +718,8 @@ useEffect(() => {
                                     opacity: .85,
                                     fontSize: 18,
                                     fontWeight: 700,
-                                    letterSpacing: "1px"
+                                    letterSpacing:
+                                        "1px"
                                 }}
                             >
                                 {formatTime()}
@@ -313,20 +732,30 @@ useEffect(() => {
                 )}
 
 
-                {isVideo && localStream && (
+                {/* =================================================
+                    LOCAL VIDEO
+                ================================================= */}
+
+                {isVideo &&
+                localStream && (
 
                     <video
-                        ref={localVideoRef}
+                        ref={
+                            localVideoRef
+                        }
                         autoPlay
                         muted
                         playsInline
+                        controls={false}
                         style={{
-                            position: "absolute",
+                            position:
+                                "absolute",
                             top: 18,
                             right: 18,
                             width: 130,
                             height: 175,
-                            objectFit: "cover",
+                            objectFit:
+                                "cover",
                             borderRadius: 16,
                             background: "#000",
                             border:
@@ -337,24 +766,33 @@ useEffect(() => {
                 )}
 
 
+                {/* =================================================
+                    INCOMING HEADER
+                ================================================= */}
+
                 {isIncoming && (
 
                     <div
                         style={{
-                            position: "absolute",
+                            position:
+                                "absolute",
                             top: 20,
                             left: 20,
                             right: 20,
-                            textAlign: "center",
+                            textAlign:
+                                "center",
                             padding: 12,
                             borderRadius: 14,
                             background:
-                                "rgba(0,0,0,.28)",
-                            backdropFilter: "blur(8px)"
+                                "rgba(0,0,0,.35)",
+                            backdropFilter:
+                                "blur(10px)"
                         }}
                     >
 
-                        <FiVolume2 size={22} />
+                        <FiVolume2
+                            size={22}
+                        />
 
                         <div
                             style={{
@@ -362,7 +800,9 @@ useEffect(() => {
                                 fontWeight: 700
                             }}
                         >
-                            {callerName} is calling...
+                            {callerName}
+                            {" "}
+                            is calling...
                         </div>
 
                     </div>
@@ -370,68 +810,92 @@ useEffect(() => {
                 )}
 
 
+                {/* =================================================
+                    CONTROLS
+                ================================================= */}
+
                 <div
                     style={{
-                        position: "absolute",
+                        position:
+                            "absolute",
                         left: 0,
                         right: 0,
                         bottom: 28,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        display:
+                            "flex",
+                        alignItems:
+                            "center",
+                        justifyContent:
+                            "center",
                         gap: 14,
-                        flexWrap: "wrap"
+                        flexWrap:
+                            "wrap"
                     }}
                 >
-
 
                     {isIncoming ? (
 
                         <>
 
-                            {/* REJECT */}
-
                             <button
                                 type="button"
-                                onClick={onReject}
+                                onClick={
+                                    handleReject
+                                }
                                 aria-label="Reject call"
                                 style={{
                                     width: 62,
                                     height: 62,
                                     border: "none",
-                                    borderRadius: "50%",
-                                    background: "#ef4444",
+                                    borderRadius:
+                                        "50%",
+                                    background:
+                                        "#ef4444",
                                     color: "#fff",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center"
+                                    cursor:
+                                        "pointer",
+                                    display:
+                                        "flex",
+                                    alignItems:
+                                        "center",
+                                    justifyContent:
+                                        "center"
                                 }}
                             >
-                                <FiPhoneOff size={25} />
+                                <FiPhoneOff
+                                    size={25}
+                                />
                             </button>
 
 
-                            {/* ACCEPT */}
-
                             <button
                                 type="button"
-                                onClick={onAccept}
+                                onClick={
+                                    handleAccept
+                                }
                                 aria-label="Accept call"
                                 style={{
                                     width: 62,
                                     height: 62,
                                     border: "none",
-                                    borderRadius: "50%",
-                                    background: "#22c55e",
+                                    borderRadius:
+                                        "50%",
+                                    background:
+                                        "#22c55e",
                                     color: "#fff",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center"
+                                    cursor:
+                                        "pointer",
+                                    display:
+                                        "flex",
+                                    alignItems:
+                                        "center",
+                                    justifyContent:
+                                        "center"
                                 }}
                             >
-                                <FiPhone size={25} />
+                                <FiPhone
+                                    size={25}
+                                />
                             </button>
 
                         </>
@@ -440,13 +904,12 @@ useEffect(() => {
 
                         <>
 
-                            {/* MUTE */}
-
                             <button
                                 type="button"
                                 onClick={() =>
                                     setMuted(
-                                        value => !value
+                                        value =>
+                                            !value
                                     )
                                 }
                                 aria-label={
@@ -458,27 +921,32 @@ useEffect(() => {
                                     width: 52,
                                     height: 52,
                                     border: "none",
-                                    borderRadius: "50%",
+                                    borderRadius:
+                                        "50%",
                                     background:
                                         "rgba(255,255,255,.16)",
                                     color: "#fff",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center"
+                                    cursor:
+                                        "pointer",
+                                    display:
+                                        "flex",
+                                    alignItems:
+                                        "center",
+                                    justifyContent:
+                                        "center"
                                 }}
                             >
-
                                 {muted ? (
-                                    <FiMicOff size={21} />
+                                    <FiMicOff
+                                        size={21}
+                                    />
                                 ) : (
-                                    <FiMic size={21} />
+                                    <FiMic
+                                        size={21}
+                                    />
                                 )}
-
                             </button>
 
-
-                            {/* CAMERA */}
 
                             {isVideo && (
 
@@ -486,7 +954,8 @@ useEffect(() => {
                                     type="button"
                                     onClick={() =>
                                         setCameraOff(
-                                            value => !value
+                                            value =>
+                                                !value
                                         )
                                     }
                                     aria-label={
@@ -498,80 +967,102 @@ useEffect(() => {
                                         width: 52,
                                         height: 52,
                                         border: "none",
-                                        borderRadius: "50%",
+                                        borderRadius:
+                                            "50%",
                                         background:
                                             cameraOff
                                                 ? "#374151"
                                                 : "rgba(255,255,255,.16)",
                                         color: "#fff",
-                                        cursor: "pointer",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center"
+                                        cursor:
+                                            "pointer",
+                                        display:
+                                            "flex",
+                                        alignItems:
+                                            "center",
+                                        justifyContent:
+                                            "center"
                                     }}
                                 >
-
                                     {cameraOff ? (
-                                        <FiVideoOff size={21} />
+                                        <FiVideoOff
+                                            size={21}
+                                        />
                                     ) : (
-                                        <FiVideo size={21} />
+                                        <FiVideo
+                                            size={21}
+                                        />
                                     )}
-
                                 </button>
 
                             )}
 
 
-                            {/* SWITCH CAMERA */}
-
                             {isVideo &&
-                                !cameraOff && (
+                            !cameraOff && (
 
                                 <button
                                     type="button"
-                                    onClick={onSwitchCamera}
+                                    onClick={
+                                        handleSwitchCamera
+                                    }
                                     aria-label="Switch camera"
                                     title="Switch camera"
                                     style={{
                                         width: 52,
                                         height: 52,
                                         border: "none",
-                                        borderRadius: "50%",
+                                        borderRadius:
+                                            "50%",
                                         background:
                                             "rgba(255,255,255,.16)",
                                         color: "#fff",
-                                        cursor: "pointer",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center"
+                                        cursor:
+                                            "pointer",
+                                        display:
+                                            "flex",
+                                        alignItems:
+                                            "center",
+                                        justifyContent:
+                                            "center"
                                     }}
                                 >
-                                    <FiRefreshCw size={21} />
+                                    <FiRefreshCw
+                                        size={21}
+                                    />
                                 </button>
 
                             )}
 
 
-                            {/* END CALL */}
-
                             <button
                                 type="button"
-                                onClick={onEnd}
+                                onClick={
+                                    handleEnd
+                                }
                                 aria-label="End call"
                                 style={{
                                     width: 62,
                                     height: 62,
                                     border: "none",
-                                    borderRadius: "50%",
-                                    background: "#ef4444",
+                                    borderRadius:
+                                        "50%",
+                                    background:
+                                        "#ef4444",
                                     color: "#fff",
-                                    cursor: "pointer",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center"
+                                    cursor:
+                                        "pointer",
+                                    display:
+                                        "flex",
+                                    alignItems:
+                                        "center",
+                                    justifyContent:
+                                        "center"
                                 }}
                             >
-                                <FiPhoneOff size={25} />
+                                <FiPhoneOff
+                                    size={25}
+                                />
                             </button>
 
                         </>
@@ -585,6 +1076,7 @@ useEffect(() => {
         </div>
 
     );
+
 };
 
 
