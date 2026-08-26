@@ -1938,32 +1938,161 @@ const onReceiveMessage =
    INCOMING CALL
 ------------------------------------------------- */
 
-const onIncomingCall =
-    data => {
+const onIncomingCall = data => {
 
-        if (!data) {
-            return;
-        }
+    if (!data) {
+        return;
+    }
 
-        console.log(
-            "📞 Incoming call received:",
-            data
+    const callerId =
+        getId(
+            data.callerId ||
+            data.senderId ||
+            data.caller
         );
 
-        const callerId =
-            getId(
-                data.callerId ||
-                data.senderId ||
+    const receiverId =
+        getId(
+            data.receiverId ||
+            currentId
+        );
+
+    if (!callerId || !receiverId) {
+        console.warn(
+            "Invalid incoming call:",
+            data
+        );
+        return;
+    }
+
+    const incomingCall = {
+
+        ...data,
+
+        callerId,
+
+        receiverId,
+
+        roomId:
+            data.roomId ||
+            getRoomId(
+                callerId,
+                receiverId
+            ),
+
+        type:
+            data.type === "video"
+                ? "video"
+                : "audio",
+
+        callerName:
+            data.callerName ||
+            data.senderName ||
+            getUserName(
                 data.caller
-            );
+            ) ||
+            "User",
 
-        const receiverId =
-            getId(
-                data.receiverId ||
-                currentId
-            );
+        callerAvatar:
+            data.callerAvatar ||
+            data.senderAvatar ||
+            getAvatar(
+                data.caller
+            ) ||
+            "",
 
-        const incoming = {
+        receiverName:
+            data.receiverName ||
+            getUserName(
+                currentUserRef.current
+            ),
+
+        receiverAvatar:
+            data.receiverAvatar ||
+            getAvatar(
+                currentUserRef.current
+            ) ||
+            "",
+
+        mode:
+            "incoming",
+
+        status:
+            "ringing",
+
+        accepted:
+            false,
+
+        receivedAt:
+            Date.now()
+
+    };
+
+    console.log(
+        "📞 INCOMING CALL:",
+        incomingCall
+    );
+
+    callRef.current =
+        incomingCall;
+
+    currentRoomRef.current =
+        incomingCall.roomId;
+
+    setCallState(
+        incomingCall
+    );
+
+    try {
+
+        showIncomingCallNotification({
+
+            callerName:
+                incomingCall.callerName,
+
+            type:
+                incomingCall.type
+
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Incoming call notification error:",
+            error
+        );
+
+    }
+
+};
+
+
+/* -------------------------------------------------
+   CALL RINGING
+------------------------------------------------- */
+
+const onCallRinging = data => {
+
+    if (!data) {
+        return;
+    }
+
+    const currentCall =
+        callRef.current;
+
+    /*
+     * If this browser is receiving the call,
+     * NEVER convert it to outgoing.
+     */
+
+    if (
+        currentCall?.mode ===
+        "incoming"
+    ) {
+
+        const incomingCall = {
+
+            ...currentCall,
 
             ...data,
 
@@ -1973,155 +2102,77 @@ const onIncomingCall =
             status:
                 "ringing",
 
-            callerId,
+            callerId:
+                currentCall.callerId ||
+                getId(data.callerId),
 
-            receiverId,
-
-            type:
-                data.type ||
-                "audio",
+            receiverId:
+                currentCall.receiverId ||
+                getId(data.receiverId) ||
+                currentId,
 
             callerName:
+                currentCall.callerName ||
                 data.callerName ||
-                data.senderName ||
-                getUserName(
-                    data.caller
-                ) ||
                 "User",
 
             callerAvatar:
+                currentCall.callerAvatar ||
                 data.callerAvatar ||
-                data.senderAvatar ||
-                getAvatar(
-                    data.caller
-                ) ||
-                ""
+                "",
 
-        };
-
-        /*
-         * Save incoming call
-         */
-
-        callRef.current =
-            incoming;
-
-        currentRoomRef.current =
-            incoming.roomId ||
-            null;
-
-        /*
-         * IMPORTANT
-         *
-         * This MUST remain "incoming"
-         */
-
-        setCallState(
-            incoming
-        );
-
-        /*
-         * Start incoming ringtone
-         */
-
-        try {
-
-            showIncomingCallNotification({
-
-                callerName:
-                    incoming.callerName,
-
-                type:
-                    incoming.type
-
-            });
-
-        } catch (error) {
-
-            console.error(
-                "Incoming ringtone error:",
-                error
-            );
-
-        }
-
-    };
-
-
-/* -------------------------------------------------
-   CALL RINGING
-------------------------------------------------- */
-
-const onCallRinging =
-    data => {
-
-        if (!data) {
-            return;
-        }
-
-        /*
-         * Incoming receiver হলে
-         * mode কখনো outgoing করা যাবে না.
-         */
-
-        if (
-            callRef.current?.mode ===
-            "incoming"
-        ) {
-
-            console.log(
-                "📞 Keeping incoming call state"
-            );
-
-            setCallState(
-                previous => ({
-
-                    ...(previous || {}),
-                    ...data,
-
-                    mode:
-                        "incoming",
-
-                    status:
-                        "ringing"
-
-                })
-            );
-
-            return;
-        }
-
-        /*
-         * Caller side
-         */
-
-        const updatedCall = {
-
-            ...(callRef.current || {}),
-            ...data,
-
-            mode:
-                "outgoing",
-
-            status:
-                data.status ||
-                "calling"
+            type:
+                currentCall.type ||
+                data.type ||
+                "audio"
 
         };
 
         callRef.current =
-            updatedCall;
+            incomingCall;
 
         currentRoomRef.current =
-            updatedCall.roomId ||
+            incomingCall.roomId ||
             currentRoomRef.current;
 
         setCallState(
-            updatedCall
+            incomingCall
         );
+
+        return;
+    }
+
+    /*
+     * Caller side
+     */
+
+    const outgoingCall = {
+
+        ...(callRef.current || {}),
+
+        ...data,
+
+        mode:
+            "outgoing",
+
+        status:
+            data.status ||
+            "calling"
 
     };
 
+    callRef.current =
+        outgoingCall;
+
+    currentRoomRef.current =
+        outgoingCall.roomId ||
+        currentRoomRef.current;
+
+    setCallState(
+        outgoingCall
+    );
+
+};
 
         /* -------------------------------------------------
            CALL ACCEPTED
