@@ -15,7 +15,6 @@ const server = http.createServer(app);
 
 const PORT = process.env.PORT || 5000;
 
-
 /* =========================================================
    CORS
 ========================================================= */
@@ -32,17 +31,10 @@ app.use(
     cors({
         origin: (origin, callback) => {
 
-            /*
-             * Server-to-server requests and tools such as
-             * health checks may not send an Origin header.
-             */
             if (!origin) {
                 return callback(null, true);
             }
 
-            /*
-             * Production Render frontends are allowed.
-             */
             if (
                 allowedOrigins.includes(origin) ||
                 origin.endsWith(".onrender.com")
@@ -50,9 +42,6 @@ app.use(
                 return callback(null, true);
             }
 
-            /*
-             * Keep compatibility with the existing frontend.
-             */
             return callback(null, true);
         },
 
@@ -74,7 +63,6 @@ app.use(
     })
 );
 
-
 /* =========================================================
    BODY PARSER
 ========================================================= */
@@ -91,7 +79,6 @@ app.use(
         limit: "10mb"
     })
 );
-
 
 /* =========================================================
    UPLOADS
@@ -116,7 +103,6 @@ app.use(
     express.static(uploadPath)
 );
 
-
 /* =========================================================
    HEALTH CHECK
 ========================================================= */
@@ -127,7 +113,7 @@ app.get(
 
         res.status(200).json({
             success: true,
-            message: "JR Store API is running 🚀",
+            message: "JR Store API is running",
             service: "ecommerce-backend",
             database: "connected",
             socket: "enabled",
@@ -136,7 +122,6 @@ app.get(
 
     }
 );
-
 
 app.get(
     "/api/health",
@@ -151,7 +136,6 @@ app.get(
 
     }
 );
-
 
 /* =========================================================
    API ROUTES
@@ -197,9 +181,8 @@ app.use(
     require("./routes/messageRoutes")
 );
 
-
 /* =========================================================
-   404 HANDLER
+   404
 ========================================================= */
 
 app.use(
@@ -214,9 +197,8 @@ app.use(
     }
 );
 
-
 /* =========================================================
-   GLOBAL ERROR HANDLER
+   GLOBAL ERROR
 ========================================================= */
 
 app.use(
@@ -242,7 +224,6 @@ app.use(
 
     }
 );
-
 
 /* =========================================================
    SOCKET.IO
@@ -273,22 +254,45 @@ const io =
         }
     );
 
-
 /* =========================================================
    ONLINE USERS
+
    userId -> Set(socketId)
 ========================================================= */
 
 const onlineUsers =
     new Map();
 
+/* =========================================================
+   ACTIVE CALLS
+
+   roomId -> {
+       callerId,
+       receiverId,
+       status,
+       type,
+       createdAt
+   }
+========================================================= */
+
+const activeCalls =
+    new Map();
 
 /* =========================================================
-   NORMALIZE USER ID
+   CALL TIMEOUT
+
+   Ringing calls automatically become missed.
+========================================================= */
+
+const CALL_RING_TIMEOUT =
+    45000;
+
+/* =========================================================
+   NORMALIZE ID
 ========================================================= */
 
 const normalizeId =
-    (value) => {
+    value => {
 
         if (!value) {
             return null;
@@ -312,7 +316,6 @@ const normalizeId =
         return String(value);
 
     };
-
 
 /* =========================================================
    ONLINE USER HELPERS
@@ -348,7 +351,6 @@ const addOnlineUser =
 
     };
 
-
 const removeOnlineUser =
     (
         userId,
@@ -362,14 +364,15 @@ const removeOnlineUser =
             !id ||
             !onlineUsers.has(id)
         ) {
-
             return;
         }
 
         const sockets =
             onlineUsers.get(id);
 
-        sockets.delete(socketId);
+        sockets.delete(
+            socketId
+        );
 
         if (
             sockets.size === 0
@@ -381,7 +384,6 @@ const removeOnlineUser =
 
     };
 
-
 const getOnlineUsers =
     () => {
 
@@ -391,9 +393,8 @@ const getOnlineUsers =
 
     };
 
-
 /* =========================================================
-   SEND EVENT TO ALL SOCKETS OF A USER
+   SEND EVENT TO USER
 ========================================================= */
 
 const sendToUser =
@@ -407,18 +408,23 @@ const sendToUser =
             normalizeId(userId);
 
         if (!id) {
-            return;
+            return false;
         }
 
         const sockets =
             onlineUsers.get(id);
 
-        if (!sockets) {
-            return;
+        if (
+            !sockets ||
+            sockets.size === 0
+        ) {
+
+            return false;
+
         }
 
         sockets.forEach(
-            (socketId) => {
+            socketId => {
 
                 io
                     .to(socketId)
@@ -430,8 +436,98 @@ const sendToUser =
             }
         );
 
+        return true;
+
     };
 
+/* =========================================================
+   CALL HELPERS
+========================================================= */
+
+const getCall =
+    roomId => {
+
+        if (!roomId) {
+            return null;
+        }
+
+        return activeCalls.get(
+            String(roomId)
+        ) || null;
+
+    };
+
+const isUserInCall =
+    userId => {
+
+        const id =
+            normalizeId(userId);
+
+        if (!id) {
+            return false;
+        }
+
+        for (
+            const call of activeCalls.values()
+        ) {
+
+            if (
+                call.callerId === id ||
+                call.receiverId === id
+            ) {
+
+                return true;
+
+            }
+
+        }
+
+        return false;
+
+    };
+
+const clearCall =
+    roomId => {
+
+        if (!roomId) {
+            return;
+        }
+
+        activeCalls.delete(
+            String(roomId)
+        );
+
+    };
+
+const emitCallToBoth =
+    (
+        call,
+        event,
+        extra = {}
+    ) => {
+
+        if (!call) {
+            return;
+        }
+
+        const payload = {
+            ...call,
+            ...extra
+        };
+
+        sendToUser(
+            call.callerId,
+            event,
+            payload
+        );
+
+        sendToUser(
+            call.receiverId,
+            event,
+            payload
+        );
+
+    };
 
 /* =========================================================
    SOCKET CONNECTION
@@ -439,21 +535,20 @@ const sendToUser =
 
 io.on(
     "connection",
-    (socket) => {
+    socket => {
 
         console.log(
-            "🟢 Socket connected:",
+            "Socket connected:",
             socket.id
         );
 
-
-        /* ==================================================
+        /* =================================================
            USER ONLINE
-        ================================================== */
+        ================================================= */
 
         socket.on(
             "user-online",
-            (userId) => {
+            userId => {
 
                 const id =
                     normalizeId(userId);
@@ -465,11 +560,6 @@ io.on(
                 socket.userId =
                     id;
 
-                /*
-                 * Personal room.
-                 * Useful for notifications,
-                 * calls and direct messages.
-                 */
                 socket.join(
                     `user:${id}`
                 );
@@ -484,17 +574,21 @@ io.on(
                     getOnlineUsers()
                 );
 
+                console.log(
+                    "User online:",
+                    id
+                );
+
             }
         );
 
-
-        /* ==================================================
-           JOIN CHAT ROOM
-        ================================================== */
+        /* =================================================
+           JOIN ROOM
+        ================================================= */
 
         socket.on(
             "join-room",
-            (roomId) => {
+            roomId => {
 
                 if (!roomId) {
                     return;
@@ -507,14 +601,13 @@ io.on(
             }
         );
 
-
-        /* ==================================================
-           LEAVE CHAT ROOM
-        ================================================== */
+        /* =================================================
+           LEAVE ROOM
+        ================================================= */
 
         socket.on(
             "leave-room",
-            (roomId) => {
+            roomId => {
 
                 if (!roomId) {
                     return;
@@ -527,54 +620,70 @@ io.on(
             }
         );
 
-
-        /* ==================================================
-           REAL-TIME MESSAGE
-        ================================================== */
+        /* =================================================
+           SEND MESSAGE
+        ================================================= */
 
         socket.on(
             "send-message",
-            (payload) => {
+            payload => {
 
                 if (!payload) {
                     return;
                 }
 
                 const roomId =
-                    payload.roomId;
-
-                const receiverId =
-                    normalizeId(
-                        payload.receiver
-                    );
+                    payload.roomId ||
+                    null;
 
                 const senderId =
                     normalizeId(
                         payload.sender
                     ) ||
+                    normalizeId(
+                        payload.senderId
+                    ) ||
                     socket.userId;
 
+                const receiverId =
+                    normalizeId(
+                        payload.receiver
+                    ) ||
+                    normalizeId(
+                        payload.receiverId
+                    );
+
                 if (
-                    !receiverId ||
-                    !senderId
+                    !senderId ||
+                    !receiverId
                 ) {
                     return;
                 }
 
                 const message = {
+
                     ...payload,
 
                     sender:
                         senderId,
 
+                    senderId,
+
                     receiver:
-                        receiverId
+                        receiverId,
+
+                    receiverId,
+
+                    createdAt:
+                        payload.createdAt ||
+                        new Date().toISOString(),
+
+                    timestamp:
+                        payload.timestamp ||
+                        Date.now()
+
                 };
 
-
-                /*
-                 * Send to current chat room.
-                 */
                 if (roomId) {
 
                     io
@@ -588,12 +697,6 @@ io.on(
 
                 }
 
-
-                /*
-                 * Send directly to receiver.
-                 * This makes messages work even when
-                 * receiver is not inside the room.
-                 */
                 sendToUser(
                     receiverId,
                     "direct-message",
@@ -603,14 +706,13 @@ io.on(
             }
         );
 
-
-        /* ==================================================
+        /* =================================================
            TYPING
-        ================================================== */
+        ================================================= */
 
         socket.on(
             "typing",
-            (payload) => {
+            payload => {
 
                 if (
                     !payload?.roomId
@@ -638,14 +740,13 @@ io.on(
             }
         );
 
-
-        /* ==================================================
+        /* =================================================
            STOP TYPING
-        ================================================== */
+        ================================================= */
 
         socket.on(
             "stop-typing",
-            (payload) => {
+            payload => {
 
                 if (
                     !payload?.roomId
@@ -673,24 +774,23 @@ io.on(
             }
         );
 
-
-        /* ==================================================
+        /* =================================================
            MESSAGE SEEN
-        ================================================== */
+        ================================================= */
 
         socket.on(
             "message-seen",
-            (payload) => {
+            payload => {
 
                 if (!payload) {
                     return;
                 }
 
-                const roomId =
-                    payload.roomId;
-
                 const data = {
-                    roomId,
+
+                    roomId:
+                        payload.roomId ||
+                        null,
 
                     senderId:
                         normalizeId(
@@ -700,15 +800,21 @@ io.on(
                     receiverId:
                         normalizeId(
                             payload.receiverId
-                        )
+                        ),
+
+                    messageId:
+                        payload.messageId ||
+                        null
+
                 };
 
-
-                if (roomId) {
+                if (data.roomId) {
 
                     io
                         .to(
-                            String(roomId)
+                            String(
+                                data.roomId
+                            )
                         )
                         .emit(
                             "messages-seen",
@@ -716,7 +822,6 @@ io.on(
                         );
 
                 }
-
 
                 if (
                     data.senderId
@@ -733,562 +838,914 @@ io.on(
             }
         );
 
-/* ==================================================
-   CALL USER
-================================================== */
+        /* =================================================
+           CALL USER
+        ================================================= */
 
-socket.on(
-    "call-user",
-    payload => {
+        socket.on(
+            "call-user",
+            payload => {
 
-        if (!payload) {
-            return;
-        }
+                if (!payload) {
+                    return;
+                }
 
-        const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
-
-        const callerId =
-            normalizeId(
-                payload.callerId
-            ) ||
-            socket.userId;
-
-        if (
-            !receiverId ||
-            !callerId
-        ) {
-            return;
-        }
-
-        const callData = {
-
-            roomId:
-                payload.roomId ||
-                null,
-
-            callerId,
-
-            receiverId,
-
-            callerName:
-                payload.callerName ||
-                "User",
-
-            callerAvatar:
-                payload.callerAvatar ||
-                "",
-
-            receiverName:
-                payload.receiverName ||
-                "User",
-
-            receiverAvatar:
-                payload.receiverAvatar ||
-                "",
-
-            type:
-                payload.type === "video"
-                    ? "video"
-                    : "audio",
-
-            status:
-                "ringing",
-
-            timestamp:
-                Date.now()
-
-        };
-
-
-        /* ------------------------------------------
-           SEND INCOMING CALL ONLY TO RECEIVER
-        ------------------------------------------ */
-
-        sendToUser(
-            receiverId,
-            "incoming-call",
-            callData
-        );
-
-
-        /* ------------------------------------------
-           RINGING STATUS ONLY TO CALLER
-        ------------------------------------------ */
-
-        socket.emit(
-            "call-ringing",
-            {
-                ...callData,
-                status: "ringing"
-            }
-        );
-
-    }
-);
-
-        /* ------------------------------------------
-           RECEIVER
-        ------------------------------------------ */
-
-        sendToUser(
-            receiverId,
-            "incoming-call",
-            callData
-        );
-
-
-        /* ------------------------------------------
-           RINGING
-        ------------------------------------------ */
-
-        sendToUser(
-            receiverId,
-            "call-ringing",
-            {
-                ...callData,
-                status: "ringing"
-            }
-        );
-
-    }
-);
-
-
-/* ==================================================
-   ACCEPT CALL
-================================================== */
-
-socket.on(
-    "accept-call",
-    (payload) => {
-
-        const callerId =
-            normalizeId(
-                payload?.callerId
-            );
-
-        if (!callerId) {
-            return;
-        }
-
-
-        sendToUser(
-            callerId,
-            "call-accepted",
-            {
-
-                ...payload,
-
-                receiverId:
+                const receiverId =
                     normalizeId(
-                        payload?.receiverId
+                        payload.receiverId
+                    );
+
+                const callerId =
+                    normalizeId(
+                        payload.callerId
                     ) ||
-                    socket.userId,
+                    socket.userId;
 
-                status:
-                    "connected"
+                const roomId =
+                    payload.roomId
+                        ? String(
+                              payload.roomId
+                          )
+                        : null;
 
-            }
-        );
+                if (
+                    !callerId ||
+                    !receiverId ||
+                    !roomId
+                ) {
+                    return;
+                }
 
-    }
-);
+                if (
+                    callerId ===
+                    receiverId
+                ) {
+                    return;
+                }
 
+                /* -----------------------------------------
+                   CALLER ALREADY BUSY
+                ----------------------------------------- */
 
-/* ==================================================
-   REJECT CALL
-================================================== */
+                if (
+                    isUserInCall(
+                        callerId
+                    )
+                ) {
 
-socket.on(
-    "reject-call",
-    (payload) => {
+                    sendToUser(
+                        callerId,
+                        "call-busy",
+                        {
+                            roomId,
+                            callerId,
+                            receiverId,
+                            status: "busy"
+                        }
+                    );
 
-        const callerId =
-            normalizeId(
-                payload?.callerId
-            );
+                    return;
 
-        if (!callerId) {
-            return;
-        }
+                }
 
+                /* -----------------------------------------
+                   RECEIVER ALREADY BUSY
+                ----------------------------------------- */
 
-        sendToUser(
-            callerId,
-            "call-rejected",
-            {
+                if (
+                    isUserInCall(
+                        receiverId
+                    )
+                ) {
 
-                ...payload,
+                    sendToUser(
+                        callerId,
+                        "call-busy",
+                        {
+                            roomId,
+                            callerId,
+                            receiverId,
+                            status: "busy"
+                        }
+                    );
 
-                receiverId:
-                    socket.userId,
+                    return;
 
-                status:
-                    "rejected"
+                }
 
-            }
-        );
+                const callData = {
 
-    }
-);
+                    roomId,
 
+                    callerId,
 
-/* ==================================================
-   END CALL
-================================================== */
+                    receiverId,
 
-socket.on(
-    "end-call",
-    (payload) => {
+                    callerName:
+                        payload.callerName ||
+                        "User",
 
-        const roomId =
-            payload?.roomId;
+                    callerAvatar:
+                        payload.callerAvatar ||
+                        "",
 
-        const callerId =
-            normalizeId(
-                payload?.callerId
-            );
+                    receiverName:
+                        payload.receiverName ||
+                        "User",
 
-        const receiverId =
-            normalizeId(
-                payload?.receiverId
-            );
+                    receiverAvatar:
+                        payload.receiverAvatar ||
+                        "",
 
+                    type:
+                        payload.type === "video"
+                            ? "video"
+                            : "audio",
 
-        const endedData = {
+                    status:
+                        "ringing",
 
-            roomId:
-                roomId || null,
+                    createdAt:
+                        new Date().toISOString(),
 
-            callerId:
-                callerId || null,
+                    timestamp:
+                        Date.now()
 
-            receiverId:
-                receiverId ||
-                socket.userId,
+                };
 
-            endedBy:
-                socket.userId,
-
-            timestamp:
-                Date.now()
-
-        };
-
-
-        if (roomId) {
-
-            io
-                .to(
-                    String(roomId)
-                )
-                .emit(
-                    "call-ended",
-                    endedData
+                activeCalls.set(
+                    roomId,
+                    callData
                 );
 
-        }
+                socket.join(
+                    roomId
+                );
 
+                sendToUser(
+                    receiverId,
+                    "incoming-call",
+                    callData
+                );
 
-        if (callerId) {
+                socket.emit(
+                    "call-ringing",
+                    callData
+                );
 
-            sendToUser(
-                callerId,
-                "call-ended",
-                endedData
-            );
+                console.log(
+                    "Incoming call:",
+                    callerId,
+                    "->",
+                    receiverId,
+                    callData.type
+                );
 
-        }
+                /* -----------------------------------------
+                   AUTOMATIC MISSED CALL
+                ----------------------------------------- */
 
+                setTimeout(
+                    () => {
 
-        if (receiverId) {
+                        const currentCall =
+                            getCall(
+                                roomId
+                            );
 
-            sendToUser(
-                receiverId,
-                "call-ended",
-                endedData
-            );
+                        if (
+                            !currentCall ||
+                            currentCall.status !==
+                                "ringing"
+                        ) {
+                            return;
+                        }
 
-        }
+                        const missedData = {
 
-    }
-);
+                            ...currentCall,
 
+                            status:
+                                "missed",
 
-/* ==================================================
-   CALL BUSY
-================================================== */
+                            missed:
+                                true,
 
-socket.on(
-    "call-busy",
-    (payload) => {
+                            timestamp:
+                                Date.now()
 
-        const callerId =
-            normalizeId(
-                payload?.callerId
-            );
+                        };
 
-        if (!callerId) {
-            return;
-        }
+                        sendToUser(
+                            currentCall.callerId,
+                            "call-missed",
+                            missedData
+                        );
 
+                        sendToUser(
+                            currentCall.receiverId,
+                            "call-missed",
+                            missedData
+                        );
 
-        sendToUser(
-            callerId,
+                        clearCall(
+                            roomId
+                        );
+
+                    },
+                    CALL_RING_TIMEOUT
+                );
+
+            }
+        );
+
+        /* =================================================
+           ACCEPT CALL
+        ================================================= */
+
+        socket.on(
+            "accept-call",
+            payload => {
+
+                if (!payload) {
+                    return;
+                }
+
+                const roomId =
+                    payload.roomId
+                        ? String(
+                              payload.roomId
+                          )
+                        : null;
+
+                const callerId =
+                    normalizeId(
+                        payload.callerId
+                    );
+
+                const receiverId =
+                    normalizeId(
+                        payload.receiverId
+                    ) ||
+                    socket.userId;
+
+                if (
+                    !roomId ||
+                    !callerId ||
+                    !receiverId
+                ) {
+                    return;
+                }
+
+                const currentCall =
+                    getCall(
+                        roomId
+                    );
+
+                const callData = {
+
+                    ...(currentCall || {}),
+
+                    ...payload,
+
+                    roomId,
+
+                    callerId,
+
+                    receiverId,
+
+                    type:
+                        payload.type === "video"
+                            ? "video"
+                            : (
+                                currentCall?.type ||
+                                "audio"
+                            ),
+
+                    status:
+                        "connected",
+
+                    accepted:
+                        true,
+
+                    connectedAt:
+                        Date.now(),
+
+                    timestamp:
+                        Date.now()
+
+                };
+
+                activeCalls.set(
+                    roomId,
+                    callData
+                );
+
+                socket.join(
+                    roomId
+                );
+
+                sendToUser(
+                    callerId,
+                    "call-accepted",
+                    callData
+                );
+
+                sendToUser(
+                    receiverId,
+                    "call-accepted",
+                    callData
+                );
+
+                console.log(
+                    "Call accepted:",
+                    roomId
+                );
+
+            }
+        );
+
+        /* =================================================
+           REJECT CALL
+        ================================================= */
+
+        socket.on(
+            "reject-call",
+            payload => {
+
+                if (!payload) {
+                    return;
+                }
+
+                const roomId =
+                    payload.roomId
+                        ? String(
+                              payload.roomId
+                          )
+                        : null;
+
+                const callerId =
+                    normalizeId(
+                        payload.callerId
+                    );
+
+                const receiverId =
+                    normalizeId(
+                        payload.receiverId
+                    ) ||
+                    socket.userId;
+
+                const rejectedData = {
+
+                    ...payload,
+
+                    roomId,
+
+                    callerId,
+
+                    receiverId,
+
+                    status:
+                        "rejected",
+
+                    timestamp:
+                        Date.now()
+
+                };
+
+                if (callerId) {
+
+                    sendToUser(
+                        callerId,
+                        "call-rejected",
+                        rejectedData
+                    );
+
+                }
+
+                if (receiverId) {
+
+                    sendToUser(
+                        receiverId,
+                        "call-rejected",
+                        rejectedData
+                    );
+
+                }
+
+                if (roomId) {
+
+                    io
+                        .to(roomId)
+                        .emit(
+                            "call-rejected",
+                            rejectedData
+                        );
+
+                }
+
+                clearCall(
+                    roomId
+                );
+
+                console.log(
+                    "Call rejected:",
+                    roomId
+                );
+
+            }
+        );
+
+        /* =================================================
+           END CALL
+        ================================================= */
+
+        socket.on(
+            "end-call",
+            payload => {
+
+                if (!payload) {
+                    return;
+                }
+
+                const roomId =
+                    payload.roomId
+                        ? String(
+                              payload.roomId
+                          )
+                        : null;
+
+                const currentCall =
+                    getCall(
+                        roomId
+                    );
+
+                const callerId =
+                    normalizeId(
+                        payload.callerId
+                    ) ||
+                    currentCall?.callerId;
+
+                const receiverId =
+                    normalizeId(
+                        payload.receiverId
+                    ) ||
+                    currentCall?.receiverId;
+
+                const endedData = {
+
+                    ...(currentCall || {}),
+
+                    ...payload,
+
+                    roomId,
+
+                    callerId:
+                        callerId ||
+                        null,
+
+                    receiverId:
+                        receiverId ||
+                        null,
+
+                    endedBy:
+                        socket.userId,
+
+                    status:
+                        "ended",
+
+                    timestamp:
+                        Date.now()
+
+                };
+
+                if (roomId) {
+
+                    io
+                        .to(roomId)
+                        .emit(
+                            "call-ended",
+                            endedData
+                        );
+
+                }
+
+                if (
+                    callerId
+                ) {
+
+                    sendToUser(
+                        callerId,
+                        "call-ended",
+                        endedData
+                    );
+
+                }
+
+                if (
+                    receiverId
+                ) {
+
+                    sendToUser(
+                        receiverId,
+                        "call-ended",
+                        endedData
+                    );
+
+                }
+
+                clearCall(
+                    roomId
+                );
+
+                console.log(
+                    "Call ended:",
+                    roomId
+                );
+
+            }
+        );
+
+        /* =================================================
+           CALL BUSY
+        ================================================= */
+
+        socket.on(
             "call-busy",
-            {
+            payload => {
 
-                ...payload,
+                if (!payload) {
+                    return;
+                }
 
-                receiverId:
-                    socket.userId,
+                const callerId =
+                    normalizeId(
+                        payload.callerId
+                    );
 
-                timestamp:
-                    Date.now()
+                if (!callerId) {
+                    return;
+                }
+
+                const busyData = {
+
+                    ...payload,
+
+                    receiverId:
+                        socket.userId,
+
+                    status:
+                        "busy",
+
+                    timestamp:
+                        Date.now()
+
+                };
+
+                sendToUser(
+                    callerId,
+                    "call-busy",
+                    busyData
+                );
 
             }
         );
 
-    }
-);
+        /* =================================================
+           CALL MISSED
+        ================================================= */
 
-
-/* ==================================================
-   CALL MISSED
-================================================== */
-
-socket.on(
-    "call-missed",
-    (payload) => {
-
-        const callerId =
-            normalizeId(
-                payload?.callerId
-            );
-
-        if (!callerId) {
-            return;
-        }
-
-
-        sendToUser(
-            callerId,
+        socket.on(
             "call-missed",
-            {
+            payload => {
 
-                ...payload,
+                if (!payload) {
+                    return;
+                }
 
-                receiverId:
-                    socket.userId,
+                const callerId =
+                    normalizeId(
+                        payload.callerId
+                    );
 
-                timestamp:
-                    Date.now()
+                const receiverId =
+                    normalizeId(
+                        payload.receiverId
+                    ) ||
+                    socket.userId;
+
+                const missedData = {
+
+                    ...payload,
+
+                    callerId,
+
+                    receiverId,
+
+                    status:
+                        "missed",
+
+                    missed:
+                        true,
+
+                    timestamp:
+                        Date.now()
+
+                };
+
+                if (callerId) {
+
+                    sendToUser(
+                        callerId,
+                        "call-missed",
+                        missedData
+                    );
+
+                }
+
+                if (receiverId) {
+
+                    sendToUser(
+                        receiverId,
+                        "call-missed",
+                        missedData
+                    );
+
+                }
+
+                clearCall(
+                    payload.roomId
+                );
 
             }
         );
 
-    }
-);
+        /* =================================================
+           WEBRTC OFFER
+        ================================================= */
 
-/* ==================================================
-   WEBRTC OFFER
-================================================== */
-
-socket.on(
-    "webrtc-offer",
-    payload => {
-
-        if (
-            !payload ||
-            !payload.receiverId ||
-            !payload.offer
-        ) {
-            return;
-        }
-
-
-        const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
-
-
-        const callerId =
-            normalizeId(
-                payload.callerId
-            ) ||
-            socket.userId;
-
-
-        if (
-            !receiverId ||
-            !callerId
-        ) {
-            return;
-        }
-
-
-        sendToUser(
-            receiverId,
+        socket.on(
             "webrtc-offer",
-            {
+            payload => {
 
-                ...payload,
+                if (
+                    !payload ||
+                    !payload.offer
+                ) {
+                    return;
+                }
 
-                callerId,
+                const receiverId =
+                    normalizeId(
+                        payload.receiverId
+                    );
 
-                receiverId,
+                const callerId =
+                    normalizeId(
+                        payload.callerId
+                    ) ||
+                    socket.userId;
 
-                roomId:
-                    payload.roomId ||
-                    null
+                const roomId =
+                    payload.roomId
+                        ? String(
+                              payload.roomId
+                          )
+                        : null;
+
+                if (
+                    !receiverId ||
+                    !callerId
+                ) {
+                    return;
+                }
+
+                sendToUser(
+                    receiverId,
+                    "webrtc-offer",
+                    {
+
+                        ...payload,
+
+                        callerId,
+
+                        receiverId,
+
+                        roomId
+
+                    }
+                );
+
+                console.log(
+                    "WebRTC offer:",
+                    callerId,
+                    "->",
+                    receiverId
+                );
 
             }
         );
 
-    }
-);
+        /* =================================================
+           WEBRTC ANSWER
+        ================================================= */
 
-
-/* ==================================================
-   WEBRTC ANSWER
-================================================== */
-
-socket.on(
-    "webrtc-answer",
-    payload => {
-
-        if (
-            !payload ||
-            !payload.receiverId ||
-            !payload.answer
-        ) {
-            return;
-        }
-
-
-        const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
-
-
-        const callerId =
-            normalizeId(
-                payload.callerId
-            ) ||
-            socket.userId;
-
-
-        if (
-            !receiverId ||
-            !callerId
-        ) {
-            return;
-        }
-
-
-        sendToUser(
-            receiverId,
+        socket.on(
             "webrtc-answer",
-            {
+            payload => {
 
-                ...payload,
+                if (
+                    !payload ||
+                    !payload.answer
+                ) {
+                    return;
+                }
 
-                callerId,
+                const receiverId =
+                    normalizeId(
+                        payload.receiverId
+                    );
 
-                receiverId,
+                const callerId =
+                    normalizeId(
+                        payload.callerId
+                    ) ||
+                    socket.userId;
 
-                roomId:
-                    payload.roomId ||
-                    null
+                const roomId =
+                    payload.roomId
+                        ? String(
+                              payload.roomId
+                          )
+                        : null;
+
+                if (
+                    !receiverId ||
+                    !callerId
+                ) {
+                    return;
+                }
+
+                sendToUser(
+                    receiverId,
+                    "webrtc-answer",
+                    {
+
+                        ...payload,
+
+                        callerId,
+
+                        receiverId,
+
+                        roomId
+
+                    }
+                );
+
+                console.log(
+                    "WebRTC answer:",
+                    callerId,
+                    "->",
+                    receiverId
+                );
 
             }
         );
 
-    }
-);
+        /* =================================================
+           WEBRTC ICE CANDIDATE
+        ================================================= */
 
-
-/* ==================================================
-   WEBRTC ICE CANDIDATE
-================================================== */
-
-socket.on(
-    "webrtc-ice-candidate",
-    payload => {
-
-        if (
-            !payload ||
-            !payload.receiverId ||
-            !payload.candidate
-        ) {
-            return;
-        }
-
-
-        const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
-
-
-        const callerId =
-            normalizeId(
-                payload.callerId
-            ) ||
-            socket.userId;
-
-
-        if (
-            !receiverId ||
-            !callerId
-        ) {
-            return;
-        }
-
-
-        sendToUser(
-            receiverId,
+        socket.on(
             "webrtc-ice-candidate",
-            {
+            payload => {
 
-                ...payload,
+                if (
+                    !payload ||
+                    !payload.candidate
+                ) {
+                    return;
+                }
 
-                callerId,
+                const receiverId =
+                    normalizeId(
+                        payload.receiverId
+                    );
 
-                receiverId,
+                const callerId =
+                    normalizeId(
+                        payload.callerId
+                    ) ||
+                    socket.userId;
 
-                roomId:
-                    payload.roomId ||
-                    null
+                const roomId =
+                    payload.roomId
+                        ? String(
+                              payload.roomId
+                          )
+                        : null;
+
+                if (
+                    !receiverId ||
+                    !callerId
+                ) {
+                    return;
+                }
+
+                sendToUser(
+                    receiverId,
+                    "webrtc-ice-candidate",
+                    {
+
+                        ...payload,
+
+                        callerId,
+
+                        receiverId,
+
+                        roomId
+
+                    }
+                );
 
             }
         );
 
-    }
-);
-       
-        /* ==================================================
+        /* =================================================
            DISCONNECT
-        ================================================== */
+        ================================================= */
 
         socket.on(
             "disconnect",
-            (reason) => {
+            reason => {
 
                 console.log(
-                    "🔴 Socket disconnected:",
+                    "Socket disconnected:",
                     socket.id,
                     reason
                 );
 
+                /*
+                 * If this socket was participating
+                 * in an active call, notify the other
+                 * participant.
+                 */
+
                 if (
                     socket.userId
                 ) {
+
+                    for (
+                        const [
+                            roomId,
+                            call
+                        ] of activeCalls.entries()
+                    ) {
+
+                        if (
+                            call.callerId ===
+                                socket.userId ||
+                            call.receiverId ===
+                                socket.userId
+                        ) {
+
+                            const otherUser =
+                                call.callerId ===
+                                    socket.userId
+                                    ? call.receiverId
+                                    : call.callerId;
+
+                            sendToUser(
+                                otherUser,
+                                "call-ended",
+                                {
+
+                                    ...call,
+
+                                    roomId,
+
+                                    endedBy:
+                                        socket.userId,
+
+                                    status:
+                                        "ended",
+
+                                    reason:
+                                        "disconnect",
+
+                                    timestamp:
+                                        Date.now()
+
+                                }
+                            );
+
+                            clearCall(
+                                roomId
+                            );
+
+                        }
+
+                    }
 
                     removeOnlineUser(
                         socket.userId,
@@ -1308,7 +1765,6 @@ socket.on(
     }
 );
 
-
 /* =========================================================
    START SERVER
 ========================================================= */
@@ -1326,19 +1782,19 @@ const startServer =
                 () => {
 
                     console.log(
-                        `🚀 JR Store API running on port ${PORT}`
+                        `JR Store API running on port ${PORT}`
                     );
 
                     console.log(
-                        "🗄️ MongoDB connected"
+                        "MongoDB connected"
                     );
 
                     console.log(
-                        "💬 Messenger enabled"
+                        "Messenger enabled"
                     );
 
                     console.log(
-                        "📞 Voice/Video WebRTC signaling enabled"
+                        "WebRTC signaling enabled"
                     );
 
                 }
@@ -1347,7 +1803,7 @@ const startServer =
         } catch (error) {
 
             console.error(
-                "❌ SERVER STARTUP FAILED:",
+                "SERVER STARTUP FAILED:",
                 error
             );
 
@@ -1356,6 +1812,5 @@ const startServer =
         }
 
     };
-
 
 startServer();
