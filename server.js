@@ -733,13 +733,13 @@ io.on(
             }
         );
 
-         /* ==================================================
+/* ==================================================
    CALL USER
 ================================================== */
 
 socket.on(
     "call-user",
-    (payload) => {
+    payload => {
 
         if (!payload) {
             return;
@@ -762,7 +762,6 @@ socket.on(
         ) {
             return;
         }
-
 
         const callData = {
 
@@ -803,6 +802,32 @@ socket.on(
 
         };
 
+
+        /* ------------------------------------------
+           SEND INCOMING CALL ONLY TO RECEIVER
+        ------------------------------------------ */
+
+        sendToUser(
+            receiverId,
+            "incoming-call",
+            callData
+        );
+
+
+        /* ------------------------------------------
+           RINGING STATUS ONLY TO CALLER
+        ------------------------------------------ */
+
+        socket.emit(
+            "call-ringing",
+            {
+                ...callData,
+                status: "ringing"
+            }
+        );
+
+    }
+);
 
         /* ------------------------------------------
            RECEIVER
