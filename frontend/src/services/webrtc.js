@@ -13,15 +13,25 @@ Responsibilities:
 6. Replace camera/audio tracks
 7. Close peer safely
 8. Stop media streams
+
+TURN can be supplied through Vite environment variables:
+
+VITE_TURN_URL
+VITE_TURN_USERNAME
+VITE_TURN_CREDENTIAL
+
+Example:
+
+VITE_TURN_URL=turn:your-server:3478
+VITE_TURN_USERNAME=username
+VITE_TURN_CREDENTIAL=password
+
+STUN works for many networks.
+TURN is required for networks where direct P2P
+connection is impossible.
 =========================================================
 */
 
-
-/*
-=========================================================
-ICE SERVERS
-=========================================================
-*/
 
 const buildIceServers = () => {
 
@@ -65,11 +75,14 @@ const buildIceServers = () => {
 
         servers.push({
 
-            urls: turnUrl,
+            urls:
+                turnUrl,
 
-            username: turnUsername,
+            username:
+                turnUsername,
 
-            credential: turnCredential
+            credential:
+                turnCredential
 
         });
 
@@ -77,20 +90,26 @@ const buildIceServers = () => {
 
 
     return servers;
+
 };
 
 
 const ICE_SERVERS = {
 
-    iceServers: buildIceServers(),
+    iceServers:
+        buildIceServers(),
 
-    iceCandidatePoolSize: 10,
+    iceCandidatePoolSize:
+        10,
 
-    bundlePolicy: "max-bundle",
+    bundlePolicy:
+        "max-bundle",
 
-    rtcpMuxPolicy: "require",
+    rtcpMuxPolicy:
+        "require",
 
-    iceTransportPolicy: "all"
+    iceTransportPolicy:
+        "all"
 
 };
 
@@ -133,24 +152,28 @@ export const createPeerConnection = ({
     -----------------------------------------------------
     */
 
-    peer.onicecandidate = event => {
+    peer.onicecandidate =
+        event => {
 
-        if (!event.candidate) {
-            return;
-        }
+            if (
+                !event.candidate
+            ) {
+                return;
+            }
 
-        if (
-            typeof onIceCandidate ===
-            "function"
-        ) {
 
-            onIceCandidate(
-                event.candidate
-            );
+            if (
+                typeof onIceCandidate ===
+                "function"
+            ) {
 
-        }
+                onIceCandidate(
+                    event.candidate
+                );
 
-    };
+            }
+
+        };
 
 
     /*
@@ -159,84 +182,22 @@ export const createPeerConnection = ({
     -----------------------------------------------------
     */
 
-    peer.ontrack = event => {
+    peer.ontrack =
+        event => {
 
-        console.log(
-            "📡 Remote track:",
-            event.track?.kind,
-            event.track?.readyState
-        );
-
-
-        if (
-            typeof onTrack !==
-            "function"
-        ) {
-            return;
-        }
-
-
-        /*
-        Prefer browser-provided MediaStream.
-        */
-
-        let stream =
-            event.streams?.[0] || null;
-
-
-        /*
-        If browser does not provide stream,
-        create one.
-        */
-
-        if (!stream) {
-            stream = new MediaStream();
-        }
-
-
-        /*
-        Make sure the received track exists
-        inside the stream.
-        */
-
-        if (
-            event.track &&
-            !stream
-                .getTracks()
-                .some(
-                    track =>
-                        track.id ===
-                        event.track.id
-                )
-        ) {
-
-            try {
-
-                stream.addTrack(
-                    event.track
-                );
-
-            } catch (error) {
-
-                console.warn(
-                    "Could not add remote track:",
-                    error
-                );
-
+            if (
+                typeof onTrack !==
+                "function"
+            ) {
+                return;
             }
 
-        }
 
+            onTrack(
+                event
+            );
 
-        onTrack({
-
-            ...event,
-
-            streams: [stream]
-
-        });
-
-    };
+        };
 
 
     /*
@@ -245,27 +206,22 @@ export const createPeerConnection = ({
     -----------------------------------------------------
     */
 
-    peer.onconnectionstatechange = () => {
+    peer.onconnectionstatechange =
+        () => {
 
-        console.log(
-            "📞 WebRTC connection:",
-            peer.connectionState
-        );
+            if (
+                typeof onConnectionStateChange ===
+                "function"
+            ) {
 
+                onConnectionStateChange(
+                    peer.connectionState,
+                    peer
+                );
 
-        if (
-            typeof onConnectionStateChange ===
-            "function"
-        ) {
+            }
 
-            onConnectionStateChange(
-                peer.connectionState,
-                peer
-            );
-
-        }
-
-    };
+        };
 
 
     /*
@@ -274,27 +230,22 @@ export const createPeerConnection = ({
     -----------------------------------------------------
     */
 
-    peer.oniceconnectionstatechange = () => {
+    peer.oniceconnectionstatechange =
+        () => {
 
-        console.log(
-            "🧊 ICE connection:",
-            peer.iceConnectionState
-        );
+            if (
+                typeof onIceConnectionStateChange ===
+                "function"
+            ) {
 
+                onIceConnectionStateChange(
+                    peer.iceConnectionState,
+                    peer
+                );
 
-        if (
-            typeof onIceConnectionStateChange ===
-            "function"
-        ) {
+            }
 
-            onIceConnectionStateChange(
-                peer.iceConnectionState,
-                peer
-            );
-
-        }
-
-    };
+        };
 
 
     /*
@@ -303,35 +254,37 @@ export const createPeerConnection = ({
     -----------------------------------------------------
     */
 
-    peer.onnegotiationneeded = async () => {
+    peer.onnegotiationneeded =
+        async () => {
 
-        if (
-            typeof onNegotiationNeeded !==
-            "function"
-        ) {
-            return;
-        }
+            if (
+                typeof onNegotiationNeeded !==
+                "function"
+            ) {
+                return;
+            }
 
 
-        try {
+            try {
 
-            await onNegotiationNeeded(
-                peer
-            );
+                await onNegotiationNeeded(
+                    peer
+                );
 
-        } catch (error) {
+            } catch (error) {
 
-            console.error(
-                "WebRTC negotiation error:",
-                error
-            );
+                console.error(
+                    "WebRTC negotiation error:",
+                    error
+                );
 
-        }
+            }
 
-    };
+        };
 
 
     return peer;
+
 };
 
 
@@ -341,139 +294,133 @@ GET USER MEDIA
 =========================================================
 */
 
-export const getUserMedia = async ({
-    audio = true,
-    video = false,
-    facingMode = "user"
-} = {}) => {
+export const getUserMedia =
+    async ({
+        audio = true,
+        video = false,
+        facingMode = "user"
+    } = {}) => {
 
-    if (
-        typeof navigator ===
-        "undefined" ||
-        !navigator.mediaDevices ||
-        typeof navigator.mediaDevices
-            .getUserMedia !== "function"
-    ) {
+        if (
+            typeof navigator ===
+            "undefined" ||
+            !navigator.mediaDevices ||
+            typeof navigator.mediaDevices.getUserMedia !==
+                "function"
+        ) {
 
-        throw new Error(
-            "Microphone/camera access is not available. Use HTTPS or localhost."
-        );
+            throw new Error(
+                "Microphone/camera access is not available. Use HTTPS or localhost and a supported browser."
+            );
 
-    }
-
-
-    const constraints = {
-
-        audio: audio
-            ? {
-                  echoCancellation: true,
-
-                  noiseSuppression: true,
-
-                  autoGainControl: true
-              }
-            : false,
+        }
 
 
-        video: video
-            ? {
-                  facingMode: {
-                      ideal: facingMode
-                  },
+        const constraints = {
 
-                  width: {
-                      ideal: 1280,
-                      max: 1920
-                  },
+            audio:
+                audio
+                    ? {
+                          echoCancellation:
+                              true,
 
-                  height: {
-                      ideal: 720,
-                      max: 1080
-                  },
+                          noiseSuppression:
+                              true,
 
-                  frameRate: {
-                      ideal: 30,
-                      max: 30
-                  }
-              }
-            : false
+                          autoGainControl:
+                              true,
 
-    };
+                          channelCount:
+                              1,
+
+                          sampleRate:
+                              48000
+                      }
+                    : false,
 
 
-    try {
+            video:
+                video
+                    ? {
+                          facingMode: {
+                              ideal:
+                                  facingMode
+                          },
 
-        const stream =
-            await navigator
+                          width: {
+                              ideal:
+                                  1280,
+                              max:
+                                  1920
+                          },
+
+                          height: {
+                              ideal:
+                                  720,
+                              max:
+                                  1080
+                          },
+
+                          frameRate: {
+                              ideal:
+                                  30,
+                              max:
+                                  30
+                          }
+                      }
+                    : false
+
+        };
+
+
+        try {
+
+            return await navigator
                 .mediaDevices
                 .getUserMedia(
                     constraints
                 );
 
+        } catch (error) {
 
-        console.log(
-            "🎤 Local media:",
-            stream
-                .getTracks()
-                .map(
-                    track =>
-                        `${track.kind}:${track.readyState}`
-                )
-        );
+            /*
+            Some devices reject advanced
+            audio constraints. Retry with
+            simple constraints.
+            */
 
+            if (
+                audio &&
+                error?.name ===
+                    "OverconstrainedError"
+            ) {
 
-        return stream;
-
-    } catch (error) {
-
-        console.error(
-            "getUserMedia error:",
-            error
-        );
-
-
-        /*
-        Retry with simple constraints.
-        */
-
-        if (
-            error?.name ===
-                "OverconstrainedError" ||
-            error?.name ===
-                "NotReadableError"
-        ) {
-
-            try {
-
-                return await navigator
+                return navigator
                     .mediaDevices
                     .getUserMedia({
 
-                        audio: audio,
+                        audio: true,
 
-                        video: video
+                        video:
+                            video
+                                ? {
+                                      facingMode: {
+                                          ideal:
+                                              facingMode
+                                      }
+                                  }
+                                : false
 
                     });
 
-            } catch (retryError) {
-
-                console.error(
-                    "Simple getUserMedia retry failed:",
-                    retryError
-                );
-
-                throw retryError;
-
             }
+
+
+            throw error;
 
         }
 
-
-        throw error;
-
-    }
-
-};
+    };
 
 
 /*
@@ -482,85 +429,53 @@ ADD LOCAL TRACKS
 =========================================================
 */
 
-export const addLocalTracks = (
-    peer,
-    stream
-) => {
+export const addLocalTracks =
+    (
+        peer,
+        stream
+    ) => {
 
-    if (
-        !peer ||
-        !stream
-    ) {
-        return;
-    }
-
-
-    const existingSenders =
-        peer.getSenders();
+        if (
+            !peer ||
+            !stream
+        ) {
+            return;
+        }
 
 
-    stream
-        .getTracks()
-        .forEach(track => {
-
-            const senderExists =
-                existingSenders.some(
-                    sender =>
-                        sender.track?.kind ===
-                            track.kind &&
-                        sender.track?.id ===
-                            track.id
-                );
+        const existingSenders =
+            peer.getSenders();
 
 
-            if (senderExists) {
-                return;
-            }
+        stream
+            .getTracks()
+            .forEach(
+                track => {
 
-
-            /*
-            Avoid duplicate audio/video sender.
-            */
-
-            const sameKindSender =
-                peer
-                    .getSenders()
-                    .find(
-                        sender =>
-                            sender.track?.kind ===
-                            track.kind
-                    );
-
-
-            if (
-                sameKindSender &&
-                !sameKindSender.track
-            ) {
-
-                sameKindSender
-                    .replaceTrack(track)
-                    .catch(error => {
-
-                        console.error(
-                            "Track replace error:",
-                            error
+                    const alreadyAdded =
+                        existingSenders.some(
+                            sender =>
+                                sender.track?.id ===
+                                track.id
                         );
 
-                    });
 
-                return;
+                    if (
+                        alreadyAdded
+                    ) {
+                        return;
+                    }
 
-            }
 
+                    peer.addTrack(
+                        track,
+                        stream
+                    );
 
-            peer.addTrack(
-                track,
-                stream
+                }
             );
 
-        });
-
-};
+    };
 
 
 /*
@@ -569,60 +484,61 @@ REPLACE VIDEO TRACK
 =========================================================
 */
 
-export const replaceVideoTrack = async (
-    peer,
-    track
-) => {
+export const replaceVideoTrack =
+    async (
+        peer,
+        track
+    ) => {
 
-    if (
-        !peer ||
-        !track
-    ) {
-        return false;
-    }
+        if (
+            !peer ||
+            !track
+        ) {
+            return false;
+        }
 
 
-    const sender =
-        peer
-            .getSenders()
-            .find(
-                item =>
-                    item.track?.kind ===
-                    "video"
+        const sender =
+            peer
+                .getSenders()
+                .find(
+                    item =>
+                        item.track?.kind ===
+                        "video"
+                );
+
+
+        if (!sender) {
+
+            console.warn(
+                "WebRTC video sender not found."
             );
 
+            return false;
 
-    if (!sender) {
-
-        console.warn(
-            "WebRTC video sender not found."
-        );
-
-        return false;
-
-    }
+        }
 
 
-    try {
+        try {
 
-        await sender.replaceTrack(
-            track
-        );
+            await sender.replaceTrack(
+                track
+            );
 
-        return true;
+            return true;
 
-    } catch (error) {
+        } catch (error) {
 
-        console.error(
-            "WebRTC video replace error:",
-            error
-        );
+            console.error(
+                "WebRTC video replace error:",
+                error
+            );
 
-        return false;
+            return false;
 
-    }
+        }
 
-};
+    };
 
 
 /*
@@ -631,60 +547,61 @@ REPLACE AUDIO TRACK
 =========================================================
 */
 
-export const replaceAudioTrack = async (
-    peer,
-    track
-) => {
+export const replaceAudioTrack =
+    async (
+        peer,
+        track
+    ) => {
 
-    if (
-        !peer ||
-        !track
-    ) {
-        return false;
-    }
+        if (
+            !peer ||
+            !track
+        ) {
+            return false;
+        }
 
 
-    const sender =
-        peer
-            .getSenders()
-            .find(
-                item =>
-                    item.track?.kind ===
-                    "audio"
+        const sender =
+            peer
+                .getSenders()
+                .find(
+                    item =>
+                        item.track?.kind ===
+                        "audio"
+                );
+
+
+        if (!sender) {
+
+            console.warn(
+                "WebRTC audio sender not found."
             );
 
+            return false;
 
-    if (!sender) {
-
-        console.warn(
-            "WebRTC audio sender not found."
-        );
-
-        return false;
-
-    }
+        }
 
 
-    try {
+        try {
 
-        await sender.replaceTrack(
-            track
-        );
+            await sender.replaceTrack(
+                track
+            );
 
-        return true;
+            return true;
 
-    } catch (error) {
+        } catch (error) {
 
-        console.error(
-            "WebRTC audio replace error:",
-            error
-        );
+            console.error(
+                "WebRTC audio replace error:",
+                error
+            );
 
-        return false;
+            return false;
 
-    }
+        }
 
-};
+    };
 
 
 /*
@@ -693,49 +610,51 @@ ADD ICE CANDIDATE
 =========================================================
 */
 
-export const addIceCandidate = async (
-    peer,
-    candidate
-) => {
+export const addIceCandidate =
+    async (
+        peer,
+        candidate
+    ) => {
 
-    if (
-        !peer ||
-        !candidate
-    ) {
-        return false;
-    }
-
-
-    try {
-
-        const normalized =
-            candidate instanceof
-            RTCIceCandidate
-                ? candidate
-                : new RTCIceCandidate(
-                      candidate
-                  );
+        if (
+            !peer ||
+            !candidate
+        ) {
+            return false;
+        }
 
 
-        await peer.addIceCandidate(
-            normalized
-        );
+        try {
+
+            const normalized =
+                candidate instanceof
+                RTCIceCandidate
+                    ? candidate
+                    : new RTCIceCandidate(
+                          candidate
+                      );
 
 
-        return true;
+            await peer
+                .addIceCandidate(
+                    normalized
+                );
 
-    } catch (error) {
 
-        console.error(
-            "WebRTC ICE candidate error:",
-            error
-        );
+            return true;
 
-        return false;
+        } catch (error) {
 
-    }
+            console.error(
+                "WebRTC ICE candidate error:",
+                error
+            );
 
-};
+            return false;
+
+        }
+
+    };
 
 
 /*
@@ -744,22 +663,23 @@ GET VIDEO SENDER
 =========================================================
 */
 
-export const getVideoSender = peer => {
+export const getVideoSender =
+    peer => {
 
-    if (!peer) {
-        return null;
-    }
+        if (!peer) {
+            return null;
+        }
 
 
-    return peer
-        .getSenders()
-        .find(
-            sender =>
-                sender.track?.kind ===
-                "video"
-        ) || null;
+        return peer
+            .getSenders()
+            .find(
+                sender =>
+                    sender.track?.kind ===
+                    "video"
+            ) || null;
 
-};
+    };
 
 
 /*
@@ -768,86 +688,86 @@ GET AUDIO SENDER
 =========================================================
 */
 
-export const getAudioSender = peer => {
+export const getAudioSender =
+    peer => {
 
-    if (!peer) {
-        return null;
-    }
+        if (!peer) {
+            return null;
+        }
 
 
-    return peer
-        .getSenders()
-        .find(
-            sender =>
-                sender.track?.kind ===
-                "audio"
-        ) || null;
+        return peer
+            .getSenders()
+            .find(
+                sender =>
+                    sender.track?.kind ===
+                    "audio"
+            ) || null;
 
-};
+    };
 
 
 /*
 =========================================================
-CLOSE PEER CONNECTION
+CLOSE PEER
 =========================================================
 */
 
-export const closePeerConnection = peer => {
+export const closePeerConnection =
+    peer => {
 
-    if (!peer) {
-        return;
-    }
-
-
-    try {
-
-        peer.onicecandidate = null;
-
-        peer.ontrack = null;
-
-        peer.onconnectionstatechange =
-            null;
-
-        peer.oniceconnectionstatechange =
-            null;
-
-        peer.onnegotiationneeded = null;
+        if (!peer) {
+            return;
+        }
 
 
-        peer
-            .getSenders()
-            .forEach(sender => {
+        try {
 
-                try {
+            peer.onicecandidate =
+                null;
 
-                    sender.replaceTrack(
-                        null
-                    );
+            peer.ontrack =
+                null;
 
-                } catch (_) {}
+            peer.onconnectionstatechange =
+                null;
 
-            });
+            peer.oniceconnectionstatechange =
+                null;
+
+            peer.onnegotiationneeded =
+                null;
 
 
-        if (
-            peer.signalingState !==
-            "closed"
-        ) {
+            peer
+                .getSenders()
+                .forEach(
+                    sender => {
+
+                        try {
+
+                            sender.replaceTrack(
+                                null
+                            );
+
+                        } catch (_) {}
+
+                    }
+                );
+
 
             peer.close();
 
+        } catch (error) {
+
+            console.error(
+                "WebRTC close error:",
+                error
+            );
+
         }
 
-    } catch (error) {
-
-        console.error(
-            "WebRTC close error:",
-            error
-        );
-
-    }
-
-};
+    };
 
 
 /*
@@ -856,40 +776,36 @@ STOP MEDIA STREAM
 =========================================================
 */
 
-export const stopMediaStream = stream => {
+export const stopMediaStream =
+    stream => {
 
-    if (!stream) {
-        return;
-    }
+        if (!stream) {
+            return;
+        }
 
 
-    stream
-        .getTracks()
-        .forEach(track => {
+        stream
+            .getTracks()
+            .forEach(
+                track => {
 
-            try {
+                    try {
 
-                if (
-                    track.readyState !==
-                    "ended"
-                ) {
+                        track.stop();
 
-                    track.stop();
+                    } catch (error) {
+
+                        console.error(
+                            "Media track stop error:",
+                            error
+                        );
+
+                    }
 
                 }
+            );
 
-            } catch (error) {
-
-                console.error(
-                    "Media track stop error:",
-                    error
-                );
-
-            }
-
-        });
-
-};
+    };
 
 
 export default {
