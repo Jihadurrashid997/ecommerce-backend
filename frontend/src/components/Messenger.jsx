@@ -371,73 +371,57 @@ const currentUserId =
 
 /* =====================================================
    CALL TIMER
-   Starts only after call is connected
-===================================================== */
+   Uses shared connectedAt from call event.
+   ===================================================== */
 
 useEffect(() => {
 
     if (
         !callState ||
-        callState.status !==
-            "connected"
+        callState.status !== "connected"
     ) {
-
         setCallDuration(0);
-
         return undefined;
-
     }
 
-
     const connectedAt =
-        callState.connectedAt ||
-        Date.now();
+        Number(callState.connectedAt);
 
+    if (
+        !Number.isFinite(connectedAt) ||
+        connectedAt <= 0
+    ) {
+        setCallDuration(0);
+        return undefined;
+    }
 
     const updateTimer = () => {
 
-        const elapsed =
+        const elapsed = Math.max(
+            0,
             Math.floor(
-                (
-                    Date.now() -
-                    connectedAt
-                ) / 1000
-            );
-
-
-        setCallDuration(
-            Math.max(
-                0,
-                elapsed
+                (Date.now() - connectedAt) / 1000
             )
         );
 
+        setCallDuration(elapsed);
     };
-
 
     updateTimer();
 
-
-    const timer =
-        setInterval(
-            updateTimer,
-            1000
-        );
-
+    const timer = setInterval(
+        updateTimer,
+        1000
+    );
 
     return () => {
-
-        clearInterval(
-            timer
-        );
-
+        clearInterval(timer);
     };
 
 }, [
     callState?.status,
     callState?.connectedAt
 ]);
-
 
     /* =====================================================
        ROOM ID
@@ -917,85 +901,162 @@ onConnectionStateChange:
             state
         );
 
-        /*
-         * Do NOT end the call immediately when
-         * connection becomes disconnected.
-         *
-         * Mobile networks / Wi-Fi can temporarily
-         * disconnect and reconnect.
-         */
 
-        if (state === "failed") {
+        /*
+        =========================================
+        CONNECTED
+        =========================================
+        */
+
+        if (
+            state === "connected"
+        ) {
+
+            const now =
+                Date.now();
+
+
+            const currentCall =
+                callRef.current ||
+                {};
+
+
+            /*
+            IMPORTANT:
+
+            Caller creates the authoritative
+            connectedAt timestamp.
+
+            If server already provided one,
+            keep it.
+            */
+
+            const connectedAt =
+                Number(
+                    currentCall.connectedAt
+                ) > 0
+                    ? Number(
+                          currentCall.connectedAt
+                      )
+                    : now;
+
+
+            const connectedCall = {
+
+                ...currentCall,
+
+                status:
+                    "connected",
+
+                mode:
+                    "connected",
+
+                connectedAt
+
+            };
+
+
+            callRef.current =
+                connectedCall;
+
+
+            setCallState(
+                connectedCall
+            );
+
+
+            console.log(
+                "✅ Call connected:",
+                connectedAt
+            );
+
+            return;
+        }
+
+
+        /*
+        =========================================
+        DISCONNECTED
+        =========================================
+        */
+
+        if (
+            state === "disconnected"
+        ) {
+
+            console.warn(
+                "⚠️ WebRTC temporarily disconnected"
+            );
+
+            /*
+            Do NOT immediately end call.
+            Mobile network may reconnect.
+            */
+
+            return;
+        }
+
+
+        /*
+        =========================================
+        FAILED
+        =========================================
+        */
+
+        if (
+            state === "failed"
+        ) {
 
             console.error(
                 "❌ WebRTC connection failed"
             );
 
+
             setTimeout(
                 () => {
 
+                    const peer =
+                        peerRef.current;
+
+
                     if (
-                        callRef.current &&
-                        peerRef.current
+                        peer &&
+                        peer.connectionState ===
+                            "failed"
                     ) {
 
-                        if (
-                            peerRef.current
-                                .connectionState ===
-                            "failed"
-                        ) {
+                        console.error(
+                            "❌ WebRTC still failed after retry window"
+                        );
 
-                            endCall();
-
-                        }
+                        endCall();
 
                     }
 
                 },
-                5000
+                8000
             );
 
         }
 
+
         /*
-         * Ignore temporary:
-         * disconnected
-         *
-         * Ignore:
-         * closed
-         *
-         * cleanupCall() will handle
-         * intentional call ending.
-         */
+        =========================================
+        CLOSED
+        =========================================
+        */
+
+        if (
+            state === "closed"
+        ) {
+
+            console.log(
+                "🔴 WebRTC connection closed"
+            );
+
+        }
 
     }
-
-                    });
-
-
-                peerRef.current =
-                    peer;
-
-
-                if (
-                    localStreamRef.current
-                ) {
-
-                    addLocalTracks(
-                        peer,
-                        localStreamRef.current
-                    );
-
-                }
-
-
-                return peer;
-
-            },
-            [
-                currentUserId
-            ]
-        );
 
 /* =====================================================
    START CALL
@@ -1380,19 +1441,20 @@ const acceptCall =
 
             try {
 
+                /*
+                -----------------------------------------
+                GET LOCAL MEDIA
+                -----------------------------------------
+                */
+
                 const stream =
                     await getUserMedia({
-
                         audio: true,
-
                         video:
-                            call.type ===
-                            "video",
-
-                        facingMode:
-                            "user"
-
+                            call.type === "video",
+                        facingMode: "user"
                     });
+
 
                 localStreamRef.current =
                     stream;
@@ -1401,31 +1463,46 @@ const acceptCall =
                     stream
                 );
 
+
+                /*
+                -----------------------------------------
+                ROOM
+                -----------------------------------------
+                */
+
                 currentRoomRef.current =
                     call.roomId;
+
 
                 socket.emit(
                     "join-room",
                     call.roomId
                 );
 
+
+                /*
+                -----------------------------------------
+                IMPORTANT
+
+                Do NOT create connectedAt here.
+
+                Receiver waits for the SAME timestamp
+                that caller/server sends.
+                -----------------------------------------
+                */
+
                 const acceptedCall = {
 
                     ...call,
 
-                    mode:
-                        "accepted",
+                    mode: "accepted",
 
-                    status:
-                        "connected",
+                    status: "accepted",
 
-                    accepted:
-                        true,
-
-                    connectedAt:
-                        Date.now()
+                    accepted: true
 
                 };
+
 
                 callRef.current =
                     acceptedCall;
@@ -1433,6 +1510,13 @@ const acceptCall =
                 setCallState(
                     acceptedCall
                 );
+
+
+                /*
+                -----------------------------------------
+                SEND ACCEPT
+                -----------------------------------------
+                */
 
                 socket.emit(
                     "accept-call",
@@ -1453,10 +1537,11 @@ const acceptCall =
                             call.type,
 
                         status:
-                            "connected"
+                            "accepted"
 
                     }
                 );
+
 
             } catch (error) {
 
@@ -1464,6 +1549,7 @@ const acceptCall =
                     "Accept call error:",
                     error
                 );
+
 
                 socket.emit(
                     "reject-call",
@@ -1483,6 +1569,7 @@ const acceptCall =
                     }
                 );
 
+
                 cleanupCall();
 
             }
@@ -1493,7 +1580,7 @@ const acceptCall =
             cleanupCall
         ]
     );
-
+    
     /* =====================================================
        REJECT CALL
     ===================================================== */
@@ -2019,99 +2106,160 @@ const onCallRinging =
 
     };
 
-        /* -------------------------------------------------
-           CALL ACCEPTED
-        ------------------------------------------------- */
+    /* -------------------------------------------------
+   CALL ACCEPTED
+------------------------------------------------- */
 
-        const onCallAccepted =
-            async data => {
+const onCallAccepted =
+    async data => {
 
-                try {
+        try {
 
-                    const call =
-                        callRef.current ||
-                        data;
+            const call =
+                callRef.current ||
+                data;
 
-
-                    const receiverId =
-                        getId(
-                            call.receiverId ||
-                            data.receiverId
-                        );
+            if (!call) {
+                return;
+            }
 
 
-                    if (!receiverId) {
-                        return;
-                    }
+            const receiverId =
+                getId(
+                    call.receiverId ||
+                    data?.receiverId
+                );
+
+            if (!receiverId) {
+                return;
+            }
 
 
-                    currentRoomRef.current =
-                        call.roomId ||
-                        data.roomId;
+            const roomId =
+                call.roomId ||
+                data?.roomId;
+
+            if (!roomId) {
+                return;
+            }
 
 
-                    const peer =
-                        createPeer(
-                            receiverId
-                        );
+            currentRoomRef.current =
+                roomId;
 
 
-                    const offer =
-                        await peer.createOffer({
-                            offerToReceiveAudio:
-                                true,
-                            offerToReceiveVideo:
-                                (
-                                    call.type ||
-                                    data.type
-                                ) === "video"
-                        });
+            /*
+            -----------------------------------------
+            CREATE PEER
+            -----------------------------------------
+            */
+
+            const peer =
+                peerRef.current ||
+                createPeer(
+                    receiverId
+                );
 
 
-                    await peer.setLocalDescription(
-                        offer
-                    );
+            /*
+            -----------------------------------------
+            CREATE OFFER
+            -----------------------------------------
+            */
+
+            const offer =
+                await peer.createOffer({
+                    offerToReceiveAudio:
+                        true,
+
+                    offerToReceiveVideo:
+                        (
+                            call.type ||
+                            data?.type
+                        ) === "video"
+                });
 
 
-                    socket.emit(
-                        "webrtc-offer",
-                        {
-                            receiverId,
-                            callerId:
-                                currentId,
-                            roomId:
-                                currentRoomRef.current,
-                            type:
-                                call.type ||
-                                data.type,
-                            offer
-                        }
-                    );
+            await peer.setLocalDescription(
+                offer
+            );
 
 
-                    setCallState(
-                        previous => ({
-                            ...(previous || {}),
-                            ...call,
-                            ...data,
-                            mode:
-                                "accepted"
-                        })
-                    );
+            /*
+            -----------------------------------------
+            UPDATE CALL STATE
 
-                } catch (error) {
+            Still NOT connected.
+            Actual connected state comes from
+            WebRTC connection.
+            -----------------------------------------
+            */
 
-                    console.error(
-                        "Offer error:",
-                        error
-                    );
+            const updatedCall = {
 
-                    endCall();
+                ...(call || {}),
+                ...(data || {}),
 
-                }
+                mode: "accepted",
+
+                status: "connecting",
+
+                type:
+                    call.type ||
+                    data?.type,
+
+                roomId
 
             };
 
+
+            callRef.current =
+                updatedCall;
+
+            setCallState(
+                updatedCall
+            );
+
+
+            /*
+            -----------------------------------------
+            SEND OFFER
+            -----------------------------------------
+            */
+
+            socket.emit(
+                "webrtc-offer",
+                {
+
+                    receiverId,
+
+                    callerId:
+                        currentUserId,
+
+                    roomId,
+
+                    type:
+                        call.type ||
+                        data?.type,
+
+                    offer
+
+                }
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "Offer error:",
+                error
+            );
+
+            endCall();
+
+        }
+
+    };
 
         /* -------------------------------------------------
            WEBRTC OFFER
@@ -2206,14 +2354,14 @@ for (
                     );
 
 
-                    setCallState(
-                        previous => ({
-                            ...(previous || {}),
-                            ...data,
-                            mode:
-                                "accepted"
-                        })
-                    );
+  setCallState(
+    previous => ({
+        ...(previous || {}),
+        ...data,
+        mode: "accepted",
+        status: "connecting"
+    })
+);
 
                 } catch (error) {
 
