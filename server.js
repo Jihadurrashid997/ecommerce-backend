@@ -838,838 +838,793 @@ io.on(
             }
         );
 
-        /* =================================================
-           CALL USER
-        ================================================= */
+/* =========================================================
+   CALL USER
+========================================================= */
 
-        socket.on(
-            "call-user",
-            payload => {
+socket.on(
+    "call-user",
+    payload => {
 
-                if (!payload) {
-                    return;
-                }
+        if (!payload) {
+            return;
+        }
 
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    );
+        const callerId =
+            normalizeId(
+                payload.callerId
+            ) || socket.userId;
 
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    ) ||
-                    socket.userId;
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
 
-                const roomId =
-                    payload.roomId
-                        ? String(
-                              payload.roomId
-                          )
-                        : null;
+        const roomId =
+            payload.roomId
+                ? String(payload.roomId)
+                : null;
 
-                if (
-                    !callerId ||
-                    !receiverId ||
-                    !roomId
-                ) {
-                    return;
-                }
+        const callType =
+            payload.type === "video"
+                ? "video"
+                : "voice";
 
-                if (
-                    callerId ===
-                    receiverId
-                ) {
-                    return;
-                }
+        if (
+            !callerId ||
+            !receiverId ||
+            !roomId
+        ) {
+            return;
+        }
 
-                /* -----------------------------------------
-                   CALLER ALREADY BUSY
-                ----------------------------------------- */
+        if (
+            callerId === receiverId
+        ) {
+            return;
+        }
 
-                if (
-                    isUserInCall(
-                        callerId
-                    )
-                ) {
+        /* -----------------------------------------
+           CALLER BUSY
+        ----------------------------------------- */
 
-                    sendToUser(
-                        callerId,
-                        "call-busy",
-                        {
-                            roomId,
-                            callerId,
-                            receiverId,
-                            status: "busy"
-                        }
-                    );
+        if (
+            isUserInCall(callerId)
+        ) {
 
-                    return;
-
-                }
-
-                /* -----------------------------------------
-                   RECEIVER ALREADY BUSY
-                ----------------------------------------- */
-
-                if (
-                    isUserInCall(
-                        receiverId
-                    )
-                ) {
-
-                    sendToUser(
-                        callerId,
-                        "call-busy",
-                        {
-                            roomId,
-                            callerId,
-                            receiverId,
-                            status: "busy"
-                        }
-                    );
-
-                    return;
-
-                }
-
-                const callData = {
-
+            sendToUser(
+                callerId,
+                "call-busy",
+                {
                     roomId,
-
                     callerId,
-
                     receiverId,
+                    type: callType,
+                    status: "busy"
+                }
+            );
 
-                    callerName:
-                        payload.callerName ||
-                        "User",
+            return;
+        }
 
-                    callerAvatar:
-                        payload.callerAvatar ||
-                        "",
 
-                    receiverName:
-                        payload.receiverName ||
-                        "User",
+        /* -----------------------------------------
+           RECEIVER BUSY
+        ----------------------------------------- */
 
-                    receiverAvatar:
-                        payload.receiverAvatar ||
-                        "",
+        if (
+            isUserInCall(receiverId)
+        ) {
 
-                    type:
-                        payload.type === "video"
-                            ? "video"
-                            : "audio",
-
-                    status:
-                        "ringing",
-
-                    createdAt:
-                        new Date().toISOString(),
-
-                    timestamp:
-                        Date.now()
-
-                };
-
-                activeCalls.set(
+            sendToUser(
+                callerId,
+                "call-busy",
+                {
                     roomId,
-                    callData
-                );
-
-                socket.join(
-                    roomId
-                );
-
-                sendToUser(
-                    receiverId,
-                    "incoming-call",
-                    callData
-                );
-
-                socket.emit(
-                    "call-ringing",
-                    callData
-                );
-
-                console.log(
-                    "Incoming call:",
                     callerId,
-                    "->",
                     receiverId,
-                    callData.type
-                );
+                    type: callType,
+                    status: "busy"
+                }
+            );
 
-                /* -----------------------------------------
-                   AUTOMATIC MISSED CALL
-                ----------------------------------------- */
+            return;
+        }
 
-                setTimeout(
-                    () => {
 
-                        const currentCall =
-                            getCall(
-                                roomId
-                            );
+        /* -----------------------------------------
+           CREATE CALL
+        ----------------------------------------- */
 
-                        if (
-                            !currentCall ||
-                            currentCall.status !==
-                                "ringing"
-                        ) {
-                            return;
-                        }
+        const callData = {
 
-                        const missedData = {
+            roomId,
 
-                            ...currentCall,
+            callerId,
 
-                            status:
-                                "missed",
+            receiverId,
 
-                            missed:
-                                true,
+            callerName:
+                payload.callerName ||
+                "User",
 
-                            timestamp:
-                                Date.now()
+            callerAvatar:
+                payload.callerAvatar ||
+                "",
 
-                        };
+            type:
+                callType,
 
-                        sendToUser(
-                            currentCall.callerId,
-                            "call-missed",
-                            missedData
-                        );
+            status:
+                "ringing",
 
-                        sendToUser(
-                            currentCall.receiverId,
-                            "call-missed",
-                            missedData
-                        );
+            createdAt:
+                Date.now()
 
-                        clearCall(
-                            roomId
-                        );
+        };
 
-                    },
-                    CALL_RING_TIMEOUT
-                );
 
+        activeCalls.set(
+            roomId,
+            callData
+        );
+
+
+        /* -----------------------------------------
+           JOIN SOCKET ROOM
+        ----------------------------------------- */
+
+        socket.join(
+            roomId
+        );
+
+
+        /* -----------------------------------------
+           SEND INCOMING CALL
+           
+           IMPORTANT:
+           Only receiver gets incoming-call.
+        ----------------------------------------- */
+
+        sendToUser(
+            receiverId,
+            "incoming-call",
+            callData
+        );
+
+
+        /* -----------------------------------------
+           SEND RINGING
+           
+           IMPORTANT:
+           Only caller gets call-ringing.
+           
+           Receiver will NEVER receive this.
+        ----------------------------------------- */
+
+        sendToUser(
+            callerId,
+            "call-ringing",
+            {
+                ...callData,
+                status: "ringing"
             }
         );
 
-        /* =================================================
-           ACCEPT CALL
-        ================================================= */
 
-        socket.on(
-            "accept-call",
-            payload => {
+        /* -----------------------------------------
+           AUTO MISSED CALL
+        ----------------------------------------- */
 
-                if (!payload) {
-                    return;
-                }
-
-                const roomId =
-                    payload.roomId
-                        ? String(
-                              payload.roomId
-                          )
-                        : null;
-
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    );
-
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    ) ||
-                    socket.userId;
-
-                if (
-                    !roomId ||
-                    !callerId ||
-                    !receiverId
-                ) {
-                    return;
-                }
+        setTimeout(
+            () => {
 
                 const currentCall =
-                    getCall(
-                        roomId
-                    );
+                    getCall(roomId);
 
-                const callData = {
-
-                    ...(currentCall || {}),
-
-                    ...payload,
-
-                    roomId,
-
-                    callerId,
-
-                    receiverId,
-
-                    type:
-                        payload.type === "video"
-                            ? "video"
-                            : (
-                                currentCall?.type ||
-                                "audio"
-                            ),
-
-                    status:
-                        "connected",
-
-                    accepted:
-                        true,
-
-                    connectedAt:
-                        Date.now(),
-
-                    timestamp:
-                        Date.now()
-
-                };
-
-                activeCalls.set(
-                    roomId,
-                    callData
-                );
-
-                socket.join(
-                    roomId
-                );
-
-                sendToUser(
-                    callerId,
-                    "call-accepted",
-                    callData
-                );
-
-                sendToUser(
-                    receiverId,
-                    "call-accepted",
-                    callData
-                );
-
-                console.log(
-                    "Call accepted:",
-                    roomId
-                );
-
-            }
-        );
-
-        /* =================================================
-           REJECT CALL
-        ================================================= */
-
-        socket.on(
-            "reject-call",
-            payload => {
-
-                if (!payload) {
+                if (
+                    !currentCall ||
+                    currentCall.status !==
+                        "ringing"
+                ) {
                     return;
                 }
 
-                const roomId =
-                    payload.roomId
-                        ? String(
-                              payload.roomId
-                          )
-                        : null;
 
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    );
+                currentCall.status =
+                    "missed";
 
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    ) ||
-                    socket.userId;
 
-                const rejectedData = {
-
-                    ...payload,
-
-                    roomId,
-
+                sendToUser(
                     callerId,
+                    "call-missed",
+                    currentCall
+                );
 
+
+                sendToUser(
                     receiverId,
+                    "call-missed",
+                    currentCall
+                );
 
-                    status:
-                        "rejected",
-
-                    timestamp:
-                        Date.now()
-
-                };
-
-                if (callerId) {
-
-                    sendToUser(
-                        callerId,
-                        "call-rejected",
-                        rejectedData
-                    );
-
-                }
-
-                if (receiverId) {
-
-                    sendToUser(
-                        receiverId,
-                        "call-rejected",
-                        rejectedData
-                    );
-
-                }
-
-                if (roomId) {
-
-                    io
-                        .to(roomId)
-                        .emit(
-                            "call-rejected",
-                            rejectedData
-                        );
-
-                }
 
                 clearCall(
                     roomId
                 );
 
-                console.log(
-                    "Call rejected:",
-                    roomId
-                );
 
+            },
+            CALL_RING_TIMEOUT
+        );
+
+    }
+);
+
+
+/* =========================================================
+   ACCEPT CALL
+========================================================= */
+
+socket.on(
+    "accept-call",
+    payload => {
+
+        if (!payload) {
+            return;
+        }
+
+        const roomId =
+            payload.roomId
+                ? String(payload.roomId)
+                : null;
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            );
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            ) || socket.userId;
+
+
+        if (
+            !roomId ||
+            !callerId ||
+            !receiverId
+        ) {
+            return;
+        }
+
+
+        const call =
+            getCall(roomId);
+
+
+        if (!call) {
+            return;
+        }
+
+
+        /* -----------------------------------------
+           SECURITY CHECK
+        ----------------------------------------- */
+
+        if (
+            call.callerId !== callerId ||
+            call.receiverId !== receiverId
+        ) {
+            return;
+        }
+
+
+        /* -----------------------------------------
+           UPDATE CALL STATUS
+        ----------------------------------------- */
+
+        call.status =
+            "accepted";
+
+        call.acceptedAt =
+            Date.now();
+
+
+        activeCalls.set(
+            roomId,
+            call
+        );
+
+
+        /* -----------------------------------------
+           JOIN ROOM
+        ----------------------------------------- */
+
+        socket.join(
+            roomId
+        );
+
+
+        /* -----------------------------------------
+           IMPORTANT
+           
+           ONLY CALLER GETS call-accepted.
+           
+           Receiver does NOT get this event.
+           This prevents both sides creating
+           an offer simultaneously.
+        ----------------------------------------- */
+
+        sendToUser(
+            callerId,
+            "call-accepted",
+            {
+                ...call,
+                status: "accepted"
             }
         );
 
-        /* =================================================
-           END CALL
-        ================================================= */
+    }
+);
 
-        socket.on(
-            "end-call",
-            payload => {
 
-                if (!payload) {
-                    return;
-                }
+/* =========================================================
+   REJECT CALL
+========================================================= */
 
-                const roomId =
-                    payload.roomId
-                        ? String(
-                              payload.roomId
-                          )
-                        : null;
+socket.on(
+    "reject-call",
+    payload => {
 
-                const currentCall =
-                    getCall(
-                        roomId
-                    );
+        if (!payload) {
+            return;
+        }
 
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    ) ||
-                    currentCall?.callerId;
+        const roomId =
+            payload.roomId
+                ? String(payload.roomId)
+                : null;
 
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    ) ||
-                    currentCall?.receiverId;
+        const callerId =
+            normalizeId(
+                payload.callerId
+            );
 
-                const endedData = {
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            ) || socket.userId;
 
-                    ...(currentCall || {}),
 
-                    ...payload,
+        if (
+            !roomId ||
+            !callerId ||
+            !receiverId
+        ) {
+            return;
+        }
 
-                    roomId,
 
-                    callerId:
-                        callerId ||
-                        null,
+        const call =
+            getCall(roomId);
 
-                    receiverId:
-                        receiverId ||
-                        null,
 
-                    endedBy:
-                        socket.userId,
+        if (!call) {
+            return;
+        }
 
-                    status:
-                        "ended",
 
-                    timestamp:
-                        Date.now()
+        /* -----------------------------------------
+           SEND REJECTED ONLY TO CALLER
+        ----------------------------------------- */
 
-                };
-
-                if (roomId) {
-
-                    io
-                        .to(roomId)
-                        .emit(
-                            "call-ended",
-                            endedData
-                        );
-
-                }
-
-                if (
-                    callerId
-                ) {
-
-                    sendToUser(
-                        callerId,
-                        "call-ended",
-                        endedData
-                    );
-
-                }
-
-                if (
-                    receiverId
-                ) {
-
-                    sendToUser(
-                        receiverId,
-                        "call-ended",
-                        endedData
-                    );
-
-                }
-
-                clearCall(
-                    roomId
-                );
-
-                console.log(
-                    "Call ended:",
-                    roomId
-                );
-
+        sendToUser(
+            callerId,
+            "call-rejected",
+            {
+                ...call,
+                status: "rejected"
             }
         );
 
-        /* =================================================
-           CALL BUSY
-        ================================================= */
 
-        socket.on(
+        /* -----------------------------------------
+           CLEAR CALL
+        ----------------------------------------- */
+
+        clearCall(
+            roomId
+        );
+
+    }
+);
+
+
+/* =========================================================
+   BUSY
+========================================================= */
+
+socket.on(
+    "call-busy",
+    payload => {
+
+        if (!payload) {
+            return;
+        }
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            );
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
+
+        const roomId =
+            payload.roomId
+                ? String(payload.roomId)
+                : null;
+
+
+        if (!callerId) {
+            return;
+        }
+
+
+        sendToUser(
+            callerId,
             "call-busy",
-            payload => {
-
-                if (!payload) {
-                    return;
-                }
-
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    );
-
-                if (!callerId) {
-                    return;
-                }
-
-                const busyData = {
-
-                    ...payload,
-
-                    receiverId:
-                        socket.userId,
-
-                    status:
-                        "busy",
-
-                    timestamp:
-                        Date.now()
-
-                };
-
-                sendToUser(
-                    callerId,
-                    "call-busy",
-                    busyData
-                );
-
+            {
+                roomId,
+                callerId,
+                receiverId,
+                type:
+                    payload.type ||
+                    "voice",
+                status:
+                    "busy"
             }
         );
 
-        /* =================================================
-           CALL MISSED
-        ================================================= */
 
-        socket.on(
-            "call-missed",
-            payload => {
+        if (roomId) {
+            clearCall(
+                roomId
+            );
+        }
 
-                if (!payload) {
-                    return;
-                }
+    }
+);
 
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    );
 
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    ) ||
-                    socket.userId;
+/* =========================================================
+   END CALL
+========================================================= */
 
-                const missedData = {
+socket.on(
+    "end-call",
+    payload => {
 
-                    ...payload,
+        if (!payload) {
+            return;
+        }
 
-                    callerId,
+        const roomId =
+            payload.roomId
+                ? String(payload.roomId)
+                : null;
 
-                    receiverId,
+        if (!roomId) {
+            return;
+        }
 
-                    status:
-                        "missed",
 
-                    missed:
-                        true,
+        const call =
+            getCall(roomId);
 
-                    timestamp:
-                        Date.now()
 
-                };
+        if (!call) {
+            return;
+        }
 
-                if (callerId) {
 
-                    sendToUser(
-                        callerId,
-                        "call-missed",
-                        missedData
-                    );
+        const senderId =
+            normalizeId(
+                payload.userId
+            ) || socket.userId;
 
-                }
 
-                if (receiverId) {
+        const otherUserId =
+            senderId === call.callerId
+                ? call.receiverId
+                : call.callerId;
 
-                    sendToUser(
-                        receiverId,
-                        "call-missed",
-                        missedData
-                    );
 
-                }
+        /* -----------------------------------------
+           NOTIFY OTHER USER
+        ----------------------------------------- */
 
-                clearCall(
-                    payload.roomId
-                );
-
+        sendToUser(
+            otherUserId,
+            "call-ended",
+            {
+                ...call,
+                endedBy:
+                    senderId,
+                status:
+                    "ended"
             }
         );
 
-        /* =================================================
-           WEBRTC OFFER
-        ================================================= */
 
-        socket.on(
+        /* -----------------------------------------
+           CLEAR CALL
+        ----------------------------------------- */
+
+        clearCall(
+            roomId
+        );
+
+
+        /* -----------------------------------------
+           LEAVE SOCKET ROOM
+        ----------------------------------------- */
+
+        socket.leave(
+            roomId
+        );
+
+    }
+);
+
+
+/* =========================================================
+   WEBRTC OFFER
+========================================================= */
+
+socket.on(
+    "webrtc-offer",
+    payload => {
+
+        if (!payload) {
+            return;
+        }
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            ) || socket.userId;
+
+        const roomId =
+            payload.roomId
+                ? String(payload.roomId)
+                : null;
+
+
+        if (
+            !receiverId ||
+            !callerId ||
+            !roomId ||
+            !payload.offer
+        ) {
+            return;
+        }
+
+
+        const call =
+            getCall(roomId);
+
+
+        if (!call) {
+            return;
+        }
+
+
+        /* -----------------------------------------
+           ONLY CALLER CAN SEND OFFER
+        ----------------------------------------- */
+
+        if (
+            call.callerId !==
+            callerId
+        ) {
+            return;
+        }
+
+
+        sendToUser(
+            receiverId,
             "webrtc-offer",
-            payload => {
+            {
+                roomId,
 
-                if (
-                    !payload ||
-                    !payload.offer
-                ) {
-                    return;
-                }
+                callerId,
 
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    );
+                receiverId,
 
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    ) ||
-                    socket.userId;
-
-                const roomId =
-                    payload.roomId
-                        ? String(
-                              payload.roomId
-                          )
-                        : null;
-
-                if (
-                    !receiverId ||
-                    !callerId
-                ) {
-                    return;
-                }
-
-                sendToUser(
-                    receiverId,
-                    "webrtc-offer",
-                    {
-
-                        ...payload,
-
-                        callerId,
-
-                        receiverId,
-
-                        roomId
-
-                    }
-                );
-
-                console.log(
-                    "WebRTC offer:",
-                    callerId,
-                    "->",
-                    receiverId
-                );
-
+                offer:
+                    payload.offer
             }
         );
 
-        /* =================================================
-           WEBRTC ANSWER
-        ================================================= */
+    }
+);
 
-        socket.on(
+
+/* =========================================================
+   WEBRTC ANSWER
+========================================================= */
+
+socket.on(
+    "webrtc-answer",
+    payload => {
+
+        if (!payload) {
+            return;
+        }
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            );
+
+        const roomId =
+            payload.roomId
+                ? String(payload.roomId)
+                : null;
+
+
+        if (
+            !receiverId ||
+            !callerId ||
+            !roomId ||
+            !payload.answer
+        ) {
+            return;
+        }
+
+
+        const call =
+            getCall(roomId);
+
+
+        if (!call) {
+            return;
+        }
+
+
+        /* -----------------------------------------
+           ONLY RECEIVER SENDS ANSWER
+        ----------------------------------------- */
+
+        if (
+            call.receiverId !==
+            receiverId
+        ) {
+            return;
+        }
+
+
+        sendToUser(
+            callerId,
             "webrtc-answer",
-            payload => {
+            {
+                roomId,
 
-                if (
-                    !payload ||
-                    !payload.answer
-                ) {
-                    return;
-                }
+                callerId,
 
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    );
+                receiverId,
 
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    ) ||
-                    socket.userId;
-
-                const roomId =
-                    payload.roomId
-                        ? String(
-                              payload.roomId
-                          )
-                        : null;
-
-                if (
-                    !receiverId ||
-                    !callerId
-                ) {
-                    return;
-                }
-
-                sendToUser(
-                    receiverId,
-                    "webrtc-answer",
-                    {
-
-                        ...payload,
-
-                        callerId,
-
-                        receiverId,
-
-                        roomId
-
-                    }
-                );
-
-                console.log(
-                    "WebRTC answer:",
-                    callerId,
-                    "->",
-                    receiverId
-                );
-
+                answer:
+                    payload.answer
             }
         );
 
-        /* =================================================
-           WEBRTC ICE CANDIDATE
-        ================================================= */
+    }
+);
 
-        socket.on(
+
+/* =========================================================
+   WEBRTC ICE CANDIDATE
+========================================================= */
+
+socket.on(
+    "webrtc-ice-candidate",
+    payload => {
+
+        if (!payload) {
+            return;
+        }
+
+        const receiverId =
+            normalizeId(
+                payload.receiverId
+            );
+
+        const callerId =
+            normalizeId(
+                payload.callerId
+            ) || socket.userId;
+
+        const roomId =
+            payload.roomId
+                ? String(payload.roomId)
+                : null;
+
+
+        if (
+            !receiverId ||
+            !callerId ||
+            !roomId ||
+            !payload.candidate
+        ) {
+            return;
+        }
+
+
+        const call =
+            getCall(roomId);
+
+
+        if (!call) {
+            return;
+        }
+
+
+        /* -----------------------------------------
+           ONLY TWO PARTICIPANTS
+        ----------------------------------------- */
+
+        if (
+            !(
+                (
+                    callerId ===
+                        call.callerId &&
+                    receiverId ===
+                        call.receiverId
+                ) ||
+                (
+                    callerId ===
+                        call.receiverId &&
+                    receiverId ===
+                        call.callerId
+                )
+            )
+        ) {
+            return;
+        }
+
+
+        sendToUser(
+            receiverId,
             "webrtc-ice-candidate",
-            payload => {
+            {
+                roomId,
 
-                if (
-                    !payload ||
-                    !payload.candidate
-                ) {
-                    return;
-                }
+                callerId,
 
-                const receiverId =
-                    normalizeId(
-                        payload.receiverId
-                    );
+                receiverId,
 
-                const callerId =
-                    normalizeId(
-                        payload.callerId
-                    ) ||
-                    socket.userId;
-
-                const roomId =
-                    payload.roomId
-                        ? String(
-                              payload.roomId
-                          )
-                        : null;
-
-                if (
-                    !receiverId ||
-                    !callerId
-                ) {
-                    return;
-                }
-
-                sendToUser(
-                    receiverId,
-                    "webrtc-ice-candidate",
-                    {
-
-                        ...payload,
-
-                        callerId,
-
-                        receiverId,
-
-                        roomId
-
-                    }
-                );
-
+                candidate:
+                    payload.candidate
             }
         );
+
+    }
+);
 
         /* =================================================
            DISCONNECT
