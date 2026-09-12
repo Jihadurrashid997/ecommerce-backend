@@ -4386,6 +4386,33 @@ const onCallMissed =
                                             "";
 
 
+                                        const fileUrl =
+                                            item.fileUrl ||
+                                            "";
+
+
+                                        const fileType =
+                                            item.fileType ||
+                                            "";
+
+
+                                        const fileName =
+                                            item.fileName ||
+                                            "Attachment";
+
+
+                                        const isImageFile =
+                                            fileUrl &&
+                                            (
+                                                fileType.startsWith(
+                                                    "image/"
+                                                ) ||
+                                                /\.(png|jpe?g|gif|webp)$/i.test(
+                                                    fileUrl
+                                                )
+                                            );
+
+
                                         const time =
                                             item.createdAt ||
                                             item.timestamp;
@@ -4423,9 +4450,56 @@ const onCallMissed =
                                                     }
                                                 >
 
-                                                    <p>
-                                                        {text}
-                                                    </p>
+                                                    {fileUrl && (
+
+                                                        isImageFile ? (
+
+                                                            <a
+                                                                href={
+                                                                    fileUrl
+                                                                }
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                            >
+                                                                <img
+                                                                    src={
+                                                                        fileUrl
+                                                                    }
+                                                                    alt={
+                                                                        fileName
+                                                                    }
+                                                                    className="message-attachment-image"
+                                                                />
+                                                            </a>
+
+                                                        ) : (
+
+                                                            <a
+                                                                href={
+                                                                    fileUrl
+                                                                }
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="message-attachment-file"
+                                                            >
+                                                                <FaPaperclip />
+                                                                <span>
+                                                                    {fileName}
+                                                                </span>
+                                                            </a>
+
+                                                        )
+
+                                                    )}
+
+
+                                                    {text && (
+
+                                                        <p>
+                                                            {text}
+                                                        </p>
+
+                                                    )}
 
 
                                                     <div className="message-meta">
