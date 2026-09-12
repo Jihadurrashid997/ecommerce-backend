@@ -6,6 +6,9 @@ const router =
 const auth =
     require("../middleware/auth");
 
+const messageUpload =
+    require("../middleware/messageUpload");
+
 const {
     sendMessage,
     getConversation,
@@ -18,11 +21,18 @@ const {
 
 /* =========================================================
    SEND MESSAGE
+
+   messageUpload.single("file") parses an optional file
+   attachment (image, pdf, doc, txt, zip - see
+   middleware/messageUpload.js) sent from the chat's
+   attach/image buttons. Plain text messages continue to
+   work exactly as before since the field is optional.
 ========================================================= */
 
 router.post(
     "/send",
     auth(),
+    messageUpload.single("file"),
     sendMessage
 );
 
@@ -86,4 +96,4 @@ router.get(
    EXPORT
 ========================================================= */
 
-module.exports = router;s
+module.exports = router;
