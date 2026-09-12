@@ -46,14 +46,55 @@ const MessageSchema =
                 type:
                     String,
 
+                // Only required when there is no
+                // file attachment - an image/file
+                // sent with no caption is still a
+                // valid message.
                 required:
-                    true,
+                    function () {
+
+                        return !this.fileUrl;
+
+                    },
 
                 trim:
                     true,
 
                 maxlength:
                     5000
+
+            },
+
+
+            fileUrl: {
+
+                type:
+                    String,
+
+                default:
+                    ""
+
+            },
+
+
+            fileName: {
+
+                type:
+                    String,
+
+                default:
+                    ""
+
+            },
+
+
+            fileType: {
+
+                type:
+                    String,
+
+                default:
+                    ""
 
             },
 
