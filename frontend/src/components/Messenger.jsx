@@ -909,115 +909,121 @@ onTrack:
 
     },
                         
-onConnectionStateChange:
-    state => {
+        onConnectionStateChange:
+            state => {
 
-        console.log(
-            "📞 WebRTC connection state:",
-            state
-        );
+                console.log(
+                    "📞 WebRTC connection state:",
+                    state
+                );
 
-        /*
-         * REAL CONNECTION ESTABLISHED
-         */
+                if (
+                    state === "connected"
+                ) {
+
+                    const connectedAt =
+                        callRef.current?.connectedAt ||
+                        Date.now();
+
+                    const connectedCall = {
+
+                        ...(callRef.current || {}),
+
+                        status:
+                            "connected",
+
+                        mode:
+                            "connected",
+
+                        connectedAt
+
+                    };
+
+                    callRef.current =
+                        connectedCall;
+
+                    setCallState(
+                        connectedCall
+                    );
+
+                    return;
+                }
+
+                if (
+                    state === "disconnected"
+                ) {
+
+                    console.warn(
+                        "⚠️ WebRTC temporarily disconnected"
+                    );
+
+                    return;
+                }
+
+                if (
+                    state === "failed"
+                ) {
+
+                    console.error(
+                        "❌ WebRTC connection failed"
+                    );
+
+                    setTimeout(
+                        () => {
+
+                            if (
+                                peerRef.current &&
+                                peerRef.current
+                                    .connectionState ===
+                                "failed"
+                            ) {
+
+                                endCall();
+
+                            }
+
+                        },
+                        5000
+                    );
+
+                    return;
+                }
+
+                if (
+                    state === "closed"
+                ) {
+
+                    console.log(
+                        "📞 WebRTC connection closed"
+                    );
+
+                }
+
+            }
+
+        });
+
+        peerRef.current =
+            peer;
 
         if (
-            state === "connected"
+            localStreamRef.current
         ) {
 
-            const connectedAt =
-                callRef.current?.connectedAt ||
-                Date.now();
-
-            const connectedCall = {
-
-                ...(callRef.current || {}),
-
-                status:
-                    "connected",
-
-                mode:
-                    "connected",
-
-                connectedAt
-
-            };
-
-            callRef.current =
-                connectedCall;
-
-            setCallState(
-                connectedCall
-            );
-
-            return;
-        }
-
-        /*
-         * Temporary mobile/Wi-Fi
-         * disconnection should NOT
-         * immediately end the call.
-         */
-
-        if (
-            state === "disconnected"
-        ) {
-
-            console.warn(
-                "⚠️ WebRTC temporarily disconnected"
-            );
-
-            return;
-        }
-
-        /*
-         * Connection failed.
-         */
-
-        if (
-            state === "failed"
-        ) {
-
-            console.error(
-                "❌ WebRTC connection failed"
-            );
-
-            setTimeout(
-                () => {
-
-                    if (
-                        peerRef.current &&
-                        peerRef.current
-                            .connectionState ===
-                            "failed"
-                    ) {
-
-                        endCall();
-
-                    }
-
-                },
-                5000
-            );
-
-            return;
-        }
-
-        /*
-         * Closed is handled by cleanupCall().
-         */
-
-        if (
-            state === "closed"
-        ) {
-
-            console.log(
-                "📞 WebRTC connection closed"
+            addLocalTracks(
+                peer,
+                localStreamRef.current
             );
 
         }
 
-    }
+        return peer;
+
+    },
+    [
+        currentUserId
+    ]
+);
 
 /* =====================================================
    START CALL
