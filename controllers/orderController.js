@@ -59,6 +59,19 @@ exports.createOrder = async (req, res) => {
                 quantity,
                 image: product.image || ""
             });
+
+            // Reduce stock now that this item has been
+            // confirmed available and added to the order.
+            // Without this the stock check above is useless:
+            // the same "in stock" quantity would keep passing
+            // for every future order, allowing overselling.
+            if (product.stock !== undefined) {
+
+                product.stock -= quantity;
+
+                await product.save();
+
+            }
         }
 
         const order = await Order.create({
@@ -172,6 +185,18 @@ exports.cancelOrder = async (req, res) => {
             return res.status(400).json({
                 message: "This order cannot be cancelled"
             });
+        }
+
+        // Restore stock for every item in this order, since it
+        // was deducted when the order was placed. Without this,
+        // cancelled orders would permanently shrink stock.
+        for (const item of order.items) {
+
+            await Product.findByIdAndUpdate(
+                item.product,
+                { $inc: { stock: item.quantity } }
+            );
+
         }
 
         order.status = "Cancelled";
