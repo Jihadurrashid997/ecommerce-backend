@@ -37,6 +37,11 @@ exports.sendMessage = async (req, res) => {
             req.body?.message ?? req.body?.text ?? ""
         ).trim();
 
+        // messageUpload middleware (see routes/messageRoutes.js)
+        // puts the uploaded file here when the request came
+        // from the chat's attach/image buttons.
+        const file = req.file;
+
         if (!sender) {
             return res.status(401).json({
                 success: false,
@@ -44,10 +49,10 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
-        if (!receiver || !text) {
+        if (!receiver || (!text && !file)) {
             return res.status(400).json({
                 success: false,
-                message: "Receiver and message are required"
+                message: "Receiver and a message or file are required"
             });
         }
 
@@ -72,12 +77,22 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
-        const created = await Message.create({
+        const messageData = {
             sender,
             receiver,
             message: text,
             isSeen: false
-        });
+        };
+
+        if (file) {
+
+            messageData.fileUrl = `/uploads/${file.filename}`;
+            messageData.fileName = file.originalname;
+            messageData.fileType = file.mimetype;
+
+        }
+
+        const created = await Message.create(messageData);
 
         const populated = await populateMessage(
             Message.findById(created._id)
