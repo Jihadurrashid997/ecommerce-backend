@@ -289,3 +289,82 @@ exports.getUnreadByUser = async (req, res) => {
         });
     }
 };
+
+/* =========================================================
+   GET RECENT CONVERSATIONS
+========================================================= */
+
+exports.getRecentConversations = async (req, res) => {
+    try {
+        const currentUser = getUserId(req);
+
+        if (!currentUser) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        const messages = await Message.find({
+            $or: [
+                { sender: currentUser },
+                { receiver: currentUser }
+            ]
+        })
+            .sort({ createdAt: -1 })
+            .limit(2000)
+            .lean();
+
+        const conversationMap = new Map();
+
+        for (const item of messages) {
+            const senderId = String(
+                item.sender?._id || item.sender || ""
+            );
+
+            const receiverId = String(
+                item.receiver?._id || item.receiver || ""
+            );
+
+            const currentId = String(currentUser);
+
+            const otherUserId =
+                senderId === currentId
+                    ? receiverId
+                    : senderId;
+
+            if (!otherUserId) continue;
+
+            if (otherUserId === currentId) continue;
+
+            // Because messages are already sorted newest first,
+            // the first message for a user is their latest message.
+            if (!conversationMap.has(otherUserId)) {
+                conversationMap.set(otherUserId, {
+                    userId: otherUserId,
+                    lastMessage: item
+                });
+            }
+        }
+
+        const conversations = Array.from(
+            conversationMap.values()
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: conversations
+        });
+
+    } catch (error) {
+        console.error(
+            "GET RECENT CONVERSATIONS ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load recent conversations."
+        });
+    }
+};
