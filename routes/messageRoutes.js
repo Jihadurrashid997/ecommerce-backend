@@ -9,11 +9,11 @@ const auth =
 const {
     sendMessage,
     getConversation,
+    getRecentConversations,
     markSeen,
     getUnreadCount,
     getUnreadByUser
-} =
-    require("../controllers/messageController");
+} = require("../controllers/messageController");
 
 
 /* =========================================================
