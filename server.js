@@ -42,7 +42,14 @@ app.use(
                 return callback(null, true);
             }
 
-            return callback(null, true);
+            // Previously this fell through to
+            // `callback(null, true)` no matter what,
+            // which meant the allowlist above did
+            // nothing and every origin was accepted.
+            return callback(
+                new Error("Not allowed by CORS"),
+                false
+            );
         },
 
         credentials: false,
