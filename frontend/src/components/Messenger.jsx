@@ -242,6 +242,20 @@ const Messenger = () => {
     const callRef =
         useRef(null);
 
+    /*
+     * NOTE: endCallRef always points to the latest
+     * version of endCall (whatever callState/cleanupCall
+     * it was built with). Anything that needs to call
+     * endCall() from inside a *stable* (rarely-recreated)
+     * callback (e.g. the WebRTC connection-state handler
+     * inside createPeer, or the socket-events effect)
+     * MUST go through this ref instead of closing over
+     * the endCall variable directly, otherwise it will
+     * silently keep calling an old, stale copy.
+     */
+    const endCallRef =
+        useRef(() => {});
+
 
     const [user, setUser] =
         useState(null);
@@ -310,7 +324,7 @@ const Messenger = () => {
 
 const [cameraFacing, setCameraFacing] =
     useState("user");
-    
+
    /* =====================================================
    REFS
 ===================================================== */
@@ -604,6 +618,12 @@ useEffect(() => {
 
     /* =====================================================
        ADD MESSAGE WITHOUT DUPLICATE
+       Returns true when the message was actually appended,
+       false when it was recognised as a duplicate. Callers
+       use this to avoid firing notifications / "seen"
+       events twice for the same message (e.g. when both
+       "receive-message" and "direct-message" are emitted
+       by the server for the same event).
     ===================================================== */
 
     const appendMessage =
@@ -611,7 +631,7 @@ useEffect(() => {
         (incoming) => {
 
             if (!incoming) {
-                return;
+                return false;
             }
 
 
@@ -646,6 +666,10 @@ useEffect(() => {
                     new Date().toISOString()
 
             };
+
+
+            let wasAppended =
+                false;
 
 
             setMessages(
@@ -734,6 +758,10 @@ useEffect(() => {
                     ==================================
                     */
 
+                    wasAppended =
+                        true;
+
+
                     return [
 
                         ...previous,
@@ -744,6 +772,8 @@ useEffect(() => {
 
                 }
             );
+
+            return wasAppended;
 
         },
         []
@@ -978,7 +1008,15 @@ onTrack:
                                 "failed"
                             ) {
 
-                                endCall();
+                                /*
+                                 * Always call through the ref so we
+                                 * run the CURRENT endCall (current
+                                 * callState / cleanupCall), not a
+                                 * stale copy captured when this
+                                 * peer connection was first created.
+                                 */
+
+                                endCallRef.current?.();
 
                             }
 
@@ -1599,6 +1637,22 @@ const acceptCall =
         );
 
 
+    /*
+     * Keep endCallRef pointed at the latest endCall on
+     * every render, so stable callbacks created earlier
+     * (createPeer's connection-state handler, the socket
+     * events effect, etc.) always trigger the up-to-date
+     * version instead of a stale closure.
+     */
+
+    useEffect(() => {
+
+        endCallRef.current =
+            endCall;
+
+    }, [endCall]);
+
+
     /* =====================================================
        SOCKET EVENTS
     ===================================================== */
@@ -1734,9 +1788,27 @@ const onReceiveMessage =
 
         if (belongs) {
 
-            appendMessage(
-                newMessage
-            );
+            /*
+             * appendMessage tells us whether this
+             * message was genuinely new. Both
+             * "receive-message" and "direct-message"
+             * can fire for the same event, so without
+             * this check the user would get the "seen"
+             * emit and the notification/sound twice
+             * for a single incoming message.
+             */
+
+            const isNew =
+                appendMessage(
+                    newMessage
+                );
+
+
+            if (!isNew) {
+
+                return;
+
+            }
 
 
             scrollToBottom();
@@ -2161,7 +2233,7 @@ const onCallAccepted =
                 error
             );
 
-            endCall();
+            endCallRef.current?.();
 
         }
 
@@ -2462,15 +2534,6 @@ const onIceCandidate =
                     data;
 
 
-                const callerName =
-                    call?.callerName ||
-                    call?.senderName ||
-                    getUserName(
-                        call?.caller
-                    ) ||
-                    "User";
-
-
                 const callType =
                     call?.type === "video"
                         ? "video"
@@ -2518,6 +2581,7 @@ const onIceCandidate =
                     callType,
 
                     senderId:
+                        call?.callerId ||
                         currentUserId,
 
                     receiverId:
@@ -2642,6 +2706,7 @@ const durationText =
                     duration,
 
                     senderId:
+                        call?.callerId ||
                         currentUserId,
 
                     receiverId:
@@ -2998,7 +3063,6 @@ const onCallMissed =
         appendMessage,
         cleanupCall,
         createPeer,
-        endCall,
         scrollToBottom
     ]);
 
@@ -3027,6 +3091,28 @@ const onCallMissed =
                         user,
                         target
                     );
+
+
+                /*
+                 * Leave whichever conversation room we
+                 * were previously in before joining the
+                 * new one, otherwise we keep accumulating
+                 * memberships in every room we've ever
+                 * opened.
+                 */
+
+                if (
+                    currentRoomRef.current &&
+                    currentRoomRef.current !==
+                        roomId
+                ) {
+
+                    socket.emit(
+                        "leave-room",
+                        currentRoomRef.current
+                    );
+
+                }
 
 
                 currentRoomRef.current =
