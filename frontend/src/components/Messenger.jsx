@@ -918,14 +918,65 @@ onConnectionStateChange:
         );
 
         /*
-         * Do NOT end the call immediately when
-         * connection becomes disconnected.
-         *
-         * Mobile networks / Wi-Fi can temporarily
-         * disconnect and reconnect.
+         * REAL CONNECTION ESTABLISHED
          */
 
-        if (state === "failed") {
+        if (
+            state === "connected"
+        ) {
+
+            const connectedAt =
+                callRef.current?.connectedAt ||
+                Date.now();
+
+            const connectedCall = {
+
+                ...(callRef.current || {}),
+
+                status:
+                    "connected",
+
+                mode:
+                    "connected",
+
+                connectedAt
+
+            };
+
+            callRef.current =
+                connectedCall;
+
+            setCallState(
+                connectedCall
+            );
+
+            return;
+        }
+
+        /*
+         * Temporary mobile/Wi-Fi
+         * disconnection should NOT
+         * immediately end the call.
+         */
+
+        if (
+            state === "disconnected"
+        ) {
+
+            console.warn(
+                "⚠️ WebRTC temporarily disconnected"
+            );
+
+            return;
+        }
+
+        /*
+         * Connection failed.
+         */
+
+        if (
+            state === "failed"
+        ) {
 
             console.error(
                 "❌ WebRTC connection failed"
@@ -935,19 +986,13 @@ onConnectionStateChange:
                 () => {
 
                     if (
-                        callRef.current &&
+                        peerRef.current &&
                         peerRef.current
+                            .connectionState ===
+                            "failed"
                     ) {
 
-                        if (
-                            peerRef.current
-                                .connectionState ===
-                            "failed"
-                        ) {
-
-                            endCall();
-
-                        }
+                        endCall();
 
                     }
 
@@ -955,47 +1000,24 @@ onConnectionStateChange:
                 5000
             );
 
+            return;
         }
 
         /*
-         * Ignore temporary:
-         * disconnected
-         *
-         * Ignore:
-         * closed
-         *
-         * cleanupCall() will handle
-         * intentional call ending.
+         * Closed is handled by cleanupCall().
          */
 
+        if (
+            state === "closed"
+        ) {
+
+            console.log(
+                "📞 WebRTC connection closed"
+            );
+
+        }
+
     }
-
-                    });
-
-
-                peerRef.current =
-                    peer;
-
-
-                if (
-                    localStreamRef.current
-                ) {
-
-                    addLocalTracks(
-                        peer,
-                        localStreamRef.current
-                    );
-
-                }
-
-
-                return peer;
-
-            },
-            [
-                currentUserId
-            ]
-        );
 
 /* =====================================================
    START CALL
@@ -1382,16 +1404,10 @@ const acceptCall =
 
                 const stream =
                     await getUserMedia({
-
                         audio: true,
-
                         video:
-                            call.type ===
-                            "video",
-
-                        facingMode:
-                            "user"
-
+                            call.type === "video",
+                        facingMode: "user"
                     });
 
                 localStreamRef.current =
@@ -1404,40 +1420,28 @@ const acceptCall =
                 currentRoomRef.current =
                     call.roomId;
 
+                callRef.current = {
+                    ...call,
+                    mode: "accepted",
+                    status: "accepted",
+                    accepted: true
+                };
+
+                setCallState({
+                    ...call,
+                    mode: "accepted",
+                    status: "accepted",
+                    accepted: true
+                });
+
                 socket.emit(
                     "join-room",
                     call.roomId
                 );
 
-                const acceptedCall = {
-
-                    ...call,
-
-                    mode:
-                        "accepted",
-
-                    status:
-                        "connected",
-
-                    accepted:
-                        true,
-
-                    connectedAt:
-                        Date.now()
-
-                };
-
-                callRef.current =
-                    acceptedCall;
-
-                setCallState(
-                    acceptedCall
-                );
-
                 socket.emit(
                     "accept-call",
                     {
-
                         roomId:
                             call.roomId,
 
@@ -1453,8 +1457,7 @@ const acceptCall =
                             call.type,
 
                         status:
-                            "connected"
-
+                            "accepted"
                     }
                 );
 
@@ -1468,7 +1471,6 @@ const acceptCall =
                 socket.emit(
                     "reject-call",
                     {
-
                         callerId:
                             call.callerId,
 
@@ -1479,7 +1481,6 @@ const acceptCall =
 
                         roomId:
                             call.roomId
-
                     }
                 );
 
@@ -1493,7 +1494,7 @@ const acceptCall =
             cleanupCall
         ]
     );
-
+    
     /* =====================================================
        REJECT CALL
     ===================================================== */
@@ -1992,240 +1993,319 @@ const onCallRinging =
             return;
         }
 
+        const current =
+            callRef.current || {};
+
+        const ringingCall = {
+
+            ...current,
+
+            ...data,
+
+            mode:
+                "outgoing",
+
+            status:
+                "ringing"
+
+        };
+
+        callRef.current =
+            ringingCall;
+
+        currentRoomRef.current =
+            data.roomId ||
+            currentRoomRef.current;
+
         setCallState(
-            previous => {
-
-                const current =
-                    previous ||
-                    callRef.current ||
-                    {};
-
-                return {
-
-                    ...current,
-
-                    ...data,
-
-                    mode:
-                        "outgoing",
-
-                    status:
-                        "ringing"
-
-                };
-
-            }
+            ringingCall
         );
 
     };
 
-        /* -------------------------------------------------
-           CALL ACCEPTED
-        ------------------------------------------------- */
+        
+/* -------------------------------------------------
+   CALL ACCEPTED
+------------------------------------------------- */
 
-        const onCallAccepted =
-            async data => {
+const onCallAccepted =
+    async data => {
 
-                try {
+        try {
 
-                    const call =
-                        callRef.current ||
-                        data;
+            const call =
+                callRef.current ||
+                data;
 
+            if (!call) {
+                return;
+            }
 
-                    const receiverId =
-                        getId(
-                            call.receiverId ||
-                            data.receiverId
-                        );
+            const receiverId =
+                getId(
+                    call.receiverId ||
+                    data?.receiverId
+                );
 
+            const roomId =
+                call.roomId ||
+                data?.roomId;
 
-                    if (!receiverId) {
-                        return;
-                    }
+            if (
+                !receiverId ||
+                !roomId
+            ) {
+                return;
+            }
 
+            currentRoomRef.current =
+                roomId;
 
-                    currentRoomRef.current =
-                        call.roomId ||
-                        data.roomId;
+            /*
+             * Caller is the ONLY side
+             * that creates the offer.
+             */
 
+            const peer =
+                peerRef.current ||
+                createPeer(
+                    receiverId
+                );
 
-                    const peer =
-                        createPeer(
-                            receiverId
-                        );
+            /*
+             * Make sure local tracks
+             * are attached.
+             */
 
+            if (
+                localStreamRef.current
+            ) {
 
-                    const offer =
-                        await peer.createOffer({
-                            offerToReceiveAudio:
-                                true,
-                            offerToReceiveVideo:
-                                (
-                                    call.type ||
-                                    data.type
-                                ) === "video"
-                        });
+                addLocalTracks(
+                    peer,
+                    localStreamRef.current
+                );
 
+            }
 
-                    await peer.setLocalDescription(
-                        offer
-                    );
+            const offer =
+                await peer.createOffer({
+                    offerToReceiveAudio: true,
 
+                    offerToReceiveVideo:
+                        (
+                            call.type ||
+                            data?.type
+                        ) === "video"
+                });
 
-                    socket.emit(
-                        "webrtc-offer",
-                        {
-                            receiverId,
-                            callerId:
-                                currentId,
-                            roomId:
-                                currentRoomRef.current,
-                            type:
-                                call.type ||
-                                data.type,
-                            offer
-                        }
-                    );
+            await peer.setLocalDescription(
+                offer
+            );
 
+            socket.emit(
+                "webrtc-offer",
+                {
 
-                    setCallState(
-                        previous => ({
-                            ...(previous || {}),
-                            ...call,
-                            ...data,
-                            mode:
-                                "accepted"
-                        })
-                    );
+                    receiverId,
 
-                } catch (error) {
+                    callerId:
+                        currentUserId,
 
-                    console.error(
-                        "Offer error:",
-                        error
-                    );
+                    roomId,
 
-                    endCall();
+                    type:
+                        call.type ||
+                        data?.type ||
+                        "voice",
+
+                    offer
 
                 }
+            );
+
+            const acceptedCall = {
+
+                ...call,
+
+                ...data,
+
+                mode:
+                    "accepted",
+
+                status:
+                    "accepted",
+
+                accepted:
+                    true
 
             };
 
+            callRef.current =
+                acceptedCall;
 
-        /* -------------------------------------------------
-           WEBRTC OFFER
-        ------------------------------------------------- */
+            setCallState(
+                acceptedCall
+            );
 
-        const onOffer =
-            async data => {
+        } catch (error) {
 
-                try {
+            console.error(
+                "Offer error:",
+                error
+            );
 
-                    if (!data?.offer) {
-                        return;
-                    }
+            endCall();
 
+        }
 
-                    currentRoomRef.current =
-                        data.roomId;
+    };
 
+/* -------------------------------------------------
+   WEBRTC OFFER
+------------------------------------------------- */
 
-                    const peer =
-                        peerRef.current ||
-                        createPeer(
-                            getId(
-                                data.callerId
-                            )
-                        );
+const onOffer =
+    async data => {
 
+        try {
 
-                    await peer.setRemoteDescription(
-                        new RTCSessionDescription(
-                            data.offer
-                        )
-                    );
-                    
-  /* Flush ICE candidates received
-   before remote description */
-                    
-const pending =
-    pendingCandidatesRef.current;
+            if (
+                !data?.offer ||
+                !data?.roomId
+            ) {
+                return;
+            }
 
-pendingCandidatesRef.current = [];
+            currentRoomRef.current =
+                data.roomId;
 
+            const callerId =
+                getId(
+                    data.callerId
+                );
 
-for (
-    const candidate of pending
-) {
+            if (!callerId) {
+                return;
+            }
 
-    try {
+            /*
+             * Receiver creates peer only
+             * after receiving caller's offer.
+             */
 
-        await peerRef.current
-            .addIceCandidate(
-                new RTCIceCandidate(
-                    candidate
+            const peer =
+                peerRef.current ||
+                createPeer(
+                    callerId
+                );
+
+            /*
+             * Set remote offer first.
+             */
+
+            await peer.setRemoteDescription(
+                new RTCSessionDescription(
+                    data.offer
                 )
             );
 
-    } catch (error) {
+            /*
+             * Add ICE candidates that
+             * arrived before the offer.
+             */
 
-        console.error(
-            "Pending ICE answer error:",
-            error
-        );
+            const pending =
+                pendingCandidatesRef.current || [];
 
-    }
+            pendingCandidatesRef.current = [];
 
-}
+            for (
+                const candidate of pending
+            ) {
 
-                    
+                try {
 
-                    const answer =
-                        await peer.createAnswer();
-
-
-                    await peer.setLocalDescription(
-                        answer
-                    );
-
-
-                    socket.emit(
-                        "webrtc-answer",
-                        {
-                            receiverId:
-                                getId(
-                                    data.callerId
-                                ),
-                            callerId:
-                                currentId,
-                            roomId:
-                                data.roomId,
-                            answer
-                        }
-                    );
-
-
-                    setCallState(
-                        previous => ({
-                            ...(previous || {}),
-                            ...data,
-                            mode:
-                                "accepted"
-                        })
+                    await peer.addIceCandidate(
+                        new RTCIceCandidate(
+                            candidate
+                        )
                     );
 
                 } catch (error) {
 
                     console.error(
-                        "WebRTC offer error:",
+                        "Pending ICE error:",
                         error
                     );
 
                 }
 
+            }
+
+            /*
+             * Receiver creates answer.
+             */
+
+            const answer =
+                await peer.createAnswer();
+
+            await peer.setLocalDescription(
+                answer
+            );
+
+            socket.emit(
+                "webrtc-answer",
+                {
+
+                    receiverId:
+                        callerId,
+
+                    callerId:
+                        currentUserId,
+
+                    roomId:
+                        data.roomId,
+
+                    answer
+
+                }
+            );
+
+            const acceptedCall = {
+
+                ...(callRef.current || {}),
+                ...data,
+
+                mode:
+                    "accepted",
+
+                status:
+                    "accepted",
+
+                accepted:
+                    true
+
             };
 
+            callRef.current =
+                acceptedCall;
+
+            setCallState(
+                acceptedCall
+            );
+
+        } catch (error) {
+
+            console.error(
+                "WebRTC offer error:",
+                error
+            );
+
+        }
+
+    };
+        
 /* -------------------------------------------------
    WEBRTC ANSWER
 ------------------------------------------------- */
@@ -2251,16 +2331,15 @@ const onAnswer =
                 )
             );
 
-
-            /* -----------------------------------------
-               FLUSH PENDING ICE CANDIDATES
-            ----------------------------------------- */
+            /*
+             * Flush ICE candidates
+             * received before answer.
+             */
 
             const pending =
                 pendingCandidatesRef.current || [];
 
             pendingCandidatesRef.current = [];
-
 
             for (
                 const candidate of pending
@@ -2296,7 +2375,6 @@ const onAnswer =
 
     };
 
-
 /* -------------------------------------------------
    ICE
 ------------------------------------------------- */
@@ -2310,44 +2388,47 @@ const onIceCandidate =
             return;
         }
 
-
         const peer =
             peerRef.current;
 
+        /*
+         * Peer not ready yet.
+         * Store candidate.
+         */
 
         if (!peer) {
 
-            pendingCandidatesRef.current
-                .push(
-                    data.candidate
-                );
+            pendingCandidatesRef.current.push(
+                data.candidate
+            );
 
             return;
-
         }
 
+        /*
+         * Remote description not ready.
+         * Store candidate until SDP is ready.
+         */
+
+        if (
+            !peer.remoteDescription ||
+            !peer.remoteDescription.type
+        ) {
+
+            pendingCandidatesRef.current.push(
+                data.candidate
+            );
+
+            return;
+        }
 
         try {
 
-            if (
-                peer.remoteDescription &&
-                peer.remoteDescription.type
-            ) {
-
-                await peer.addIceCandidate(
-                    new RTCIceCandidate(
-                        data.candidate
-                    )
-                );
-
-            } else {
-
-                pendingCandidatesRef.current
-                    .push(
-                        data.candidate
-                    );
-
-            }
+            await peer.addIceCandidate(
+                new RTCIceCandidate(
+                    data.candidate
+                )
+            );
 
         } catch (error) {
 
@@ -2359,7 +2440,6 @@ const onIceCandidate =
         }
 
     };
-
         
         /* -------------------------------------------------
            REJECTED
