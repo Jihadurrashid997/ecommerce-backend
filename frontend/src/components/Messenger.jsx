@@ -26,10 +26,13 @@ import {
     FaUserCircle,
     FaTimes,
     FaImage,
-    FaPalette
+    FaPalette,
+    FaCog
 } from "react-icons/fa";
 
-import api from "../services/api";
+import api, {
+    getUploadUrl
+} from "../services/api";
 
 import socket, {
     connectSocket
@@ -302,6 +305,49 @@ const Messenger = () => {
     const [onlineUsers, setOnlineUsers] =
         useState([]);
 
+    /*
+     * userId -> ms timestamp of when that user was last
+     * seen online. Seeded per-user from the "lastSeen"
+     * field already returned by /users/chat-users, then
+     * kept fresh via the "user-last-seen" socket event
+     * fired the moment someone disconnects.
+     */
+    const [lastSeenMap, setLastSeenMap] =
+        useState({});
+
+    /*
+     * Ticks every 30s purely to force a re-render so
+     * "Last seen 3 minutes ago" keeps advancing on screen
+     * without needing a page refresh.
+     */
+    const [presenceTick, setPresenceTick] =
+        useState(0);
+
+    useEffect(() => {
+
+        const interval =
+            setInterval(
+                () => {
+
+                    setPresenceTick(
+                        value =>
+                            value + 1
+                    );
+
+                },
+                30000
+            );
+
+        return () => {
+
+            clearInterval(
+                interval
+            );
+
+        };
+
+    }, []);
+
     const [unreadUsers, setUnreadUsers] =
         useState({});
 
@@ -396,6 +442,103 @@ const Messenger = () => {
                     "jr-chat-background"
                 ) || "default"
         );
+
+    /*
+     * MESSENGER SETTINGS
+     * Persisted locally (device-level, like most chat
+     * apps' "notification"/"data usage" prefs) rather
+     * than on the server.
+     */
+    const DEFAULT_SETTINGS = {
+
+        soundEnabled: true,
+
+        readReceiptsEnabled: true,
+
+        enterToSend: true,
+
+        autoDownloadMedia: true
+
+    };
+
+    const [settings, setSettings] =
+        useState(
+            () => {
+
+                try {
+
+                    const saved =
+                        JSON.parse(
+                            localStorage.getItem(
+                                "jr-messenger-settings"
+                            ) ||
+                            "{}"
+                        );
+
+                    return {
+                        ...DEFAULT_SETTINGS,
+                        ...saved
+                    };
+
+                } catch (_) {
+
+                    return DEFAULT_SETTINGS;
+
+                }
+
+            }
+        );
+
+    const [showSettings, setShowSettings] =
+        useState(false);
+
+    /*
+     * When settings.autoDownloadMedia is off, images show
+     * a "Tap to load" placeholder first (saves data on a
+     * slow/metered connection) - this tracks which ones
+     * the person has explicitly chosen to load.
+     */
+    const [revealedMedia, setRevealedMedia] =
+        useState(
+            () => new Set()
+        );
+
+    const settingsRef =
+        useRef(DEFAULT_SETTINGS);
+
+    useEffect(() => {
+
+        settingsRef.current =
+            settings;
+
+    }, [settings]);
+
+    const updateSetting =
+        (key, value) => {
+
+            setSettings(
+                previous => {
+
+                    const next = {
+                        ...previous,
+                        [key]: value
+                    };
+
+                    try {
+
+                        localStorage.setItem(
+                            "jr-messenger-settings",
+                            JSON.stringify(next)
+                        );
+
+                    } catch (_) {}
+
+                    return next;
+
+                }
+            );
+
+        };
 
     const [callState, setCallState] =
         useState(null);
@@ -674,6 +817,49 @@ useEffect(() => {
                             : [];
 
                     setUsers(list);
+
+                    setLastSeenMap(
+                        previous => {
+
+                            const next = {
+                                ...previous
+                            };
+
+                            list.forEach(
+                                item => {
+
+                                    const id =
+                                        getId(item);
+
+                                    const when =
+                                        item.lastSeen;
+
+                                    const time =
+                                        when
+                                            ? new Date(when).getTime()
+                                            : null;
+
+                                    if (
+                                        id &&
+                                        time &&
+                                        !Number.isNaN(time)
+                                    ) {
+
+                                        next[id] =
+                                            Math.max(
+                                                next[id] || 0,
+                                                time
+                                            );
+
+                                    }
+
+                                }
+                            );
+
+                            return next;
+
+                        }
+                    );
 
                 } catch (error) {
 
@@ -1368,13 +1554,17 @@ const startCall =
                 getUserName(target);
 
             const receiverAvatar =
-                getAvatar(target);
+                getUploadUrl(
+                    getAvatar(target)
+                );
 
             const callerName =
                 getUserName(me);
 
             const callerAvatar =
-                getAvatar(me);
+                getUploadUrl(
+                    getAvatar(me)
+                );
 
             try {
 
@@ -1956,6 +2146,32 @@ const acceptCall =
             };
 
 
+        const onUserLastSeen =
+            data => {
+
+                const id =
+                    getId(
+                        data?.userId
+                    );
+
+                if (
+                    !id ||
+                    !data?.lastSeen
+                ) {
+                    return;
+                }
+
+                setLastSeenMap(
+                    previous => ({
+                        ...previous,
+                        [id]:
+                            data.lastSeen
+                    })
+                );
+
+            };
+
+
        /* -------------------------------------------------
    MESSAGE RECEIVED
 ------------------------------------------------- */
@@ -2093,25 +2309,29 @@ const onReceiveMessage =
             --------------------------------------
             */
 
-            socket.emit(
-                "message-seen",
-                {
+            if (settingsRef.current.readReceiptsEnabled) {
 
-                    roomId:
-                        currentRoomRef.current,
+                socket.emit(
+                    "message-seen",
+                    {
 
-                    messageId:
-                        getMessageId(
-                            newMessage
-                        ),
+                        roomId:
+                            currentRoomRef.current,
 
-                    senderId,
+                        messageId:
+                            getMessageId(
+                                newMessage
+                            ),
 
-                    receiverId:
-                        currentId
+                        senderId,
 
-                }
-            );
+                        receiverId:
+                            currentId
+
+                    }
+                );
+
+            }
 
 
             /*
@@ -2120,19 +2340,23 @@ const onReceiveMessage =
             --------------------------------------
             */
 
-            showMessageNotification({
+            if (settingsRef.current.soundEnabled) {
 
-                senderName:
-                    getUserName(
-                        newMessage.sender
-                    ),
+                showMessageNotification({
 
-                message:
-                    newMessage.message ||
-                    newMessage.text ||
-                    "New message"
+                    senderName:
+                        getUserName(
+                            newMessage.sender
+                        ),
 
-            });
+                    message:
+                        newMessage.message ||
+                        newMessage.text ||
+                        "New message"
+
+                });
+
+            }
 
         }
 
@@ -2170,20 +2394,24 @@ const onReceiveMessage =
             --------------------------------------
             */
 
-            showMessageNotification({
+            if (settingsRef.current.soundEnabled) {
 
-                senderName:
-                    getUserName(
-                        newMessage.sender
-                    ) ||
-                    "New message",
+                showMessageNotification({
 
-                message:
-                    newMessage.message ||
-                    newMessage.text ||
-                    "New message"
+                    senderName:
+                        getUserName(
+                            newMessage.sender
+                        ) ||
+                        "New message",
 
-            });
+                    message:
+                        newMessage.message ||
+                        newMessage.text ||
+                        "New message"
+
+                });
+
+            }
 
         }
 
@@ -2918,9 +3146,23 @@ const onIceCandidate =
                 };
 
 
-                appendMessage(
-                    rejectedMessage
-                );
+                const otherPartyId =
+                    call?.callerId ===
+                    currentUserId
+                        ? call?.receiverId
+                        : call?.callerId;
+
+                if (
+                    getId(
+                        selectedUserRef.current
+                    ) === otherPartyId
+                ) {
+
+                    appendMessage(
+                        rejectedMessage
+                    );
+
+                }
 
 
                 cleanupCall();
@@ -3043,9 +3285,23 @@ const durationText =
                 };
 
 
-                appendMessage(
-                    endedMessage
-                );
+                const otherPartyId =
+                    call?.callerId ===
+                    currentUserId
+                        ? call?.receiverId
+                        : call?.callerId;
+
+                if (
+                    getId(
+                        selectedUserRef.current
+                    ) === otherPartyId
+                ) {
+
+                    appendMessage(
+                        endedMessage
+                    );
+
+                }
 
 
                 cleanupCall();
@@ -3119,9 +3375,23 @@ const durationText =
                 };
 
 
-                appendMessage(
-                    busyMessage
-                );
+                const otherPartyId =
+                    call?.callerId ===
+                    currentUserId
+                        ? call?.receiverId
+                        : call?.callerId;
+
+                if (
+                    getId(
+                        selectedUserRef.current
+                    ) === otherPartyId
+                ) {
+
+                    appendMessage(
+                        busyMessage
+                    );
+
+                }
 
 
                 cleanupCall();
@@ -3158,36 +3428,50 @@ const onCallMissed =
         ==========================================
         */
 
-        appendMessage({
+        const otherPartyId =
+            call.callerId ===
+            currentUserId
+                ? call.receiverId
+                : call.callerId;
 
-            id:
-                `missed-call-${Date.now()}`,
+        if (
+            getId(
+                selectedUserRef.current
+            ) === otherPartyId
+        ) {
 
-            type:
-                "missed-call",
+            appendMessage({
 
-            message:
-                `📞 Missed ${
-                    callType === "video"
-                        ? "video"
-                        : "voice"
-                } call`,
+                id:
+                    `missed-call-${Date.now()}`,
 
-            callType,
+                type:
+                    "missed-call",
 
-            callerName,
+                message:
+                    `📞 Missed ${
+                        callType === "video"
+                            ? "video"
+                            : "voice"
+                    } call`,
 
-            senderId:
-                call.callerId ||
-                call.receiverId,
+                callType,
 
-            createdAt:
-                new Date().toISOString(),
+                callerName,
 
-            timestamp:
-                Date.now()
+                senderId:
+                    call.callerId ||
+                    call.receiverId,
 
-        });
+                createdAt:
+                    new Date().toISOString(),
+
+                timestamp:
+                    Date.now()
+
+            });
+
+        }
 
 
         /*
@@ -3208,6 +3492,11 @@ const onCallMissed =
         socket.on(
             "online-users",
             onOnlineUsers
+        );
+
+        socket.on(
+            "user-last-seen",
+            onUserLastSeen
         );
 
         socket.on(
@@ -3301,6 +3590,11 @@ const onCallMissed =
             socket.off(
                 "online-users",
                 onOnlineUsers
+            );
+
+            socket.off(
+                "user-last-seen",
+                onUserLastSeen
             );
 
             socket.off(
@@ -3528,13 +3822,20 @@ const onCallMissed =
                     );
 
 
-                    try {
+                    if (
+                        settingsRef.current
+                            .readReceiptsEnabled
+                    ) {
 
-                        await api.put(
-                            `/messages/seen/${targetId}`
-                        );
+                        try {
 
-                    } catch (_) {}
+                            await api.put(
+                                `/messages/seen/${targetId}`
+                            );
+
+                        } catch (_) {}
+
+                    }
 
 
                     scrollToBottom(
@@ -4392,6 +4693,164 @@ const onCallMissed =
             "";
 
 
+    const handleAttachmentDownload =
+        async (event, url, filename) => {
+
+            event.preventDefault();
+
+            try {
+
+                const response =
+                    await fetch(url);
+
+                const blob =
+                    await response.blob();
+
+                const blobUrl =
+                    window.URL.createObjectURL(
+                        blob
+                    );
+
+                const link =
+                    document.createElement(
+                        "a"
+                    );
+
+                link.href =
+                    blobUrl;
+
+                link.download =
+                    filename ||
+                    "download";
+
+                document.body.appendChild(
+                    link
+                );
+
+                link.click();
+
+                link.remove();
+
+                window.URL.revokeObjectURL(
+                    blobUrl
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Attachment download error:",
+                    error
+                );
+
+                // Fall back to just opening it - the
+                // person can still save it manually
+                // (long-press / right-click "Save as").
+                window.open(
+                    url,
+                    "_blank",
+                    "noopener,noreferrer"
+                );
+
+            }
+
+        };
+
+
+    /*
+     * "Last seen just now" / "5 minutes ago" / "Yesterday
+     * at 3:45 PM" / a full date for anything older. Reads
+     * `presenceTick` purely so it re-evaluates every 30s
+     * without needing a page refresh.
+     */
+    const formatLastSeen =
+        userId => {
+
+            void presenceTick;
+
+            const id =
+                getId(userId);
+
+            const when =
+                id && lastSeenMap[id];
+
+            if (!when) {
+                return "Offline";
+            }
+
+            const date =
+                new Date(when);
+
+            if (
+                Number.isNaN(
+                    date.getTime()
+                )
+            ) {
+                return "Offline";
+            }
+
+            const diffMs =
+                Date.now() -
+                date.getTime();
+
+            const diffMinutes =
+                Math.floor(
+                    diffMs / 60000
+                );
+
+            if (diffMinutes < 1) {
+                return "Last seen just now";
+            }
+
+            if (diffMinutes < 60) {
+                return `Last seen ${diffMinutes} minute${
+                    diffMinutes === 1 ? "" : "s"
+                } ago`;
+            }
+
+            const diffHours =
+                Math.floor(
+                    diffMinutes / 60
+                );
+
+            if (diffHours < 24) {
+                return `Last seen ${diffHours} hour${
+                    diffHours === 1 ? "" : "s"
+                } ago`;
+            }
+
+            const diffDays =
+                Math.floor(
+                    diffHours / 24
+                );
+
+            if (diffDays === 1) {
+
+                return `Last seen yesterday at ${formatTime(
+                    when
+                )}`;
+
+            }
+
+            if (diffDays < 7) {
+                return `Last seen ${diffDays} days ago`;
+            }
+
+            return `Last seen ${date.toLocaleDateString(
+                [],
+                {
+                    day: "numeric",
+                    month: "short",
+                    year:
+                        date.getFullYear() !==
+                        new Date().getFullYear()
+                            ? "numeric"
+                            : undefined
+                }
+            )}`;
+
+        };
+
+
     /*
      * Interleaves date-separator entries between groups of
      * messages sent on different calendar days, so the
@@ -4610,7 +5069,9 @@ const onCallMissed =
         target => {
 
             const avatar =
-                getAvatar(target);
+                getUploadUrl(
+                    getAvatar(target)
+                );
 
 
             if (avatar) {
@@ -4711,7 +5172,148 @@ const onCallMissed =
 
                     </div>
 
+
+                    <button
+                        type="button"
+                        className="messenger-settings-btn"
+                        title="Messenger settings"
+                        onClick={() =>
+                            setShowSettings(
+                                value =>
+                                    !value
+                            )
+                        }
+                    >
+                        <FaCog />
+                    </button>
+
                 </div>
+
+
+                {showSettings && (
+
+                    <div className="messenger-settings-panel">
+
+                        <div className="settings-panel-title">
+
+                            <strong>
+                                Settings
+                            </strong>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setShowSettings(
+                                        false
+                                    )
+                                }
+                            >
+                                <FaTimes />
+                            </button>
+
+                        </div>
+
+
+                        <label className="settings-row">
+
+                            <span>
+                                Notification sound
+                            </span>
+
+                            <input
+                                type="checkbox"
+                                checked={
+                                    settings.soundEnabled
+                                }
+                                onChange={
+                                    event =>
+                                        updateSetting(
+                                            "soundEnabled",
+                                            event.target.checked
+                                        )
+                                }
+                            />
+
+                        </label>
+
+
+                        <label className="settings-row">
+
+                            <span>
+                                Read receipts (seen status)
+                            </span>
+
+                            <input
+                                type="checkbox"
+                                checked={
+                                    settings.readReceiptsEnabled
+                                }
+                                onChange={
+                                    event =>
+                                        updateSetting(
+                                            "readReceiptsEnabled",
+                                            event.target.checked
+                                        )
+                                }
+                            />
+
+                        </label>
+
+
+                        <label className="settings-row">
+
+                            <span>
+                                Send message with Enter
+                            </span>
+
+                            <input
+                                type="checkbox"
+                                checked={
+                                    settings.enterToSend
+                                }
+                                onChange={
+                                    event =>
+                                        updateSetting(
+                                            "enterToSend",
+                                            event.target.checked
+                                        )
+                                }
+                            />
+
+                        </label>
+
+
+                        <label className="settings-row">
+
+                            <span>
+                                Auto-download photos
+                            </span>
+
+                            <input
+                                type="checkbox"
+                                checked={
+                                    settings.autoDownloadMedia
+                                }
+                                onChange={
+                                    event =>
+                                        updateSetting(
+                                            "autoDownloadMedia",
+                                            event.target.checked
+                                        )
+                                }
+                            />
+
+                        </label>
+
+
+                        <p className="settings-note">
+                            These preferences are saved on
+                            this device only.
+                        </p>
+
+                    </div>
+
+                )}
 
 
                 <div className="messenger-search">
@@ -4840,7 +5442,9 @@ const onCallMissed =
                                                         target
                                                     )
                                                         ? "Active now"
-                                                        : "Offline"}
+                                                        : formatLastSeen(
+                                                              target
+                                                          )}
                                                 </span>
 
 
@@ -4968,7 +5572,9 @@ const onCallMissed =
                                                   selectedUser
                                               )
                                             ? "Active now"
-                                            : "Offline"}
+                                            : formatLastSeen(
+                                                  selectedUser
+                                              )}
 
                                     </span>
 
@@ -5346,8 +5952,10 @@ const onCallMissed =
 
 
                                         const fileUrl =
-                                            item.fileUrl ||
-                                            "";
+                                            getUploadUrl(
+                                                item.fileUrl ||
+                                                    ""
+                                            );
 
 
                                         const fileType =
@@ -5369,6 +5977,20 @@ const onCallMissed =
                                                 /\.(png|jpe?g|gif|webp)$/i.test(
                                                     fileUrl
                                                 )
+                                            );
+
+
+                                        const attachmentKey =
+                                            getMessageId(
+                                                item
+                                            ) ||
+                                            `msg-${index}`;
+
+
+                                        const mediaRevealed =
+                                            settings.autoDownloadMedia ||
+                                            revealedMedia.has(
+                                                attachmentKey
                                             );
 
 
@@ -5441,23 +6063,69 @@ const onCallMissed =
 
                                                         isImageFile ? (
 
-                                                            <a
-                                                                href={
-                                                                    fileUrl
-                                                                }
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                            >
-                                                                <img
-                                                                    src={
+                                                            mediaRevealed ? (
+
+                                                                <a
+                                                                    href={
                                                                         fileUrl
                                                                     }
-                                                                    alt={
+                                                                    download={
                                                                         fileName
                                                                     }
-                                                                    className="message-attachment-image"
-                                                                />
-                                                            </a>
+                                                                    onClick={
+                                                                        event =>
+                                                                            handleAttachmentDownload(
+                                                                                event,
+                                                                                fileUrl,
+                                                                                fileName
+                                                                            )
+                                                                    }
+                                                                    title="Click to download"
+                                                                >
+                                                                    <img
+                                                                        src={
+                                                                            fileUrl
+                                                                        }
+                                                                        alt={
+                                                                            fileName
+                                                                        }
+                                                                        className="message-attachment-image"
+                                                                    />
+                                                                </a>
+
+                                                            ) : (
+
+                                                                <button
+                                                                    type="button"
+                                                                    className="message-attachment-file"
+                                                                    onClick={() =>
+
+                                                                        setRevealedMedia(
+                                                                            previous => {
+
+                                                                                const next =
+                                                                                    new Set(
+                                                                                        previous
+                                                                                    );
+
+                                                                                next.add(
+                                                                                    attachmentKey
+                                                                                );
+
+                                                                                return next;
+
+                                                                            }
+                                                                        )
+
+                                                                    }
+                                                                >
+                                                                    <FaImage />
+                                                                    <span>
+                                                                        Tap to load image
+                                                                    </span>
+                                                                </button>
+
+                                                            )
 
                                                         ) : (
 
@@ -5465,9 +6133,19 @@ const onCallMissed =
                                                                 href={
                                                                     fileUrl
                                                                 }
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
+                                                                download={
+                                                                    fileName
+                                                                }
+                                                                onClick={
+                                                                    event =>
+                                                                        handleAttachmentDownload(
+                                                                            event,
+                                                                            fileUrl,
+                                                                            fileName
+                                                                        )
+                                                                }
                                                                 className="message-attachment-file"
+                                                                title="Click to download"
                                                             >
                                                                 <FaPaperclip />
                                                                 <span>
@@ -5639,6 +6317,21 @@ const onCallMissed =
                                     onChange={
                                         handleTyping
                                     }
+                                    onKeyDown={
+                                        event => {
+
+                                            if (
+                                                event.key ===
+                                                    "Enter" &&
+                                                !settings.enterToSend
+                                            ) {
+
+                                                event.preventDefault();
+
+                                            }
+
+                                        }
+                                    }
                                     placeholder="Write a message..."
                                     autoComplete="off"
                                 />
@@ -5745,18 +6438,20 @@ const onCallMissed =
     }
 
     callerAvatar={
-        callState?.mode === "incoming"
-            ? (
-                callState?.callerAvatar ||
-                callState?.senderAvatar ||
-                ""
-            )
-            : (
-                callState?.receiverAvatar ||
-                callState?.calleeAvatar ||
-                getAvatar(selectedUser) ||
-                ""
-            )
+        getUploadUrl(
+            callState?.mode === "incoming"
+                ? (
+                    callState?.callerAvatar ||
+                    callState?.senderAvatar ||
+                    ""
+                )
+                : (
+                    callState?.receiverAvatar ||
+                    callState?.calleeAvatar ||
+                    getAvatar(selectedUser) ||
+                    ""
+                )
+        )
     }
 
     localStream={
