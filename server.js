@@ -7,6 +7,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 
 const connectDB = require("./config/db");
+const Message = require("./models/Message");
 
 dotenv.config();
 
@@ -704,11 +705,61 @@ io.on(
 
                 }
 
-                sendToUser(
-                    receiverId,
-                    "direct-message",
-                    message
-                );
+                const wasDelivered =
+                    sendToUser(
+                        receiverId,
+                        "direct-message",
+                        message
+                    );
+
+                /*
+                 * DELIVERED STATUS:
+                 * If the receiver currently has an
+                 * active socket connection, the message
+                 * just reached their device - mark it
+                 * delivered and tell the sender right
+                 * away so their tick can update from
+                 * single-check to double-check, without
+                 * waiting for the receiver to actually
+                 * open the chat (that's what flips it to
+                 * "seen" instead, via message-seen).
+                 */
+
+                const messageId =
+                    message._id ||
+                    message.id;
+
+                if (
+                    wasDelivered &&
+                    messageId
+                ) {
+
+                    Message.findByIdAndUpdate(
+                        messageId,
+                        {
+                            isDelivered: true
+                        }
+                    ).catch(
+                        error => {
+
+                            console.error(
+                                "Mark delivered error:",
+                                error
+                            );
+
+                        }
+                    );
+
+                    sendToUser(
+                        senderId,
+                        "message-delivered",
+                        {
+                            messageId,
+                            receiverId
+                        }
+                    );
+
+                }
 
             }
         );
