@@ -875,7 +875,7 @@ socket.on(
         const callType =
             payload.type === "video"
                 ? "video"
-                : "voice";
+                : "audio";
 
         if (
             !callerId ||
@@ -1290,7 +1290,7 @@ socket.on(
                 receiverId,
                 type:
                     payload.type ||
-                    "voice",
+                    "audio",
                 status:
                     "busy"
             }
