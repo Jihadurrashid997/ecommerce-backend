@@ -15,6 +15,7 @@ const safeUserFields = [
     "profileImage",
     "avatar",
     "image",
+    "lastSeen",
     "createdAt"
 ];
 
