@@ -7,6 +7,10 @@ import React, {
 } from "react";
 
 import {
+    useSearchParams
+} from "react-router-dom";
+
+import {
     FaSearch,
     FaPaperPlane,
     FaSmile,
@@ -209,6 +213,17 @@ const getMessageId = (item) => {
 
 const Messenger = () => {
 
+    /*
+     * Reads ?user=<id> from the URL - this is how
+     * UserProfile.jsx's "Message" button and
+     * SearchResults.jsx's message icon navigate here
+     * (e.g. /messenger?user=64f...). See the effect
+     * further below (after selectUser is defined) that
+     * actually opens this conversation.
+     */
+    const [searchParams, setSearchParams] =
+        useSearchParams();
+
     const messagesEndRef =
         useRef(null);
 
@@ -359,6 +374,20 @@ const Messenger = () => {
 
     const [showMenu, setShowMenu] =
         useState(false);
+
+    /*
+     * In-conversation message search ("premium" feature):
+     * lets the user find old messages inside the currently
+     * open chat instead of only searching the contact list.
+     */
+    const [showConvSearch, setShowConvSearch] =
+        useState(false);
+
+    const [convSearchTerm, setConvSearchTerm] =
+        useState("");
+
+    const [activeMatchIndex, setActiveMatchIndex] =
+        useState(0);
 
     const [background, setBackground] =
         useState(
@@ -2257,6 +2286,50 @@ const onReceiveMessage =
             };
 
 
+        /* -------------------------------------------------
+           DELIVERED
+           Fired when the receiver's device has actively
+           received the message over the socket (they're
+           online), before they've necessarily opened the
+           chat. Distinct from "seen".
+        ------------------------------------------------- */
+
+        const onDelivered =
+            data => {
+
+                if (!data?.messageId) {
+                    return;
+                }
+
+                setMessages(
+                    previous =>
+                        previous.map(
+                            item => {
+
+                                if (
+                                    getMessageId(
+                                        item
+                                    ) ===
+                                    data.messageId
+                                ) {
+
+                                    return {
+                                        ...item,
+                                        delivered: true,
+                                        isDelivered: true
+                                    };
+
+                                }
+
+                                return item;
+
+                            }
+                        )
+                );
+
+            };
+
+
 /* =================================================
    INCOMING CALL
 ================================================= */
@@ -3163,6 +3236,11 @@ const onCallMissed =
         );
 
         socket.on(
+            "message-delivered",
+            onDelivered
+        );
+
+        socket.on(
             "incoming-call",
             onIncomingCall
         );
@@ -3248,6 +3326,11 @@ const onCallMissed =
             socket.off(
                 "messages-seen",
                 onSeen
+            );
+
+            socket.off(
+                "message-delivered",
+                onDelivered
             );
 
             socket.off(
@@ -3387,6 +3470,10 @@ const onCallMissed =
 
                 setShowMenu(false);
 
+                setShowConvSearch(false);
+
+                setConvSearchTerm("");
+
 
                 setUnreadUsers(
                     previous => {
@@ -3476,6 +3563,120 @@ const onCallMissed =
                 user
             ]
         );
+
+
+    /* =====================================================
+       OPEN CONVERSATION FROM ?user=<id> IN THE URL
+
+       UserProfile.jsx's "Message" button and
+       SearchResults.jsx's message icon both navigate to
+       /messenger?user=<id>, but nothing here ever read
+       that param - so landing on Messenger this way just
+       showed the normal empty "select someone to chat"
+       screen, with no way to actually message that person.
+    ===================================================== */
+
+    useEffect(() => {
+
+        if (!user) {
+            return;
+        }
+
+        const targetId =
+            searchParams.get("user");
+
+        if (!targetId) {
+            return;
+        }
+
+        // Already viewing this conversation - nothing to do.
+        if (
+            getId(selectedUserRef.current) ===
+            targetId
+        ) {
+            return;
+        }
+
+        let cancelled =
+            false;
+
+        (async () => {
+
+            // Prefer the already-loaded contact list -
+            // avoids an extra request in the common case.
+            let target =
+                users.find(
+                    item =>
+                        getId(item) === targetId
+                );
+
+            if (!target) {
+
+                try {
+
+                    const response =
+                        await api.get(
+                            `/users/public/${targetId}`
+                        );
+
+                    target =
+                        response.data?.user ||
+                        response.data?.data ||
+                        null;
+
+                } catch (error) {
+
+                    console.error(
+                        "Load profile from URL error:",
+                        error
+                    );
+
+                }
+
+            }
+
+            if (
+                cancelled ||
+                !target
+            ) {
+                return;
+            }
+
+            setSearch("");
+
+            await selectUser(
+                target
+            );
+
+            if (!cancelled) {
+
+                // Clean the URL up (/messenger) now that
+                // the conversation is open, so refreshing
+                // the page or navigating back and forth
+                // doesn't keep re-triggering this.
+                setSearchParams(
+                    {},
+                    { replace: true }
+                );
+
+            }
+
+        })();
+
+        return () => {
+
+            cancelled =
+                true;
+
+        };
+
+    }, [
+        user,
+        users,
+        searchParams,
+        selectUser,
+        setSearchParams
+    ]);
 
 
     /* =====================================================
@@ -4116,6 +4317,295 @@ const onCallMissed =
         };
 
 
+    /*
+     * "Today" / "Yesterday" / full date - used for the
+     * date separators between groups of messages.
+     */
+    const formatDateLabel =
+        value => {
+
+            if (!value) {
+                return "";
+            }
+
+            const date =
+                new Date(value);
+
+            if (
+                Number.isNaN(
+                    date.getTime()
+                )
+            ) {
+                return "";
+            }
+
+            const startOfDay =
+                d =>
+                    new Date(
+                        d.getFullYear(),
+                        d.getMonth(),
+                        d.getDate()
+                    ).getTime();
+
+            const today =
+                startOfDay(
+                    new Date()
+                );
+
+            const yesterday =
+                today -
+                24 * 60 * 60 * 1000;
+
+            const day =
+                startOfDay(date);
+
+            if (day === today) {
+                return "Today";
+            }
+
+            if (day === yesterday) {
+                return "Yesterday";
+            }
+
+            return date.toLocaleDateString(
+                [],
+                {
+                    day: "numeric",
+                    month: "long",
+                    year:
+                        date.getFullYear() !==
+                        new Date().getFullYear()
+                            ? "numeric"
+                            : undefined
+                }
+            );
+
+        };
+
+
+    const getMessageText =
+        item =>
+
+            item?.message ||
+            item?.text ||
+            item?.content ||
+            "";
+
+
+    /*
+     * Interleaves date-separator entries between groups of
+     * messages sent on different calendar days, so the
+     * thread reads like "Today" / "Yesterday" / "3 March"
+     * the way most chat apps do.
+     */
+    const messagesWithSeparators =
+        useMemo(
+            () => {
+
+                const result = [];
+
+                let lastDayKey =
+                    null;
+
+                messages.forEach(
+                    (item, index) => {
+
+                        const when =
+                            item.createdAt ||
+                            item.timestamp;
+
+                        const date =
+                            when
+                                ? new Date(when)
+                                : null;
+
+                        const dayKey =
+                            date &&
+                            !Number.isNaN(
+                                date.getTime()
+                            )
+                                ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+                                : null;
+
+                        if (
+                            dayKey &&
+                            dayKey !== lastDayKey
+                        ) {
+
+                            result.push({
+                                type: "separator",
+                                key: `sep-${dayKey}`,
+                                label:
+                                    formatDateLabel(when)
+                            });
+
+                            lastDayKey =
+                                dayKey;
+
+                        }
+
+                        result.push({
+                            type: "message",
+                            key:
+                                getMessageId(item) ||
+                                `msg-${index}`,
+                            item,
+                            index
+                        });
+
+                    }
+                );
+
+                return result;
+
+            },
+            [messages]
+        );
+
+
+    /*
+     * Indices (into `messages`) of every message whose text
+     * matches the in-conversation search box, for the
+     * search bar's "3/12" counter and jump-to-match buttons.
+     */
+    const searchMatchIndices =
+        useMemo(
+            () => {
+
+                const term =
+                    convSearchTerm
+                        .trim()
+                        .toLowerCase();
+
+                if (!term) {
+                    return [];
+                }
+
+                const indices = [];
+
+                messages.forEach(
+                    (item, index) => {
+
+                        if (
+                            getMessageText(item)
+                                .toLowerCase()
+                                .includes(term)
+                        ) {
+
+                            indices.push(index);
+
+                        }
+
+                    }
+                );
+
+                return indices;
+
+            },
+            [
+                messages,
+                convSearchTerm
+            ]
+        );
+
+
+    useEffect(() => {
+
+        setActiveMatchIndex(0);
+
+    }, [
+        convSearchTerm,
+        selectedUser
+    ]);
+
+
+    useEffect(() => {
+
+        if (
+            !showConvSearch ||
+            searchMatchIndices.length ===
+                0
+        ) {
+            return;
+        }
+
+        const targetIndex =
+            searchMatchIndices[
+                activeMatchIndex %
+                    searchMatchIndices.length
+            ];
+
+        const targetItem =
+            messages[targetIndex];
+
+        const targetId =
+            targetItem &&
+            (
+                getMessageId(targetItem) ||
+                `msg-${targetIndex}`
+            );
+
+        if (!targetId) {
+            return;
+        }
+
+        const element =
+            document.getElementById(
+                `chat-message-${targetId}`
+            );
+
+        element?.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+
+    }, [
+        activeMatchIndex,
+        searchMatchIndices,
+        showConvSearch,
+        messages
+    ]);
+
+
+    const goToMatch =
+        direction => {
+
+            if (
+                searchMatchIndices.length ===
+                0
+            ) {
+                return;
+            }
+
+            setActiveMatchIndex(
+                previous => {
+
+                    const total =
+                        searchMatchIndices.length;
+
+                    return (
+                        (previous + direction + total) %
+                        total
+                    );
+
+                }
+            );
+
+        };
+
+
+    const closeConvSearch =
+        () => {
+
+            setShowConvSearch(false);
+
+            setConvSearchTerm("");
+
+            setActiveMatchIndex(0);
+
+        };
+
+
     const renderAvatar =
         target => {
 
@@ -4517,6 +5007,30 @@ const onCallMissed =
 
                                 <button
                                     type="button"
+                                    title="Search in conversation"
+                                    onClick={() => {
+
+                                        setShowConvSearch(
+                                            value =>
+                                                !value
+                                        );
+
+                                        setShowMenu(
+                                            false
+                                        );
+
+                                        setShowBackgrounds(
+                                            false
+                                        );
+
+                                    }}
+                                >
+                                    <FaSearch />
+                                </button>
+
+
+                                <button
+                                    type="button"
                                     title="Chat background"
                                     onClick={() => {
 
@@ -4665,6 +5179,84 @@ const onCallMissed =
                         </header>
 
 
+                        {showConvSearch && (
+
+                            <div className="conversation-search-bar">
+
+                                <FaSearch />
+
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={convSearchTerm}
+                                    onChange={
+                                        event =>
+                                            setConvSearchTerm(
+                                                event.target.value
+                                            )
+                                    }
+                                    placeholder="Search in this conversation..."
+                                />
+
+                                {convSearchTerm && (
+
+                                    <span className="search-match-count">
+
+                                        {searchMatchIndices.length >
+                                        0
+                                            ? `${
+                                                  (activeMatchIndex %
+                                                      searchMatchIndices.length) +
+                                                  1
+                                              }/${
+                                                  searchMatchIndices.length
+                                              }`
+                                            : "0/0"}
+
+                                    </span>
+
+                                )}
+
+                                <button
+                                    type="button"
+                                    title="Previous match"
+                                    onClick={() =>
+                                        goToMatch(-1)
+                                    }
+                                >
+                                    <FaArrowLeft />
+                                </button>
+
+                                <button
+                                    type="button"
+                                    title="Next match"
+                                    onClick={() =>
+                                        goToMatch(1)
+                                    }
+                                >
+                                    <FaArrowLeft
+                                        style={{
+                                            transform:
+                                                "rotate(180deg)"
+                                        }}
+                                    />
+                                </button>
+
+                                <button
+                                    type="button"
+                                    title="Close search"
+                                    onClick={
+                                        closeConvSearch
+                                    }
+                                >
+                                    <FaTimes />
+                                </button>
+
+                            </div>
+
+                        )}
+
+
                         <section
                             className="messages-container"
                             style={{
@@ -4708,8 +5300,33 @@ const onCallMissed =
 
                             ) : (
 
-                                messages.map(
-                                    (item, index) => {
+                                messagesWithSeparators.map(
+                                    entry => {
+
+                                        if (
+                                            entry.type ===
+                                            "separator"
+                                        ) {
+
+                                            return (
+                                                <div
+                                                    key={
+                                                        entry.key
+                                                    }
+                                                    className="date-separator"
+                                                >
+                                                    <span>
+                                                        {entry.label}
+                                                    </span>
+                                                </div>
+                                            );
+
+                                        }
+
+                                        const {
+                                            item,
+                                            index
+                                        } = entry;
 
                                         const senderId =
                                             getMessageSenderId(
@@ -4765,6 +5382,22 @@ const onCallMissed =
                                             item.isSeen;
 
 
+                                        const delivered =
+                                            item.delivered ||
+                                            item.isDelivered;
+
+
+                                        const isActiveMatch =
+                                            showConvSearch &&
+                                            searchMatchIndices.length >
+                                                0 &&
+                                            index ===
+                                                searchMatchIndices[
+                                                    activeMatchIndex %
+                                                        searchMatchIndices.length
+                                                ];
+
+
                                         return (
                                             <div
                                                 key={
@@ -4772,6 +5405,14 @@ const onCallMissed =
                                                         item
                                                     ) ||
                                                     index
+                                                }
+                                                id={
+                                                    `chat-message-${
+                                                        getMessageId(
+                                                            item
+                                                        ) ||
+                                                        `msg-${index}`
+                                                    }`
                                                 }
                                                 className={
                                                     `message-row ${
@@ -4787,6 +5428,10 @@ const onCallMissed =
                                                         `message-bubble ${
                                                             own
                                                                 ? "own"
+                                                                : ""
+                                                        } ${
+                                                            isActiveMatch
+                                                                ? "search-match"
                                                                 : ""
                                                         }`
                                                     }
@@ -4854,9 +5499,29 @@ const onCallMissed =
 
 
                                                         {own && (
-                                                            <span className="message-status">
+                                                            <span
+                                                                className={
+                                                                    `message-status ${
+                                                                        seen
+                                                                            ? "status-seen"
+                                                                            : delivered
+                                                                            ? "status-delivered"
+                                                                            : "status-sent"
+                                                                    }`
+                                                                }
+                                                                title={
+                                                                    seen
+                                                                        ? "Seen"
+                                                                        : delivered
+                                                                        ? "Delivered"
+                                                                        : "Sent"
+                                                                }
+                                                            >
 
-                                                                {seen ? (
+                                                                {(
+                                                                    seen ||
+                                                                    delivered
+                                                                ) ? (
                                                                     <FaCheckDouble />
                                                                 ) : (
                                                                     <FaCheck />
