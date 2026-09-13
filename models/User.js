@@ -52,6 +52,15 @@ const userSchema = new mongoose.Schema(
         profileImage: {
             type: String,
             default: ""
+        },
+
+        // ==========================
+        // PRESENCE
+        // ==========================
+
+        lastSeen: {
+            type: Date,
+            default: Date.now
         }
 
     },
