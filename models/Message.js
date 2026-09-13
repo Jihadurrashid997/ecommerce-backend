@@ -110,6 +110,17 @@ const MessageSchema =
                 index:
                     true
 
+            },
+
+
+            isDelivered: {
+
+                type:
+                    Boolean,
+
+                default:
+                    false
+
             }
 
         },
