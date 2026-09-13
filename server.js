@@ -8,6 +8,7 @@ const { Server } = require("socket.io");
 
 const connectDB = require("./config/db");
 const Message = require("./models/Message");
+const User = require("./models/User");
 
 dotenv.config();
 
@@ -372,7 +373,7 @@ const removeOnlineUser =
             !id ||
             !onlineUsers.has(id)
         ) {
-            return;
+            return false;
         }
 
         const sockets =
@@ -388,7 +389,13 @@ const removeOnlineUser =
 
             onlineUsers.delete(id);
 
+            // Fully offline now (no other tabs/devices
+            // still connected for this user).
+            return true;
+
         }
+
+        return false;
 
     };
 
@@ -1044,30 +1051,43 @@ socket.on(
            Only receiver gets incoming-call.
         ----------------------------------------- */
 
-        sendToUser(
-            receiverId,
-            "incoming-call",
-            callData
-        );
+        const receiverIsReachable =
+            sendToUser(
+                receiverId,
+                "incoming-call",
+                callData
+            );
 
 
         /* -----------------------------------------
            SEND RINGING
            
            IMPORTANT:
-           Only caller gets call-ringing.
-           
-           Receiver will NEVER receive this.
+           Only caller gets call-ringing, and only
+           when the receiver's device actually
+           received the incoming-call signal above.
+           Previously this was sent unconditionally,
+           so a caller would see "Ringing" even when
+           the other person was completely offline
+           and never got notified at all. Now the
+           caller correctly stays on "Calling..."
+           until either the receiver's device picks
+           it up (this event) or the ring timeout
+           below fires a missed call.
         ----------------------------------------- */
 
-        sendToUser(
-            callerId,
-            "call-ringing",
-            {
-                ...callData,
-                status: "ringing"
-            }
-        );
+        if (receiverIsReachable) {
+
+            sendToUser(
+                callerId,
+                "call-ringing",
+                {
+                    ...callData,
+                    status: "ringing"
+                }
+            );
+
+        }
 
 
         /* -----------------------------------------
@@ -1402,19 +1422,65 @@ socket.on(
 
 
         /* -----------------------------------------
-           NOTIFY OTHER USER
+           DURATION
+
+           Only counts from when the call was
+           actually accepted - a call that rang but
+           was never picked up has no "connected"
+           time and should show as 0 (the chat log
+           already has separate missed-call /
+           declined messages for that case).
+        ----------------------------------------- */
+
+        const duration =
+            call.acceptedAt
+                ? Math.max(
+                      0,
+                      Math.floor(
+                          (
+                              Date.now() -
+                              call.acceptedAt
+                          ) / 1000
+                      )
+                  )
+                : 0;
+
+
+        const endedPayload = {
+
+            ...call,
+
+            endedBy:
+                senderId,
+
+            status:
+                "ended",
+
+            duration
+
+        };
+
+
+        /* -----------------------------------------
+           NOTIFY BOTH PARTIES
+
+           Previously only the other user got
+           "call-ended", so whoever pressed "end"
+           never saw a "call ended" log for their
+           own side of the chat. Both sides now go
+           through the exact same code path/message.
         ----------------------------------------- */
 
         sendToUser(
             otherUserId,
             "call-ended",
-            {
-                ...call,
-                endedBy:
-                    senderId,
-                status:
-                    "ended"
-            }
+            endedPayload
+        );
+
+        sendToUser(
+            senderId,
+            "call-ended",
+            endedPayload
         );
 
 
@@ -1763,6 +1829,44 @@ socket.on(
                     removeOnlineUser(
                         socket.userId,
                         socket.id
+                    );
+
+                }
+
+                if (
+                    socket.userId &&
+                    !onlineUsers.has(
+                        socket.userId
+                    )
+                ) {
+
+                    const lastSeen =
+                        new Date();
+
+                    User.findByIdAndUpdate(
+                        socket.userId,
+                        {
+                            lastSeen
+                        }
+                    ).catch(
+                        error => {
+
+                            console.error(
+                                "Save lastSeen error:",
+                                error
+                            );
+
+                        }
+                    );
+
+                    io.emit(
+                        "user-last-seen",
+                        {
+                            userId:
+                                socket.userId,
+                            lastSeen:
+                                lastSeen.getTime()
+                        }
                     );
 
                 }
