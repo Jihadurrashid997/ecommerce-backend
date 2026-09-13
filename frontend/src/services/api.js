@@ -77,16 +77,63 @@ api.interceptors.response.use(
 
         if (status === 401) {
 
+            const hadToken =
+                Boolean(
+                    localStorage.getItem("token")
+                );
+
             /*
-             * Do not immediately remove authentication
-             * because some protected requests may fail
-             * temporarily.
+             * A 401 with no stored token just means a
+             * login/signup attempt was rejected (wrong
+             * email or password) - that's a normal form
+             * error, not a session problem, so leave it
+             * to the calling screen to show its own
+             * message.
+             *
+             * A 401 WITH a stored token means the token
+             * itself is invalid or expired (e.g. it's
+             * been 7+ days, the server's JWT secret
+             * changed, etc). Previously this just logged
+             * a warning and left the stale token in
+             * place, so every subsequent action (sending
+             * a message, etc) kept failing with the same
+             * raw "Invalid or Expired Token" alert and
+             * the person had no way out except manually
+             * clearing storage. Now we clear the stale
+             * session and send them back to log in again.
              */
 
-            console.warn(
-                "Authentication failed:",
-                error?.response?.data
-            );
+            if (hadToken) {
+
+                console.warn(
+                    "Session expired - logging out.",
+                    error?.response?.data
+                );
+
+                localStorage.removeItem("token");
+                localStorage.removeItem("user");
+
+                if (
+                    typeof window !== "undefined" &&
+                    !window.location.pathname.startsWith(
+                        "/login"
+                    )
+                ) {
+
+                    window.location.href =
+                        "/login?sessionExpired=1";
+
+                }
+
+            } else {
+
+                console.warn(
+                    "Authentication failed:",
+                    error?.response?.data
+                );
+
+            }
+
         }
 
         if (!error.response) {
