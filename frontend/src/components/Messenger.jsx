@@ -290,6 +290,64 @@ const Messenger = () => {
     const [unreadUsers, setUnreadUsers] =
         useState({});
 
+    /*
+     * Maps userId -> ms timestamp of the most recent
+     * message exchanged with that user (sent OR
+     * received). Drives the "most recent chat on top"
+     * ordering of the sidebar. Seeded from
+     * GET /messages/recent on load, then kept up to
+     * date locally whenever a message is sent or a
+     * new one arrives over the socket.
+     */
+    const [recentTimestamps, setRecentTimestamps] =
+        useState({});
+
+    const bumpRecent =
+        useCallback(
+            (userId, when) => {
+
+                const id =
+                    getId(userId);
+
+                if (!id) {
+                    return;
+                }
+
+                const time =
+                    when
+                        ? new Date(when).getTime()
+                        : Date.now();
+
+                if (
+                    Number.isNaN(time)
+                ) {
+                    return;
+                }
+
+                setRecentTimestamps(
+                    previous => {
+
+                        if (
+                            (previous[id] || 0) >=
+                            time
+                        ) {
+
+                            return previous;
+
+                        }
+
+                        return {
+                            ...previous,
+                            [id]: time
+                        };
+
+                    }
+                );
+
+            },
+            []
+        );
+
     const [mobileChatOpen, setMobileChatOpen] =
         useState(false);
 
@@ -614,6 +672,179 @@ useEffect(() => {
         loadUsers();
 
     }, [loadUsers]);
+
+
+    /* =====================================================
+       LOAD RECENT CONVERSATIONS + UNREAD COUNTS
+
+       These were previously only ever built up live from
+       socket events, which meant refreshing the page (or
+       just never having received a socket event yet for
+       an old unread message) reset the sidebar to no
+       ordering and no unread badges. Both endpoints
+       already existed on the backend
+       (/messages/recent, /messages/unread/by-user) but
+       weren't being called from here.
+    ===================================================== */
+
+    useEffect(() => {
+
+        if (!user) {
+            return;
+        }
+
+        let cancelled =
+            false;
+
+        (async () => {
+
+            try {
+
+                const response =
+                    await api.get(
+                        "/messages/recent"
+                    );
+
+                const list =
+                    response.data?.data ||
+                    response.data ||
+                    [];
+
+                if (
+                    cancelled ||
+                    !Array.isArray(list)
+                ) {
+                    return;
+                }
+
+                setRecentTimestamps(
+                    previous => {
+
+                        const next = {
+                            ...previous
+                        };
+
+                        list.forEach(
+                            item => {
+
+                                const id =
+                                    getId(
+                                        item.userId ||
+                                        item.user
+                                    );
+
+                                const lastMessage =
+                                    item.lastMessage ||
+                                    item;
+
+                                const when =
+                                    lastMessage?.createdAt ||
+                                    lastMessage?.timestamp;
+
+                                const time =
+                                    when
+                                        ? new Date(when).getTime()
+                                        : null;
+
+                                if (
+                                    id &&
+                                    time &&
+                                    !Number.isNaN(time)
+                                ) {
+
+                                    next[id] =
+                                        Math.max(
+                                            next[id] || 0,
+                                            time
+                                        );
+
+                                }
+
+                            }
+                        );
+
+                        return next;
+
+                    }
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Recent conversations error:",
+                    error
+                );
+
+            }
+
+        })();
+
+        (async () => {
+
+            try {
+
+                const response =
+                    await api.get(
+                        "/messages/unread/by-user"
+                    );
+
+                const unread =
+                    response.data?.unread ||
+                    response.data?.data ||
+                    {};
+
+                if (
+                    cancelled ||
+                    !unread ||
+                    typeof unread !==
+                        "object"
+                ) {
+                    return;
+                }
+
+                setUnreadUsers(
+                    previous => {
+
+                        const merged = {
+                            ...unread
+                        };
+
+                        Object.keys(previous).forEach(
+                            id => {
+
+                                merged[id] =
+                                    Math.max(
+                                        merged[id] || 0,
+                                        previous[id] || 0
+                                    );
+
+                            }
+                        );
+
+                        return merged;
+
+                    }
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Unread by user error:",
+                    error
+                );
+
+            }
+
+        })();
+
+        return () => {
+
+            cancelled =
+                true;
+
+        };
+
+    }, [user]);
 
 
     /* =====================================================
@@ -1749,6 +1980,19 @@ const onReceiveMessage =
         }
 
 
+        /*
+         * Whoever just messaged us should float to the
+         * top of the sidebar, whether or not their chat
+         * is currently open.
+         */
+
+        bumpRecent(
+            senderId,
+            newMessage.createdAt ||
+                newMessage.timestamp
+        );
+
+
         const active =
             selectedUserRef.current;
 
@@ -2195,7 +2439,7 @@ const onCallAccepted =
                     type:
                         call.type ||
                         data?.type ||
-                        "voice",
+                        "audio",
 
                     offer
 
@@ -3061,6 +3305,7 @@ const onCallMissed =
     }, [
         user,
         appendMessage,
+        bumpRecent,
         cleanupCall,
         createPeer,
         scrollToBottom
@@ -3277,6 +3522,11 @@ const onCallMissed =
                     user,
                     selectedUser
                 );
+
+
+            bumpRecent(
+                receiver
+            );
 
 
             /*
@@ -3611,6 +3861,62 @@ const onCallMissed =
 
                     scrollToBottom();
 
+
+                    bumpRecent(
+                        getId(selectedUser)
+                    );
+
+
+                    /*
+                     * Previously nothing was emitted
+                     * here, so the receiver only ever
+                     * found out about a file/image once
+                     * they manually reopened the chat -
+                     * unlike text messages, which are
+                     * pushed over the socket right after
+                     * saving. Mirror that same flow here.
+                     */
+
+                    const roomId =
+                        currentRoomRef.current ||
+                        getRoomId(
+                            user,
+                            selectedUser
+                        );
+
+                    socket.emit(
+                        "send-message",
+                        {
+                            roomId,
+                            sender:
+                                getId(user),
+                            receiver:
+                                getId(selectedUser),
+                            message:
+                                saved.message ||
+                                "",
+                            fileUrl:
+                                saved.fileUrl ||
+                                "",
+                            fileName:
+                                saved.fileName ||
+                                "",
+                            fileType:
+                                saved.fileType ||
+                                "",
+                            _id:
+                                saved._id ||
+                                saved.id,
+                            id:
+                                saved._id ||
+                                saved.id,
+                            createdAt:
+                                saved.createdAt ||
+                                new Date()
+                                    .toISOString()
+                        }
+                    );
+
                 }
 
             } catch (error) {
@@ -3668,6 +3974,42 @@ const onCallMissed =
         };
 
 
+    /*
+     * Users with a conversation are shown most-recent
+     * first; users with no messages yet keep their
+     * original (name-sorted, from the API) order and
+     * sit below everyone with an active conversation.
+     */
+    const sortedUsers =
+        useMemo(
+            () => {
+
+                return [...users].sort(
+                    (a, b) => {
+
+                        const timeA =
+                            recentTimestamps[
+                                getId(a)
+                            ] || 0;
+
+                        const timeB =
+                            recentTimestamps[
+                                getId(b)
+                            ] || 0;
+
+                        return timeB - timeA;
+
+                    }
+                );
+
+            },
+            [
+                users,
+                recentTimestamps
+            ]
+        );
+
+
     const filteredUsers =
         useMemo(
             () => {
@@ -3679,11 +4021,11 @@ const onCallMissed =
 
 
                 if (!term) {
-                    return users;
+                    return sortedUsers;
                 }
 
 
-                return users.filter(
+                return sortedUsers.filter(
                     target => {
 
                         const name =
@@ -3721,7 +4063,7 @@ const onCallMissed =
 
             },
             [
-                users,
+                sortedUsers,
                 search
             ]
         );
