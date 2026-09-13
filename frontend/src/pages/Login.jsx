@@ -109,6 +109,38 @@ const Login = () => {
 
     /*
     =====================================================
+    SESSION EXPIRED NOTICE
+    Shown when services/api.js's response interceptor
+    redirects here after an old/invalid token gets
+    rejected by the backend (?sessionExpired=1), instead
+    of the person just seeing a raw
+    "Invalid or Expired Token" alert with no explanation.
+    =====================================================
+    */
+
+    useEffect(() => {
+
+        const params =
+            new URLSearchParams(
+                location.search
+            );
+
+        if (
+            params.get("sessionExpired") ===
+            "1"
+        ) {
+
+            setError(
+                "Your session has expired. Please log in again."
+            );
+
+        }
+
+    }, [location.search]);
+
+
+    /*
+    =====================================================
     INPUT
     =====================================================
     */
