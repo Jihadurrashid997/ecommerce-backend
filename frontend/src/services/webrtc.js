@@ -44,6 +44,53 @@ const buildIceServers = () => {
                 "stun:stun2.l.google.com:19302",
                 "stun:stun3.l.google.com:19302"
             ]
+        },
+
+        /*
+         * FREE PUBLIC TURN FALLBACK (OpenRelay project).
+         *
+         * STUN alone only helps two peers discover a
+         * direct path to each other, and that direct path
+         * often doesn't exist at all - most mobile carrier
+         * networks and many corporate/home routers use NAT
+         * types that block direct peer-to-peer connections
+         * entirely. Without a relay (TURN) server, the call
+         * UI can still say "connected" (that's just the
+         * signaling/negotiation succeeding) while no actual
+         * audio/video ever flows - which matches "kotha
+         * bolle kono kotha jai na" / video not visible
+         * between two mobile devices exactly.
+         *
+         * This free relay keeps calls working out of the
+         * box. For production-scale reliability, replace it
+         * with your own TURN server (coturn, Twilio,
+         * Metered, Xirsys, etc.) via the VITE_TURN_* env
+         * vars below - those are appended on top of, not
+         * instead of, this fallback.
+         */
+        {
+            urls:
+                "turn:openrelay.metered.ca:80",
+            username:
+                "openrelayproject",
+            credential:
+                "openrelayproject"
+        },
+        {
+            urls:
+                "turn:openrelay.metered.ca:443",
+            username:
+                "openrelayproject",
+            credential:
+                "openrelayproject"
+        },
+        {
+            urls:
+                "turn:openrelay.metered.ca:443?transport=tcp",
+            username:
+                "openrelayproject",
+            credential:
+                "openrelayproject"
         }
 
     ];
