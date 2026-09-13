@@ -198,7 +198,8 @@ exports.markSeen = async (req, res) => {
             },
             {
                 $set: {
-                    isSeen: true
+                    isSeen: true,
+                    isDelivered: true
                 }
             }
         );
