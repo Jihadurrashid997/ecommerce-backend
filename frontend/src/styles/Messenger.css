@@ -537,6 +537,55 @@
 }
 
 
+.chat-options-menu button.danger-option {
+    color: #e53935;
+}
+
+
+.chat-options-menu button.danger-option:hover {
+    background: #fdecea;
+}
+
+
+/* =========================================================
+   BLOCKED CONVERSATION BANNER
+========================================================= */
+
+.blocked-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    background: #fff5f5;
+    border-top: 1px solid #ffe1e1;
+    color: #b91c1c;
+    font-size: 13.5px;
+}
+
+
+.blocked-banner span {
+    flex: 1;
+}
+
+
+.blocked-banner button {
+    background: #b91c1c;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+
+.blocked-banner button:hover {
+    background: #991b1b;
+}
+
+
 /* =========================================================
    BACKGROUND PANEL
 ========================================================= */
