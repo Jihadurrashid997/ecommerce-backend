@@ -11,7 +11,9 @@ const {
     updateProfile,
     searchUsers,
     getPublicProfile,
-    deleteUser
+    deleteUser,
+    blockUser,
+    unblockUser
 
 } =
     require("../controllers/userController");
@@ -50,6 +52,21 @@ router.get(
     "/chat-users",
     auth(),
     getChatUsers
+);
+
+
+// BLOCK / UNBLOCK
+
+router.post(
+    "/block/:id",
+    auth(),
+    blockUser
+);
+
+router.post(
+    "/unblock/:id",
+    auth(),
+    unblockUser
 );
 
 
