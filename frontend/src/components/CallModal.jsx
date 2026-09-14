@@ -21,6 +21,7 @@ const CallModal = ({
     visible,
     type = "audio",
     mode = "outgoing",
+    status = "calling",
     callerName = "User",
     callerAvatar = "",
     localStream = null,
@@ -705,7 +706,11 @@ const CallModal = ({
                                               : "Voice"
                                       } call`
 
-                                    : "Calling..."}
+                                    : status === "ringing"
+
+                                        ? "Ringing..."
+
+                                        : "Calling..."}
 
                         </p>
 
