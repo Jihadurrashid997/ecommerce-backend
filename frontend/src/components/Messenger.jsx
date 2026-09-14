@@ -27,7 +27,8 @@ import {
     FaTimes,
     FaImage,
     FaPalette,
-    FaCog
+    FaCog,
+    FaBan
 } from "react-icons/fa";
 
 import api, {
@@ -253,6 +254,9 @@ const Messenger = () => {
 
     const remoteStreamRef =
         useRef(null);
+
+    const remoteTracksRef =
+        useRef([]);
 
     const pendingCandidatesRef =
         useRef([]);
@@ -1273,6 +1277,9 @@ useEffect(() => {
                 remoteStreamRef.current =
                     null;
 
+                remoteTracksRef.current =
+                    [];
+
                 pendingCandidatesRef.current =
                     [];
 
@@ -1333,54 +1340,63 @@ onTrack:
         );
 
 
-        let stream =
-            remoteStreamRef.current;
+        /*
+         * Keep the raw list of tracks in a ref (not a
+         * MediaStream), and build a FRESH MediaStream
+         * object every time a track is added. Mutating
+         * and re-passing the same MediaStream instance
+         * to setRemoteStream() is a same-reference no-op
+         * as far as React is concerned, so the second
+         * track to arrive (often video, after audio)
+         * could end up never actually triggering the
+         * effect that attaches the stream to the
+         * <video>/<audio> element.
+         */
 
+        const existingTracks =
+            remoteTracksRef.current ||
+            [];
 
-        if (!stream) {
-
-            stream =
-                event.streams?.[0] ||
-                new MediaStream();
-
-        }
-
-
-        if (
+        const alreadyHasTrack =
             event.track &&
-            !stream
-                .getTracks()
-                .some(
-                    track =>
-                        track.id ===
-                        event.track.id
-                )
-        ) {
-
-            stream.addTrack(
-                event.track
+            existingTracks.some(
+                track =>
+                    track.id ===
+                    event.track.id
             );
 
-        }
+        const updatedTracks =
+            event.track &&
+            !alreadyHasTrack
+                ? [
+                      ...existingTracks,
+                      event.track
+                  ]
+                : existingTracks;
 
+        remoteTracksRef.current =
+            updatedTracks;
+
+        const freshStream =
+            new MediaStream(
+                updatedTracks
+            );
 
         remoteStreamRef.current =
-            stream;
+            freshStream;
 
 
         setRemoteStream(
-            stream
+            freshStream
         );
 
 
         console.log(
             "📡 Remote tracks:",
-            stream
-                .getTracks()
-                .map(
-                    track =>
-                        `${track.kind}:${track.readyState}`
-                )
+            updatedTracks.map(
+                track =>
+                    `${track.kind}:${track.readyState}`
+            )
         );
 
     },
@@ -1736,22 +1752,69 @@ const switchCamera =
                 );
 
                 /*
+                 * Stop the CURRENT camera first. Many
+                 * mobile browsers (especially Android)
+                 * cannot have two camera streams open at
+                 * once, so requesting the new facing mode
+                 * while the old track is still live can
+                 * silently fail or just hand back the same
+                 * (front) camera again - which looks
+                 * exactly like "the back camera never
+                 * opens".
+                 */
+
+                currentVideoTrack.stop();
+
+                /*
                  * Get new camera
                  */
 
-                const newStream =
-                    await navigator.mediaDevices.getUserMedia({
+                let newStream;
 
-                        audio: false,
+                try {
 
-                        video: {
-                            facingMode: {
-                                ideal:
-                                    nextFacing
+                    newStream =
+                        await navigator.mediaDevices.getUserMedia({
+
+                            audio: false,
+
+                            video: {
+                                facingMode: {
+                                    exact:
+                                        nextFacing
+                                }
                             }
-                        }
 
-                    });
+                        });
+
+                } catch (exactError) {
+
+                    console.warn(
+                        "Exact facingMode failed, falling back to ideal:",
+                        exactError
+                    );
+
+                    // Some devices/browsers reject an
+                    // "exact" constraint they can't fully
+                    // guarantee even when the camera does
+                    // exist - retry with "ideal" as a
+                    // best-effort fallback instead of
+                    // giving up entirely.
+                    newStream =
+                        await navigator.mediaDevices.getUserMedia({
+
+                            audio: false,
+
+                            video: {
+                                facingMode: {
+                                    ideal:
+                                        nextFacing
+                                }
+                            }
+
+                        });
+
+                }
 
                 const newVideoTrack =
                     newStream
@@ -1811,12 +1874,6 @@ const switchCamera =
                     }
 
                 }
-
-                /*
-                 * Stop old camera
-                 */
-
-                currentVideoTrack.stop();
 
                 /*
                  * Keep existing audio track
@@ -4476,6 +4533,86 @@ const onCallMissed =
         };
 
 
+    const handleBlockToggle =
+        async () => {
+
+            if (!selectedUser) {
+                return;
+            }
+
+            const targetId =
+                getId(selectedUser);
+
+            const currentlyBlocked =
+                Boolean(
+                    selectedUser.isBlockedByMe
+                );
+
+            const confirmed =
+                window.confirm(
+                    currentlyBlocked
+                        ? `Unblock ${getUserName(selectedUser)}?`
+                        : `Block ${getUserName(selectedUser)}? They won't be able to message you.`
+                );
+
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+
+                await api.post(
+                    `/users/${
+                        currentlyBlocked
+                            ? "unblock"
+                            : "block"
+                    }/${targetId}`
+                );
+
+                const applyFlag =
+                    user =>
+                        getId(user) === targetId
+                            ? {
+                                  ...user,
+                                  isBlockedByMe:
+                                      !currentlyBlocked
+                              }
+                            : user;
+
+                setUsers(
+                    previous =>
+                        previous.map(
+                            applyFlag
+                        )
+                );
+
+                setSelectedUser(
+                    previous =>
+                        previous
+                            ? applyFlag(previous)
+                            : previous
+                );
+
+                setShowMenu(false);
+
+            } catch (error) {
+
+                console.error(
+                    "Block/unblock error:",
+                    error
+                );
+
+                alert(
+                    error.response?.data
+                        ?.message ||
+                    "Something went wrong."
+                );
+
+            }
+
+        };
+
+
     /*
      * Users with a conversation are shown most-recent
      * first; users with no messages yet keep their
@@ -4582,6 +4719,21 @@ const onCallMissed =
                 CHAT_BACKGROUNDS[0],
             [background]
         );
+
+
+    const iBlockedThem =
+        Boolean(
+            selectedUser?.isBlockedByMe
+        );
+
+    const theyBlockedMe =
+        Boolean(
+            selectedUser?.hasBlockedMe
+        );
+
+    const isConversationBlocked =
+        iBlockedThem ||
+        theyBlockedMe;
 
 
     const formatTime =
@@ -5707,6 +5859,20 @@ const onCallMissed =
                                         Clear local chat
                                     </button>
 
+
+                                    <button
+                                        type="button"
+                                        className="danger-option"
+                                        onClick={
+                                            handleBlockToggle
+                                        }
+                                    >
+                                        <FaBan />
+                                        {selectedUser?.isBlockedByMe
+                                            ? "Unblock this user"
+                                            : "Block this user"}
+                                    </button>
+
                                 </div>
                             )}
 
@@ -6245,6 +6411,37 @@ const onCallMissed =
                         </section>
 
 
+                        {isConversationBlocked ? (
+
+                            <div className="blocked-banner">
+
+                                <FaBan />
+
+                                <span>
+
+                                    {iBlockedThem
+                                        ? `You blocked ${getUserName(selectedUser)}.`
+                                        : `You can't message this user.`}
+
+                                </span>
+
+                                {iBlockedThem && (
+
+                                    <button
+                                        type="button"
+                                        onClick={
+                                            handleBlockToggle
+                                        }
+                                    >
+                                        Unblock
+                                    </button>
+
+                                )}
+
+                            </div>
+
+                        ) : (
+
                         <form
                             className="message-form"
                             onSubmit={
@@ -6404,6 +6601,8 @@ const onCallMissed =
 
                         </form>
 
+                        )}
+
                     </>
 
                 )}
@@ -6420,6 +6619,10 @@ const onCallMissed =
 
     mode={
         callState?.mode || "outgoing"
+    }
+
+    status={
+        callState?.status || "calling"
     }
 
     callerName={
