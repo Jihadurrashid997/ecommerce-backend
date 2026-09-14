@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Message = require("../models/Message");
+const User = require("../models/User");
 
 const getUserId = (req) => {
     return (
@@ -67,6 +68,35 @@ exports.sendMessage = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "You cannot message yourself"
+            });
+        }
+
+        const [senderDoc, receiverDoc] = await Promise.all([
+            User.findById(sender).select("blockedUsers"),
+            User.findById(receiver).select("blockedUsers")
+        ]);
+
+        const senderBlockedReceiver =
+            (senderDoc?.blockedUsers || [])
+                .map(String)
+                .includes(String(receiver));
+
+        const receiverBlockedSender =
+            (receiverDoc?.blockedUsers || [])
+                .map(String)
+                .includes(String(sender));
+
+        if (senderBlockedReceiver) {
+            return res.status(403).json({
+                success: false,
+                message: "You have blocked this user. Unblock them to send a message."
+            });
+        }
+
+        if (receiverBlockedSender) {
+            return res.status(403).json({
+                success: false,
+                message: "You can't send a message to this user."
             });
         }
 
