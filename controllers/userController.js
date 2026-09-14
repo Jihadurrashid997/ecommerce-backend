@@ -182,8 +182,12 @@ exports.getChatUsers = async (req, res) => {
         const currentUserId =
             req.user.id;
 
-        const users =
-            await User.find({
+        const [
+            users,
+            currentUser
+        ] = await Promise.all([
+
+            User.find({
 
                 _id: {
                     $ne: currentUserId
@@ -196,14 +200,49 @@ exports.getChatUsers = async (req, res) => {
                 .sort({
                     name: 1
                 })
-                .lean();
+                .lean(),
+
+            User.findById(currentUserId)
+                .select("blockedUsers")
+                .lean()
+
+        ]);
+
+        const myBlockedSet =
+            new Set(
+                (
+                    currentUser?.blockedUsers ||
+                    []
+                ).map(String)
+            );
 
         res.json({
 
             success: true,
 
             users:
-                users.map(normalizeUser)
+                users.map(
+                    user => ({
+
+                        ...normalizeUser(user),
+
+                        isBlockedByMe:
+                            myBlockedSet.has(
+                                String(user._id)
+                            ),
+
+                        hasBlockedMe:
+                            (
+                                user.blockedUsers ||
+                                []
+                            )
+                                .map(String)
+                                .includes(
+                                    String(currentUserId)
+                                )
+
+                    })
+                )
 
         });
 
@@ -221,6 +260,124 @@ exports.getChatUsers = async (req, res) => {
             message:
                 "Failed to load chat users."
 
+        });
+
+    }
+
+};
+
+
+// ======================================================
+// BLOCK / UNBLOCK USER
+// ======================================================
+
+exports.blockUser = async (req, res) => {
+
+    try {
+
+        const targetId =
+            req.params.id;
+
+        if (
+            !mongoose.Types.ObjectId.isValid(
+                targetId
+            )
+        ) {
+
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user ID."
+            });
+
+        }
+
+        if (
+            String(targetId) ===
+            String(req.user.id)
+        ) {
+
+            return res.status(400).json({
+                success: false,
+                message: "You cannot block yourself."
+            });
+
+        }
+
+        await User.findByIdAndUpdate(
+            req.user.id,
+            {
+                $addToSet: {
+                    blockedUsers: targetId
+                }
+            }
+        );
+
+        res.json({
+            success: true,
+            message: "User blocked."
+        });
+
+    } catch (err) {
+
+        console.error(
+            "BLOCK USER ERROR:",
+            err
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to block user."
+        });
+
+    }
+
+};
+
+
+exports.unblockUser = async (req, res) => {
+
+    try {
+
+        const targetId =
+            req.params.id;
+
+        if (
+            !mongoose.Types.ObjectId.isValid(
+                targetId
+            )
+        ) {
+
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user ID."
+            });
+
+        }
+
+        await User.findByIdAndUpdate(
+            req.user.id,
+            {
+                $pull: {
+                    blockedUsers: targetId
+                }
+            }
+        );
+
+        res.json({
+            success: true,
+            message: "User unblocked."
+        });
+
+    } catch (err) {
+
+        console.error(
+            "UNBLOCK USER ERROR:",
+            err
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to unblock user."
         });
 
     }
