@@ -23,7 +23,23 @@ const populateMessage = (query) =>
         .populate(
             "receiver",
             "name email role profileImage avatar username fullName displayName firstName"
-        );
+        )
+        .populate({
+            path: "replyTo",
+            select: "message fileUrl fileName fileType sender createdAt",
+            populate: {
+                path: "sender",
+                select: "name username fullName displayName firstName"
+            }
+        })
+        .populate({
+            path: "forwardedFrom",
+            select: "message fileUrl fileName fileType sender createdAt",
+            populate: {
+                path: "sender",
+                select: "name username fullName displayName firstName"
+            }
+        });
 
 /* =========================================================
    SEND MESSAGE
@@ -119,6 +135,38 @@ exports.sendMessage = async (req, res) => {
             messageData.fileUrl = `/uploads/${file.filename}`;
             messageData.fileName = file.originalname;
             messageData.fileType = file.mimetype;
+
+        }
+
+        const replyTo = req.body?.replyTo;
+
+        if (replyTo && isValidObjectId(replyTo)) {
+
+            const original = await Message.exists({
+                _id: replyTo,
+                $or: [
+                    { sender, receiver },
+                    { sender: receiver, receiver: sender }
+                ]
+            });
+
+            if (original) {
+                messageData.replyTo = replyTo;
+            }
+
+        }
+
+        const forwardedFrom = req.body?.forwardedFrom;
+
+        if (forwardedFrom && isValidObjectId(forwardedFrom)) {
+
+            const originalExists = await Message.exists({
+                _id: forwardedFrom
+            });
+
+            if (originalExists) {
+                messageData.forwardedFrom = forwardedFrom;
+            }
 
         }
 
