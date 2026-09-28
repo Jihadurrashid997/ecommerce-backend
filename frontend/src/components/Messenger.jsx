@@ -28,7 +28,15 @@ import {
     FaImage,
     FaPalette,
     FaCog,
-    FaBan
+    FaBan,
+    FaMicrophone,
+    FaStop,
+    FaTrash,
+    FaPlay,
+    FaPause,
+    FaReply,
+    FaShare,
+    FaCheckCircle
 } from "react-icons/fa";
 
 import api, {
@@ -206,6 +214,210 @@ const getMessageId = (item) => {
         item?.id ||
         item?.messageId ||
         null
+    );
+
+};
+
+
+const formatDuration = seconds => {
+
+    const total =
+        Math.max(
+            0,
+            Math.floor(seconds || 0)
+        );
+
+    const mins =
+        Math.floor(total / 60);
+
+    const secs =
+        total % 60;
+
+    return `${mins}:${
+        String(secs).padStart(2, "0")
+    }`;
+
+};
+
+
+/* =========================================================
+   VOICE MESSAGE PLAYER
+
+   Compact play/pause + progress bar + duration player for
+   voice-message bubbles.
+========================================================= */
+
+const VoiceMessagePlayer = ({ url, own }) => {
+
+    const audioRef =
+        useRef(null);
+
+    const [playing, setPlaying] =
+        useState(false);
+
+    const [duration, setDuration] =
+        useState(0);
+
+    const [currentTime, setCurrentTime] =
+        useState(0);
+
+    useEffect(() => {
+
+        const audio =
+            audioRef.current;
+
+        if (!audio) {
+            return undefined;
+        }
+
+        const onLoadedMetadata = () => {
+
+            if (
+                Number.isFinite(audio.duration)
+            ) {
+
+                setDuration(audio.duration);
+
+            }
+
+        };
+
+        const onTimeUpdate = () => {
+
+            setCurrentTime(audio.currentTime);
+
+        };
+
+        const onEnded = () => {
+
+            setPlaying(false);
+
+            setCurrentTime(0);
+
+        };
+
+        audio.addEventListener("loadedmetadata", onLoadedMetadata);
+        audio.addEventListener("timeupdate", onTimeUpdate);
+        audio.addEventListener("ended", onEnded);
+
+        return () => {
+
+            audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+            audio.removeEventListener("timeupdate", onTimeUpdate);
+            audio.removeEventListener("ended", onEnded);
+
+        };
+
+    }, []);
+
+    const togglePlay = () => {
+
+        const audio =
+            audioRef.current;
+
+        if (!audio) {
+            return;
+        }
+
+        if (playing) {
+
+            audio.pause();
+
+            setPlaying(false);
+
+        } else {
+
+            audio.play()
+                .then(() => setPlaying(true))
+                .catch(
+                    error =>
+                        console.error(
+                            "Voice playback error:",
+                            error
+                        )
+                );
+
+        }
+
+    };
+
+    const progressPercent =
+        duration > 0
+            ? (currentTime / duration) * 100
+            : 0;
+
+    const handleSeek = event => {
+
+        const audio =
+            audioRef.current;
+
+        if (!audio || !duration) {
+            return;
+        }
+
+        const rect =
+            event.currentTarget.getBoundingClientRect();
+
+        const ratio =
+            Math.min(
+                1,
+                Math.max(
+                    0,
+                    (event.clientX - rect.left) / rect.width
+                )
+            );
+
+        audio.currentTime =
+            ratio * duration;
+
+        setCurrentTime(audio.currentTime);
+
+    };
+
+    return (
+        <div
+            className={
+                `voice-message-player ${own ? "own" : ""}`
+            }
+        >
+
+            <audio
+                ref={audioRef}
+                src={url}
+                preload="metadata"
+            />
+
+            <button
+                type="button"
+                className="voice-play-btn"
+                onClick={togglePlay}
+            >
+                {playing ? <FaPause /> : <FaPlay />}
+            </button>
+
+            <div
+                className="voice-progress-track"
+                onClick={handleSeek}
+            >
+                <div
+                    className="voice-progress-fill"
+                    style={{
+                        width: `${progressPercent}%`
+                    }}
+                />
+            </div>
+
+            <span className="voice-duration">
+                {formatDuration(
+                    duration > 0
+                        ? (playing || currentTime
+                            ? duration - currentTime
+                            : duration)
+                        : 0
+                )}
+            </span>
+
+        </div>
     );
 
 };
@@ -439,6 +651,9 @@ const Messenger = () => {
     const [activeMatchIndex, setActiveMatchIndex] =
         useState(0);
 
+    const [replyingTo, setReplyingTo] =
+        useState(null);
+
     const [background, setBackground] =
         useState(
             () =>
@@ -516,6 +731,30 @@ const Messenger = () => {
             settings;
 
     }, [settings]);
+
+    /*
+     * VOICE MESSAGE RECORDING
+     */
+    const [isRecording, setIsRecording] =
+        useState(false);
+
+    const [recordingSeconds, setRecordingSeconds] =
+        useState(0);
+
+    const [sendingVoice, setSendingVoice] =
+        useState(false);
+
+    const mediaRecorderRef =
+        useRef(null);
+
+    const recordedChunksRef =
+        useRef([]);
+
+    const recordingStreamRef =
+        useRef(null);
+
+    const recordingTimerRef =
+        useRef(null);
 
     const updateSetting =
         (key, value) => {
@@ -4115,8 +4354,15 @@ const onCallMissed =
                 seen:
                     false,
                 optimistic:
-                    true
+                    true,
+                replyTo:
+                    replyingTo ||
+                    undefined
             };
+
+
+            const replySnapshot =
+                replyingTo;
 
 
             appendMessage(
@@ -4128,6 +4374,8 @@ const onCallMissed =
             setMessage("");
 
             setShowEmoji(false);
+
+            setReplyingTo(null);
 
 
             socket.emit(
@@ -4152,7 +4400,12 @@ const onCallMissed =
                         {
                             receiver,
                             message:
-                                text
+                                text,
+                            replyTo:
+                                getMessageId(
+                                    replySnapshot
+                                ) ||
+                                undefined
                         }
                     );
 
@@ -4195,6 +4448,9 @@ const onCallMissed =
                             message:
                                 saved.message ||
                                 text,
+                            replyTo:
+                                saved.replyTo ||
+                                undefined,
                             _id:
                                 saved._id ||
                                 saved.id,
@@ -4499,6 +4755,340 @@ const onCallMissed =
             }
 
         };
+
+
+    /* =====================================================
+       VOICE MESSAGE
+    ===================================================== */
+
+    const uploadVoiceMessage =
+        async blob => {
+
+            if (
+                !selectedUser ||
+                !user
+            ) {
+                return;
+            }
+
+            setSendingVoice(true);
+
+            try {
+
+                const extension =
+                    blob.type.includes("mp4")
+                        ? "m4a"
+                        : blob.type.includes("ogg")
+                        ? "ogg"
+                        : "webm";
+
+                const file =
+                    new File(
+                        [blob],
+                        `voice-${Date.now()}.${extension}`,
+                        {
+                            type:
+                                blob.type ||
+                                "audio/webm"
+                        }
+                    );
+
+                const formData =
+                    new FormData();
+
+                formData.append(
+                    "file",
+                    file
+                );
+
+                formData.append(
+                    "receiver",
+                    getId(selectedUser)
+                );
+
+                const response =
+                    await api.post(
+                        "/messages/send",
+                        formData,
+                        {
+                            headers: {
+                                "Content-Type":
+                                    "multipart/form-data"
+                            }
+                        }
+                    );
+
+                const saved =
+                    response.data?.data ||
+                    response.data?.message;
+
+                if (saved) {
+
+                    appendMessage(saved);
+
+                    scrollToBottom();
+
+                    bumpRecent(
+                        getId(selectedUser)
+                    );
+
+                    const roomId =
+                        currentRoomRef.current ||
+                        getRoomId(
+                            user,
+                            selectedUser
+                        );
+
+                    socket.emit(
+                        "send-message",
+                        {
+                            roomId,
+                            sender:
+                                getId(user),
+                            receiver:
+                                getId(selectedUser),
+                            message:
+                                saved.message ||
+                                "",
+                            fileUrl:
+                                saved.fileUrl ||
+                                "",
+                            fileName:
+                                saved.fileName ||
+                                "",
+                            fileType:
+                                saved.fileType ||
+                                "",
+                            _id:
+                                saved._id ||
+                                saved.id,
+                            id:
+                                saved._id ||
+                                saved.id,
+                            createdAt:
+                                saved.createdAt ||
+                                new Date().toISOString()
+                        }
+                    );
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "Voice message send error:",
+                    error
+                );
+
+                alert(
+                    error.response?.data
+                        ?.message ||
+                    "Voice message could not be sent."
+                );
+
+            } finally {
+
+                setSendingVoice(false);
+
+            }
+
+        };
+
+
+    const stopRecordingTracks =
+        () => {
+
+            clearInterval(
+                recordingTimerRef.current
+            );
+
+            recordingTimerRef.current = null;
+
+            recordingStreamRef.current
+                ?.getTracks()
+                .forEach(track => track.stop());
+
+            recordingStreamRef.current = null;
+
+            mediaRecorderRef.current = null;
+
+            setIsRecording(false);
+
+            setRecordingSeconds(0);
+
+        };
+
+
+    const startRecording =
+        async () => {
+
+            if (
+                !selectedUser ||
+                isConversationBlocked
+            ) {
+                return;
+            }
+
+            try {
+
+                const stream =
+                    await navigator.mediaDevices.getUserMedia({
+                        audio: true
+                    });
+
+                recordingStreamRef.current = stream;
+
+                recordedChunksRef.current = [];
+
+                const mimeType =
+                    [
+                        "audio/webm;codecs=opus",
+                        "audio/webm",
+                        "audio/mp4"
+                    ].find(
+                        type =>
+                            window.MediaRecorder
+                                ?.isTypeSupported?.(type)
+                    ) || "";
+
+                const recorder =
+                    mimeType
+                        ? new MediaRecorder(stream, { mimeType })
+                        : new MediaRecorder(stream);
+
+                recorder.ondataavailable =
+                    event => {
+
+                        if (
+                            event.data &&
+                            event.data.size > 0
+                        ) {
+
+                            recordedChunksRef.current.push(
+                                event.data
+                            );
+
+                        }
+
+                    };
+
+                mediaRecorderRef.current = recorder;
+
+                recorder.start();
+
+                setIsRecording(true);
+
+                setRecordingSeconds(0);
+
+                recordingTimerRef.current =
+                    setInterval(
+                        () => {
+
+                            setRecordingSeconds(
+                                value => value + 1
+                            );
+
+                        },
+                        1000
+                    );
+
+            } catch (error) {
+
+                console.error(
+                    "Start recording error:",
+                    error
+                );
+
+                alert(
+                    "Microphone permission is required to send a voice message."
+                );
+
+            }
+
+        };
+
+
+    const finishRecording =
+        () =>
+            new Promise(resolve => {
+
+                const recorder =
+                    mediaRecorderRef.current;
+
+                if (!recorder) {
+
+                    resolve(null);
+
+                    return;
+
+                }
+
+                recorder.onstop =
+                    () => {
+
+                        const blob =
+                            new Blob(
+                                recordedChunksRef.current,
+                                {
+                                    type:
+                                        recorder.mimeType ||
+                                        "audio/webm"
+                                }
+                            );
+
+                        resolve(blob);
+
+                    };
+
+                recorder.stop();
+
+            });
+
+
+    const stopAndSendRecording =
+        async () => {
+
+            const blob =
+                await finishRecording();
+
+            stopRecordingTracks();
+
+            if (
+                blob &&
+                blob.size > 0
+            ) {
+
+                await uploadVoiceMessage(blob);
+
+            }
+
+        };
+
+
+    const cancelRecording =
+        () => {
+
+            const recorder =
+                mediaRecorderRef.current;
+
+            if (recorder) {
+
+                recorder.onstop = null;
+
+                try {
+
+                    recorder.stop();
+
+                } catch (_) {}
+
+            }
+
+            recordedChunksRef.current = [];
+
+            stopRecordingTracks();
+
+        };
+
 
 
     /* =====================================================
@@ -6146,6 +6736,26 @@ const onCallMissed =
                                             );
 
 
+                                        const isAudioFile =
+                                            fileUrl &&
+                                            (
+                                                fileType.startsWith(
+                                                    "audio/"
+                                                ) ||
+                                                /\.(webm|ogg|m4a|mp3|wav)$/i.test(
+                                                    fileUrl
+                                                )
+                                            ) &&
+                                            (
+                                                fileName.startsWith(
+                                                    "voice-"
+                                                ) ||
+                                                fileType.startsWith(
+                                                    "audio/"
+                                                )
+                                            );
+
+
                                         const attachmentKey =
                                             getMessageId(
                                                 item
@@ -6225,9 +6835,46 @@ const onCallMissed =
                                                     }
                                                 >
 
+                                                    {item.replyTo && (
+
+                                                        <div className="reply-quote">
+
+                                                            <strong>
+
+                                                                {getUserName(
+                                                                    item.replyTo.sender
+                                                                )}
+
+                                                            </strong>
+
+                                                            <span>
+
+                                                                {getMessageText(
+                                                                    item.replyTo
+                                                                ) ||
+                                                                    (
+                                                                        item.replyTo.fileUrl
+                                                                            ? "📎 Attachment"
+                                                                            : ""
+                                                                    )}
+
+                                                            </span>
+
+                                                        </div>
+
+                                                    )}
+
+
                                                     {fileUrl && (
 
-                                                        isImageFile ? (
+                                                        isAudioFile ? (
+
+                                                            <VoiceMessagePlayer
+                                                                url={fileUrl}
+                                                                own={own}
+                                                            />
+
+                                                        ) : isImageFile ? (
 
                                                             mediaRevealed ? (
 
@@ -6334,6 +6981,20 @@ const onCallMissed =
 
 
                                                     <div className="message-meta">
+
+                                                        <button
+                                                            type="button"
+                                                            className="message-reply-btn"
+                                                            title="Reply"
+                                                            onClick={() =>
+                                                                setReplyingTo(
+                                                                    item
+                                                                )
+                                                            }
+                                                        >
+                                                            ↩
+                                                        </button>
+
 
                                                         <small>
                                                             {formatTime(
@@ -6442,12 +7103,88 @@ const onCallMissed =
 
                         ) : (
 
+                        <>
+
+                        {replyingTo && (
+
+                            <div className="reply-preview-bar">
+
+                                <div className="reply-preview-content">
+
+                                    <strong>
+                                        Replying to{" "}
+                                        {getMessageSenderId(replyingTo) === currentUserId
+                                            ? "yourself"
+                                            : getUserName(selectedUser)}
+                                    </strong>
+
+                                    <span>
+                                        {getMessageText(replyingTo) ||
+                                            (replyingTo.fileUrl ? "📎 Attachment" : "")}
+                                    </span>
+
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setReplyingTo(null)}
+                                >
+                                    <FaTimes />
+                                </button>
+
+                            </div>
+
+                        )}
+
                         <form
                             className="message-form"
                             onSubmit={
                                 sendMessage
                             }
                         >
+
+                        {isRecording ? (
+
+                            <div className="voice-recording-bar">
+
+                                <button
+                                    type="button"
+                                    className="voice-cancel-btn"
+                                    title="Cancel"
+                                    onClick={
+                                        cancelRecording
+                                    }
+                                >
+                                    <FaTrash />
+                                </button>
+
+                                <div className="voice-recording-indicator">
+
+                                    <span className="recording-dot" />
+
+                                    {formatDuration(
+                                        recordingSeconds
+                                    )}
+
+                                </div>
+
+                                <button
+                                    type="button"
+                                    className="send-message-btn"
+                                    title="Send voice message"
+                                    disabled={sendingVoice}
+                                    onClick={
+                                        stopAndSendRecording
+                                    }
+                                >
+                                    <FaPaperPlane />
+                                </button>
+
+                            </div>
+
+                        ) : (
+
+                        <>
 
                             <div className="composer-actions">
 
@@ -6536,16 +7273,35 @@ const onCallMissed =
                             </div>
 
 
-                            <button
-                                className="send-message-btn"
-                                type="submit"
-                                disabled={
-                                    !message.trim()
-                                }
-                                title="Send"
-                            >
-                                <FaPaperPlane />
-                            </button>
+                            {message.trim() ? (
+
+                                <button
+                                    className="send-message-btn"
+                                    type="submit"
+                                    title="Send"
+                                >
+                                    <FaPaperPlane />
+                                </button>
+
+                            ) : (
+
+                                <button
+                                    type="button"
+                                    className="send-message-btn mic-btn"
+                                    title="Record voice message"
+                                    disabled={sendingVoice}
+                                    onClick={
+                                        startRecording
+                                    }
+                                >
+                                    <FaMicrophone />
+                                </button>
+
+                            )}
+
+                        </>
+
+                        )}
 
 
                             {showEmoji && (
@@ -6600,6 +7356,8 @@ const onCallMissed =
                             )}
 
                         </form>
+
+                        </>
 
                         )}
 
