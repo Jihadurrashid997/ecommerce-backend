@@ -121,6 +121,34 @@ const MessageSchema =
                 default:
                     false
 
+            },
+
+
+            replyTo: {
+
+                type:
+                    mongoose.Schema.Types.ObjectId,
+
+                ref:
+                    "Message",
+
+                default:
+                    null
+
+            },
+
+
+            forwardedFrom: {
+
+                type:
+                    mongoose.Schema.Types.ObjectId,
+
+                ref:
+                    "Message",
+
+                default:
+                    null
+
             }
 
         },
