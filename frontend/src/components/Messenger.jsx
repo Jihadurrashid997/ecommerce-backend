@@ -654,6 +654,20 @@ const Messenger = () => {
     const [replyingTo, setReplyingTo] =
         useState(null);
 
+    const [forwardingMessage, setForwardingMessage] =
+        useState(null);
+
+    const [forwardSearch, setForwardSearch] =
+        useState("");
+
+    const [forwardSentTo, setForwardSentTo] =
+        useState(
+            () => new Set()
+        );
+
+    const [forwardSending, setForwardSending] =
+        useState(false);
+
     const [background, setBackground] =
         useState(
             () =>
@@ -4653,13 +4667,7 @@ const onCallMissed =
                 const response =
                     await api.post(
                         "/messages/send",
-                        formData,
-                        {
-                            headers: {
-                                "Content-Type":
-                                    "multipart/form-data"
-                            }
-                        }
+                        formData
                     );
 
 
@@ -4809,13 +4817,7 @@ const onCallMissed =
                 const response =
                     await api.post(
                         "/messages/send",
-                        formData,
-                        {
-                            headers: {
-                                "Content-Type":
-                                    "multipart/form-data"
-                            }
-                        }
+                        formData
                     );
 
                 const saved =
@@ -5197,6 +5199,137 @@ const onCallMissed =
                         ?.message ||
                     "Something went wrong."
                 );
+
+            }
+
+        };
+
+
+    const handleForwardSend =
+        async targetUser => {
+
+            if (
+                !forwardingMessage ||
+                !targetUser
+            ) {
+                return;
+            }
+
+            const targetId =
+                getId(targetUser);
+
+            try {
+
+                setForwardSending(true);
+
+                const response =
+                    await api.post(
+                        "/messages/send",
+                        {
+                            receiver:
+                                targetId,
+                            forwardedFrom:
+                                getMessageId(
+                                    forwardingMessage
+                                )
+                        }
+                    );
+
+                const saved =
+                    response.data?.data;
+
+                const roomId =
+                    getRoomId(
+                        user,
+                        targetUser
+                    );
+
+                if (saved) {
+
+                    socket.emit(
+                        "send-message",
+                        {
+                            roomId,
+                            sender:
+                                getId(user),
+                            receiver:
+                                targetId,
+                            message:
+                                saved.message ||
+                                "",
+                            fileUrl:
+                                saved.fileUrl ||
+                                "",
+                            fileName:
+                                saved.fileName ||
+                                "",
+                            fileType:
+                                saved.fileType ||
+                                "",
+                            forwardedFrom:
+                                saved.forwardedFrom ||
+                                undefined,
+                            _id:
+                                saved._id,
+                            id:
+                                saved._id,
+                            createdAt:
+                                saved.createdAt ||
+                                new Date().toISOString()
+                        }
+                    );
+
+                    // If we happen to have this contact's
+                    // chat open already, show it there too.
+                    if (
+                        getId(
+                            selectedUserRef.current
+                        ) === targetId
+                    ) {
+
+                        appendMessage(
+                            saved
+                        );
+
+                        scrollToBottom();
+
+                    }
+
+                    bumpRecent(
+                        targetId
+                    );
+
+                }
+
+                setForwardSentTo(
+                    previous => {
+
+                        const next =
+                            new Set(previous);
+
+                        next.add(targetId);
+
+                        return next;
+
+                    }
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "Forward error:",
+                    error
+                );
+
+                alert(
+                    error.response?.data
+                        ?.message ||
+                    "Could not forward this message."
+                );
+
+            } finally {
+
+                setForwardSending(false);
 
             }
 
@@ -6996,6 +7129,30 @@ const onCallMissed =
                                                         </button>
 
 
+                                                        <button
+                                                            type="button"
+                                                            className="message-reply-btn"
+                                                            title="Forward"
+                                                            onClick={() => {
+
+                                                                setForwardingMessage(
+                                                                    item
+                                                                );
+
+                                                                setForwardSearch(
+                                                                    ""
+                                                                );
+
+                                                                setForwardSentTo(
+                                                                    new Set()
+                                                                );
+
+                                                            }}
+                                                        >
+                                                            ➦
+                                                        </button>
+
+
                                                         <small>
                                                             {formatTime(
                                                                 time
@@ -7443,6 +7600,95 @@ const onCallMissed =
         switchCamera
     }
 />
+
+
+{forwardingMessage && (
+
+    <div className="forward-modal-overlay">
+
+        <div className="forward-modal">
+
+            <div className="forward-modal-header">
+
+                <strong>Forward message</strong>
+
+                <button
+                    type="button"
+                    onClick={() =>
+                        setForwardingMessage(null)
+                    }
+                >
+                    <FaTimes />
+                </button>
+
+            </div>
+
+            <div className="forward-modal-search">
+
+                <FaSearch />
+
+                <input
+                    type="text"
+                    autoFocus
+                    value={forwardSearch}
+                    onChange={event =>
+                        setForwardSearch(event.target.value)
+                    }
+                    placeholder="Search people..."
+                />
+
+            </div>
+
+            <div className="forward-modal-list">
+
+                {users
+                    .filter(target =>
+                        getUserName(target)
+                            .toLowerCase()
+                            .includes(
+                                forwardSearch.trim().toLowerCase()
+                            )
+                    )
+                    .map(target => {
+
+                        const targetId = getId(target);
+                        const sent = forwardSentTo.has(targetId);
+
+                        return (
+                            <div
+                                key={targetId}
+                                className="forward-modal-row"
+                            >
+
+                                <div className="messenger-avatar">
+                                    {renderAvatar(target)}
+                                </div>
+
+                                <span>{getUserName(target)}</span>
+
+                                <button
+                                    type="button"
+                                    disabled={sent || forwardSending}
+                                    onClick={() =>
+                                        handleForwardSend(target)
+                                    }
+                                >
+                                    {sent ? "Sent" : "Send"}
+                                </button>
+
+                            </div>
+                        );
+
+                    })}
+
+            </div>
+
+        </div>
+
+    </div>
+
+)}
+
 
         </div>
     );
