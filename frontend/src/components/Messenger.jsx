@@ -1654,35 +1654,6 @@ onTrack:
 
     },
                         
-        onIceConnectionStateChange:
-            (state, peer) => {
-
-                console.log(
-                    "🧊 WebRTC ICE connection state:",
-                    state
-                );
-
-                if (
-                    (state === "connected" ||
-                     state === "completed") &&
-                    peer
-                ) {
-                    const connectedAt =
-                        callRef.current?.connectedAt ||
-                        Date.now();
-
-                    const connectedCall = {
-                        ...(callRef.current || {}),
-                        status: "connected",
-                        mode: "connected",
-                        connectedAt
-                    };
-
-                    callRef.current = connectedCall;
-                    setCallState(connectedCall);
-                }
-            },
-
         onConnectionStateChange:
             state => {
 
@@ -1694,6 +1665,10 @@ onTrack:
                 if (
                     state === "connected"
                 ) {
+
+                    console.log(
+                        "✅ WebRTC MEDIA CONNECTION CONNECTED"
+                    );
 
                     const connectedAt =
                         callRef.current?.connectedAt ||
@@ -3267,15 +3242,24 @@ const onOffer =
                 answer
             );
 
+            /*
+             * BACKEND CONTRACT:
+             * receiverId = actual callee (this browser)
+             * callerId   = actual caller (the peer that sent offer)
+             *
+             * The old code reversed these IDs, so server.js rejected
+             * the answer. The caller then stayed before ICE/media
+             * connection, causing 00:00 and no remote audio/video.
+             */
             socket.emit(
                 "webrtc-answer",
                 {
 
                     receiverId:
-                        callerId,
+                        currentUserId,
 
                     callerId:
-                        currentUserId,
+                        callerId,
 
                     roomId:
                         data.roomId,
