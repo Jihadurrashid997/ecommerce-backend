@@ -1645,11 +1645,17 @@ onTrack:
 
 
         console.log(
-            "📡 Remote tracks:",
+            "📡 REMOTE MEDIA RECEIVED:",
             updatedTracks.map(
                 track =>
                     `${track.kind}:${track.readyState}`
-            )
+            ),
+            {
+                audioTracks:
+                    freshStream.getAudioTracks().length,
+                videoTracks:
+                    freshStream.getVideoTracks().length
+            }
         );
 
     },
@@ -1665,10 +1671,6 @@ onTrack:
                 if (
                     state === "connected"
                 ) {
-
-                    console.log(
-                        "✅ WebRTC MEDIA CONNECTION CONNECTED"
-                    );
 
                     const connectedAt =
                         callRef.current?.connectedAt ||
@@ -1762,6 +1764,23 @@ onTrack:
 
         peerRef.current =
             peer;
+
+        console.log(
+            "📞 WebRTC peer ready:",
+            {
+                iceConnectionState:
+                    peer.iceConnectionState,
+                connectionState:
+                    peer.connectionState,
+                signalingState:
+                    peer.signalingState,
+                localTracks:
+                    peer.getSenders().map(
+                        sender =>
+                            sender.track?.kind
+                    )
+            }
+        );
 
         if (
             localStreamRef.current
@@ -3243,13 +3262,12 @@ const onOffer =
             );
 
             /*
-             * BACKEND CONTRACT:
-             * receiverId = actual callee (this browser)
-             * callerId   = actual caller (the peer that sent offer)
+             * SERVER CONTRACT:
+             * receiverId = the user who RECEIVED the offer (this browser)
+             * callerId   = the original caller who SENT the offer
              *
-             * The old code reversed these IDs, so server.js rejected
-             * the answer. The caller then stayed before ICE/media
-             * connection, causing 00:00 and no remote audio/video.
+             * The old code sent these IDs reversed. server.js rejects
+             * that answer, leaving the caller before the media connection.
              */
             socket.emit(
                 "webrtc-answer",
