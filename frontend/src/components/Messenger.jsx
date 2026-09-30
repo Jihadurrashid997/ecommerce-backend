@@ -1568,11 +1568,6 @@ useEffect(() => {
                         onIceCandidate:
                             candidate => {
 
-                                console.log(
-                                    "🧊 Sending ICE candidate to:",
-                                    receiverId
-                                );
-
                                 socket.emit(
                                     "webrtc-ice-candidate",
                                     {
@@ -1667,42 +1662,25 @@ onTrack:
                     state
                 );
 
-                /*
-                 * Some browsers expose the ICE connection as
-                 * connected/completed slightly before the generic
-                 * RTCPeerConnection connectionState changes. Treat
-                 * that as a real media connection as well, so the
-                 * call timer/UI cannot remain stuck at 00:00.
-                 */
                 if (
                     (state === "connected" ||
                      state === "completed") &&
                     peer
                 ) {
-
                     const connectedAt =
                         callRef.current?.connectedAt ||
                         Date.now();
 
                     const connectedCall = {
-
                         ...(callRef.current || {}),
-
                         status: "connected",
                         mode: "connected",
                         connectedAt
-
                     };
 
-                    callRef.current =
-                        connectedCall;
-
-                    setCallState(
-                        connectedCall
-                    );
-
+                    callRef.current = connectedCall;
+                    setCallState(connectedCall);
                 }
-
             },
 
         onConnectionStateChange:
@@ -1820,6 +1798,17 @@ onTrack:
             );
 
         }
+
+        console.log(
+            "🔗 Peer created:",
+            {
+                receiverId,
+                roomId: currentRoomRef.current,
+                localTracks: peer.getSenders().map(
+                    sender => sender.track?.kind
+                )
+            }
+        );
 
         return peer;
 
@@ -2275,37 +2264,6 @@ const acceptCall =
                 currentRoomRef.current =
                     call.roomId;
 
-                /*
-                 * IMPORTANT: the receiver must create the SAME
-                 * RTCPeerConnection and attach its microphone /
-                 * camera BEFORE accepting the call. Otherwise the
-                 * receiver sends an SDP answer with no media tracks,
-                 * so the caller can negotiate but receives no audio
-                 * or video.
-                 */
-                const callerId =
-                    getId(call.callerId);
-
-                if (!callerId) {
-                    throw new Error("Caller ID is missing.");
-                }
-
-                const peer =
-                    peerRef.current ||
-                    createPeer(callerId);
-
-                addLocalTracks(
-                    peer,
-                    stream
-                );
-
-                console.log(
-                    "📞 Receiver peer ready with local tracks:",
-                    peer.getSenders().map(
-                        sender => sender.track?.kind
-                    )
-                );
-
                 callRef.current = {
                     ...call,
                     mode: "accepted",
@@ -2324,6 +2282,29 @@ const acceptCall =
                     "join-room",
                     call.roomId
                 );
+
+                /*
+                 * Prepare the receiver peer BEFORE telling the
+                 * server that the call was accepted. This removes
+                 * a race where the caller can send the SDP offer
+                 * immediately after receiving call-accepted while
+                 * the receiver has not created its RTCPeerConnection
+                 * yet.
+                 */
+                const receiverPeer =
+                    peerRef.current &&
+                    peerRef.current.signalingState !== "closed"
+                        ? peerRef.current
+                        : createPeer(
+                              getId(call.callerId)
+                          );
+
+                if (localStreamRef.current) {
+                    addLocalTracks(
+                        receiverPeer,
+                        localStreamRef.current
+                    );
+                }
 
                 socket.emit(
                     "accept-call",
@@ -2377,7 +2358,8 @@ const acceptCall =
         },
         [
             callState,
-            cleanupCall
+            cleanupCall,
+            createPeer
         ]
     );
     
@@ -3081,11 +3063,6 @@ const onCallAccepted =
              * that creates the offer.
              */
 
-            console.log(
-                "📞 Call accepted -> creating WebRTC offer",
-                { receiverId, roomId, type: call.type || data?.type }
-            );
-
             const peer =
                 peerRef.current ||
                 createPeer(
@@ -3214,21 +3191,20 @@ const onOffer =
              * after receiving caller's offer.
              */
 
-            console.log(
-                "📡 WebRTC offer received",
-                { callerId, roomId: data.roomId, type: data.type }
-            );
-
             const peer =
-                peerRef.current ||
-                createPeer(
-                    callerId
-                );
+                peerRef.current &&
+                peerRef.current.signalingState !== "closed"
+                    ? peerRef.current
+                    : createPeer(
+                          callerId
+                      );
 
             /*
-             * The receiver normally already attached its local
-             * tracks inside acceptCall(). Keep this guard as a
-             * safety net for refresh/reconnect/race conditions.
+             * The receiver MUST have its microphone/camera
+             * tracks on the peer before creating the answer.
+             * createPeer normally does this, but keeping this
+             * explicit makes the offer/answer path safe even if
+             * the peer was created before getUserMedia finished.
              */
             if (localStreamRef.current) {
                 addLocalTracks(
@@ -3362,14 +3338,17 @@ const onAnswer =
             const peer =
                 peerRef.current;
 
-            console.log(
-                "📡 WebRTC answer received"
-            );
-
             await peer.setRemoteDescription(
                 new RTCSessionDescription(
                     data.answer
                 )
+            );
+
+            console.log(
+                "✅ Remote SDP answer applied. ICE state:",
+                peer.iceConnectionState,
+                "connection state:",
+                peer.connectionState
             );
 
             /*
@@ -3469,6 +3448,11 @@ const onIceCandidate =
                 new RTCIceCandidate(
                     data.candidate
                 )
+            );
+
+            console.log(
+                "🧊 Remote ICE candidate added:",
+                data.candidate?.candidate || data.candidate
             );
 
         } catch (error) {
