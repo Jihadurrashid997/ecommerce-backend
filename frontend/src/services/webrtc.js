@@ -14,17 +14,20 @@ Responsibilities:
 7. Close peer safely
 8. Stop media streams
 
-TURN can be supplied through Vite environment variables:
+TURN can be supplied through Create React App
+environment variables (REACT_APP_ prefix - this
+project builds with react-scripts, not Vite):
 
-VITE_TURN_URL
-VITE_TURN_USERNAME
-VITE_TURN_CREDENTIAL
+REACT_APP_TURN_URL
+REACT_APP_TURN_USERNAME
+REACT_APP_TURN_CREDENTIAL
 
-Example:
+Example (set these in Render's Environment tab for
+the frontend service, then redeploy):
 
-VITE_TURN_URL=turn:your-server:3478
-VITE_TURN_USERNAME=username
-VITE_TURN_CREDENTIAL=password
+REACT_APP_TURN_URL=turn:global.relay.metered.ca:80
+REACT_APP_TURN_USERNAME=your-username
+REACT_APP_TURN_CREDENTIAL=your-password
 
 STUN works for many networks.
 TURN is required for networks where direct P2P
@@ -96,22 +99,60 @@ const buildIceServers = () => {
     ];
 
 
+    /*
+     * This project builds with Create React App
+     * (react-scripts), which only exposes environment
+     * variables prefixed REACT_APP_ via process.env -
+     * baked in at build time. import.meta.env is a Vite
+     * feature and does not exist here, so it's kept only
+     * as a fallback for portability if this project is
+     * ever migrated to Vite.
+     */
+
+    const readEnv = name => {
+
+        try {
+
+            if (
+                typeof process !== "undefined" &&
+                process.env &&
+                process.env[`REACT_APP_${name}`]
+            ) {
+
+                return process.env[`REACT_APP_${name}`];
+
+            }
+
+        } catch (_) {}
+
+        try {
+
+            if (
+                typeof import.meta !== "undefined" &&
+                import.meta.env
+            ) {
+
+                return import.meta.env[`VITE_${name}`];
+
+            }
+
+        } catch (_) {}
+
+        return undefined;
+
+    };
+
+
     const turnUrl =
-        typeof import.meta !== "undefined"
-            ? import.meta.env?.VITE_TURN_URL
-            : undefined;
+        readEnv("TURN_URL");
 
 
     const turnUsername =
-        typeof import.meta !== "undefined"
-            ? import.meta.env?.VITE_TURN_USERNAME
-            : undefined;
+        readEnv("TURN_USERNAME");
 
 
     const turnCredential =
-        typeof import.meta !== "undefined"
-            ? import.meta.env?.VITE_TURN_CREDENTIAL
-            : undefined;
+        readEnv("TURN_CREDENTIAL");
 
 
     if (
