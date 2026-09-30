@@ -2275,6 +2275,37 @@ const acceptCall =
                 currentRoomRef.current =
                     call.roomId;
 
+                /*
+                 * IMPORTANT: the receiver must create the SAME
+                 * RTCPeerConnection and attach its microphone /
+                 * camera BEFORE accepting the call. Otherwise the
+                 * receiver sends an SDP answer with no media tracks,
+                 * so the caller can negotiate but receives no audio
+                 * or video.
+                 */
+                const callerId =
+                    getId(call.callerId);
+
+                if (!callerId) {
+                    throw new Error("Caller ID is missing.");
+                }
+
+                const peer =
+                    peerRef.current ||
+                    createPeer(callerId);
+
+                addLocalTracks(
+                    peer,
+                    stream
+                );
+
+                console.log(
+                    "📞 Receiver peer ready with local tracks:",
+                    peer.getSenders().map(
+                        sender => sender.track?.kind
+                    )
+                );
+
                 callRef.current = {
                     ...call,
                     mode: "accepted",
@@ -3193,6 +3224,18 @@ const onOffer =
                 createPeer(
                     callerId
                 );
+
+            /*
+             * The receiver normally already attached its local
+             * tracks inside acceptCall(). Keep this guard as a
+             * safety net for refresh/reconnect/race conditions.
+             */
+            if (localStreamRef.current) {
+                addLocalTracks(
+                    peer,
+                    localStreamRef.current
+                );
+            }
 
             /*
              * Set remote offer first.
