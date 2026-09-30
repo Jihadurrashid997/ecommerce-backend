@@ -1568,6 +1568,11 @@ useEffect(() => {
                         onIceCandidate:
                             candidate => {
 
+                                console.log(
+                                    "🧊 Sending ICE candidate to:",
+                                    receiverId
+                                );
+
                                 socket.emit(
                                     "webrtc-ice-candidate",
                                     {
@@ -1654,6 +1659,52 @@ onTrack:
 
     },
                         
+        onIceConnectionStateChange:
+            (state, peer) => {
+
+                console.log(
+                    "🧊 WebRTC ICE connection state:",
+                    state
+                );
+
+                /*
+                 * Some browsers expose the ICE connection as
+                 * connected/completed slightly before the generic
+                 * RTCPeerConnection connectionState changes. Treat
+                 * that as a real media connection as well, so the
+                 * call timer/UI cannot remain stuck at 00:00.
+                 */
+                if (
+                    (state === "connected" ||
+                     state === "completed") &&
+                    peer
+                ) {
+
+                    const connectedAt =
+                        callRef.current?.connectedAt ||
+                        Date.now();
+
+                    const connectedCall = {
+
+                        ...(callRef.current || {}),
+
+                        status: "connected",
+                        mode: "connected",
+                        connectedAt
+
+                    };
+
+                    callRef.current =
+                        connectedCall;
+
+                    setCallState(
+                        connectedCall
+                    );
+
+                }
+
+            },
+
         onConnectionStateChange:
             state => {
 
@@ -2999,6 +3050,11 @@ const onCallAccepted =
              * that creates the offer.
              */
 
+            console.log(
+                "📞 Call accepted -> creating WebRTC offer",
+                { receiverId, roomId, type: call.type || data?.type }
+            );
+
             const peer =
                 peerRef.current ||
                 createPeer(
@@ -3126,6 +3182,11 @@ const onOffer =
              * Receiver creates peer only
              * after receiving caller's offer.
              */
+
+            console.log(
+                "📡 WebRTC offer received",
+                { callerId, roomId: data.roomId, type: data.type }
+            );
 
             const peer =
                 peerRef.current ||
@@ -3257,6 +3318,10 @@ const onAnswer =
 
             const peer =
                 peerRef.current;
+
+            console.log(
+                "📡 WebRTC answer received"
+            );
 
             await peer.setRemoteDescription(
                 new RTCSessionDescription(
