@@ -205,8 +205,28 @@ export const createPeerConnection = ({
             if (
                 !event.candidate
             ) {
+
+                console.log(
+                    "🧊 ICE gathering finished (null candidate)"
+                );
+
                 return;
             }
+
+
+            // typ host = same network, typ srflx = STUN
+            // (public IP discovered), typ relay = TURN
+            // relay actually being used. If you NEVER see
+            // "relay" here on a cross-network call, the
+            // TURN server isn't reachable/working and
+            // that's why the call can't connect.
+            console.log(
+                "🧊 Local ICE candidate:",
+                event.candidate.type,
+                event.candidate.protocol,
+                event.candidate.address ||
+                    event.candidate.candidate
+            );
 
 
             if (
@@ -219,6 +239,17 @@ export const createPeerConnection = ({
                 );
 
             }
+
+        };
+
+
+    peer.onicegatheringstatechange =
+        () => {
+
+            console.log(
+                "🧊 ICE gathering state:",
+                peer.iceGatheringState
+            );
 
         };
 
@@ -255,6 +286,11 @@ export const createPeerConnection = ({
 
     peer.onconnectionstatechange =
         () => {
+
+            console.log(
+                "📞 peer.connectionState:",
+                peer.connectionState
+            );
 
             if (
                 typeof onConnectionStateChange ===
