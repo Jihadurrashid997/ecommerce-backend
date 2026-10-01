@@ -668,6 +668,21 @@ const Messenger = () => {
     const [forwardSending, setForwardSending] =
         useState(false);
 
+    const [messageMenuFor, setMessageMenuFor] =
+        useState(null);
+
+    const [reactionPickerFor, setReactionPickerFor] =
+        useState(null);
+
+    const [editingMessage, setEditingMessage] =
+        useState(null);
+
+    const [editText, setEditText] =
+        useState("");
+
+    const REACTION_EMOJIS =
+        ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
     const [background, setBackground] =
         useState(
             () =>
@@ -2926,6 +2941,33 @@ const onReceiveMessage =
             };
 
 
+        const onMessageReaction =
+            data => {
+
+                const updated =
+                    data?.message;
+
+                if (!updated) {
+                    return;
+                }
+
+                const messageId =
+                    getMessageId(updated);
+
+                setMessages(
+                    previous =>
+                        previous.map(
+                            item =>
+                                getMessageId(item) ===
+                                messageId
+                                    ? updated
+                                    : item
+                        )
+                );
+
+            };
+
+
 /* =================================================
    INCOMING CALL
 ================================================= */
@@ -3934,6 +3976,11 @@ const onCallMissed =
         );
 
         socket.on(
+            "message-reaction",
+            onMessageReaction
+        );
+
+        socket.on(
             "incoming-call",
             onIncomingCall
         );
@@ -4029,6 +4076,11 @@ const onCallMissed =
             socket.off(
                 "message-delivered",
                 onDelivered
+            );
+
+            socket.off(
+                "message-reaction",
+                onMessageReaction
             );
 
             socket.off(
@@ -5424,6 +5476,201 @@ const onCallMissed =
             } finally {
 
                 setForwardSending(false);
+
+            }
+
+        };
+
+
+    const handleReact =
+        async (item, emoji) => {
+
+            const messageId =
+                getMessageId(item);
+
+            if (!messageId) {
+                return;
+            }
+
+            setReactionPickerFor(null);
+
+            try {
+
+                const response =
+                    await api.put(
+                        `/messages/${messageId}/react`,
+                        { emoji }
+                    );
+
+                const updated =
+                    response.data?.data;
+
+                if (updated) {
+
+                    setMessages(
+                        previous =>
+                            previous.map(
+                                msg =>
+                                    getMessageId(msg) ===
+                                    messageId
+                                        ? updated
+                                        : msg
+                            )
+                    );
+
+                    const roomId =
+                        currentRoomRef.current;
+
+                    socket.emit(
+                        "message-reaction",
+                        {
+                            roomId,
+                            receiverId:
+                                getId(selectedUser),
+                            message:
+                                updated
+                        }
+                    );
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "React error:",
+                    error
+                );
+
+            }
+
+        };
+
+
+    const handleEditSave =
+        async () => {
+
+            const messageId =
+                getMessageId(editingMessage);
+
+            const text =
+                editText.trim();
+
+            if (
+                !messageId ||
+                !text
+            ) {
+                setEditingMessage(null);
+                return;
+            }
+
+            try {
+
+                const response =
+                    await api.put(
+                        `/messages/${messageId}`,
+                        { message: text }
+                    );
+
+                const updated =
+                    response.data?.data;
+
+                if (updated) {
+
+                    setMessages(
+                        previous =>
+                            previous.map(
+                                msg =>
+                                    getMessageId(msg) ===
+                                    messageId
+                                        ? updated
+                                        : msg
+                            )
+                    );
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "Edit error:",
+                    error
+                );
+
+                alert(
+                    error.response?.data
+                        ?.message ||
+                    "Could not edit this message."
+                );
+
+            } finally {
+
+                setEditingMessage(null);
+
+                setEditText("");
+
+            }
+
+        };
+
+
+    const handleDeleteMessage =
+        async item => {
+
+            const messageId =
+                getMessageId(item);
+
+            if (!messageId) {
+                return;
+            }
+
+            const confirmed =
+                window.confirm(
+                    "Delete this message?"
+                );
+
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+
+                const response =
+                    await api.delete(
+                        `/messages/${messageId}`
+                    );
+
+                const updated =
+                    response.data?.data;
+
+                if (updated) {
+
+                    setMessages(
+                        previous =>
+                            previous.map(
+                                msg =>
+                                    getMessageId(msg) ===
+                                    messageId
+                                        ? updated
+                                        : msg
+                            )
+                    );
+
+                }
+
+                setMessageMenuFor(null);
+
+            } catch (error) {
+
+                console.error(
+                    "Delete error:",
+                    error
+                );
+
+                alert(
+                    error.response?.data
+                        ?.message ||
+                    "Could not delete this message."
+                );
 
             }
 
@@ -7198,11 +7445,72 @@ const onCallMissed =
                                                     )}
 
 
-                                                    {text && (
+                                                    {item.isDeleted ? (
 
-                                                        <p>
-                                                            {text}
+                                                        <p className="message-deleted-text">
+                                                            🚫 This message was deleted
                                                         </p>
+
+                                                    ) : getMessageId(item) ===
+                                                      getMessageId(editingMessage) ? (
+
+                                                        <div className="message-edit-box">
+
+                                                            <input
+                                                                type="text"
+                                                                value={editText}
+                                                                autoFocus
+                                                                onChange={event =>
+                                                                    setEditText(
+                                                                        event.target.value
+                                                                    )
+                                                                }
+                                                                onKeyDown={event => {
+
+                                                                    if (
+                                                                        event.key ===
+                                                                        "Enter"
+                                                                    ) {
+                                                                        handleEditSave();
+                                                                    }
+
+                                                                    if (
+                                                                        event.key ===
+                                                                        "Escape"
+                                                                    ) {
+                                                                        setEditingMessage(
+                                                                            null
+                                                                        );
+                                                                    }
+
+                                                                }}
+                                                            />
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={
+                                                                    handleEditSave
+                                                                }
+                                                            >
+                                                                ✓
+                                                            </button>
+
+                                                        </div>
+
+                                                    ) : (
+
+                                                        text && (
+
+                                                            <p>
+                                                                {text}
+                                                                {item.isEdited && (
+                                                                    <span className="edited-tag">
+                                                                        {" "}(edited)
+                                                                    </span>
+                                                                )}
+                                                            </p>
+
+                                                        )
 
                                                     )}
 
@@ -7247,6 +7555,96 @@ const onCallMissed =
                                                         </button>
 
 
+                                                        <button
+                                                            type="button"
+                                                            className="message-reply-btn"
+                                                            title="React"
+                                                            onClick={() =>
+                                                                setReactionPickerFor(
+                                                                    reactionPickerFor ===
+                                                                        getMessageId(item)
+                                                                        ? null
+                                                                        : getMessageId(item)
+                                                                )
+                                                            }
+                                                        >
+                                                            😊
+                                                        </button>
+
+
+                                                        {reactionPickerFor ===
+                                                            getMessageId(item) && (
+
+                                                            <div className="reaction-picker">
+
+                                                                {REACTION_EMOJIS.map(
+                                                                    emoji => (
+
+                                                                        <button
+                                                                            key={emoji}
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                handleReact(
+                                                                                    item,
+                                                                                    emoji
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            {emoji}
+                                                                        </button>
+
+                                                                    )
+                                                                )}
+
+                                                            </div>
+
+                                                        )}
+
+
+                                                        {own && (
+
+                                                            <>
+
+                                                                <button
+                                                                    type="button"
+                                                                    className="message-reply-btn"
+                                                                    title="Edit"
+                                                                    onClick={() => {
+
+                                                                        setEditingMessage(
+                                                                            item
+                                                                        );
+
+                                                                        setEditText(
+                                                                            getMessageText(
+                                                                                item
+                                                                            )
+                                                                        );
+
+                                                                    }}
+                                                                >
+                                                                    ✎
+                                                                </button>
+
+
+                                                                <button
+                                                                    type="button"
+                                                                    className="message-reply-btn"
+                                                                    title="Delete"
+                                                                    onClick={() =>
+                                                                        handleDeleteMessage(
+                                                                            item
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    🗑
+                                                                </button>
+
+                                                            </>
+
+                                                        )}
+
+
                                                         <small>
                                                             {formatTime(
                                                                 time
@@ -7287,6 +7685,47 @@ const onCallMissed =
                                                         )}
 
                                                     </div>
+
+
+                                                    {item.reactions &&
+                                                        item.reactions.length >
+                                                            0 && (
+
+                                                        <div className="message-reactions">
+
+                                                            {Object.entries(
+                                                                item.reactions.reduce(
+                                                                    (acc, r) => {
+
+                                                                        acc[r.emoji] =
+                                                                            (acc[r.emoji] || 0) + 1;
+
+                                                                        return acc;
+
+                                                                    },
+                                                                    {}
+                                                                )
+                                                            ).map(
+                                                                ([emoji, count]) => (
+
+                                                                    <span
+                                                                        key={emoji}
+                                                                        className="reaction-badge"
+                                                                    >
+                                                                        {emoji}
+                                                                        {count > 1 && (
+                                                                            <small>
+                                                                                {count}
+                                                                            </small>
+                                                                        )}
+                                                                    </span>
+
+                                                                )
+                                                            )}
+
+                                                        </div>
+
+                                                    )}
 
                                                 </div>
 
