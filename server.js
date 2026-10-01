@@ -903,6 +903,61 @@ io.on(
             }
         );
 
+
+        /* =================================================
+           MESSAGE REACTION
+        ================================================= */
+
+        socket.on(
+            "message-reaction",
+            payload => {
+
+                if (
+                    !payload ||
+                    !payload.message
+                ) {
+                    return;
+                }
+
+                const receiverId =
+                    normalizeId(
+                        payload.receiverId
+                    );
+
+                if (payload.roomId) {
+
+                    io
+                        .to(
+                            String(
+                                payload.roomId
+                            )
+                        )
+                        .emit(
+                            "message-reaction",
+                            {
+                                message:
+                                    payload.message
+                            }
+                        );
+
+                }
+
+                if (receiverId) {
+
+                    sendToUser(
+                        receiverId,
+                        "message-reaction",
+                        {
+                            message:
+                                payload.message
+                        }
+                    );
+
+                }
+
+            }
+        );
+
 /* =========================================================
    CALL USER
 ========================================================= */
