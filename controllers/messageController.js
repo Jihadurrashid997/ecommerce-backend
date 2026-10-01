@@ -39,7 +39,11 @@ const populateMessage = (query) =>
                 path: "sender",
                 select: "name username fullName displayName firstName"
             }
-        });
+        })
+        .populate(
+            "reactions.user",
+            "name username fullName displayName firstName"
+        );
 
 /* =========================================================
    SEND MESSAGE
@@ -460,5 +464,149 @@ exports.getRecentConversations = async (req, res) => {
             success: false,
             message: "Unable to load recent conversations."
         });
+    }
+};
+
+/* =========================================================
+   REACT TO MESSAGE (toggle)
+========================================================= */
+
+exports.reactToMessage = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+        const { emoji } = req.body || {};
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Authentication required" });
+        }
+
+        if (!isValidObjectId(id) || !emoji) {
+            return res.status(400).json({ success: false, message: "Invalid message or emoji" });
+        }
+
+        const message = await Message.findById(id);
+
+        if (!message) {
+            return res.status(404).json({ success: false, message: "Message not found" });
+        }
+
+        const existingIndex = message.reactions.findIndex(
+            r => String(r.user) === String(userId) && r.emoji === emoji
+        );
+
+        if (existingIndex !== -1) {
+            // Same emoji already reacted -> remove (toggle off)
+            message.reactions.splice(existingIndex, 1);
+        } else {
+            // Remove any other reaction by this user first (one reaction per user per message)
+            message.reactions = message.reactions.filter(
+                r => String(r.user) !== String(userId)
+            );
+            message.reactions.push({ emoji, user: userId });
+        }
+
+        await message.save();
+
+        const populated = await populateMessage(Message.findById(id));
+
+        return res.json({ success: true, data: populated });
+
+    } catch (error) {
+        console.error("REACT MESSAGE ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to react to message." });
+    }
+};
+
+/* =========================================================
+   EDIT MESSAGE (text only, own messages only)
+========================================================= */
+
+exports.editMessage = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+        const text = String(req.body?.message ?? "").trim();
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Authentication required" });
+        }
+
+        if (!isValidObjectId(id) || !text) {
+            return res.status(400).json({ success: false, message: "Invalid message" });
+        }
+
+        const message = await Message.findById(id);
+
+        if (!message) {
+            return res.status(404).json({ success: false, message: "Message not found" });
+        }
+
+        if (String(message.sender) !== String(userId)) {
+            return res.status(403).json({ success: false, message: "You can only edit your own messages" });
+        }
+
+        if (message.isDeleted) {
+            return res.status(400).json({ success: false, message: "Cannot edit a deleted message" });
+        }
+
+        message.message = text;
+        message.isEdited = true;
+
+        await message.save();
+
+        const populated = await populateMessage(Message.findById(id));
+
+        return res.json({ success: true, data: populated });
+
+    } catch (error) {
+        console.error("EDIT MESSAGE ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to edit message." });
+    }
+};
+
+/* =========================================================
+   DELETE MESSAGE (soft delete, own messages only)
+========================================================= */
+
+exports.deleteMessage = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+
+        if (!userId) {
+            return res.status(401).json({ success: false, message: "Authentication required" });
+        }
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: "Invalid message" });
+        }
+
+        const message = await Message.findById(id);
+
+        if (!message) {
+            return res.status(404).json({ success: false, message: "Message not found" });
+        }
+
+        if (String(message.sender) !== String(userId)) {
+            return res.status(403).json({ success: false, message: "You can only delete your own messages" });
+        }
+
+        message.isDeleted = true;
+        message.message = "";
+        message.fileUrl = "";
+        message.fileName = "";
+        message.fileType = "";
+        message.reactions = [];
+
+        await message.save();
+
+        const populated = await populateMessage(Message.findById(id));
+
+        return res.json({ success: true, data: populated });
+
+    } catch (error) {
+        console.error("DELETE MESSAGE ERROR:", error);
+        return res.status(500).json({ success: false, message: "Unable to delete message." });
     }
 };
