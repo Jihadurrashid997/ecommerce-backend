@@ -149,6 +149,46 @@ const MessageSchema =
                 default:
                     null
 
+            },
+
+
+            reactions: [
+                {
+
+                    emoji: {
+                        type: String,
+                        required: true
+                    },
+
+                    user: {
+                        type: mongoose.Schema.Types.ObjectId,
+                        ref: "User",
+                        required: true
+                    }
+
+                }
+            ],
+
+
+            isEdited: {
+
+                type:
+                    Boolean,
+
+                default:
+                    false
+
+            },
+
+
+            isDeleted: {
+
+                type:
+                    Boolean,
+
+                default:
+                    false
+
             }
 
         },
