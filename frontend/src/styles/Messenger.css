@@ -1607,3 +1607,494 @@
     }
 
 }
+
+
+/* =========================================================================
+   ✨ PREMIUM THEME — ICONIC MESSENGER LOOK
+   Everything below layers on top of the rules above (same
+   selectors, later in the cascade) to give the whole app a
+   distinctive gradient identity, soft depth, and motion —
+   without touching any of the structural/layout CSS above.
+========================================================================= */
+
+:root {
+
+    --jr-gradient:
+        linear-gradient(135deg, #6C5CE7 0%, #8E6CEF 45%, #4834D4 100%);
+
+    --jr-gradient-soft:
+        linear-gradient(135deg, rgba(108, 92, 231, 0.12), rgba(72, 52, 212, 0.06));
+
+    --jr-accent: #6C5CE7;
+    --jr-accent-dark: #4834D4;
+    --jr-online: #2ecc71;
+    --jr-shadow-soft: 0 8px 24px rgba(76, 52, 212, 0.12);
+    --jr-shadow-lift: 0 16px 40px rgba(76, 52, 212, 0.18);
+    --jr-radius-lg: 20px;
+    --jr-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+}
+
+
+/* ---------- Custom scrollbar everywhere in Messenger ---------- */
+
+.messenger-page ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.messenger-page ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messenger-page ::-webkit-scrollbar-thumb {
+    background: rgba(108, 92, 231, 0.35);
+    border-radius: 999px;
+}
+
+.messenger-page ::-webkit-scrollbar-thumb:hover {
+    background: rgba(108, 92, 231, 0.55);
+}
+
+
+/* ---------- Sidebar header: gradient wordmark ---------- */
+
+.messenger-sidebar-header h2 {
+    background: var(--jr-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+}
+
+
+.messenger-settings-btn {
+    background: var(--jr-gradient-soft) !important;
+    color: var(--jr-accent-dark) !important;
+    transition: transform 0.25s var(--jr-ease), box-shadow 0.25s var(--jr-ease);
+}
+
+.messenger-settings-btn:hover {
+    transform: rotate(35deg) scale(1.08);
+    box-shadow: var(--jr-shadow-soft);
+}
+
+
+/* ---------- Search bar: soft focus glow ---------- */
+
+.messenger-search {
+    transition: box-shadow 0.25s var(--jr-ease), background 0.25s var(--jr-ease);
+}
+
+.messenger-search:focus-within {
+    background: #ffffff !important;
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.18);
+}
+
+
+/* ---------- Contact rows: smooth hover lift + active gradient rail ---------- */
+
+.chat-user {
+    position: relative;
+    transition: background 0.2s var(--jr-ease), transform 0.2s var(--jr-ease);
+    border-radius: 14px;
+}
+
+.chat-user:hover {
+    background: var(--jr-gradient-soft) !important;
+    transform: translateX(2px);
+}
+
+.chat-user.active {
+    background: var(--jr-gradient-soft) !important;
+}
+
+.chat-user.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 14%;
+    bottom: 14%;
+    width: 4px;
+    border-radius: 999px;
+    background: var(--jr-gradient);
+}
+
+
+/* ---------- Avatars: gradient ring when online ---------- */
+
+.messenger-avatar {
+    position: relative;
+    border-radius: 50%;
+    transition: transform 0.25s var(--jr-ease);
+}
+
+.messenger-avatar img,
+.avatar-fallback {
+    transition: box-shadow 0.25s var(--jr-ease);
+}
+
+.chat-user:hover .messenger-avatar {
+    transform: scale(1.05);
+}
+
+
+.online-dot {
+    animation: jrPulse 1.8s ease-in-out infinite;
+}
+
+.online-dot svg {
+    color: var(--jr-online) !important;
+    filter: drop-shadow(0 0 4px rgba(46, 204, 113, 0.7));
+}
+
+@keyframes jrPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.25); opacity: 0.75; }
+}
+
+
+/* ---------- Unread badge: gradient pill + pop-in ---------- */
+
+.unread-badge {
+    background: var(--jr-gradient) !important;
+    box-shadow: 0 4px 10px rgba(108, 92, 231, 0.4);
+    animation: jrPop 0.3s var(--jr-ease);
+}
+
+@keyframes jrPop {
+    0% { transform: scale(0.5); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+
+/* ---------- Chat header ---------- */
+
+.chat-header {
+    position: relative;
+}
+
+.chat-header::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(108, 92, 231, 0.25), transparent);
+}
+
+.chat-header-actions button {
+    transition: transform 0.2s var(--jr-ease), color 0.2s var(--jr-ease), background 0.2s var(--jr-ease);
+    border-radius: 50%;
+}
+
+.chat-header-actions button:hover {
+    background: var(--jr-gradient-soft);
+    color: var(--jr-accent-dark);
+    transform: translateY(-2px) scale(1.08);
+}
+
+
+/* ---------- Message bubbles: entrance animation + refined shape ---------- */
+
+.message-row {
+    animation: jrMessageIn 0.32s var(--jr-ease) both;
+}
+
+@keyframes jrMessageIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.message-bubble {
+    border-radius: var(--jr-radius-lg) !important;
+    box-shadow: 0 2px 8px rgba(17, 24, 39, 0.05);
+    transition: transform 0.15s var(--jr-ease);
+}
+
+.message-bubble:hover {
+    transform: translateY(-1px);
+}
+
+.message-bubble.own {
+    background: var(--jr-gradient) !important;
+    border-bottom-right-radius: 6px !important;
+    box-shadow: 0 6px 16px rgba(108, 92, 231, 0.3);
+}
+
+.message-bubble:not(.own) {
+    border-bottom-left-radius: 6px !important;
+}
+
+
+/* ---------- Typing indicator: smoother wave ---------- */
+
+.typing-bubble span {
+    background: var(--jr-accent) !important;
+}
+
+
+/* ---------- Composer ---------- */
+
+.message-form {
+    position: relative;
+}
+
+.message-input-wrapper input {
+    transition: box-shadow 0.25s var(--jr-ease);
+    border-radius: 999px !important;
+}
+
+.message-input-wrapper:focus-within input,
+.message-input-wrapper input:focus {
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.15);
+}
+
+.composer-actions button {
+    transition: transform 0.2s var(--jr-ease), color 0.2s var(--jr-ease);
+    border-radius: 50%;
+}
+
+.composer-actions button:hover {
+    color: var(--jr-accent) !important;
+    transform: translateY(-2px) scale(1.1);
+}
+
+.send-message-btn {
+    background: var(--jr-gradient) !important;
+    box-shadow: 0 6px 16px rgba(108, 92, 231, 0.4);
+    transition: transform 0.2s var(--jr-ease), box-shadow 0.2s var(--jr-ease);
+}
+
+.send-message-btn:hover:not(:disabled) {
+    transform: scale(1.08) rotate(-8deg);
+    box-shadow: 0 10px 22px rgba(108, 92, 231, 0.5);
+}
+
+.send-message-btn:active:not(:disabled) {
+    transform: scale(0.94);
+}
+
+.send-message-btn:disabled {
+    background: #d8d8e0 !important;
+    box-shadow: none;
+}
+
+
+/* ---------- Emoji / background pickers, menus: soft elevation ---------- */
+
+.emoji-picker,
+.background-panel,
+.chat-options-menu,
+.messenger-settings-panel {
+    border-radius: 18px !important;
+    box-shadow: var(--jr-shadow-lift) !important;
+    animation: jrDropIn 0.22s var(--jr-ease) both;
+}
+
+@keyframes jrDropIn {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+
+/* ---------- Reply / forward / attachments ---------- */
+
+.reply-preview-bar,
+.conversation-search-bar {
+    border-top: 1px solid rgba(108, 92, 231, 0.15) !important;
+}
+
+.reply-preview-content strong {
+    color: var(--jr-accent-dark) !important;
+}
+
+.reply-quote {
+    border-left-color: var(--jr-accent) !important;
+    background: rgba(108, 92, 231, 0.08) !important;
+}
+
+.message-bubble.own .reply-quote {
+    border-left-color: rgba(255, 255, 255, 0.7) !important;
+    background: rgba(255, 255, 255, 0.16) !important;
+}
+
+
+/* ---------- Forward modal: glass overlay ---------- */
+
+.forward-modal-overlay {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.forward-modal {
+    border-radius: 22px !important;
+    animation: jrModalIn 0.28s var(--jr-ease) both;
+}
+
+@keyframes jrModalIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.forward-modal-row button {
+    background: var(--jr-gradient) !important;
+    border-radius: 999px !important;
+}
+
+
+/* ---------- Voice recorder + player: gradient accent ---------- */
+
+.voice-recording-bar .mic-record-btn,
+.mic-btn.recording {
+    background: var(--jr-gradient) !important;
+}
+
+.voice-message-player .voice-play-btn {
+    background: var(--jr-gradient) !important;
+    box-shadow: 0 4px 10px rgba(108, 92, 231, 0.35);
+}
+
+.voice-message-player .voice-progress-fill {
+    background: var(--jr-gradient) !important;
+}
+
+
+/* ---------- Block banner ---------- */
+
+.blocked-banner button {
+    border-radius: 999px !important;
+}
+
+
+/* ---------- Date separators: glassy pill ---------- */
+
+.date-separator span {
+    background: rgba(108, 92, 231, 0.08) !important;
+    color: var(--jr-accent-dark) !important;
+    backdrop-filter: blur(2px);
+}
+
+
+/* ---------- Smooth panel/page transitions ---------- */
+
+.messenger-sidebar,
+.messenger-chat {
+    transition: transform 0.3s var(--jr-ease);
+}
+
+
+/* ---------- Empty state polish ---------- */
+
+.empty-chat-icon {
+    filter: drop-shadow(0 8px 20px rgba(108, 92, 231, 0.35));
+}
+
+.empty-chat h2 {
+    background: var(--jr-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+
+/* =========================================================
+   REACTIONS / EDIT / DELETE
+========================================================= */
+
+.reaction-picker {
+    position: absolute;
+    bottom: 100%;
+    margin-bottom: 6px;
+    display: flex;
+    gap: 4px;
+    background: #fff;
+    border-radius: 999px;
+    padding: 6px 10px;
+    box-shadow: var(--jr-shadow-lift, 0 10px 24px rgba(0,0,0,0.18));
+    z-index: 20;
+    animation: jrPop 0.2s ease;
+}
+
+.reaction-picker button {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.reaction-picker button:hover {
+    transform: scale(1.3);
+}
+
+.message-meta {
+    position: relative;
+}
+
+.message-reactions {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.reaction-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 999px;
+    padding: 2px 7px;
+    font-size: 13px;
+}
+
+.message-bubble.own .reaction-badge {
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.reaction-badge small {
+    font-size: 10px;
+    opacity: 0.75;
+}
+
+.message-deleted-text {
+    font-style: italic;
+    opacity: 0.6;
+}
+
+.message-edit-box {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.message-edit-box input {
+    flex: 1;
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+    background: transparent;
+    font-size: 14px;
+    padding: 2px 0;
+    outline: none;
+    color: inherit;
+}
+
+.message-edit-box button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: inherit;
+    font-weight: 700;
+}
+
+.edited-tag {
+    font-size: 11px;
+    opacity: 0.6;
+    font-style: italic;
+}
