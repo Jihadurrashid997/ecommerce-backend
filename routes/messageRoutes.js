@@ -15,7 +15,10 @@ const {
     getRecentConversations,
     markSeen,
     getUnreadCount,
-    getUnreadByUser
+    getUnreadByUser,
+    reactToMessage,
+    editMessage,
+    deleteMessage
 } = require("../controllers/messageController");
 
 
@@ -89,6 +92,43 @@ router.get(
     "/unread/by-user",
     auth(),
     getUnreadByUser
+);
+
+
+/* =========================================================
+   EXPORT
+========================================================= */
+
+/* =========================================================
+   REACT TO A MESSAGE
+========================================================= */
+
+router.put(
+    "/:id/react",
+    auth(),
+    reactToMessage
+);
+
+
+/* =========================================================
+   EDIT A MESSAGE
+========================================================= */
+
+router.put(
+    "/:id",
+    auth(),
+    editMessage
+);
+
+
+/* =========================================================
+   DELETE A MESSAGE
+========================================================= */
+
+router.delete(
+    "/:id",
+    auth(),
+    deleteMessage
 );
 
 
