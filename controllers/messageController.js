@@ -70,7 +70,18 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
-        if (!receiver || (!text && !file)) {
+        const forwardedFromId = req.body?.forwardedFrom;
+
+        let forwardSource = null;
+
+        if (forwardedFromId && isValidObjectId(forwardedFromId)) {
+
+            forwardSource = await Message.findById(forwardedFromId)
+                .select("message fileUrl fileName fileType");
+
+        }
+
+        if (!receiver || (!text && !file && !forwardSource)) {
             return res.status(400).json({
                 success: false,
                 message: "Receiver and a message or file are required"
@@ -160,16 +171,22 @@ exports.sendMessage = async (req, res) => {
 
         }
 
-        const forwardedFrom = req.body?.forwardedFrom;
+        if (forwardSource) {
 
-        if (forwardedFrom && isValidObjectId(forwardedFrom)) {
+            messageData.forwardedFrom = forwardSource._id;
 
-            const originalExists = await Message.exists({
-                _id: forwardedFrom
-            });
+            // Only fill in from the original when the person
+            // didn't already type their own text or attach a
+            // fresh file - this is what lets "forward" work
+            // without re-uploading the file to the server.
+            if (!text && !file) {
+                messageData.message = forwardSource.message || "";
+            }
 
-            if (originalExists) {
-                messageData.forwardedFrom = forwardedFrom;
+            if (!file && forwardSource.fileUrl) {
+                messageData.fileUrl = forwardSource.fileUrl;
+                messageData.fileName = forwardSource.fileName;
+                messageData.fileType = forwardSource.fileType;
             }
 
         }
