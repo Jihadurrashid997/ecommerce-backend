@@ -8079,13 +8079,25 @@ const onCallMissed =
             ? (
                 callState?.callerName ||
                 callState?.senderName ||
-                "User"
+                getUserName(
+                    users.find(
+                        u =>
+                            getId(u) ===
+                            getId(callState?.callerId)
+                    )
+                )
             )
             : (
                 callState?.receiverName ||
                 callState?.calleeName ||
                 getUserName(selectedUser) ||
-                "User"
+                getUserName(
+                    users.find(
+                        u =>
+                            getId(u) ===
+                            getId(callState?.receiverId)
+                    )
+                )
             )
     }
 
@@ -8095,12 +8107,26 @@ const onCallMissed =
                 ? (
                     callState?.callerAvatar ||
                     callState?.senderAvatar ||
+                    getAvatar(
+                        users.find(
+                            u =>
+                                getId(u) ===
+                                getId(callState?.callerId)
+                        )
+                    ) ||
                     ""
                 )
                 : (
                     callState?.receiverAvatar ||
                     callState?.calleeAvatar ||
                     getAvatar(selectedUser) ||
+                    getAvatar(
+                        users.find(
+                            u =>
+                                getId(u) ===
+                                getId(callState?.receiverId)
+                        )
+                    ) ||
                     ""
                 )
         )
