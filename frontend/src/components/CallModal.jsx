@@ -546,12 +546,23 @@ const CallModal = ({
             }}
         >
 
-            {/* AUDIO OUTPUT */}
+            {/*
+                AUDIO OUTPUT (voice calls)
 
-            <audio
+                A hidden <video> element is used here
+                instead of a plain <audio> element. Many
+                mobile browsers route <audio> playback to
+                the earpiece/receiver by default (quiet,
+                phone-call style), while a <video> element
+                - even with only an audio track attached -
+                is reliably routed to the loudspeaker.
+            */}
+
+            <video
                 ref={remoteAudioRef}
                 autoPlay
                 playsInline
+                muted={false}
                 preload="auto"
                 style={{
                     position: "absolute",
