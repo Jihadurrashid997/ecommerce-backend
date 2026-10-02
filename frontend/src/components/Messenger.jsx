@@ -3654,8 +3654,9 @@ const onIceCandidate =
 
                 const duration =
     Number(
-        call?.duration ||
-        call?.callDuration ||
+        data?.duration ??
+        call?.duration ??
+        call?.callDuration ??
         0
     );
 
