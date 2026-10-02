@@ -38,13 +38,29 @@ const ALLOWED_MIME_TYPES = [
     "image/png",
     "image/gif",
     "image/webp",
+    "image/heic",
+    "image/heif",
 
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
     "application/zip",
-    "application/x-zip-compressed"
+    "application/x-zip-compressed",
+
+    // Voice messages (MediaRecorder output - the exact
+    // mime type varies by browser/device: Chrome/Android
+    // commonly produce audio/webm, Safari/iOS commonly
+    // produces audio/mp4 or audio/aac).
+    "audio/webm",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/mp4",
+    "audio/aac",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/x-m4a"
 
 ];
 
