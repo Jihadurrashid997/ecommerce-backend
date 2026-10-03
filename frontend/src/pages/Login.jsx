@@ -764,6 +764,15 @@ const Login = () => {
 
                         </div>
 
+
+                        <div className="login-forgot-row">
+
+                            <Link to="/forgot-password">
+                                Forgot password?
+                            </Link>
+
+                        </div>
+
                     </div>
 
 
