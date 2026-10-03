@@ -109,50 +109,32 @@ const buildIceServers = () => {
      * ever migrated to Vite.
      */
 
-    const readEnv = name => {
-
-        try {
-
-            if (
-                typeof process !== "undefined" &&
-                process.env &&
-                process.env[`REACT_APP_${name}`]
-            ) {
-
-                return process.env[`REACT_APP_${name}`];
-
-            }
-
-        } catch (_) {}
-
-        try {
-
-            if (
-                typeof import.meta !== "undefined" &&
-                import.meta.env
-            ) {
-
-                return import.meta.env[`VITE_${name}`];
-
-            }
-
-        } catch (_) {}
-
-        return undefined;
-
-    };
-
+    /*
+     * IMPORTANT: Create React App's webpack build only
+     * replaces STATIC, literal "process.env.REACT_APP_X"
+     * expressions with their build-time value - that
+     * substitution is pure text-matching on the exact
+     * dotted expression, done BEFORE the code ever runs in
+     * a browser (there is no real `process` object in the
+     * shipped bundle). A dynamic/computed access such as
+     * process.env[`REACT_APP_${name}`] is invisible to that
+     * step, so it silently evaluates to undefined in
+     * production - which is exactly why the TURN env vars
+     * were never actually reaching this code, and it kept
+     * falling back to the hardcoded OpenRelay default.
+     * Each variable MUST be written out literally like this.
+     */
 
     const turnUrl =
-        readEnv("TURN_URL");
+        process.env.REACT_APP_TURN_URL;
 
 
     const turnUsername =
-        readEnv("TURN_USERNAME");
+        process.env.REACT_APP_TURN_USERNAME;
 
 
     const turnCredential =
-        readEnv("TURN_CREDENTIAL");
+        process.env.REACT_APP_TURN_CREDENTIAL;
 
 
     if (
