@@ -228,6 +228,20 @@ export const createPeerConnection = ({
     }
 
 
+    console.log(
+        "🧊🔧 ICE_SERVERS being used:",
+        JSON.stringify(
+            ICE_SERVERS.iceServers.map(
+                s => ({
+                    urls: s.urls,
+                    username: s.username,
+                    hasCredential: Boolean(s.credential)
+                })
+            )
+        )
+    );
+
+
     const peer =
         new RTCPeerConnection(
             ICE_SERVERS
