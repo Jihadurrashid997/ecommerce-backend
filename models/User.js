@@ -64,6 +64,20 @@ const userSchema = new mongoose.Schema(
         },
 
         // ==========================
+        // PASSWORD RESET
+        // ==========================
+
+        resetPasswordToken: {
+            type: String,
+            select: false
+        },
+
+        resetPasswordExpires: {
+            type: Date,
+            select: false
+        },
+
+        // ==========================
         // BLOCKING
         // ==========================
 
