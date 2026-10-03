@@ -8,7 +8,9 @@ const router =
 const {
     register,
     login,
-    me
+    me,
+    forgotPassword,
+    resetPassword
 } =
     require("../controllers/authController");
 
@@ -58,6 +60,30 @@ router.get(
     "/me",
     auth(),
     me
+);
+
+
+/*
+FORGOT PASSWORD
+POST /api/auth/forgot-password
+Body: { email }
+*/
+
+router.post(
+    "/forgot-password",
+    forgotPassword
+);
+
+
+/*
+RESET PASSWORD
+POST /api/auth/reset-password/:token
+Body: { password }
+*/
+
+router.post(
+    "/reset-password/:token",
+    resetPassword
 );
 
 
