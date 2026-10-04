@@ -69,7 +69,7 @@ SEND PASSWORD RESET EMAIL
 =========================================================
 */
 
-exports.sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
+exports.sendPasswordResetEmail = async ({ to, name, code }) => {
 
     const transport = getTransporter();
 
@@ -77,8 +77,8 @@ exports.sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
 
         console.warn(
             "EMAIL NOT CONFIGURED - set EMAIL_HOST/EMAIL_USER/EMAIL_PASS env vars. " +
-            "Skipping password reset email. Reset URL was:",
-            resetUrl
+            "Skipping password reset email. Code was:",
+            code
         );
 
         return { sent: false, reason: "not_configured" };
@@ -91,32 +91,34 @@ exports.sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
 
     const html = `
         <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-            <h2 style="color: #6C5CE7;">Password Reset Request</h2>
+            <h2 style="color: #6C5CE7;">Password Reset Code</h2>
             <p>Hi ${name || "there"},</p>
-            <p>We received a request to reset your password. Click the button below to choose a new one. This link expires in 1 hour.</p>
+            <p>Use this code to reset your password. It expires in 10 minutes.</p>
             <p style="text-align: center; margin: 32px 0;">
-                <a href="${resetUrl}" style="background: #6C5CE7; color: #fff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold;">
-                    Reset Password
-                </a>
+                <span style="display:inline-block; background: #f3f0ff; color: #4834D4; padding: 16px 32px; border-radius: 10px; font-size: 32px; font-weight: 800; letter-spacing: 8px;">
+                    ${code}
+                </span>
             </p>
             <p style="color: #888; font-size: 13px;">
                 If you didn't request this, you can safely ignore this email - your password will remain unchanged.
-            </p>
-            <p style="color: #888; font-size: 13px;">
-                If the button doesn't work, copy and paste this link into your browser:<br/>
-                <a href="${resetUrl}">${resetUrl}</a>
             </p>
         </div>
     `;
 
     try {
 
-        await transport.sendMail({
-            from: fromAddress,
-            to,
-            subject: "Reset your password",
-            html
-        });
+        const info =
+            await transport.sendMail({
+                from: fromAddress,
+                to,
+                subject: `${code} is your password reset code`,
+                html
+            });
+
+        console.log(
+            "Password reset email sent:",
+            info.messageId
+        );
 
         return { sent: true };
 
