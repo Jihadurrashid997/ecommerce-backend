@@ -10,6 +10,7 @@ const {
     login,
     me,
     forgotPassword,
+    verifyResetCode,
     resetPassword
 } =
     require("../controllers/authController");
@@ -64,7 +65,7 @@ router.get(
 
 
 /*
-FORGOT PASSWORD
+FORGOT PASSWORD - step 1: request a code
 POST /api/auth/forgot-password
 Body: { email }
 */
@@ -76,13 +77,26 @@ router.post(
 
 
 /*
-RESET PASSWORD
-POST /api/auth/reset-password/:token
-Body: { password }
+FORGOT PASSWORD - step 2: verify the code
+POST /api/auth/verify-reset-code
+Body: { email, code }
+Returns: { resetToken } on success
 */
 
 router.post(
-    "/reset-password/:token",
+    "/verify-reset-code",
+    verifyResetCode
+);
+
+
+/*
+FORGOT PASSWORD - step 3: set the new password
+POST /api/auth/reset-password
+Body: { resetToken, password }
+*/
+
+router.post(
+    "/reset-password",
     resetPassword
 );
 
