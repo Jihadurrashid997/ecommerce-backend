@@ -41,7 +41,6 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
 import SellerDashboard from "./pages/SellerDashboard";
 import SellerOrders from "./pages/SellerOrders";
@@ -194,13 +193,6 @@ function AppLayout() {
                     path="/forgot-password"
                     element={
                         <ForgotPassword />
-                    }
-                />
-
-                <Route
-                    path="/reset-password/:token"
-                    element={
-                        <ResetPassword />
                     }
                 />
 
