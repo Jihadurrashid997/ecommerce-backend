@@ -1057,3 +1057,24 @@
     }
 
 }
+
+
+/* =========================================================
+   FORGOT PASSWORD LINK (on login page)
+========================================================= */
+
+.login-forgot-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.login-forgot-row a {
+    color: #c4b5fd;
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.login-forgot-row a:hover {
+    text-decoration: underline;
+}
