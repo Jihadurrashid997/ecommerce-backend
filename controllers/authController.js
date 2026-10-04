@@ -578,10 +578,10 @@ exports.me = async (
 
 /*
 =========================================================
-FORGOT PASSWORD
-Generates a one-time reset token (valid 1 hour), stores
-its HASH in the DB (never the raw token), and emails the
-person a link containing the raw token.
+FORGOT PASSWORD (step 1 of 3)
+Generates a 6-digit numeric code (valid 10 minutes),
+stores its HASH in the DB (never the raw code), and
+emails the person that code.
 =========================================================
 */
 
@@ -616,38 +616,34 @@ exports.forgotPassword = async (req, res) => {
         const genericResponse = {
             success: true,
             message:
-                "If an account exists for that email, a password reset link has been sent."
+                "If an account exists for that email, a verification code has been sent."
         };
 
         if (!user) {
             return res.json(genericResponse);
         }
 
-        const rawToken =
-            crypto.randomBytes(32).toString("hex");
+        const code =
+            String(
+                crypto.randomInt(100000, 999999)
+            );
 
-        const hashedToken =
+        const hashedCode =
             crypto
                 .createHash("sha256")
-                .update(rawToken)
+                .update(code)
                 .digest("hex");
 
-        user.resetPasswordToken = hashedToken;
-        user.resetPasswordExpires = Date.now() + 60 * 60 * 1000; // 1 hour
+        user.resetPasswordToken = hashedCode;
+        user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
 
         await user.save();
-
-        const frontendUrl =
-            (process.env.FRONTEND_URL || "").replace(/\/$/, "");
-
-        const resetUrl =
-            `${frontendUrl}/reset-password/${rawToken}`;
 
         const emailResult =
             await sendPasswordResetEmail({
                 to: user.email,
                 name: user.name,
-                resetUrl
+                code
             });
 
         if (!emailResult.sent) {
@@ -681,9 +677,98 @@ exports.forgotPassword = async (req, res) => {
 
 /*
 =========================================================
-RESET PASSWORD
-Takes the raw token from the reset link, hashes it to
-compare against the stored hash, checks expiry, and sets
+VERIFY RESET CODE (step 2 of 3)
+Checks the 6-digit code against the stored hash and
+expiry. On success, issues a short-lived JWT (15 min)
+that step 3 uses to actually set the new password -
+without that, anyone could call reset-password directly
+on any email with no code at all.
+=========================================================
+*/
+
+exports.verifyResetCode = async (req, res) => {
+
+    try {
+
+        const email =
+            String(req.body?.email || "")
+                .trim()
+                .toLowerCase();
+
+        const code =
+            String(req.body?.code || "").trim();
+
+        if (!email || !code) {
+
+            return res.status(400).json({
+                success: false,
+                message: "Email and code are required."
+            });
+
+        }
+
+        const hashedCode =
+            crypto
+                .createHash("sha256")
+                .update(code)
+                .digest("hex");
+
+        const user =
+            await User.findOne({
+                email,
+                resetPasswordToken: hashedCode,
+                resetPasswordExpires: { $gt: Date.now() }
+            }).select("+resetPasswordToken +resetPasswordExpires");
+
+        if (!user) {
+
+            return res.status(400).json({
+                success: false,
+                message: "That code is incorrect or has expired."
+            });
+
+        }
+
+        // One-time use - clear it now that it's been
+        // verified, so it can't be replayed.
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+
+        await user.save();
+
+        const resetToken =
+            jwt.sign(
+                {
+                    id: user._id,
+                    purpose: "password-reset"
+                },
+                process.env.JWT_SECRET,
+                { expiresIn: "15m" }
+            );
+
+        return res.json({
+            success: true,
+            resetToken
+        });
+
+    } catch (error) {
+
+        console.error("VERIFY RESET CODE ERROR:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Something went wrong. Please try again."
+        });
+
+    }
+
+};
+
+
+/*
+=========================================================
+RESET PASSWORD (step 3 of 3)
+Takes the short-lived resetToken from step 2 and sets
 the new password.
 =========================================================
 */
@@ -692,16 +777,17 @@ exports.resetPassword = async (req, res) => {
 
     try {
 
-        const { token } = req.params;
+        const resetToken =
+            req.body?.resetToken;
 
         const password =
             String(req.body?.password || "");
 
-        if (!token || !password) {
+        if (!resetToken || !password) {
 
             return res.status(400).json({
                 success: false,
-                message: "Token and new password are required."
+                message: "Missing verification. Please verify your code again."
             });
 
         }
@@ -715,32 +801,48 @@ exports.resetPassword = async (req, res) => {
 
         }
 
-        const hashedToken =
-            crypto
-                .createHash("sha256")
-                .update(token)
-                .digest("hex");
+        let decoded;
+
+        try {
+
+            decoded =
+                jwt.verify(
+                    resetToken,
+                    process.env.JWT_SECRET
+                );
+
+        } catch (_) {
+
+            return res.status(400).json({
+                success: false,
+                message: "This session has expired. Please request a new code."
+            });
+
+        }
+
+        if (decoded?.purpose !== "password-reset") {
+
+            return res.status(400).json({
+                success: false,
+                message: "Invalid reset session."
+            });
+
+        }
 
         const user =
-            await User.findOne({
-                resetPasswordToken: hashedToken,
-                resetPasswordExpires: { $gt: Date.now() }
-            }).select("+resetPasswordToken +resetPasswordExpires");
+            await User.findById(decoded.id);
 
         if (!user) {
 
             return res.status(400).json({
                 success: false,
-                message: "This reset link is invalid or has expired."
+                message: "Account not found."
             });
 
         }
 
         user.password =
             await bcrypt.hash(password, 12);
-
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpires = undefined;
 
         await user.save();
 
