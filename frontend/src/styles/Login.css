@@ -1078,3 +1078,18 @@
 .login-forgot-row a:hover {
     text-decoration: underline;
 }
+
+
+.link-button {
+    background: none;
+    border: none;
+    color: #c4b5fd;
+    font-size: 13px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+}
+
+.link-button:hover {
+    color: #ffffff;
+}
