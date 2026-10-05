@@ -59,30 +59,19 @@ const LoadingScreen = ({ onComplete }) => {
 
             <div className="loading-content">
 
-                <div className="loading-logo">
+                <div className="loading-brand loading-brand-etop">
 
-                    <div className="loading-logo-box">
-                        JR
-                    </div>
-
-                </div>
-
-
-                <div className="loading-brand">
-
-                    <h1>
-                        JR <span>Store</span>
+                    <h1 className="etop-wordmark">
+                        <span className="etop-e">E</span>Top
+                        <span className="etop-crown">👑</span>
                     </h1>
-
-                    <p>
-                        Your trusted marketplace
-                    </p>
 
                 </div>
 
 
                 <div className="loading-spinner">
 
+                    <span />
                     <span />
                     <span />
                     <span />
@@ -108,7 +97,7 @@ const LoadingScreen = ({ onComplete }) => {
                     <div className="loading-progress-text">
 
                         <span>
-                            Loading marketplace
+                            Loading......
                         </span>
 
                         <span>
@@ -120,9 +109,17 @@ const LoadingScreen = ({ onComplete }) => {
                 </div>
 
 
-                <p className="loading-tagline">
-                    Buy • Sell • Chat • Discover
-                </p>
+                <div className="loading-company">
+
+                    <p className="loading-company-name">
+                        JR <span>Group</span>
+                    </p>
+
+                    <p className="loading-company-sub">
+                        of Company
+                    </p>
+
+                </div>
 
             </div>
 
