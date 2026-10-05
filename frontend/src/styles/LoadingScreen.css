@@ -9,16 +9,83 @@
     background:
         radial-gradient(
             circle at 20% 20%,
-            rgba(124, 92, 255, 0.22),
+            rgba(255, 255, 255, 0.12),
             transparent 35%
         ),
         radial-gradient(
             circle at 80% 80%,
-            rgba(92, 62, 220, 0.2),
+            rgba(255, 255, 255, 0.10),
             transparent 35%
         ),
-        #080912;
+        linear-gradient(145deg, #1159ff, #0a3fd1);
     color: #ffffff;
+}
+
+
+.etop-wordmark {
+    margin: 0;
+    font-size: 56px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 4px;
+    position: relative;
+}
+
+.etop-e {
+    background: linear-gradient(135deg, #7dd3fc, #ffffff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.etop-crown {
+    position: absolute;
+    top: -22px;
+    right: -6px;
+    font-size: 22px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.loading-brand-etop {
+    margin-bottom: 36px;
+}
+
+
+.loading-company {
+    margin-top: 32px;
+}
+
+.loading-company-name {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.loading-company-name span {
+    color: #bfe0ff;
+}
+
+.loading-company-sub {
+    margin: 2px 0 0;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: rgba(255, 255, 255, 0.65);
+    text-transform: uppercase;
+    position: relative;
+}
+
+.loading-company-sub::before,
+.loading-company-sub::after {
+    content: "";
+    display: inline-block;
+    width: 28px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.35);
+    vertical-align: middle;
+    margin: 0 8px;
 }
 
 .loading-background {
@@ -41,13 +108,13 @@
 .loading-orb-one {
     top: -150px;
     left: -100px;
-    background: #7c5cff;
+    background: #7dd3fc;
 }
 
 .loading-orb-two {
     right: -120px;
     bottom: -130px;
-    background: #9333ea;
+    background: #ffffff;
     animation-delay: 1.5s;
 }
 
@@ -56,7 +123,7 @@
     top: 40%;
     width: 180px;
     height: 180px;
-    background: #4f46e5;
+    background: #38bdf8;
     animation-delay: 3s;
 }
 
@@ -123,7 +190,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #8b72ff;
+    background: #ffffff;
     animation: loadingDots 1.2s infinite ease-in-out;
 }
 
@@ -152,11 +219,11 @@
     border-radius: inherit;
     background: linear-gradient(
         90deg,
-        #635bff,
-        #9b5cff,
-        #c084fc
+        #ffffff,
+        #fbcfe8,
+        #f9a8d4
     );
-    box-shadow: 0 0 18px rgba(139, 114, 255, 0.6);
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.5);
     transition: width 0.15s ease;
 }
 
@@ -164,8 +231,8 @@
     display: flex;
     justify-content: space-between;
     margin-top: 10px;
-    color: #858ba4;
-    font-size: 12px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 14px;
 }
 
 .loading-tagline {
