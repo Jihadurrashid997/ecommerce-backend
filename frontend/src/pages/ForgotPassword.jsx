@@ -24,6 +24,10 @@ import {
 
 import api from "../services/api";
 
+import EtopLogo from "../components/EtopLogo";
+
+import "../styles/EtopLogo.css";
+
 import "../styles/Login.css";
 
 
@@ -243,6 +247,19 @@ const ForgotPassword = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
             >
+
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        marginBottom: 20
+                    }}
+                >
+
+                    <EtopLogo size="md" light />
+
+                </div>
+
 
                 <div className="login-heading">
 
