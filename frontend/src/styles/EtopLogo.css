@@ -1,0 +1,73 @@
+.etop-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.etop-logo-mark {
+    flex-shrink: 0;
+    filter: drop-shadow(0 4px 10px rgba(37, 99, 235, 0.35));
+}
+
+.etop-logo-text {
+    font-weight: 900;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #2563eb, #60a5fa 60%, #7dd3fc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1;
+}
+
+.etop-logo-light .etop-logo-text {
+    background: linear-gradient(135deg, #ffffff, #bfdbfe);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.etop-logo-sm .etop-logo-text {
+    font-size: 22px;
+}
+
+.etop-logo-md .etop-logo-text {
+    font-size: 32px;
+}
+
+.etop-logo-lg .etop-logo-text {
+    font-size: 52px;
+}
+
+.etop-logo-tagline {
+    display: flex;
+    flex-direction: column;
+    margin-left: 6px;
+    line-height: 1.25;
+}
+
+.etop-logo-company {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #1d4ed8;
+}
+
+.etop-logo-light .etop-logo-company {
+    color: #dbeafe;
+}
+
+.etop-logo-company b {
+    font-weight: 900;
+}
+
+.etop-logo-company-sub {
+    font-size: 9.5px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #6b7280;
+}
+
+.etop-logo-light .etop-logo-company-sub {
+    color: rgba(255, 255, 255, 0.6);
+}
