@@ -14,6 +14,10 @@ import {
 
 import api from "../services/api";
 
+import EtopLogo from "../components/EtopLogo";
+
+import "../styles/EtopLogo.css";
+
 import "../styles/Register.css";
 
 
@@ -238,33 +242,19 @@ const Register = () => {
 
                     <motion.div
 
-                        className="register-logo"
-
                         whileHover={{
-                            scale: 1.08,
-                            rotate: -5
+                            scale: 1.04
                         }}
 
                         whileTap={{
-                            scale: 0.94
+                            scale: 0.97
                         }}
 
                     >
-                        JR
+
+                        <EtopLogo size="md" withTagline light />
+
                     </motion.div>
-
-
-                    <div>
-
-                        <h1>
-                            JR Store
-                        </h1>
-
-                        <span>
-                            Premium Marketplace
-                        </span>
-
-                    </div>
 
                 </motion.div>
 
