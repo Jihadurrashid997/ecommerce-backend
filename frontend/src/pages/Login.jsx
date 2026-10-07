@@ -15,7 +15,6 @@ import {
     FaEye,
     FaEyeSlash,
     FaArrowRight,
-    FaStore
 } from "react-icons/fa";
 
 import {
@@ -23,6 +22,10 @@ import {
 } from "framer-motion";
 
 import api from "../services/api";
+
+import EtopLogo from "../components/EtopLogo";
+
+import "../styles/EtopLogo.css";
 
 import {
     useApp
@@ -545,42 +548,19 @@ const Login = () => {
                 >
 
                     <motion.div
-                        className="login-brand-icon"
 
                         whileHover={{
-                            scale: 1.08,
-                            rotate: -5
+                            scale: 1.04
                         }}
 
                         whileTap={{
-                            scale: 0.94
+                            scale: 0.97
                         }}
                     >
 
-                        <FaStore />
+                        <EtopLogo size="md" withTagline light />
 
                     </motion.div>
-
-
-                    <div>
-
-                        <h2>
-
-                            <strong>
-                                JR
-                            </strong>
-
-                            <span>
-                                Store
-                            </span>
-
-                        </h2>
-
-                        <small>
-                            Your trusted marketplace
-                        </small>
-
-                    </div>
 
                 </motion.div>
 
