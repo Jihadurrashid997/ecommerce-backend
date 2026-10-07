@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
+import EtopLogo from "./EtopLogo";
 import "../styles/LoadingScreen.css";
+import "../styles/EtopLogo.css";
 
 const LoadingScreen = ({ onComplete }) => {
 
@@ -61,10 +63,7 @@ const LoadingScreen = ({ onComplete }) => {
 
                 <div className="loading-brand loading-brand-etop">
 
-                    <h1 className="etop-wordmark">
-                        <span className="etop-e">E</span>Top
-                        <span className="etop-crown">👑</span>
-                    </h1>
+                    <EtopLogo size="lg" light />
 
                 </div>
 
