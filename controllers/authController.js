@@ -634,10 +634,15 @@ exports.forgotPassword = async (req, res) => {
                 .update(code)
                 .digest("hex");
 
-        user.resetPasswordToken = hashedCode;
-        user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-        await user.save();
+        await User.updateOne(
+            { _id: user._id },
+            {
+                $set: {
+                    resetPasswordToken: hashedCode,
+                    resetPasswordExpires: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+                }
+            }
+        );
 
         const emailResult =
             await sendPasswordResetEmail({
@@ -667,7 +672,7 @@ exports.forgotPassword = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Something went wrong. Please try again."
+            message: `Something went wrong: ${error.message}`
         });
 
     }
@@ -731,10 +736,15 @@ exports.verifyResetCode = async (req, res) => {
 
         // One-time use - clear it now that it's been
         // verified, so it can't be replayed.
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpires = undefined;
-
-        await user.save();
+        await User.updateOne(
+            { _id: user._id },
+            {
+                $unset: {
+                    resetPasswordToken: "",
+                    resetPasswordExpires: ""
+                }
+            }
+        );
 
         const resetToken =
             jwt.sign(
@@ -841,10 +851,13 @@ exports.resetPassword = async (req, res) => {
 
         }
 
-        user.password =
+        const hashedPassword =
             await bcrypt.hash(password, 12);
 
-        await user.save();
+        await User.updateOne(
+            { _id: user._id },
+            { $set: { password: hashedPassword } }
+        );
 
         return res.json({
             success: true,
