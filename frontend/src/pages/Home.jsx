@@ -1,688 +1,212 @@
-import React, {
-    useEffect,
-    useMemo,
-    useState
-} from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FaImage, FaTimes } from "react-icons/fa";
+import api, { getUploadUrl } from "../services/api";
+import { useApp } from "../context/AppContext";
+import PostCard from "../components/PostCard";
+import "../styles/Social.css";
 
-import {
-    useSearchParams
-} from "react-router-dom";
-
-import api from "../services/api";
-
-import ProductCard
-    from "../components/ProductCard";
-
-import "../styles/Home.css";
-
+const MAX_PHOTOS = 5;
 
 const Home = () => {
 
-    const [
-        searchParams,
-        setSearchParams
-    ] = useSearchParams();
+    const { user } = useApp();
 
+    const fileRef = useRef(null);
 
-    const initialKeyword =
-        (
-            searchParams.get("search") ||
-            searchParams.get("q") ||
-            ""
-        ).trim();
+    const [posts, setPosts] = useState([]);
+    const [cursor, setCursor] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [error, setError] = useState("");
 
+    const [caption, setCaption] = useState("");
+    const [files, setFiles] = useState([]);
+    const [posting, setPosting] = useState(false);
 
-    const initialCategory =
-        (
-            searchParams.get("category") ||
-            ""
-        ).trim();
+    // created once per selection (not on every keystroke) and released afterwards
+    const previews = useMemo(
+        () => files.map(f => URL.createObjectURL(f)),
+        [files]
+    );
 
+    useEffect(
+        () => () => previews.forEach(url => URL.revokeObjectURL(url)),
+        [previews]
+    );
 
-    const [
-        keyword,
-        setKeyword
-    ] =
-        useState(
-            initialKeyword
-        );
+    const load = useCallback(async (before = null) => {
 
+        try {
 
-    const [
-        category,
-        setCategory
-    ] =
-        useState(
-            initialCategory
-        );
+            before ? setLoadingMore(true) : setLoading(true);
 
+            const res = await api.get("/posts/feed", {
+                params: before ? { before } : {}
+            });
 
-    const [
-        products,
-        setProducts
-    ] =
-        useState([]);
+            setPosts(prev => before ? [...prev, ...res.data.data] : res.data.data);
+            setCursor(res.data.nextCursor || null);
+            setError("");
 
+        } catch (e) {
+            setError(e.response?.data?.message || "Could not load the feed.");
+        } finally {
+            setLoading(false);
+            setLoadingMore(false);
+        }
 
-    const [
-        loading,
-        setLoading
-    ] =
-        useState(true);
+    }, []);
 
+    useEffect(() => { load(); }, [load]);
 
-    const [
-        error,
-        setError
-    ] =
-        useState("");
+    const pickFiles = event => {
 
+        const picked = Array.from(event.target.files || []);
 
-    const [
-        page,
-        setPage
-    ] =
-        useState(1);
+        event.target.value = "";
 
+        const next = [...files, ...picked].slice(0, MAX_PHOTOS);
 
-    const productsPerPage =
-        8;
+        if (files.length + picked.length > MAX_PHOTOS) {
+            alert(`You can add up to ${MAX_PHOTOS} photos.`);
+        }
 
+        const tooBig = next.find(f => f.size > 10 * 1024 * 1024);
 
-    // ==================================================
-    // SYNC URL
-    // ==================================================
+        if (tooBig) {
+            alert("Each photo must be under 10MB.");
+            return;
+        }
 
-    useEffect(() => {
+        setFiles(next);
 
-        const urlSearch =
-            (
-                searchParams.get("search") ||
-                searchParams.get("q") ||
-                ""
-            ).trim();
+    };
 
-        const urlCategory =
-            (
-                searchParams.get("category") ||
-                ""
-            ).trim();
+    const publish = async event => {
 
+        event.preventDefault();
 
-        setKeyword(
-            previous =>
-                previous === urlSearch
-                    ? previous
-                    : urlSearch
-        );
+        if (files.length === 0 || posting) return;
 
+        const form = new FormData();
 
-        setCategory(
-            previous =>
-                previous === urlCategory
-                    ? previous
-                    : urlCategory
-        );
+        files.forEach(f => form.append("photos", f));
+        form.append("caption", caption.trim());
 
+        try {
 
-    }, [searchParams]);
+            setPosting(true);
 
+            const res = await api.post("/posts", form);
 
-    // ==================================================
-    // FETCH PRODUCTS
-    // ==================================================
+            setPosts(prev => [res.data.data, ...prev]);
+            setFiles([]);
+            setCaption("");
 
-    useEffect(() => {
+        } catch (e) {
+            alert(e.response?.data?.message || "Could not publish your post.");
+        } finally {
+            setPosting(false);
+        }
 
-        let cancelled = false;
-
-
-        const fetchProducts =
-            async () => {
-
-                try {
-
-                    setLoading(true);
-                    setError("");
-
-
-                    const params =
-                        new URLSearchParams();
-
-
-                    if (
-                        keyword.trim()
-                    ) {
-
-                        params.set(
-                            "keyword",
-                            keyword.trim()
-                        );
-
-                    }
-
-
-                    if (category) {
-
-                        params.set(
-                            "category",
-                            category
-                        );
-
-                    }
-
-
-                    const query =
-                        params.toString();
-
-
-                    const response =
-                        await api.get(
-
-                            query
-                                ? `/products?${query}`
-                                : "/products",
-
-                            {
-                                timeout: 12000
-                            }
-
-                        );
-
-
-                    if (cancelled) {
-                        return;
-                    }
-
-
-                    const data =
-                        response.data;
-
-
-                    const list =
-                        Array.isArray(data)
-                            ? data
-                            : (
-                                data?.products ||
-                                data?.data ||
-                                []
-                            );
-
-
-                    setProducts(
-                        Array.isArray(list)
-                            ? list
-                            : []
-                    );
-
-
-                } catch (err) {
-
-                    if (cancelled) {
-                        return;
-                    }
-
-
-                    console.error(
-                        "PRODUCT LOAD ERROR:",
-                        err
-                    );
-
-
-                    setProducts([]);
-
-
-                    setError(
-                        err.response?.data?.message ||
-                        "Failed to load products."
-                    );
-
-
-                } finally {
-
-                    if (!cancelled) {
-
-                        setLoading(false);
-
-                    }
-
-                }
-
-            };
-
-
-        fetchProducts();
-
-
-        return () => {
-
-            cancelled = true;
-
-        };
-
-    }, [
-        keyword,
-        category
-    ]);
-
-
-    // ==================================================
-    // SEARCH
-    // ==================================================
-
-    const handleSearch =
-        (e) => {
-
-            const value =
-                e.target.value;
-
-
-            setKeyword(value);
-            setPage(1);
-
-
-            const params = {};
-
-
-            if (
-                value.trim()
-            ) {
-
-                params.search =
-                    value.trim();
-
-            }
-
-
-            if (category) {
-
-                params.category =
-                    category;
-
-            }
-
-
-            setSearchParams(
-                params
-            );
-
-        };
-
-
-    // ==================================================
-    // CATEGORY
-    // ==================================================
-
-    const handleCategory =
-        (e) => {
-
-            const value =
-                e.target.value;
-
-
-            setCategory(value);
-            setPage(1);
-
-
-            const params = {};
-
-
-            if (
-                keyword.trim()
-            ) {
-
-                params.search =
-                    keyword.trim();
-
-            }
-
-
-            if (value) {
-
-                params.category =
-                    value;
-
-            }
-
-
-            setSearchParams(
-                params
-            );
-
-        };
-
-
-    // ==================================================
-    // PAGINATION
-    // ==================================================
-
-    const totalPages =
-        Math.max(
-            Math.ceil(
-                products.length /
-                productsPerPage
-            ),
-            1
-        );
-
-
-    const safePage =
-        Math.min(
-            page,
-            totalPages
-        );
-
-
-    const firstIndex =
-        (
-            safePage - 1
-        ) *
-        productsPerPage;
-
-
-    const currentProducts =
-        products.slice(
-            firstIndex,
-            firstIndex +
-            productsPerPage
-        );
-
-
-    // ==================================================
-    // CLEAR
-    // ==================================================
-
-    const clearFilters =
-        () => {
-
-            setKeyword("");
-            setCategory("");
-            setPage(1);
-
-            setSearchParams({});
-
-        };
-
-
-    // ==================================================
-    // LOADING
-    // ==================================================
-
-    if (loading) {
-
-        return (
-
-            <div className="home-loading">
-
-                <div className="loader"></div>
-
-                <p>
-                    Loading products...
-                </p>
-
-            </div>
-
-        );
-
-    }
-
+    };
 
     return (
+        <div className="social-page">
 
-        <div className="home-page">
+            <form className="composer" onSubmit={publish}>
 
+                <div className="composer-row">
 
-            {/* HERO */}
-
-            <section className="hero-section">
-
-                <div className="hero-content">
-
-                    <span className="hero-badge">
-                        ✨ Your Trusted Marketplace
-                    </span>
-
-                    <h1>
-
-                        Buy.
-                        <span>
-                            {" "}Sell.{" "}
-                        </span>
-                        Connect.
-
-                    </h1>
-
-                    <p>
-
-                        Discover amazing products,
-                        connect with sellers,
-                        and enjoy a secure
-                        marketplace experience.
-
-                    </p>
-
-                </div>
-
-            </section>
-
-
-            <div className="container">
-
-
-                {/* HEADER */}
-
-                <div className="marketplace-header">
-
-                    <div>
-
-                        <h2 className="title">
-                            Explore Products
-                        </h2>
-
-                        <p className="subtitle">
-                            Find exactly what
-                            you're looking for.
-                        </p>
-
+                    <div className="avatar-sm">
+                        {user?.profileImage || user?.avatar
+                            ? <img src={getUploadUrl(user.profileImage || user.avatar)} alt="" />
+                            : (user?.name || "U").charAt(0).toUpperCase()}
                     </div>
 
+                    <input
+                        className="composer-input"
+                        value={caption}
+                        onChange={e => setCaption(e.target.value)}
+                        placeholder="What's on your mind?"
+                        maxLength={2200}
+                    />
 
-                    <span className="product-count">
-
-                        {products.length}
-                        {" "}
-                        Products
-
-                    </span>
-
-                </div>
-
-
-                {/* FILTER */}
-
-                <div className="filter-bar">
-
-                    <div className="home-search">
-
-                        <span>
-                            🔍
-                        </span>
-
-                        <input
-                            type="search"
-                            value={keyword}
-                            onChange={
-                                handleSearch
-                            }
-                            placeholder="Search products..."
-                        />
-
-                    </div>
-
-
-                    <select
-                        value={category}
-                        onChange={
-                            handleCategory
-                        }
+                    <button
+                        type="button"
+                        className="icon-btn big"
+                        onClick={() => fileRef.current?.click()}
+                        title="Add photos"
                     >
+                        <FaImage />
+                    </button>
 
-                        <option value="">
-                            All Categories
-                        </option>
-
-                        <option value="Electronics">
-                            Electronics
-                        </option>
-
-                        <option value="Fashion">
-                            Fashion
-                        </option>
-
-                        <option value="Books">
-                            Books
-                        </option>
-
-                        <option value="Sports">
-                            Sports
-                        </option>
-
-                        <option value="Home">
-                            Home
-                        </option>
-
-                    </select>
+                    <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        hidden
+                        onChange={pickFiles}
+                    />
 
                 </div>
 
-
-                {error && (
-
-                    <div className="error-message">
-
-                        {error}
-
-                    </div>
-
-                )}
-
-
-                {!error &&
-                    currentProducts.length === 0 && (
-
-                        <div className="no-products">
-
-                            <div className="no-products-icon">
-                                🔍
+                {files.length > 0 && (
+                    <div className="composer-previews">
+                        {previews.map((src, i) => (
+                            <div key={i} className="composer-thumb">
+                                <img src={src} alt="" />
+                                <button
+                                    type="button"
+                                    onClick={() => setFiles(files.filter((_, n) => n !== i))}
+                                    aria-label="Remove"
+                                >
+                                    <FaTimes />
+                                </button>
                             </div>
-
-                            <h2>
-                                No Products Found
-                            </h2>
-
-                            <p>
-                                We couldn't find
-                                products matching
-                                your search.
-                            </p>
-
-                            <button
-                                onClick={
-                                    clearFilters
-                                }
-                            >
-                                Clear Filters
-                            </button>
-
-                        </div>
-
-                    )}
-
-
-                {currentProducts.length > 0 && (
-
-                    <div className="product-grid">
-
-                        {currentProducts.map(
-                            product => (
-
-                                <ProductCard
-                                    key={
-                                        product._id ||
-                                        product.id
-                                    }
-                                    product={
-                                        product
-                                    }
-                                />
-
-                            )
-                        )}
-
+                        ))}
                     </div>
-
                 )}
 
-
-                {/* PAGINATION */}
-
-                {products.length > 0 && (
-
-                    <div className="pagination">
-
-                        <button
-                            disabled={
-                                safePage === 1
-                            }
-                            onClick={() =>
-                                setPage(
-                                    safePage - 1
-                                )
-                            }
-                        >
-                            ← Previous
-                        </button>
-
-
-                        <div className="page-info">
-
-                            Page{" "}
-                            <strong>
-                                {safePage}
-                            </strong>
-                            {" "}of{" "}
-                            <strong>
-                                {totalPages}
-                            </strong>
-
-                        </div>
-
-
-                        <button
-                            disabled={
-                                safePage ===
-                                totalPages
-                            }
-                            onClick={() =>
-                                setPage(
-                                    safePage + 1
-                                )
-                            }
-                        >
-                            Next →
-                        </button>
-
-                    </div>
-
+                {files.length > 0 && (
+                    <button className="btn-primary" type="submit" disabled={posting}>
+                        {posting ? "Posting..." : "Post"}
+                    </button>
                 )}
 
-            </div>
+            </form>
+
+            {loading && <p className="social-note">Loading feed...</p>}
+
+            {error && <p className="social-note error">{error}</p>}
+
+            {!loading && !error && posts.length === 0 && (
+                <p className="social-note">No posts yet. Share the first photo!</p>
+            )}
+
+            {posts.map(post => (
+                <PostCard
+                    key={post._id}
+                    post={post}
+                    onDeleted={id => setPosts(prev => prev.filter(p => p._id !== id))}
+                />
+            ))}
+
+            {cursor && (
+                <button
+                    className="btn-ghost"
+                    type="button"
+                    onClick={() => load(cursor)}
+                    disabled={loadingMore}
+                >
+                    {loadingMore ? "Loading..." : "Load more"}
+                </button>
+            )}
 
         </div>
-
     );
 
 };
-
 
 export default Home;
