@@ -71,8 +71,4 @@ const Home = () => {
   );
 };
 
----
-
-Eta tomar `frontend/src/pages/Home.jsx`- e bosiye dao. Erpor amra **Reels** ba **Messenger** page- gulo ke oi video-r moto high-quality micro-animation ebong smooth UI diye update korbo. 
-
-Bolo, pore kon page-ti update korbo?
+export default Home;
