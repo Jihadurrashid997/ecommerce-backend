@@ -20,15 +20,24 @@ const TopTabs = () => {
     setTimeout(() => {
       navigate(path);
       setAnimatingTab(null);
-    }, 400); // Smooth micro-animation delay matching the video style
+    }, 500); // Video-r moto smooth timing delay
   };
 
   return (
-    <div className="container mt-3">
+    <div className="container mt-3 position-relative">
+      {/* Video-style Sliding / Loading Overlay on Click */}
+      {animatingTab && (
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center" style={{ background: 'rgba(15, 23, 42, 0.7)', zIndex: 9999, backdropFilter: 'blur(8px)' }}>
+          <div className="bg-white p-4 rounded-pill shadow-lg d-flex align-items-center gap-3 zoom">
+            <div className="spinner-border text-primary" role="status"></div>
+            <span className="fw-bold text-dark">Loading {animatingTab}...</span>
+          </div>
+        </div>
+      )}
+
       <div className="d-flex justify-content-center bg-dark p-2 rounded-pill shadow-lg gap-2 overflow-auto" style={{ backdropFilter: 'blur(10px)' }}>
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path || (tab.path === '/' && location.pathname === '/home');
-          const isAnimating = animatingTab === tab.name;
 
           return (
             <button
@@ -37,15 +46,9 @@ const TopTabs = () => {
               className={`btn px-4 py-2 rounded-pill fw-bold transition-all position-relative overflow-hidden ${
                 isActive ? 'btn-light text-dark shadow' : 'btn-dark text-white opacity-75'
               }`}
-              style={{
-                transform: isAnimating ? 'scale(0.95)' : 'scale(1)',
-                transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-              }}
+              style={{ transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
             >
               {tab.name}
-              {isAnimating && (
-                <span className="position-absolute top-0 start-0 w-100 h-100 bg-primary opacity-25 shimmer"></span>
-              )}
             </button>
           );
         })}
