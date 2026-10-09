@@ -18,15 +18,15 @@ const TopTabs = () => {
   const handleTabClick = (path, name) => {
     setLoadingState({ active: true, name, status: 'loading' });
 
-    // 5+ seconds full screen video-style progress animation
+    // Exactly 5+ seconds full screen video-style progress animation
     setTimeout(() => {
       setLoadingState({ active: true, name, status: 'success' });
 
       setTimeout(() => {
         navigate(path);
         setLoadingState({ active: false, name: '', status: 'default' });
-      }, 1000);
-    }, 5000); // Exactly 5 seconds duration as requested
+      }, 1200); // 1.2s delay after success checkmark
+    }, 5200); // 5.2 seconds duration matching your video requirement
   };
 
   return (
@@ -37,17 +37,17 @@ const TopTabs = () => {
           
           <div className="text-center mb-4 zoom">
             <h2 className="text-white fw-bold mb-2">Opening {loadingState.name}...</h2>
-            <p className="text-muted fs-5">Experience high-end animation</p>
+            <p className="text-muted fs-5">E Top Premium Experience</p>
           </div>
 
           {/* Video style big capsule loading bar in full screen */}
-          <div className="position-relative overflow-hidden shadow-lg" style={{ width: '340px', height: '75px', borderRadius: '38px', background: loadingState.status === 'success' ? '#10b981' : '#1e293b', transition: 'background 0.5s ease' }}>
+          <div className="position-relative overflow-hidden shadow-lg" style={{ width: '360px', height: '75px', borderRadius: '38px', background: loadingState.status === 'success' ? '#10b981' : '#1e293b', transition: 'background 0.5s ease' }}>
             
             {loadingState.status === 'loading' && (
               <>
-                <div className="position-absolute top-0 start-0 h-100 bg-primary shimmer" style={{ width: '100%', animation: 'fullProgressFill 5s linear forwards' }}></div>
+                <div className="position-absolute top-0 start-0 h-100 bg-primary shimmer" style={{ width: '100%', animation: 'videoProgressFill 5.2s linear forwards' }}></div>
                 <span className="position-absolute top-50 start-50 translate-middle text-white fw-bold fs-5 z-2">
-                  Loading...
+                  Processing...
                 </span>
               </>
             )}
@@ -82,7 +82,7 @@ const TopTabs = () => {
       </div>
 
       <style>{`
-        @keyframes fullProgressFill {
+        @keyframes videoProgressFill {
           0% { width: 0%; }
           100% { width: 100%; }
         }
