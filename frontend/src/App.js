@@ -41,6 +41,9 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
+import Reels from "./pages/Reels";
+import Shop from "./pages/Shop";
+import TopTabs from "./components/TopTabs";
 import Profile from "./pages/Profile";
 import SellerDashboard from "./pages/SellerDashboard";
 import SellerOrders from "./pages/SellerOrders";
@@ -152,6 +155,10 @@ function AppLayout() {
             <Navbar />
         )}
 
+        {!authPage && location.pathname !== "/forgot-password" && (
+            <TopTabs />
+        )}
+
 
         {/* ==================================================
             GLOBAL INCOMING CALL
@@ -229,6 +236,24 @@ function AppLayout() {
 
                         </PrivateRoute>
 
+                    }
+                />
+
+                <Route
+                    path="/reels"
+                    element={
+                        <PrivateRoute>
+                            <Reels />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
+                    path="/shop"
+                    element={
+                        <PrivateRoute>
+                            <Shop />
+                        </PrivateRoute>
                     }
                 />
 
