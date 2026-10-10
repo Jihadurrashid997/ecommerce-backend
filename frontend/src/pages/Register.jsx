@@ -270,7 +270,7 @@ const Register = () => {
                     </h2>
 
                     <p>
-                        Join JR Store and start your
+                        Join E Top and start your
                         shopping journey.
                     </p>
 
@@ -575,7 +575,7 @@ const Register = () => {
                     </span>
 
                     <span>
-                        JR Store © 2026
+                        E Top © 2026 · JR Group of Company
                     </span>
 
                 </div>
