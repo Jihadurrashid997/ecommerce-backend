@@ -81,6 +81,16 @@ const userSchema = new mongoose.Schema(
         // BLOCKING
         // ==========================
 
+        // people this user follows (followers = users whose
+        // `following` contains this user's id)
+        following: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+                index: true
+            }
+        ],
+
         blockedUsers: [
             {
                 type: mongoose.Schema.Types.ObjectId,
