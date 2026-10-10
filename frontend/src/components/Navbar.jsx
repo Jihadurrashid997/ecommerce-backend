@@ -20,6 +20,8 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useApp } from "../context/AppContext";
+import EtopLogo from "./EtopLogo";
+import "../styles/EtopLogo.css";
 
 import "../styles/Navbar.css";
 
@@ -231,34 +233,7 @@ const Navbar = () => {
                     className="jr-logo-link"
                 >
 
-                    <motion.span
-                        className="logo-icon jr-logo-icon"
-                        whileHover={{
-                            rotate: -8,
-                            scale: 1.12
-                        }}
-                        whileTap={{
-                            scale: 0.9
-                        }}
-                        transition={{
-                            type: "spring",
-                            stiffness: 450,
-                            damping: 16
-                        }}
-                    >
-                        JR
-                    </motion.span>
-
-
-                    <motion.span
-                        className="jr-brand-name"
-                        whileHover={{
-                            letterSpacing: "1px"
-                        }}
-                    >
-                        <strong>JR</strong>
-                        <span>Store</span>
-                    </motion.span>
+                    <EtopLogo size="sm" light />
 
                 </Link>
 
