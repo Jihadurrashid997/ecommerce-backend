@@ -12,7 +12,7 @@ const ProtectedRoute = ({ children }) => {
         return (
             <div className="protected-loading">
                 <div className="protected-loader"></div>
-                <h2>JR Store</h2>
+                <h2>E Top</h2>
                 <p>Loading...</p>
             </div>
         );
