@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
+const Post = require("../models/Post");
 
 // ======================================================
 // HELPERS
@@ -837,6 +838,106 @@ exports.deleteUser = async (req, res) => {
                 "Failed to delete user."
 
         });
+
+    }
+
+};
+
+
+// ======================================================
+// SOCIAL: follow / unfollow + profile stats
+// ======================================================
+
+exports.getSocialStats = async (req, res) => {
+
+    try {
+
+        const targetId = req.params.id;
+
+        if (!mongoose.Types.ObjectId.isValid(targetId)) {
+            return res.status(400).json({ success: false, message: "Invalid user." });
+        }
+
+        const [target, me, followersCount, postsCount, reelsCount] =
+            await Promise.all([
+                User.findById(targetId).select("following").lean(),
+                User.findById(req.user.id).select("following").lean(),
+                User.countDocuments({ following: targetId }),
+                Post.countDocuments({ author: targetId, kind: "post" }),
+                Post.countDocuments({ author: targetId, kind: "reel" })
+            ]);
+
+        if (!target) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        return res.json({
+            success: true,
+            followersCount,
+            followingCount: (target.following || []).length,
+            postsCount,
+            reelsCount,
+            isFollowing: (me?.following || []).some(
+                id => String(id) === String(targetId)
+            )
+        });
+
+    } catch (err) {
+
+        console.error("SOCIAL STATS ERROR:", err);
+
+        return res.status(500).json({ success: false, message: "Could not load profile stats." });
+
+    }
+
+};
+
+exports.toggleFollow = async (req, res) => {
+
+    try {
+
+        const targetId = req.params.id;
+
+        if (!mongoose.Types.ObjectId.isValid(targetId)) {
+            return res.status(400).json({ success: false, message: "Invalid user." });
+        }
+
+        if (String(targetId) === String(req.user.id)) {
+            return res.status(400).json({ success: false, message: "You can't follow yourself." });
+        }
+
+        const exists = await User.exists({ _id: targetId });
+
+        if (!exists) {
+            return res.status(404).json({ success: false, message: "User not found." });
+        }
+
+        const me = await User.findById(req.user.id).select("following").lean();
+
+        const already = (me?.following || []).some(
+            id => String(id) === String(targetId)
+        );
+
+        await User.updateOne(
+            { _id: req.user.id },
+            already
+                ? { $pull: { following: targetId } }
+                : { $addToSet: { following: targetId } }
+        );
+
+        const followersCount = await User.countDocuments({ following: targetId });
+
+        return res.json({
+            success: true,
+            isFollowing: !already,
+            followersCount
+        });
+
+    } catch (err) {
+
+        console.error("TOGGLE FOLLOW ERROR:", err);
+
+        return res.status(500).json({ success: false, message: "Could not update follow." });
 
     }
 
