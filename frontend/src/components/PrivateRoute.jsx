@@ -21,7 +21,7 @@ const PrivateRoute = ({ children }) => {
                 <div className="route-loader-spinner"></div>
 
                 <p>
-                    Loading JR Store...
+                    Loading E Top...
                 </p>
 
             </div>
