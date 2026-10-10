@@ -15,6 +15,7 @@ import {
 } from "react-icons/fa";
 
 import { useApp } from "../context/AppContext";
+import ProfileSocial from "../components/ProfileSocial";
 
 import "../styles/Profile.css";
 
@@ -430,6 +431,11 @@ const Profile = () => {
                 </div>
 
             </div>
+
+            <ProfileSocial
+                userId={user?._id || user?.id}
+                isSelf
+            />
 
         </div>
 
