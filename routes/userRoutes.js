@@ -13,7 +13,9 @@ const {
     getPublicProfile,
     deleteUser,
     blockUser,
-    unblockUser
+    unblockUser,
+    getSocialStats,
+    toggleFollow
 
 } =
     require("../controllers/userController");
@@ -52,6 +54,21 @@ router.get(
     "/chat-users",
     auth(),
     getChatUsers
+);
+
+
+// SOCIAL (follow + profile stats)
+
+router.get(
+    "/social/:id",
+    auth(),
+    getSocialStats
+);
+
+router.post(
+    "/follow/:id",
+    auth(),
+    toggleFollow
 );
 
 
