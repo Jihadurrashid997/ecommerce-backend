@@ -134,7 +134,7 @@ export const stopCallRingtone =
 ========================================================= */
 
 export const showBrowserNotification = ({
-    title = "JR Store",
+    title = "E Top",
     body = "You have a new notification.",
     icon = "/favicon.ico",
     tag = "jr-store-notification"
