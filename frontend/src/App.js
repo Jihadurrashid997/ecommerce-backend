@@ -74,7 +74,7 @@ function Footer() {
             <div className="container">
 
                 <h2>
-                    JR Store
+                    E Top
                 </h2>
 
                 <p>
@@ -82,7 +82,7 @@ function Footer() {
                 </p>
 
                 <p>
-                    © 2026 JR Store. All Rights Reserved.
+                    © 2026 E Top. All Rights Reserved.
                 </p>
 
             </div>
