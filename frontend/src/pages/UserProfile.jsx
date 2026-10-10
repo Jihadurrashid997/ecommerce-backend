@@ -17,6 +17,8 @@ import {
 
 import api from "../services/api";
 
+import ProfileSocial from "../components/ProfileSocial";
+
 import "../styles/Profile.css";
 
 
@@ -394,6 +396,8 @@ const UserProfile = () => {
 
 
             </div>
+
+            <ProfileSocial userId={user._id} />
 
         </div>
 
