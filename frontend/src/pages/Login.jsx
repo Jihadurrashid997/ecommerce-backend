@@ -362,7 +362,7 @@ const Login = () => {
                 ) {
 
                     setError(
-                        "Cannot connect to JR Store server. Please try again."
+                        "Cannot connect to E Top server. Please try again."
                     );
 
                     return;
@@ -576,7 +576,7 @@ const Login = () => {
                     <p>
                         Sign in to continue to
                         <strong>
-                            {" "}JR Store
+                            {" "}E Top
                         </strong>
                     </p>
 
@@ -788,7 +788,7 @@ const Login = () => {
                         {
                             loading
                                 ? "Signing in..."
-                                : "Login to JR Store"
+                                : "Login to E Top"
                         }
 
 
