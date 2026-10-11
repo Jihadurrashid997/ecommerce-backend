@@ -81,6 +81,25 @@ const userSchema = new mongoose.Schema(
         // BLOCKING
         // ==========================
 
+        // ==========================
+        // ADMIN MODERATION
+        // ==========================
+
+        isSuspended: {
+            type: Boolean,
+            default: false,
+            index: true
+        },
+
+        suspendedReason: {
+            type: String,
+            default: ""
+        },
+
+        suspendedAt: {
+            type: Date
+        },
+
         // people this user follows (followers = users whose
         // `following` contains this user's id)
         following: [
