@@ -440,6 +440,29 @@ exports.login = async (
 
 
         /*
+        SUSPENDED ACCOUNTS CANNOT LOG IN
+        */
+
+        if (user.isSuspended) {
+
+            return res.status(403).json({
+
+                success: false,
+
+                message:
+                    "Your account has been suspended." +
+                    (
+                        user.suspendedReason
+                            ? ` Reason: ${user.suspendedReason}`
+                            : ""
+                    )
+
+            });
+
+        }
+
+
+        /*
         AUTO-MIGRATE LEGACY PASSWORD
         */
 
