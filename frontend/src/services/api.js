@@ -75,6 +75,26 @@ api.interceptors.response.use(
         const status =
             error?.response?.status;
 
+        if (
+            status === 403 &&
+            /suspended/i.test(error?.response?.data?.message || "") &&
+            localStorage.getItem("token")
+        ) {
+
+            localStorage.removeItem("token");
+            localStorage.removeItem("user");
+
+            if (
+                typeof window !== "undefined" &&
+                !window.location.pathname.startsWith("/login")
+            ) {
+
+                window.location.href = "/login";
+
+            }
+
+        }
+
         if (status === 401) {
 
             const hadToken =
