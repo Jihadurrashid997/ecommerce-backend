@@ -414,6 +414,7 @@ const Navbar = () => {
                 {/* ADMIN */}
 
                 {user?.role === "admin" && (
+                    <>
 
                     <motion.li variants={navItem}>
 
@@ -426,6 +427,20 @@ const Navbar = () => {
                         />
 
                     </motion.li>
+
+                    <motion.li variants={navItem}>
+
+                        <NavItem
+                            to="/admin/control"
+                            icon={<FaUserShield />}
+                            label="Control"
+                            active={isActive("/admin/control")}
+                            onClick={closeMenu}
+                        />
+
+                    </motion.li>
+
+                    </>
 
                 )}
 
