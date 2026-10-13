@@ -43,6 +43,7 @@ import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import Reels from "./pages/Reels";
 import Shop from "./pages/Shop";
+import AdminControl from "./pages/AdminControl";
 import TopTabs from "./components/TopTabs";
 import Profile from "./pages/Profile";
 import SellerDashboard from "./pages/SellerDashboard";
@@ -587,6 +588,15 @@ function AppLayout() {
                     ADMIN
                 ================================================== */}
 
+
+                <Route
+                    path="/admin/control"
+                    element={
+                        <PrivateRoute>
+                            <AdminControl />
+                        </PrivateRoute>
+                    }
+                />
 
                 <Route
                     path="/admin"
