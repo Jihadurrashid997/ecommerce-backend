@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
+import VerifiedBadge from "../components/VerifiedBadge";
 import "../styles/AdminControl.css";
+import "../styles/VerifiedBadge.css";
 
 const fmtDate = v => (v ? new Date(v).toLocaleString() : "-");
 
@@ -166,7 +168,12 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
                 <div className="ac-user-head">
                     <Avatar u={user} />
                     <div>
-                        <h3>{user.name}</h3>
+                        <h3>
+                            {user.name}
+                            {user.isVerified && (
+                                <VerifiedBadge className="verified-badge-admin" />
+                            )}
+                        </h3>
                         <span className={`ac-badge ${user.role}`}>{user.role}</span>
                         {user.isSuspended && <span className="ac-badge suspended">suspended</span>}
                     </div>
@@ -218,6 +225,28 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
                                     Change role
                                 </button>
                             </div>
+
+                            <button
+                                type="button"
+                                className={user.isVerified ? "warn" : "ok"}
+                                onClick={() =>
+                                    run(
+                                        () =>
+                                            api.patch(
+                                                `/admin/control/users/${id}/verification`,
+                                                { isVerified: !user.isVerified }
+                                            ),
+                                        user.isVerified
+                                            ? "Verified badge removed."
+                                            : "Verified badge granted."
+                                    )
+                                }
+                                disabled={busy}
+                            >
+                                {user.isVerified
+                                    ? "Remove verification badge"
+                                    : "Grant verification badge"}
+                            </button>
 
                             {user.role !== "admin" && (
                                 <button type="button" className={user.isSuspended ? "ok" : "warn"} onClick={toggleSuspend} disabled={busy}>
@@ -319,7 +348,12 @@ const Users = ({ myId }) => {
                     <button type="button" key={u._id} className="ac-item" onClick={() => setOpenId(u._id)}>
                         <Avatar u={u} />
                         <div className="ac-item-main">
-                            <b>{u.name}</b>
+                            <b>
+                                {u.name}
+                                {u.isVerified && (
+                                    <VerifiedBadge className="verified-badge-admin" />
+                                )}
+                            </b>
                             <span>{u.email}</span>
                         </div>
                         <div className="ac-item-side">

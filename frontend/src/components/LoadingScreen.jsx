@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from "react";
-import EtopLogo from "./EtopLogo";
 import "../styles/LoadingScreen.css";
-import "../styles/EtopLogo.css";
 
 const LoadingScreen = ({ onComplete }) => {
 
     const [progress, setProgress] = useState(0);
+    const [isComplete, setIsComplete] = useState(false);
 
     useEffect(() => {
 
         let current = 0;
+        let completionTimeout;
 
         const interval = setInterval(() => {
 
@@ -24,8 +24,9 @@ const LoadingScreen = ({ onComplete }) => {
                 clearInterval(interval);
 
                 setProgress(100);
+                setIsComplete(true);
 
-                setTimeout(() => {
+                completionTimeout = setTimeout(() => {
 
                     if (typeof onComplete === "function") {
                         onComplete();
@@ -40,13 +41,19 @@ const LoadingScreen = ({ onComplete }) => {
 
         return () => {
             clearInterval(interval);
+            clearTimeout(completionTimeout);
         };
 
     }, [onComplete]);
 
 
     return (
-        <div className="loading-screen">
+        <div
+            className={`loading-screen ${isComplete ? "is-complete" : ""}`}
+            role="status"
+            aria-live="polite"
+            aria-label={`Loading E Top, ${progress}%`}
+        >
 
             <div className="loading-background">
 
@@ -56,68 +63,68 @@ const LoadingScreen = ({ onComplete }) => {
 
                 <div className="loading-orb loading-orb-three" />
 
+                <div className="loading-grid" />
+
             </div>
 
 
             <div className="loading-content">
 
+                <div className="loading-eyebrow">
+                    <span />
+                    YOUR SOCIAL MARKETPLACE
+                    <span />
+                </div>
+
                 <div className="loading-brand loading-brand-etop">
-
-                    <EtopLogo size="lg" light />
-
+                    <img
+                        className="loading-logo-image"
+                        src={`${process.env.PUBLIC_URL}/brand/etop-loading-logo.jpg`}
+                        alt="E Top"
+                    />
                 </div>
 
+                <h1 className="loading-headline">
+                    Discover. Connect. <span>Shop.</span>
+                </h1>
 
-                <div className="loading-spinner">
-
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-
-                </div>
-
+                <p className="loading-description">
+                    Your community is getting ready.
+                </p>
 
                 <div className="loading-progress">
 
-                    <div className="loading-progress-track">
-
+                    <div
+                        className="loading-progress-track"
+                        role="progressbar"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow={progress}
+                    >
                         <div
                             className="loading-progress-bar"
                             style={{
                                 width: `${progress}%`
                             }}
                         />
-
                     </div>
 
-
                     <div className="loading-progress-text">
-
                         <span>
-                            Loading......
+                            <i className="loading-status-dot" />
+                            Preparing your experience
                         </span>
-
-                        <span>
-                            {progress}%
-                        </span>
-
+                        <span>{progress}%</span>
                     </div>
 
                 </div>
 
-
                 <div className="loading-company">
-
-                    <p className="loading-company-name">
-                        JR <span>Group</span>
-                    </p>
-
-                    <p className="loading-company-sub">
-                        of Company
-                    </p>
-
+                    <img
+                        src={`${process.env.PUBLIC_URL}/brand/jr-group-logo.jpg`}
+                        alt="JR Group of Company"
+                    />
+                    <span>Powered by JR Group of Company</span>
                 </div>
 
             </div>

@@ -18,8 +18,10 @@ import {
 import api from "../services/api";
 
 import ProfileSocial from "../components/ProfileSocial";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 import "../styles/Profile.css";
+import "../styles/VerifiedBadge.css";
 
 
 const UserProfile = () => {
@@ -325,6 +327,7 @@ const UserProfile = () => {
                         user.name ||
                         "Marketplace User"
                     }
+                    {user.isVerified && <VerifiedBadge />}
                 </h1>
 
 

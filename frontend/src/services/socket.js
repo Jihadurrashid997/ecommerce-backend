@@ -67,6 +67,13 @@ const createSocket = (
         return null;
     }
 
+    const token =
+        localStorage.getItem("token");
+
+    if (!token) {
+        return null;
+    }
+
 
     currentUserId =
         normalizedId;
@@ -83,8 +90,8 @@ const createSocket = (
                 ],
 
                 auth: {
-                    userId:
-                        normalizedId
+                    userId: normalizedId,
+                    token
                 },
 
                 reconnection:
@@ -236,8 +243,9 @@ const connectSocket = (
         } else {
 
             socket.auth = {
-                userId:
-                    normalizedId
+                userId: normalizedId,
+                token:
+                    localStorage.getItem("token")
             };
 
 

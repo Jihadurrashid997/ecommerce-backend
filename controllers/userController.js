@@ -14,6 +14,7 @@ const safeUserFields = [
     "bio",
     "location",
     "profileImage",
+    "isVerified",
     "avatar",
     "image",
     "lastSeen",
@@ -38,6 +39,7 @@ const normalizeUser = (user) => {
         role: object.role || "customer",
         bio: object.bio || "",
         location: object.location || "",
+        isVerified: Boolean(object.isVerified),
         profileImage:
             object.profileImage ||
             object.avatar ||

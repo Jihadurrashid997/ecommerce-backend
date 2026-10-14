@@ -92,7 +92,7 @@ exports.listUsers = async (req, res) => {
 
         const [items, total] = await Promise.all([
             User.find(filter)
-                .select("name email role profileImage location createdAt lastSeen isSuspended")
+                .select("name email role profileImage location createdAt lastSeen isSuspended isVerified")
                 .sort({ createdAt: -1 })
                 .skip((page - 1) * limit)
                 .limit(limit)
@@ -273,6 +273,67 @@ exports.setRole = async (req, res) => {
     } catch (error) {
         console.error("ADMIN SET ROLE ERROR:", error);
         return res.status(500).json({ success: false, message: "Could not change the role." });
+    }
+
+};
+
+exports.setVerification = async (req, res) => {
+
+    try {
+
+        const { id } = req.params;
+        const isVerified = req.body?.isVerified;
+
+        if (!isId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user."
+            });
+        }
+
+        if (typeof isVerified !== "boolean") {
+            return res.status(400).json({
+                success: false,
+                message: "Verification status must be true or false."
+            });
+        }
+
+        const update = isVerified
+            ? {
+                  $set: {
+                      isVerified: true,
+                      verifiedAt: new Date(),
+                      verifiedBy: req.user.id
+                  }
+              }
+            : {
+                  $set: { isVerified: false },
+                  $unset: {
+                      verifiedAt: "",
+                      verifiedBy: ""
+                  }
+              };
+
+        const result = await User.updateOne({ _id: id }, update);
+
+        if (!result.matchedCount) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        return res.json({
+            success: true,
+            isVerified
+        });
+
+    } catch (error) {
+        console.error("ADMIN SET VERIFICATION ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not update verification status."
+        });
     }
 
 };

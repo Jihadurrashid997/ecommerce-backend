@@ -1,0 +1,34 @@
+.verified-badge {
+    width: 17px;
+    height: 17px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    border-radius: 50%;
+    color: #fff;
+    background: linear-gradient(145deg, #28a9ff, #1467e8);
+    box-shadow: 0 2px 7px rgba(20, 103, 232, 0.28);
+    vertical-align: 0.08em;
+    font-size: 9px;
+}
+
+.verified-badge svg {
+    display: block;
+}
+
+.verified-badge.verified-badge-small {
+    width: 14px;
+    height: 14px;
+    margin-left: 4px;
+    font-size: 7px;
+}
+
+.verified-badge.verified-badge-admin {
+    width: 15px;
+    height: 15px;
+    margin: 0 0 0 5px;
+    vertical-align: middle;
+    font-size: 8px;
+}
