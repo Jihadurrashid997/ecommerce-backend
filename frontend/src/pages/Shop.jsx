@@ -1,688 +1,277 @@
-import React, {
-    useEffect,
-    useMemo,
-    useState
-} from "react";
-
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
-    useSearchParams
-} from "react-router-dom";
-
+    FaArrowRight,
+    FaBoxOpen,
+    FaCheckCircle,
+    FaHeart,
+    FaSearch,
+    FaShieldAlt,
+    FaShoppingBag,
+    FaSlidersH,
+    FaStore
+} from "react-icons/fa";
 import api from "../services/api";
-
-import ProductCard
-    from "../components/ProductCard";
-
+import ProductCard from "../components/ProductCard";
 import "../styles/Home.css";
+import "../styles/Shop.css";
 
+const PAGE_SIZE = 12;
 
 const Shop = () => {
-
-    const [
-        searchParams,
-        setSearchParams
-    ] = useSearchParams();
-
-
-    const initialKeyword =
-        (
-            searchParams.get("search") ||
-            searchParams.get("q") ||
-            ""
-        ).trim();
-
-
-    const initialCategory =
-        (
-            searchParams.get("category") ||
-            ""
-        ).trim();
-
-
-    const [
-        keyword,
-        setKeyword
-    ] =
-        useState(
-            initialKeyword
-        );
-
-
-    const [
-        category,
-        setCategory
-    ] =
-        useState(
-            initialCategory
-        );
-
-
-    const [
-        products,
-        setProducts
-    ] =
-        useState([]);
-
-
-    const [
-        loading,
-        setLoading
-    ] =
-        useState(true);
-
-
-    const [
-        error,
-        setError
-    ] =
-        useState("");
-
-
-    const [
-        page,
-        setPage
-    ] =
-        useState(1);
-
-
-    const productsPerPage =
-        8;
-
-
-    // ==================================================
-    // SYNC URL
-    // ==================================================
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [keyword, setKeyword] = useState(
+        (searchParams.get("search") || searchParams.get("q") || "").trim()
+    );
+    const [category, setCategory] = useState(
+        (searchParams.get("category") || "").trim()
+    );
+    const [sort, setSort] = useState("stock");
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [page, setPage] = useState(1);
+    const [retry, setRetry] = useState(0);
 
     useEffect(() => {
-
-        const urlSearch =
-            (
-                searchParams.get("search") ||
-                searchParams.get("q") ||
-                ""
-            ).trim();
-
-        const urlCategory =
-            (
-                searchParams.get("category") ||
-                ""
-            ).trim();
-
-
-        setKeyword(
-            previous =>
-                previous === urlSearch
-                    ? previous
-                    : urlSearch
-        );
-
-
-        setCategory(
-            previous =>
-                previous === urlCategory
-                    ? previous
-                    : urlCategory
-        );
-
-
+        const urlSearch = (searchParams.get("search") || searchParams.get("q") || "").trim();
+        const urlCategory = (searchParams.get("category") || "").trim();
+        setKeyword(previous => previous === urlSearch ? previous : urlSearch);
+        setCategory(previous => previous === urlCategory ? previous : urlCategory);
     }, [searchParams]);
 
-
-    // ==================================================
-    // FETCH PRODUCTS
-    // ==================================================
+    useEffect(() => {
+        const params = {};
+        if (keyword.trim()) params.search = keyword.trim();
+        if (category) params.category = category;
+        setSearchParams(params, { replace: true });
+    }, [keyword, category, setSearchParams]);
 
     useEffect(() => {
-
         let cancelled = false;
+        const loadProducts = async () => {
+            try {
+                setLoading(true);
+                setError("");
 
+                const response = await api.get("/products", { timeout: 12000 });
+                if (cancelled) return;
 
-        const fetchProducts =
-            async () => {
+                const data = response.data;
+                const list = Array.isArray(data)
+                    ? data
+                    : data?.products || data?.data || [];
 
-                try {
+                setProducts(Array.isArray(list) ? list : []);
+            } catch (err) {
+                if (cancelled) return;
+                console.error("PRODUCT LOAD ERROR:", err);
+                setProducts([]);
+                setError(err.response?.data?.message || "Products couldn't load. Please try again.");
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
 
-                    setLoading(true);
-                    setError("");
-
-
-                    const params =
-                        new URLSearchParams();
-
-
-                    if (
-                        keyword.trim()
-                    ) {
-
-                        params.set(
-                            "keyword",
-                            keyword.trim()
-                        );
-
-                    }
-
-
-                    if (category) {
-
-                        params.set(
-                            "category",
-                            category
-                        );
-
-                    }
-
-
-                    const query =
-                        params.toString();
-
-
-                    const response =
-                        await api.get(
-
-                            query
-                                ? `/products?${query}`
-                                : "/products",
-
-                            {
-                                timeout: 12000
-                            }
-
-                        );
-
-
-                    if (cancelled) {
-                        return;
-                    }
-
-
-                    const data =
-                        response.data;
-
-
-                    const list =
-                        Array.isArray(data)
-                            ? data
-                            : (
-                                data?.products ||
-                                data?.data ||
-                                []
-                            );
-
-
-                    setProducts(
-                        Array.isArray(list)
-                            ? list
-                            : []
-                    );
-
-
-                } catch (err) {
-
-                    if (cancelled) {
-                        return;
-                    }
-
-
-                    console.error(
-                        "PRODUCT LOAD ERROR:",
-                        err
-                    );
-
-
-                    setProducts([]);
-
-
-                    setError(
-                        err.response?.data?.message ||
-                        "Failed to load products."
-                    );
-
-
-                } finally {
-
-                    if (!cancelled) {
-
-                        setLoading(false);
-
-                    }
-
-                }
-
-            };
-
-
-        fetchProducts();
-
+        loadProducts();
 
         return () => {
-
             cancelled = true;
-
         };
-
-    }, [
-        keyword,
-        category
-    ]);
-
-
-    // ==================================================
-    // SEARCH
-    // ==================================================
-
-    const handleSearch =
-        (e) => {
-
-            const value =
-                e.target.value;
-
-
-            setKeyword(value);
-            setPage(1);
-
-
-            const params = {};
-
-
-            if (
-                value.trim()
-            ) {
-
-                params.search =
-                    value.trim();
-
-            }
-
-
-            if (category) {
-
-                params.category =
-                    category;
-
-            }
-
-
-            setSearchParams(
-                params
-            );
-
-        };
-
-
-    // ==================================================
-    // CATEGORY
-    // ==================================================
-
-    const handleCategory =
-        (e) => {
-
-            const value =
-                e.target.value;
-
-
-            setCategory(value);
-            setPage(1);
-
-
-            const params = {};
-
-
-            if (
-                keyword.trim()
-            ) {
-
-                params.search =
-                    keyword.trim();
-
-            }
-
-
-            if (value) {
-
-                params.category =
-                    value;
-
-            }
-
-
-            setSearchParams(
-                params
-            );
-
-        };
-
-
-    // ==================================================
-    // PAGINATION
-    // ==================================================
-
-    const totalPages =
-        Math.max(
-            Math.ceil(
-                products.length /
-                productsPerPage
-            ),
-            1
-        );
-
-
-    const safePage =
-        Math.min(
-            page,
-            totalPages
-        );
-
-
-    const firstIndex =
-        (
-            safePage - 1
-        ) *
-        productsPerPage;
-
-
-    const currentProducts =
-        products.slice(
-            firstIndex,
-            firstIndex +
-            productsPerPage
-        );
-
-
-    // ==================================================
-    // CLEAR
-    // ==================================================
-
-    const clearFilters =
-        () => {
-
-            setKeyword("");
-            setCategory("");
-            setPage(1);
-
-            setSearchParams({});
-
-        };
-
-
-    // ==================================================
-    // LOADING
-    // ==================================================
-
-    if (loading) {
-
-        return (
-
-            <div className="home-loading">
-
-                <div className="loader"></div>
-
-                <p>
-                    Loading products...
-                </p>
-
-            </div>
-
-        );
-
-    }
-
+    }, [retry]);
+
+    const categories = useMemo(() => (
+        Array.from(new Set(products.map(product => product.category).filter(Boolean)))
+            .sort((a, b) => a.localeCompare(b))
+    ), [products]);
+
+    const sortedProducts = useMemo(() => {
+        const search = keyword.trim().toLocaleLowerCase();
+        const result = products.filter(product => {
+            const matchesCategory = !category || product.category === category;
+            const matchesSearch = !search || [
+                product.name,
+                product.description,
+                product.category,
+                product.seller?.name
+            ].some(value => String(value || "").toLocaleLowerCase().includes(search));
+
+            return matchesCategory && matchesSearch;
+        });
+
+        if (sort === "price-low") {
+            result.sort((a, b) => Number(a.price) - Number(b.price));
+        } else if (sort === "price-high") {
+            result.sort((a, b) => Number(b.price) - Number(a.price));
+        } else if (sort === "newest") {
+            result.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        } else if (sort === "stock") {
+            result.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
+        }
+
+        return result;
+    }, [products, keyword, category, sort]);
+
+    const totalPages = Math.max(Math.ceil(sortedProducts.length / PAGE_SIZE), 1);
+    const safePage = Math.min(page, totalPages);
+    const visibleProducts = sortedProducts.slice(
+        (safePage - 1) * PAGE_SIZE,
+        safePage * PAGE_SIZE
+    );
+
+    const updateCategory = value => {
+        setCategory(value);
+        setPage(1);
+    };
+
+    const clearFilters = () => {
+        setKeyword("");
+        setCategory("");
+        setSort("stock");
+        setPage(1);
+    };
 
     return (
-
-        <div className="home-page">
-
-
-            {/* HERO */}
-
-            <section className="hero-section">
-
-                <div className="hero-content">
-
-                    <span className="hero-badge">
-                        ✨ Your Trusted Marketplace
-                    </span>
-
-                    <h1>
-
-                        Buy.
-                        <span>
-                            {" "}Sell.{" "}
-                        </span>
-                        Connect.
-
-                    </h1>
-
-                    <p>
-
-                        Discover amazing products,
-                        connect with sellers,
-                        and enjoy a secure
-                        marketplace experience.
-
-                    </p>
-
+        <main className="shop-premium">
+            <section className="shop-hero">
+                <div className="shop-hero-copy">
+                    <span className="shop-kicker"><FaStore /> THE E TOP MARKET</span>
+                    <h1>Find things<br />with <em>a little more soul.</em></h1>
+                    <p>Independent finds, thoughtful makers, and pieces worth keeping. All in one place.</p>
+                    <a className="shop-hero-link" href="#shop-collection">Explore the collection <FaArrowRight /></a>
                 </div>
-
+                <div className="shop-hero-art" aria-hidden="true">
+                    <div className="shop-art-sun" />
+                    <div className="shop-art-shape shop-art-shape-back" />
+                    <div className="shop-art-shape shop-art-shape-front">
+                        <FaShoppingBag />
+                        <span>MADE<br />TO BE<br /><em>FOUND.</em></span>
+                    </div>
+                    <span className="shop-art-spark">✳</span>
+                    <span className="shop-art-caption">GOOD THINGS,<br />GOOD PEOPLE.</span>
+                </div>
+                <div className="shop-hero-bottom">
+                    <span><FaCheckCircle /> A community marketplace</span>
+                    <span><FaShieldAlt /> Shop from independent sellers</span>
+                    <span><FaHeart /> Finds worth sharing</span>
+                </div>
             </section>
 
+            <section className="shop-assurance" aria-label="Marketplace values">
+                <div><span className="shop-assurance-icon"><FaStore /></span><span><b>Meet the makers</b><small>Discover independent sellers</small></span></div>
+                <div><span className="shop-assurance-icon"><FaShieldAlt /></span><span><b>Shop with confidence</b><small>Secure checkout, clear orders</small></span></div>
+                <div><span className="shop-assurance-icon"><FaHeart /></span><span><b>Find your next favorite</b><small>Thoughtful picks from the community</small></span></div>
+            </section>
 
-            <div className="container">
-
-
-                {/* HEADER */}
-
-                <div className="marketplace-header">
-
+            <section className="shop-collection" id="shop-collection">
+                <header className="shop-collection-heading">
                     <div>
-
-                        <h2 className="title">
-                            Explore Products
-                        </h2>
-
-                        <p className="subtitle">
-                            Find exactly what
-                            you're looking for.
-                        </p>
-
+                        <span className="shop-kicker">A GOOD PLACE TO START</span>
+                        <h2>Browse the collection</h2>
+                        <p>Explore what the E Top community has on offer.</p>
                     </div>
-
-
-                    <span className="product-count">
-
-                        {products.length}
-                        {" "}
-                        Products
-
-                    </span>
-
-                </div>
-
-
-                {/* FILTER */}
-
-                <div className="filter-bar">
-
-                    <div className="home-search">
-
-                        <span>
-                            🔍
+                    {!loading && !error && (
+                        <span className="shop-result-count">
+                            <b>{sortedProducts.length}</b> {sortedProducts.length === 1 ? "find" : "finds"}
                         </span>
+                    )}
+                </header>
 
+                <div className="shop-controls">
+                    <label className="shop-search">
+                        <FaSearch aria-hidden="true" />
                         <input
                             type="search"
                             value={keyword}
-                            onChange={
-                                handleSearch
-                            }
-                            placeholder="Search products..."
+                            onChange={event => {
+                                setKeyword(event.target.value);
+                                setPage(1);
+                            }}
+                            placeholder="Search products and finds..."
+                            aria-label="Search products"
                         />
-
-                    </div>
-
-
-                    <select
-                        value={category}
-                        onChange={
-                            handleCategory
-                        }
-                    >
-
-                        <option value="">
-                            All Categories
-                        </option>
-
-                        <option value="Electronics">
-                            Electronics
-                        </option>
-
-                        <option value="Fashion">
-                            Fashion
-                        </option>
-
-                        <option value="Books">
-                            Books
-                        </option>
-
-                        <option value="Sports">
-                            Sports
-                        </option>
-
-                        <option value="Home">
-                            Home
-                        </option>
-
-                    </select>
-
+                        {keyword && (
+                            <button type="button" onClick={() => setKeyword("")} aria-label="Clear search">×</button>
+                        )}
+                    </label>
+                    <label className="shop-sort">
+                        <FaSlidersH aria-hidden="true" />
+                        <span>Sort</span>
+                        <select value={sort} onChange={event => setSort(event.target.value)} aria-label="Sort products">
+                            <option value="stock">In stock first</option>
+                            <option value="newest">Newest</option>
+                            <option value="price-low">Price: low to high</option>
+                            <option value="price-high">Price: high to low</option>
+                        </select>
+                    </label>
                 </div>
 
+                <div className="shop-categories" aria-label="Filter by category">
+                    <button type="button" className={!category ? "active" : ""} onClick={() => updateCategory("")}>Everything</button>
+                    {categories.map(item => (
+                        <button
+                            type="button"
+                            key={item}
+                            className={category === item ? "active" : ""}
+                            onClick={() => updateCategory(category === item ? "" : item)}
+                        >
+                            {item}
+                        </button>
+                    ))}
+                </div>
 
                 {error && (
-
-                    <div className="error-message">
-
-                        {error}
-
+                    <div className="shop-state shop-error">
+                        <span className="shop-state-icon"><FaBoxOpen /></span>
+                        <h3>We couldn't bring the collection in.</h3>
+                        <p>{error}</p>
+                        <button type="button" onClick={() => setRetry(value => value + 1)}>Try again</button>
                     </div>
-
                 )}
 
-
-                {!error &&
-                    currentProducts.length === 0 && (
-
-                        <div className="no-products">
-
-                            <div className="no-products-icon">
-                                🔍
+                {loading && (
+                    <div className="shop-grid" aria-label="Loading products">
+                        {Array.from({ length: 8 }, (_, index) => (
+                            <div className="shop-skeleton" key={index}>
+                                <span /><div /><div />
                             </div>
-
-                            <h2>
-                                No Products Found
-                            </h2>
-
-                            <p>
-                                We couldn't find
-                                products matching
-                                your search.
-                            </p>
-
-                            <button
-                                onClick={
-                                    clearFilters
-                                }
-                            >
-                                Clear Filters
-                            </button>
-
-                        </div>
-
-                    )}
-
-
-                {currentProducts.length > 0 && (
-
-                    <div className="product-grid">
-
-                        {currentProducts.map(
-                            product => (
-
-                                <ProductCard
-                                    key={
-                                        product._id ||
-                                        product.id
-                                    }
-                                    product={
-                                        product
-                                    }
-                                />
-
-                            )
-                        )}
-
+                        ))}
                     </div>
-
                 )}
 
-
-                {/* PAGINATION */}
-
-                {products.length > 0 && (
-
-                    <div className="pagination">
-
-                        <button
-                            disabled={
-                                safePage === 1
-                            }
-                            onClick={() =>
-                                setPage(
-                                    safePage - 1
-                                )
-                            }
-                        >
-                            ← Previous
-                        </button>
-
-
-                        <div className="page-info">
-
-                            Page{" "}
-                            <strong>
-                                {safePage}
-                            </strong>
-                            {" "}of{" "}
-                            <strong>
-                                {totalPages}
-                            </strong>
-
-                        </div>
-
-
-                        <button
-                            disabled={
-                                safePage ===
-                                totalPages
-                            }
-                            onClick={() =>
-                                setPage(
-                                    safePage + 1
-                                )
-                            }
-                        >
-                            Next →
-                        </button>
-
+                {!loading && !error && visibleProducts.length === 0 && (
+                    <div className="shop-state">
+                        <span className="shop-state-icon"><FaSearch /></span>
+                        <h3>No finds on this shelf just yet.</h3>
+                        <p>Try another search or clear your filters to see everything.</p>
+                        <button type="button" onClick={clearFilters}>Clear filters</button>
                     </div>
-
                 )}
 
-            </div>
+                {!loading && !error && visibleProducts.length > 0 && (
+                    <div className="shop-product-grid">
+                        {visibleProducts.map(product => (
+                            <ProductCard key={product._id || product.id} product={product} />
+                        ))}
+                    </div>
+                )}
 
-        </div>
+                {!loading && !error && totalPages > 1 && (
+                    <nav className="shop-pagination" aria-label="Product pages">
+                        <button type="button" disabled={safePage === 1} onClick={() => setPage(safePage - 1)}>Previous</button>
+                        <span>Page <b>{safePage}</b> of <b>{totalPages}</b></span>
+                        <button type="button" disabled={safePage === totalPages} onClick={() => setPage(safePage + 1)}>Next <FaArrowRight /></button>
+                    </nav>
+                )}
+            </section>
 
+            <footer className="shop-maker-note">
+                <span className="shop-maker-mark">E</span>
+                <div><span className="shop-kicker">MORE THAN A MARKETPLACE</span><h2>Every good find has a story.</h2><p>And behind it, a person. Discover the community behind the things you love.</p></div>
+                <Link to="/reels">Meet the community <FaArrowRight /></Link>
+            </footer>
+        </main>
     );
-
 };
-
 
 export default Shop;

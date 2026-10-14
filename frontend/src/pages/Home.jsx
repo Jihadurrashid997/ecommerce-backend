@@ -35,6 +35,7 @@ const Home = () => {
     const [caption, setCaption] = useState("");
     const [files, setFiles] = useState([]);
     const [posting, setPosting] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     // created once per selection (not on every keystroke) and released afterwards
     const previews = useMemo(
@@ -97,6 +98,16 @@ const Home = () => {
 
         event.target.value = "";
 
+        const unsupported = picked.find(file =>
+            !["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"]
+                .includes(file.type)
+        );
+
+        if (unsupported) {
+            alert("Choose a JPG, PNG, WebP, GIF, or HEIC image.");
+            return;
+        }
+
         const next = [...files, ...picked].slice(0, MAX_PHOTOS);
 
         if (files.length + picked.length > MAX_PHOTOS) {
@@ -129,7 +140,15 @@ const Home = () => {
 
             setPosting(true);
 
-            const res = await api.post("/posts", form);
+            const res = await api.post("/posts", form, {
+                timeout: 5 * 60 * 1000,
+                headers: { "Content-Type": "multipart/form-data" },
+                onUploadProgress: event => {
+                    if (event.total) {
+                        setUploadProgress(Math.round((event.loaded / event.total) * 100));
+                    }
+                }
+            });
 
             setPosts(prev => [res.data.data, ...prev]);
             setFiles([]);
@@ -139,6 +158,7 @@ const Home = () => {
             alert(e.response?.data?.message || "Could not publish your post.");
         } finally {
             setPosting(false);
+            setUploadProgress(0);
         }
 
     };
@@ -261,7 +281,7 @@ const Home = () => {
                     <input
                         ref={fileRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
                         multiple
                         hidden
                         onChange={pickFiles}
@@ -290,7 +310,7 @@ const Home = () => {
                             <span className="home-composer-hint"><FaImage /> Add up to 5 photos</span>
                             <span className="home-composer-count">{caption.length}/2200</span>
                             <button className="btn-primary" type="submit" disabled={posting || (!caption.trim() && files.length === 0)}>
-                                {posting ? "Sharing..." : "Share post"} <FaArrowRight />
+                                {posting ? `Sharing ${uploadProgress}%...` : "Share post"} <FaArrowRight />
                             </button>
                         </div>
 

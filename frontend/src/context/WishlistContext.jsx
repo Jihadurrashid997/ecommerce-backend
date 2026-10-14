@@ -26,19 +26,24 @@ export const WishlistProvider = ({ children }) => {
 
     const addToWishlist = (product) => {
 
-        const exists = wishlist.find(item => item._id === product._id);
+        const productId = String(product._id || product.id || "");
 
-        if (!exists) {
+        setWishlist(previous => {
+            const exists = previous.some(
+                item => String(item._id || item.id || "") === productId
+            );
 
-            setWishlist([...wishlist, product]);
-
-        }
+            return exists ? previous : [...previous, product];
+        });
 
     };
 
     const removeFromWishlist = (id) => {
 
-        setWishlist(wishlist.filter(item => item._id !== id));
+        const productId = String(id);
+        setWishlist(previous => previous.filter(
+            item => String(item._id || item.id || "") !== productId
+        ));
 
     };
 

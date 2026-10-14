@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const User = require("../models/User");
 const Post = require("../models/Post");
+const { saveFile, deleteFile } = require("../services/mediaStorage");
 
 // ======================================================
 // HELPERS
@@ -451,6 +452,9 @@ exports.getProfile = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
 
+    let uploadedMedia = null;
+    let profileSaved = false;
+
     try {
 
         const {
@@ -463,6 +467,8 @@ exports.updateProfile = async (req, res) => {
         const user =
             await User.findById(
                 req.user.id
+            ).select(
+                "+profileImagePublicId +profileImageType"
             );
 
         if (!user) {
@@ -476,6 +482,17 @@ exports.updateProfile = async (req, res) => {
 
             });
 
+        }
+
+        const file = req.files?.[0];
+        const previousImage = {
+            url: user.profileImage,
+            publicId: user.profileImagePublicId,
+            type: user.profileImageType
+        };
+
+        if (file) {
+            uploadedMedia = await saveFile(file, "etop/profiles");
         }
 
         if (
@@ -507,15 +524,37 @@ exports.updateProfile = async (req, res) => {
         }
 
         if (
+            !file &&
             typeof profileImage === "string"
         ) {
 
             user.profileImage =
                 profileImage.trim();
 
+            if (user.profileImage !== previousImage.url) {
+                user.profileImagePublicId = "";
+                user.profileImageType = "";
+            }
+
+        }
+
+        if (uploadedMedia) {
+            user.profileImage = uploadedMedia.url;
+            user.profileImagePublicId = uploadedMedia.publicId || "";
+            user.profileImageType = uploadedMedia.type || "image";
+
         }
 
         await user.save();
+        profileSaved = true;
+
+        if (
+            uploadedMedia &&
+            previousImage.url &&
+            previousImage.url !== uploadedMedia.url
+        ) {
+            await deleteFile(previousImage);
+        }
 
         const updated =
             await User.findById(
@@ -539,6 +578,10 @@ exports.updateProfile = async (req, res) => {
         });
 
     } catch (err) {
+
+        if (uploadedMedia && !profileSaved) {
+            await deleteFile(uploadedMedia);
+        }
 
         console.error(
             "UPDATE PROFILE ERROR:",

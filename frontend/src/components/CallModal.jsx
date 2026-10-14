@@ -533,6 +533,7 @@ const CallModal = ({
     return (
 
         <div
+            className="messenger-call-modal"
             style={{
                 position: "fixed",
                 inset: 0,

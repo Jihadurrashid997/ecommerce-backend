@@ -180,6 +180,16 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 
         setError("");
 
+        if (picked.size > 80 * 1024 * 1024) {
+            setError("Choose a video smaller than 80MB.");
+            return;
+        }
+
+        if (!["video/mp4", "video/webm", "video/quicktime", "video/x-matroska", "video/3gpp"].includes(picked.type)) {
+            setError("Choose an MP4, WebM, MOV, MKV, or 3GP video.");
+            return;
+        }
+
         const url = URL.createObjectURL(picked);
 
         const probe = document.createElement("video");
@@ -225,6 +235,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
             setError("");
 
             const res = await api.post("/posts/reels", form, {
+                headers: { "Content-Type": "multipart/form-data" },
                 onUploadProgress: e => {
                     if (e.total) setProgress(Math.round((e.loaded / e.total) * 100));
                 },
@@ -253,7 +264,12 @@ const UploadSheet = ({ onClose, onUploaded }) => {
                     <label className="pick-video">
                         <FaPlus />
                         <span>Choose a video (max {MAX_SECONDS}s)</span>
-                        <input type="file" accept="video/*" hidden onChange={choose} />
+                        <input
+                            type="file"
+                            accept="video/mp4,video/webm,video/quicktime,video/x-matroska,video/3gpp"
+                            hidden
+                            onChange={choose}
+                        />
                     </label>
                 ) : (
                     <video className="sheet-preview" src={preview} controls playsInline />

@@ -77,8 +77,7 @@ exports.sendPasswordResetEmail = async ({ to, name, code }) => {
 
         console.warn(
             "EMAIL NOT CONFIGURED - set EMAIL_HOST/EMAIL_USER/EMAIL_PASS env vars. " +
-            "Skipping password reset email. Code was:",
-            code
+            "Skipping password reset email."
         );
 
         return { sent: false, reason: "not_configured" };

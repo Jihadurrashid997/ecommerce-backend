@@ -52,6 +52,13 @@ exports.reelUpload = makeUploader({
     maxFiles: 1
 });
 
+// Profile photos are single image uploads, limited to the same size as a post photo.
+exports.profileUpload = makeUploader({
+    allowed: IMAGE_TYPES,
+    maxSize: 10 * 1024 * 1024,
+    maxFiles: 1
+});
+
 // Wraps an uploader so ANY multer error becomes a clean JSON 400
 exports.handle = (uploader, field) => (req, res, next) => {
 

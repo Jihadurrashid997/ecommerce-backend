@@ -11,7 +11,8 @@ const crypto =
     require("crypto");
 
 const {
-    sendPasswordResetEmail
+    sendPasswordResetEmail,
+    isEmailConfigured
 } = require("../services/emailService");
 
 
@@ -626,6 +627,13 @@ exports.forgotPassword = async (req, res) => {
 
         }
 
+        if (!isEmailConfigured()) {
+            return res.status(503).json({
+                success: false,
+                message: "Password reset email is not configured. Please contact support."
+            });
+        }
+
         const user =
             await User.findOne({ email });
 
@@ -676,14 +684,25 @@ exports.forgotPassword = async (req, res) => {
 
         if (!emailResult.sent) {
 
-            // Email isn't configured or failed to send -
-            // let the admin know via server logs, but still
-            // don't reveal this to the requester (same
-            // reasoning as above).
             console.warn(
                 "Password reset email not sent:",
                 emailResult.reason
             );
+
+            await User.updateOne(
+                { _id: user._id },
+                {
+                    $unset: {
+                        resetPasswordToken: "",
+                        resetPasswordExpires: ""
+                    }
+                }
+            );
+
+            return res.status(503).json({
+                success: false,
+                message: "We couldn't send the reset code. Please try again later."
+            });
 
         }
 
@@ -695,7 +714,7 @@ exports.forgotPassword = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: `Something went wrong: ${error.message}`
+            message: "Something went wrong. Please try again."
         });
 
     }

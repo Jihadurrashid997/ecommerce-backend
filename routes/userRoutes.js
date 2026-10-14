@@ -24,6 +24,11 @@ const {
 const auth =
     require("../middleware/auth");
 
+const {
+    profileUpload,
+    handle
+} = require("../middleware/postUpload");
+
 
 // ======================================================
 // IMPORTANT ROUTE ORDER
@@ -45,6 +50,7 @@ router.get(
 router.put(
     "/profile",
     auth(),
+    handle(profileUpload, "profileImage"),
     updateProfile
 );
 

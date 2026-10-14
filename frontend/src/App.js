@@ -6,6 +6,7 @@ import {
     Route,
     useLocation
 } from "react-router-dom";
+import { useApp } from "./context/AppContext";
 
 
 // ======================================================
@@ -30,7 +31,6 @@ import Messenger from "./components/Messenger";
 import Dashboard from "./components/Dashboard";
 import PrivateRoute from "./components/PrivateRoute";
 import LoadingScreen from "./components/LoadingScreen";
-import GlobalCallManager from "./components/GlobalCallManager";
 
 
 // ======================================================
@@ -132,6 +132,7 @@ function AppLayout() {
 
     const location =
         useLocation();
+    const { user } = useApp();
 
 
     // ==================================================
@@ -159,13 +160,6 @@ function AppLayout() {
         {!authPage && location.pathname !== "/forgot-password" && (
             <TopTabs />
         )}
-
-
-        {/* ==================================================
-            GLOBAL INCOMING CALL
-        ================================================== */}
-
-        <GlobalCallManager />
 
 
         {/* ==================================================
@@ -532,9 +526,7 @@ function AppLayout() {
                     element={
 
                         <PrivateRoute>
-
-                            <Messenger />
-
+                            <div />
                         </PrivateRoute>
 
                     }
@@ -626,6 +618,9 @@ function AppLayout() {
 
             </Routes>
 
+            {user && (
+                <Messenger isActive={location.pathname === "/messenger"} />
+            )}
 
             {/* ==================================================
                 FOOTER
