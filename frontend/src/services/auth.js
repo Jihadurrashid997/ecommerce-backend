@@ -272,17 +272,12 @@ export const refreshCurrentUser = async () => {
     try {
 
         const response =
-            await api.get(
-                `/users/${userId}`
-            );
+            await api.get("/auth/me");
 
         const data =
             response?.data || {};
 
-        const user =
-            data.user ||
-            data.data ||
-            data;
+        const user = data.user || data.data;
 
         if (user) {
 

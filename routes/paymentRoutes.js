@@ -4,6 +4,7 @@ const router = express.Router();
 const auth = require("../middleware/auth");
 
 const {
+    getPaymentStatus,
     initPayment,
     paymentSuccess,
     paymentFail,
@@ -11,6 +12,11 @@ const {
     paymentIPN
 } = require("../controllers/paymentController");
 
+router.get(
+    "/status/:transactionId",
+    auth(),
+    getPaymentStatus
+);
 
 // Start payment
 router.post(

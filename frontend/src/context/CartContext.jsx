@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useState,
+    useEffect
+} from "react";
 
 const CartContext = createContext();
 
@@ -6,9 +12,15 @@ export const CartProvider = ({ children }) => {
 
     const [cart, setCart] = useState(() => {
 
-        const saved = localStorage.getItem("cart");
+        try {
+            const saved = localStorage.getItem("cart");
+            const parsed = saved ? JSON.parse(saved) : [];
 
-        return saved ? JSON.parse(saved) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            console.error("Could not read saved cart:", error);
+            return [];
+        }
 
     });
 
@@ -18,37 +30,27 @@ export const CartProvider = ({ children }) => {
 
     }, [cart]);
 
-    const addToCart = (product) => {
+    const addToCart = useCallback((product) => {
+        setCart(previous => {
+            const exists = previous.some(item => item._id === product._id);
 
-        const exist = cart.find(item => item._id === product._id);
+            return exists
+                ? previous.map(item =>
+                    item._id === product._id
+                        ? { ...item, quantity: item.quantity + 1 }
+                        : item
+                )
+                : [...previous, { ...product, quantity: 1 }];
+        });
+    }, []);
 
-        if (exist) {
+    const removeFromCart = useCallback((id) => {
+        setCart(previous => previous.filter(item => item._id !== id));
+    }, []);
 
-            setCart(cart.map(item =>
-                item._id === product._id
-                    ? { ...item, quantity: item.quantity + 1 }
-                    : item
-            ));
-
-        } else {
-
-            setCart([...cart, { ...product, quantity: 1 }]);
-
-        }
-
-    };
-
-    const removeFromCart = (id) => {
-
-        setCart(cart.filter(item => item._id !== id));
-
-    };
-
-    const clearCart = () => {
-
+    const clearCart = useCallback(() => {
         setCart([]);
-
-    };
+    }, []);
 
     return (
 

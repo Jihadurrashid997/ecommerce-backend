@@ -4,7 +4,50 @@ const Order = require("../models/Order");
 const store_id = process.env.SSLC_STORE_ID;
 const store_passwd = process.env.SSLC_STORE_PASSWORD;
 
-const is_live = false;
+const is_live = process.env.SSLC_IS_LIVE === "true";
+
+exports.getPaymentStatus = async (req, res) => {
+    try {
+        const transactionId = String(req.params.transactionId || "").trim();
+
+        if (!transactionId) {
+            return res.status(400).json({
+                success: false,
+                message: "Transaction ID is required."
+            });
+        }
+
+        const order = await Order.findOne({ transactionId })
+            .select("user status paymentStatus transactionId");
+
+        if (!order) {
+            return res.status(404).json({
+                success: false,
+                message: "Payment not found."
+            });
+        }
+
+        if (String(order.user) !== String(req.user.id) && req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "You are not authorized to view this payment."
+            });
+        }
+
+        return res.json({
+            success: true,
+            transactionId: order.transactionId,
+            paymentStatus: order.paymentStatus,
+            orderStatus: order.status
+        });
+    } catch (error) {
+        console.error("GET PAYMENT STATUS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load payment status."
+        });
+    }
+};
 
 
 // ==================================================

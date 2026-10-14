@@ -6,9 +6,15 @@ export const WishlistProvider = ({ children }) => {
 
     const [wishlist, setWishlist] = useState(() => {
 
-        const saved = localStorage.getItem("wishlist");
+        try {
+            const saved = localStorage.getItem("wishlist");
+            const parsed = saved ? JSON.parse(saved) : [];
 
-        return saved ? JSON.parse(saved) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            console.error("Could not read saved wishlist:", error);
+            return [];
+        }
 
     });
 

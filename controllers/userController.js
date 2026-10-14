@@ -9,7 +9,6 @@ const Post = require("../models/Post");
 const safeUserFields = [
     "_id",
     "name",
-    "email",
     "role",
     "bio",
     "location",
@@ -123,7 +122,7 @@ exports.getUsers = async (req, res) => {
 
         const users =
             await User.find(filter)
-                .select(safeUserFields.join(" "))
+                .select(`${safeUserFields.join(" ")} email`)
                 .sort({
                     createdAt: -1
                 })
@@ -196,7 +195,7 @@ exports.getChatUsers = async (req, res) => {
 
             })
                 .select(
-                    safeUserFields.join(" ")
+                    `${safeUserFields.join(" ")} blockedUsers`
                 )
                 .sort({
                     name: 1
