@@ -1,10 +1,10 @@
 // frontend/src/services/socket.js
 
 import { io } from "socket.io-client";
+import { getSocketBaseUrl } from "./api";
 
 
-const SOCKET_URL =
-    "https://ecommerce-api-9wc9.onrender.com";
+const SOCKET_URL = getSocketBaseUrl();
 
 
 let socket = null;

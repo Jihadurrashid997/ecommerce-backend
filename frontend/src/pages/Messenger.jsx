@@ -24,15 +24,12 @@ import {
 
 import { io } from "socket.io-client";
 
-import api from "../services/api";
+import api, { getSocketBaseUrl } from "../services/api";
 
 import "../styles/Messenger.css";
 
 
-const SOCKET_URL =
-    process.env.REACT_APP_API_URL
-        ? process.env.REACT_APP_API_URL.replace("/api", "")
-        : window.location.origin;
+const SOCKET_URL = getSocketBaseUrl();
 
 
 const Messenger = () => {

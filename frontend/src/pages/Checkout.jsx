@@ -12,8 +12,7 @@ const Checkout = () => {
     const navigate = useNavigate();
 
     const {
-        cartItems,
-        clearCart
+        cart
     } = useCart();
 
 
@@ -38,7 +37,7 @@ const Checkout = () => {
     ========================================
     */
 
-    const totalAmount = (cartItems || []).reduce(
+    const totalAmount = (cart || []).reduce(
 
         (total, item) => {
 
@@ -66,15 +65,15 @@ const Checkout = () => {
     useEffect(() => {
 
         if (
-            !cartItems ||
-            cartItems.length === 0
+            !cart ||
+            cart.length === 0
         ) {
 
             navigate("/cart");
 
         }
 
-    }, [cartItems, navigate]);
+    }, [cart, navigate]);
 
 
     /*
@@ -138,8 +137,8 @@ const Checkout = () => {
         */
 
         if (
-            !cartItems ||
-            cartItems.length === 0
+            !cart ||
+            cart.length === 0
         ) {
 
             alert(
@@ -179,7 +178,7 @@ const Checkout = () => {
             ========================================
             */
 
-            const items = cartItems.map(
+            const items = cart.map(
                 (item) => ({
 
                     product:
@@ -547,7 +546,7 @@ const Checkout = () => {
                     </h2>
 
 
-                    {(cartItems || []).map(
+                    {(cart || []).map(
                         (item, index) => (
 
                             <div

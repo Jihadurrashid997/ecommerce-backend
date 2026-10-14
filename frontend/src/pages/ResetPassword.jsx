@@ -59,10 +59,10 @@ const ResetPassword = () => {
 
             setError("");
 
-            if (password.length < 6) {
+            if (password.length < 8) {
 
                 setError(
-                    "Password must be at least 6 characters."
+                    "Password must be at least 8 characters."
                 );
 
                 return;
@@ -186,7 +186,7 @@ const ResetPassword = () => {
                                 <input
                                     id="password"
                                     type={showPassword ? "text" : "password"}
-                                    placeholder="At least 6 characters"
+                                    placeholder="At least 8 characters"
                                     value={password}
                                     onChange={event =>
                                         setPassword(event.target.value)

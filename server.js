@@ -26,8 +26,12 @@ const allowedOrigins = [
     "https://ecommerce-api-9wc9.onrender.com",
     "http://localhost:3000",
     "http://localhost:3001",
-    "http://localhost:5173"
-];
+    "http://localhost:5173",
+    process.env.CLIENT_URL,
+    ...(process.env.CORS_ORIGINS || "").split(",")
+]
+    .filter(Boolean)
+    .map(origin => origin.trim().replace(/\/+$/, ""));
 
 app.use(
     cors({
@@ -37,21 +41,7 @@ app.use(
                 return callback(null, true);
             }
 
-            if (
-                allowedOrigins.includes(origin) ||
-                origin.endsWith(".onrender.com")
-            ) {
-                return callback(null, true);
-            }
-
-            // Previously this fell through to
-            // `callback(null, true)` no matter what,
-            // which meant the allowlist above did
-            // nothing and every origin was accepted.
-            return callback(
-                new Error("Not allowed by CORS"),
-                false
-            );
+            return callback(null, allowedOrigins.includes(origin));
         },
 
         credentials: false,
@@ -248,7 +238,7 @@ const io =
         server,
         {
             cors: {
-                origin: "*",
+                origin: allowedOrigins,
                 methods: [
                     "GET",
                     "POST"

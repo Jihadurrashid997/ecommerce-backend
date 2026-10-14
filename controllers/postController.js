@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Post = require("../models/Post");
+const User = require("../models/User");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
 
 const AUTHOR_FIELDS = "name username profileImage avatar role";
@@ -32,7 +33,8 @@ const shape = (post, userId) => {
 
 const listQuery = async (filter, req) => {
 
-    const limit = Math.min(Number(req.query.limit) || 10, 30);
+    const requestedLimit = Number(req.query.limit) || 10;
+    const limit = Math.max(1, Math.min(requestedLimit, 30));
 
     const before = req.query.before
         ? new Date(req.query.before)
@@ -70,11 +72,19 @@ exports.createPost = async (req, res) => {
     try {
 
         const files = req.files || [];
+        const caption = String(req.body?.caption || "").trim().slice(0, 2200);
 
-        if (files.length === 0) {
+        if (files.length === 0 && !caption) {
             return res.status(400).json({
                 success: false,
-                message: "Please add at least one photo."
+                message: "Write something or add at least one photo."
+            });
+        }
+
+        if (files.length > 5) {
+            return res.status(400).json({
+                success: false,
+                message: "You can add up to 5 photos."
             });
         }
 
@@ -87,7 +97,7 @@ exports.createPost = async (req, res) => {
         const post = await Post.create({
             author: req.user.id,
             kind: "post",
-            caption: String(req.body?.caption || "").slice(0, 2200),
+            caption,
             media
         });
 
@@ -188,7 +198,23 @@ exports.createReel = async (req, res) => {
 exports.getFeed = async (req, res) => {
 
     try {
-        return res.json(await listQuery({ kind: "post" }, req));
+        const filter = { kind: "post" };
+
+        if (req.query.scope === "following") {
+            const user = await User
+                .findById(req.user.id)
+                .select("following")
+                .lean();
+
+            filter.author = {
+                $in: [
+                    req.user.id,
+                    ...(user?.following || [])
+                ]
+            };
+        }
+
+        return res.json(await listQuery(filter, req));
     } catch (error) {
         console.error("GET FEED ERROR:", error);
         return res.status(500).json({ success: false, message: "Could not load the feed." });

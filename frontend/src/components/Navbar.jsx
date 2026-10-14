@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useApp } from "../context/AppContext";
+import { useCart } from "../context/CartContext";
 import EtopLogo from "./EtopLogo";
 import "../styles/EtopLogo.css";
 
@@ -33,9 +34,9 @@ const Navbar = () => {
 
     const {
         user,
-        logout,
-        cart
+        logout
     } = useApp();
+    const { cart } = useCart();
 
     const navigate = useNavigate();
     const location = useLocation();

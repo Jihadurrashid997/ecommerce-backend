@@ -15,7 +15,8 @@ const {
     blockUser,
     unblockUser,
     getSocialStats,
-    toggleFollow
+    toggleFollow,
+    getFollowing
 
 } =
     require("../controllers/userController");
@@ -69,6 +70,12 @@ router.post(
     "/follow/:id",
     auth(),
     toggleFollow
+);
+
+router.get(
+    "/following",
+    auth(),
+    getFollowing
 );
 
 

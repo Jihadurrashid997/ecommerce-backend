@@ -91,6 +91,7 @@ const PostCard = ({ post, onDeleted }) => {
 
             {post.caption && <p className="post-caption">{post.caption}</p>}
 
+            {post.media?.length > 0 && (
             <div className="post-media">
 
                 <img src={getUploadUrl(post.media[slide]?.url)} alt="" loading="lazy" />
@@ -110,6 +111,7 @@ const PostCard = ({ post, onDeleted }) => {
                 )}
 
             </div>
+            )}
 
             <div className="post-actions">
 

@@ -9,7 +9,6 @@ const Post = require("../models/Post");
 const safeUserFields = [
     "_id",
     "name",
-    "email",
     "role",
     "bio",
     "location",
@@ -123,7 +122,7 @@ exports.getUsers = async (req, res) => {
 
         const users =
             await User.find(filter)
-                .select(safeUserFields.join(" "))
+                .select(`${safeUserFields.join(" ")} email`)
                 .sort({
                     createdAt: -1
                 })
@@ -196,7 +195,7 @@ exports.getChatUsers = async (req, res) => {
 
             })
                 .select(
-                    safeUserFields.join(" ")
+                    `${safeUserFields.join(" ")} blockedUsers`
                 )
                 .sort({
                     name: 1
@@ -941,4 +940,31 @@ exports.toggleFollow = async (req, res) => {
 
     }
 
+};
+
+exports.getFollowing = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .select("following")
+            .populate("following", "name role profileImage")
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        return res.json({
+            success: true,
+            users: (user.following || []).filter(Boolean)
+        });
+    } catch (error) {
+        console.error("GET FOLLOWING ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load the people you follow."
+        });
+    }
 };

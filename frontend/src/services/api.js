@@ -2,8 +2,22 @@
 
 import axios from "axios";
 
-const API_BASE_URL =
+const DEFAULT_API_BASE_URL =
     "https://ecommerce-api-9wc9.onrender.com/api";
+
+const configuredApiUrl =
+    process.env.REACT_APP_API_URL || DEFAULT_API_BASE_URL;
+
+const API_BASE_URL =
+    configuredApiUrl.replace(/\/+$/, "").endsWith("/api")
+        ? configuredApiUrl.replace(/\/+$/, "")
+        : `${configuredApiUrl.replace(/\/+$/, "")}/api`;
+
+export const getSocketBaseUrl = () =>
+    (
+        process.env.REACT_APP_SOCKET_URL ||
+        API_BASE_URL.replace(/\/api$/, "")
+    ).replace(/\/+$/, "");
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -217,8 +231,7 @@ export const getUploadUrl = (
     const cleanPath =
         value.replace(/^\/+/, "");
 
-    return `https://ecommerce-api-9wc9.onrender.com/${cleanPath}`;
-
+    return `${getSocketBaseUrl()}/${cleanPath}`;
 };
 
 
@@ -234,31 +247,15 @@ export const getMessages = async ({
     limit = 50
 } = {}) => {
 
-    const params = {
-        page,
-        limit
-    };
+    const conversationUserId = receiverId || roomId || userId;
 
-    if (userId) {
-        params.userId =
-            String(userId);
-    }
-
-    if (receiverId) {
-        params.receiverId =
-            String(receiverId);
-    }
-
-    if (roomId) {
-        params.roomId =
-            String(roomId);
+    if (!conversationUserId) {
+        throw new Error("A conversation user ID is required");
     }
 
     return api.get(
-        "/messages",
-        {
-            params
-        }
+        `/messages/conversation/${conversationUserId}`,
+        { params: { page, limit } }
     );
 
 };
@@ -268,26 +265,23 @@ export const sendMessage = async (
     messageData
 ) => {
 
-    return api.post(
-        "/messages",
-        messageData
-    );
+    return api.post("/messages/send", messageData);
 
 };
 
 
 export const markMessageSeen = async (
-    messageId
+    userId
 ) => {
 
-    if (!messageId) {
+    if (!userId) {
         throw new Error(
-            "messageId is required"
+            "userId is required"
         );
     }
 
-    return api.patch(
-        `/messages/${messageId}/seen`
+    return api.put(
+        `/messages/seen/${userId}`
     );
 
 };

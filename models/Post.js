@@ -61,7 +61,15 @@ const postSchema = new mongoose.Schema(
 
         media: {
             type: [mediaSchema],
-            validate: v => Array.isArray(v) && v.length > 0
+            validate: {
+                validator(v) {
+                    return Array.isArray(v) && (
+                        v.length > 0 ||
+                        (this.kind === "post" && Boolean(this.caption?.trim()))
+                    );
+                },
+                message: "A post needs a caption or media."
+            }
         },
 
         likes: [
