@@ -427,7 +427,7 @@ const VoiceMessagePlayer = ({ url, own }) => {
    COMPONENT
 ========================================================= */
 
-const Messenger = () => {
+const Messenger = ({ isActive = true }) => {
 
     /*
      * Reads ?user=<id> from the URL - this is how
@@ -6343,6 +6343,10 @@ const onCallMissed =
 
     if (loading) {
 
+        if (!isActive) {
+            return null;
+        }
+
         return (
             <div className="messenger-loading">
 
@@ -6363,7 +6367,7 @@ const onCallMissed =
     ===================================================== */
 
     return (
-        <div className="messenger-page">
+        <div className={`messenger-page ${isActive ? "" : "messenger-persistent-background"}`}>
 
             <aside
                 className={

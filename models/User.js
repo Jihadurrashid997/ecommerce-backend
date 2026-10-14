@@ -54,6 +54,18 @@ const userSchema = new mongoose.Schema(
             default: ""
         },
 
+        profileImagePublicId: {
+            type: String,
+            default: "",
+            select: false
+        },
+
+        profileImageType: {
+            type: String,
+            default: "",
+            select: false
+        },
+
         // ==========================
         // PRESENCE
         // ==========================

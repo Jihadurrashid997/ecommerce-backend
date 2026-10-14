@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -11,6 +11,7 @@ import {
 } from "react-icons/fa";
 
 import api from "../services/api";
+import { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 
 import "../styles/EditProfile.css";
@@ -39,29 +40,27 @@ const EditProfile = () => {
 
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
-
-
-    // ==========================
-    // AUTH CHECK
-    // ==========================
+    const [profileFile, setProfileFile] = useState(null);
+    const [profilePreview, setProfilePreview] = useState("");
 
     useEffect(() => {
-
-        if (!user) {
-            navigate("/login");
-            return;
+        if (!profileFile) {
+            setProfilePreview("");
+            return undefined;
         }
 
-        loadProfile();
+        const previewUrl = URL.createObjectURL(profileFile);
+        setProfilePreview(previewUrl);
 
-    }, [user]);
+        return () => URL.revokeObjectURL(previewUrl);
+    }, [profileFile]);
 
 
     // ==========================
     // LOAD PROFILE
     // ==========================
 
-    const loadProfile = async () => {
+    const loadProfile = useCallback(async () => {
 
         try {
 
@@ -97,7 +96,23 @@ const EditProfile = () => {
 
         }
 
-    };
+    }, []);
+
+
+    // ==========================
+    // AUTH CHECK
+    // ==========================
+
+    useEffect(() => {
+
+        if (!user) {
+            navigate("/login");
+            return;
+        }
+
+        loadProfile();
+
+    }, [user, navigate, loadProfile]);
 
 
     // ==========================
@@ -119,6 +134,27 @@ const EditProfile = () => {
         setMessage("");
         setError("");
 
+    };
+
+    const handleProfileFile = event => {
+        const file = event.target.files?.[0];
+        event.target.value = "";
+
+        if (!file) return;
+
+        if (!file.type.startsWith("image/")) {
+            setError("Choose an image file.");
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            setError("Profile photos must be 10MB or smaller.");
+            return;
+        }
+
+        setProfileFile(file);
+        setMessage("");
+        setError("");
     };
 
 
@@ -150,10 +186,7 @@ const EditProfile = () => {
             setSaving(true);
 
 
-            const response =
-                await api.put(
-                    "/users/profile",
-                    {
+            let profilePayload = {
                         name:
                             formData.name.trim(),
 
@@ -165,8 +198,26 @@ const EditProfile = () => {
 
                         profileImage:
                             formData.profileImage.trim()
+                    };
+
+            if (profileFile) {
+                profilePayload = new FormData();
+                profilePayload.append("name", formData.name.trim());
+                profilePayload.append("bio", formData.bio.trim());
+                profilePayload.append("location", formData.location.trim());
+                profilePayload.append("profileImage", profileFile);
+            }
+
+            const response = await api.put(
+                "/users/profile",
+                profilePayload,
+                profileFile
+                    ? {
+                        timeout: 120000,
+                        headers: { "Content-Type": "multipart/form-data" }
                     }
-                );
+                    : undefined
+            );
 
 
             const updatedUser =
@@ -293,12 +344,10 @@ const EditProfile = () => {
 
                     <div className="edit-profile-icon">
 
-                        {formData.profileImage ? (
+                        {profilePreview || formData.profileImage ? (
 
                             <img
-                                src={
-                                    formData.profileImage
-                                }
+                                src={getUploadUrl(profilePreview || formData.profileImage)}
                                 alt="Profile"
                             />
 
@@ -511,33 +560,35 @@ const EditProfile = () => {
                     <div className="form-group">
 
                         <label htmlFor="profileImage">
-
-                            Profile Image URL
-
+                            Profile photo
                         </label>
 
                         <div className="input-wrapper">
-
                             <FaUserCircle />
-
                             <input
                                 id="profileImage"
                                 name="profileImage"
-                                type="url"
-                                value={
-                                    formData.profileImage
-                                }
-                                onChange={
-                                    handleChange
-                                }
-                                placeholder="https://example.com/image.jpg"
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+                                onChange={handleProfileFile}
+                                disabled={saving}
                             />
-
                         </div>
 
                         <small>
-                            Paste a direct image URL.
+                            Choose an image up to 10MB. Your new photo previews above.
                         </small>
+
+                        {profileFile && (
+                            <button
+                                type="button"
+                                className="cancel-profile-btn"
+                                onClick={() => setProfileFile(null)}
+                                disabled={saving}
+                            >
+                                Keep current photo
+                            </button>
+                        )}
 
                     </div>
 
