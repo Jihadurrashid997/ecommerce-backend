@@ -941,3 +941,30 @@ exports.toggleFollow = async (req, res) => {
     }
 
 };
+
+exports.getFollowing = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .select("following")
+            .populate("following", "name role profileImage")
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        return res.json({
+            success: true,
+            users: (user.following || []).filter(Boolean)
+        });
+    } catch (error) {
+        console.error("GET FOLLOWING ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load the people you follow."
+        });
+    }
+};
