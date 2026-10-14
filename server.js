@@ -5,10 +5,12 @@ const fs = require("fs");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
+const jwt = require("jsonwebtoken");
 
 const connectDB = require("./config/db");
 const Message = require("./models/Message");
 const User = require("./models/User");
+const GroupConversation = require("./models/GroupConversation");
 
 dotenv.config();
 
@@ -181,6 +183,11 @@ app.use(
 );
 
 app.use(
+    "/api/groups",
+    require("./routes/groupRoutes")
+);
+
+app.use(
     "/api/posts",
     require("./routes/postRoutes")
 );
@@ -257,6 +264,8 @@ const io =
             maxHttpBufferSize: 10e6
         }
     );
+
+app.set("io", io);
 
 /* =========================================================
    ONLINE USERS
@@ -402,6 +411,28 @@ const getOnlineUsers =
         );
 
     };
+
+io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+
+    if (!token) {
+        return next(new Error("Authentication required"));
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = normalizeId(decoded?.id || decoded?._id || decoded?.userId);
+
+        if (!userId) {
+            return next(new Error("Invalid socket identity"));
+        }
+
+        socket.userId = userId;
+        return next();
+    } catch (error) {
+        return next(new Error("Invalid or expired socket token"));
+    }
+});
 
 /* =========================================================
    SEND EVENT TO USER
@@ -563,12 +594,9 @@ io.on(
                 const id =
                     normalizeId(userId);
 
-                if (!id) {
+                if (!id || id !== socket.userId) {
                     return;
                 }
-
-                socket.userId =
-                    id;
 
                 socket.join(
                     `user:${id}`
@@ -598,10 +626,33 @@ io.on(
 
         socket.on(
             "join-room",
-            roomId => {
+            async roomId => {
 
                 if (!roomId) {
                     return;
+                }
+
+                const groupRoom =
+                    /^group:([a-f\d]{24})$/i.exec(String(roomId));
+
+                if (groupRoom) {
+                    if (!socket.userId) {
+                        return;
+                    }
+
+                    try {
+                        const isMember = await GroupConversation.exists({
+                            _id: groupRoom[1],
+                            participants: socket.userId
+                        });
+
+                        if (!isMember) {
+                            return;
+                        }
+                    } catch (error) {
+                        console.error("Group room membership check error:", error);
+                        return;
+                    }
                 }
 
                 socket.join(
@@ -636,9 +687,84 @@ io.on(
 
         socket.on(
             "send-message",
-            payload => {
+            async payload => {
 
                 if (!payload) {
+                    return;
+                }
+
+                if (payload.groupId) {
+                    const senderId = socket.userId;
+                    const groupId = normalizeId(payload.groupId);
+
+                    if (!senderId || !groupId) {
+                        return;
+                    }
+
+                    try {
+                        const group = await GroupConversation.findOne({
+                            _id: groupId,
+                            participants: senderId
+                        }).select("participants");
+
+                        if (!group) {
+                            return;
+                        }
+
+                        const messageId =
+                            normalizeId(payload._id || payload.id);
+                        const storedMessage = messageId
+                            ? await Message.findOne({
+                                  _id: messageId,
+                                  groupId,
+                                  sender: senderId
+                              }).populate(
+                                  "sender",
+                                  "name username fullName displayName isVerified"
+                              )
+                            : null;
+
+                        if (!storedMessage) {
+                            return;
+                        }
+
+                        const roomId = `group:${groupId}`;
+                        const message = {
+                            _id: String(storedMessage._id),
+                            id: String(storedMessage._id),
+                            groupId,
+                            roomId,
+                            sender: storedMessage.sender,
+                            senderId,
+                            senderName:
+                                storedMessage.sender?.name ||
+                                storedMessage.sender?.username ||
+                                storedMessage.sender?.fullName ||
+                                storedMessage.sender?.displayName ||
+                                "Group member",
+                            receiver: null,
+                            receiverId: null,
+                            message: storedMessage.message || "",
+                            fileUrl: storedMessage.fileUrl || "",
+                            fileName: storedMessage.fileName || "",
+                            fileType: storedMessage.fileType || "",
+                            createdAt: storedMessage.createdAt,
+                            timestamp: new Date(storedMessage.createdAt).getTime()
+                        };
+
+                        io.to(roomId).emit("group-message", message);
+
+                        group.participants.forEach(memberId => {
+                            sendToUser(
+                                memberId,
+                                "group-message-notification",
+                                message
+                            );
+                        });
+                    } catch (error) {
+                        console.error("Group message socket error:", error);
+                    }
+
                     return;
                 }
 
@@ -772,12 +898,30 @@ io.on(
 
         socket.on(
             "typing",
-            payload => {
+            async payload => {
 
                 if (
                     !payload?.roomId
                 ) {
                     return;
+                }
+
+                const groupRoom =
+                    /^group:([a-f\d]{24})$/i.exec(String(payload.roomId));
+
+                if (groupRoom) {
+                    try {
+                        const isMember = await GroupConversation.exists({
+                            _id: groupRoom[1],
+                            participants: socket.userId
+                        });
+                        if (!isMember) {
+                            return;
+                        }
+                    } catch (error) {
+                        console.error("Group typing membership check error:", error);
+                        return;
+                    }
                 }
 
                 socket
@@ -788,13 +932,12 @@ io.on(
                     )
                     .emit(
                         "user-typing",
-                        {
-                            userId:
-                                normalizeId(
-                                    payload.userId
-                                ) ||
-                                socket.userId
-                        }
+                        groupRoom
+                            ? {
+                                  userId: socket.userId,
+                                  groupId: groupRoom[1]
+                              }
+                            : { userId: socket.userId }
                     );
 
             }
@@ -806,12 +949,30 @@ io.on(
 
         socket.on(
             "stop-typing",
-            payload => {
+            async payload => {
 
                 if (
                     !payload?.roomId
                 ) {
                     return;
+                }
+
+                const groupRoom =
+                    /^group:([a-f\d]{24})$/i.exec(String(payload.roomId));
+
+                if (groupRoom) {
+                    try {
+                        const isMember = await GroupConversation.exists({
+                            _id: groupRoom[1],
+                            participants: socket.userId
+                        });
+                        if (!isMember) {
+                            return;
+                        }
+                    } catch (error) {
+                        console.error("Group stop-typing membership check error:", error);
+                        return;
+                    }
                 }
 
                 socket
@@ -822,13 +983,12 @@ io.on(
                     )
                     .emit(
                         "user-stop-typing",
-                        {
-                            userId:
-                                normalizeId(
-                                    payload.userId
-                                ) ||
-                                socket.userId
-                        }
+                        groupRoom
+                            ? {
+                                  userId: socket.userId,
+                                  groupId: groupRoom[1]
+                              }
+                            : { userId: socket.userId }
                     );
 
             }
@@ -905,12 +1065,56 @@ io.on(
 
         socket.on(
             "message-reaction",
-            payload => {
+            async payload => {
 
                 if (
                     !payload ||
                     !payload.message
                 ) {
+                    return;
+                }
+
+                const groupId =
+                    normalizeId(payload.message.groupId);
+
+                if (groupId) {
+                    try {
+                        const isMember = await GroupConversation.exists({
+                            _id: groupId,
+                            participants: socket.userId
+                        });
+
+                        if (!isMember) {
+                            return;
+                        }
+
+                        const messageId =
+                            normalizeId(
+                                payload.message._id ||
+                                payload.message.id
+                            );
+                        const storedMessage = messageId
+                            ? await Message.findOne({
+                                  _id: messageId,
+                                  groupId
+                              }).populate(
+                                  "sender reactions.user",
+                                  "name username fullName displayName"
+                              )
+                            : null;
+
+                        if (!storedMessage) {
+                            return;
+                        }
+
+                        io.to(`group:${groupId}`).emit(
+                            "message-reaction",
+                            { message: storedMessage }
+                        );
+                    } catch (error) {
+                        console.error("Group reaction membership check error:", error);
+                    }
+
                     return;
                 }
 

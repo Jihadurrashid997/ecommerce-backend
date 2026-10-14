@@ -36,7 +36,10 @@ import {
     FaPause,
     FaReply,
     FaShare,
-    FaCheckCircle
+    FaCheckCircle,
+    FaUsers,
+    FaPlus,
+    FaUserPlus
 } from "react-icons/fa";
 
 import api, {
@@ -64,8 +67,10 @@ import {
 } from "../services/notification";
 
 import CallModal from "./CallModal";
+import VerifiedBadge from "./VerifiedBadge";
 
 import "../styles/Messenger.css";
+import "../styles/VerifiedBadge.css";
 
 
 /* =========================================================
@@ -497,6 +502,9 @@ const Messenger = ({ isActive = true }) => {
     const [users, setUsers] =
         useState([]);
 
+    const [groups, setGroups] =
+        useState([]);
+
     const [selectedUser, setSelectedUser] =
         useState(null);
 
@@ -514,6 +522,21 @@ const Messenger = ({ isActive = true }) => {
 
     const [search, setSearch] =
         useState("");
+
+    const [showGroupCreator, setShowGroupCreator] =
+        useState(false);
+
+    const [groupName, setGroupName] =
+        useState("");
+
+    const [groupMemberIds, setGroupMemberIds] =
+        useState([]);
+
+    const [showGroupDetails, setShowGroupDetails] =
+        useState(false);
+
+    const [groupMemberSelection, setGroupMemberSelection] =
+        useState([]);
 
     const [typing, setTyping] =
         useState(false);
@@ -621,6 +644,44 @@ const Messenger = ({ isActive = true }) => {
                     }
                 );
 
+            },
+            []
+        );
+
+    const updateGroupPreview =
+        useCallback(
+            (groupId, messageItem) => {
+                const id = getId(groupId);
+
+                if (!id) {
+                    return;
+                }
+
+                setGroups(previous =>
+                    previous
+                        .map(group =>
+                            getId(group) === id
+                                ? {
+                                      ...group,
+                                      lastMessage: {
+                                          message:
+                                              messageItem.message ||
+                                              (messageItem.fileUrl
+                                                  ? "Attachment"
+                                                  : ""),
+                                          sender: messageItem.sender,
+                                          createdAt: messageItem.createdAt
+                                      },
+                                      updatedAt: messageItem.createdAt
+                                  }
+                                : group
+                        )
+                        .sort(
+                            (a, b) =>
+                                new Date(b.updatedAt || 0).getTime() -
+                                new Date(a.updatedAt || 0).getTime()
+                        )
+                );
             },
             []
         );
@@ -970,9 +1031,16 @@ useEffect(() => {
                     getId(second);
 
                 if (
-                    !firstId ||
                     !secondId
                 ) {
+                    return null;
+                }
+
+                if (second?.isGroup) {
+                    return `group:${secondId}`;
+                }
+
+                if (!firstId) {
                     return null;
                 }
 
@@ -1089,6 +1157,38 @@ useEffect(() => {
                             : [];
 
                     setUsers(list);
+
+                    try {
+                        const groupResponse = await api.get("/groups");
+                        const groupList =
+                            groupResponse.data?.data ||
+                            groupResponse.data?.groups ||
+                            [];
+
+                        setGroups(
+                            Array.isArray(groupList)
+                                ? groupList.map(group => ({
+                                      ...group,
+                                      isGroup: true
+                                  }))
+                                : []
+                        );
+                        if (Array.isArray(groupList)) {
+                            setUnreadUsers(previous => {
+                                const next = { ...previous };
+                                groupList.forEach(group => {
+                                    next[getId(group)] = group.unreadCount || 0;
+                                });
+                                return next;
+                            });
+                        }
+                    } catch (groupError) {
+                        console.error(
+                            "Chat groups error:",
+                            groupError
+                        );
+                        setGroups([]);
+                    }
 
                     setLastSeenMap(
                         previous => {
@@ -2807,6 +2907,117 @@ const onReceiveMessage =
         const onDirectMessage =
             onReceiveMessage;
 
+        const onGroupMessage =
+            incoming => {
+                const active = selectedUserRef.current;
+                const groupId = getId(incoming?.groupId);
+
+                if (
+                    !groupId ||
+                    !active?.isGroup ||
+                    getId(active) !== groupId ||
+                    getMessageSenderId(incoming) === currentId
+                ) {
+                    return;
+                }
+
+                appendMessage(incoming);
+                scrollToBottom();
+            };
+
+        const onGroupMessageNotification =
+            incoming => {
+                const active = selectedUserRef.current;
+                const groupId = getId(incoming?.groupId);
+                const senderId = getMessageSenderId(incoming);
+
+                if (!groupId || senderId === currentId) {
+                    return;
+                }
+
+                bumpRecent(
+                    groupId,
+                    incoming.createdAt || incoming.timestamp
+                );
+
+                updateGroupPreview(groupId, incoming);
+
+                if (active?.isGroup && getId(active) === groupId) {
+                    appendMessage(incoming);
+                    scrollToBottom();
+                    if (settingsRef.current.readReceiptsEnabled) {
+                        api.put(`/groups/${groupId}/seen`).catch(error => {
+                            console.error("Mark group messages seen error:", error);
+                        });
+                    }
+                    return;
+                }
+
+                setUnreadUsers(previous => ({
+                    ...previous,
+                    [groupId]: (previous[groupId] || 0) + 1
+                }));
+
+                if (settingsRef.current.soundEnabled) {
+                    showMessageNotification({
+                        senderName:
+                            incoming.senderName ||
+                            getUserName(incoming.sender) ||
+                            "Group message",
+                        message:
+                            incoming.message ||
+                            "Shared an attachment"
+                    });
+                }
+            };
+
+        const onGroupUpdated =
+            async () => {
+                try {
+                    const response = await api.get("/groups");
+                    const groupList =
+                        response.data?.data ||
+                        response.data?.groups ||
+                        [];
+                    const nextGroups = Array.isArray(groupList)
+                        ? groupList.map(group => ({
+                              ...group,
+                              isGroup: true
+                          }))
+                        : [];
+
+                    setGroups(nextGroups);
+                    setUnreadUsers(previous => {
+                        const next = { ...previous };
+                        nextGroups.forEach(group => {
+                            next[getId(group)] = group.unreadCount || 0;
+                        });
+                        return next;
+                    });
+
+                    const active = selectedUserRef.current;
+                    if (
+                        active?.isGroup &&
+                        !nextGroups.some(group => getId(group) === getId(active))
+                    ) {
+                        setSelectedUser(null);
+                        selectedUserRef.current = null;
+                        setMessages([]);
+                        setMobileChatOpen(false);
+                    } else if (active?.isGroup) {
+                        const refreshed = nextGroups.find(
+                            group => getId(group) === getId(active)
+                        );
+                        if (refreshed) {
+                            setSelectedUser(refreshed);
+                            selectedUserRef.current = refreshed;
+                        }
+                    }
+                } catch (error) {
+                    console.error("Refresh groups error:", error);
+                }
+            };
+
 
         /* -------------------------------------------------
            TYPING
@@ -2822,11 +3033,11 @@ const onReceiveMessage =
 
                 if (
                     activeId &&
-                    getId(
-                        data?.userId ||
-                        data
-                    ) ===
-                    activeId
+                    (
+                        selectedUserRef.current?.isGroup
+                            ? getId(data?.groupId) === activeId
+                            : getId(data?.userId || data) === activeId
+                    )
                 ) {
 
                     setTyping(true);
@@ -2846,11 +3057,11 @@ const onReceiveMessage =
 
                 if (
                     activeId &&
-                    getId(
-                        data?.userId ||
-                        data
-                    ) ===
-                    activeId
+                    (
+                        selectedUserRef.current?.isGroup
+                            ? getId(data?.groupId) === activeId
+                            : getId(data?.userId || data) === activeId
+                    )
                 ) {
 
                     setTyping(false);
@@ -3957,6 +4168,21 @@ const onCallMissed =
         );
 
         socket.on(
+            "group-message",
+            onGroupMessage
+        );
+
+        socket.on(
+            "group-message-notification",
+            onGroupMessageNotification
+        );
+
+        socket.on(
+            "group-updated",
+            onGroupUpdated
+        );
+
+        socket.on(
             "user-typing",
             onTyping
         );
@@ -4060,6 +4286,21 @@ const onCallMissed =
             );
 
             socket.off(
+                "group-message",
+                onGroupMessage
+            );
+
+            socket.off(
+                "group-message-notification",
+                onGroupMessageNotification
+            );
+
+            socket.off(
+                "group-updated",
+                onGroupUpdated
+            );
+
+            socket.off(
                 "user-typing",
                 onTyping
             );
@@ -4140,6 +4381,7 @@ const onCallMissed =
         user,
         appendMessage,
         bumpRecent,
+        updateGroupPreview,
         cleanupCall,
         createPeer,
         scrollToBottom
@@ -4166,10 +4408,12 @@ const onCallMissed =
                     getId(target);
 
                 const roomId =
-                    getRoomId(
-                        user,
-                        target
-                    );
+                    target.isGroup
+                        ? `group:${targetId}`
+                        : getRoomId(
+                              user,
+                              target
+                          );
 
 
                 /*
@@ -4262,7 +4506,9 @@ const onCallMissed =
 
                     const response =
                         await api.get(
-                            `/messages/conversation/${targetId}`
+                            target.isGroup
+                                ? `/groups/${targetId}/messages`
+                                : `/messages/conversation/${targetId}`
                         );
 
 
@@ -4280,6 +4526,7 @@ const onCallMissed =
 
 
                     if (
+                        !target.isGroup &&
                         settingsRef.current
                             .readReceiptsEnabled
                     ) {
@@ -4321,6 +4568,149 @@ const onCallMissed =
                 user
             ]
         );
+
+    const createGroup =
+        async event => {
+            event.preventDefault();
+            const name = groupName.trim();
+
+            if (!name || !groupMemberIds.length) {
+                alert("Add a group name and at least one member.");
+                return;
+            }
+
+            try {
+                const response = await api.post("/groups", {
+                    name,
+                    memberIds: groupMemberIds
+                });
+                const group = {
+                    ...(response.data?.data || {}),
+                    isGroup: true
+                };
+
+                if (!getId(group)) {
+                    throw new Error("The group was created but could not be loaded.");
+                }
+
+                setGroups(previous => [
+                    group,
+                    ...previous.filter(item => getId(item) !== getId(group))
+                ]);
+                setGroupName("");
+                setGroupMemberIds([]);
+                setShowGroupCreator(false);
+                await selectUser(group);
+            } catch (error) {
+                console.error("Create group error:", error);
+                alert(
+                    error.response?.data?.message ||
+                    error.message ||
+                    "Could not create the group."
+                );
+            }
+        };
+
+    const updateGroupDetails =
+        async () => {
+            if (!selectedUser?.isGroup || !groupMemberSelection.length) {
+                return;
+            }
+
+            try {
+                const response = await api.post(
+                    `/groups/${getId(selectedUser)}/members`,
+                    { memberIds: groupMemberSelection }
+                );
+                const updated = {
+                    ...(response.data?.data || {}),
+                    isGroup: true
+                };
+
+                setGroups(previous =>
+                    previous.map(group =>
+                        getId(group) === getId(updated) ? updated : group
+                    )
+                );
+                setSelectedUser(updated);
+                selectedUserRef.current = updated;
+                setGroupMemberSelection([]);
+            } catch (error) {
+                console.error("Add group members error:", error);
+                alert(
+                    error.response?.data?.message ||
+                    "Could not add members to the group."
+                );
+            }
+        };
+
+    const removeGroupMember =
+        async memberId => {
+            try {
+                const response = await api.delete(
+                    `/groups/${getId(selectedUser)}/members/${memberId}`
+                );
+                const updated = response.data?.data
+                    ? { ...response.data.data, isGroup: true }
+                    : null;
+
+                if (!updated) {
+                    setGroups(previous =>
+                        previous.filter(group => getId(group) !== getId(selectedUser))
+                    );
+                    setSelectedUser(null);
+                    selectedUserRef.current = null;
+                    setMessages([]);
+                    setShowGroupDetails(false);
+                    return;
+                }
+
+                setGroups(previous =>
+                    previous.map(group =>
+                        getId(group) === getId(updated) ? updated : group
+                    )
+                );
+                setSelectedUser(updated);
+                selectedUserRef.current = updated;
+            } catch (error) {
+                console.error("Remove group member error:", error);
+                alert(
+                    error.response?.data?.message ||
+                    "Could not remove the group member."
+                );
+            }
+        };
+
+    const leaveGroup =
+        async () => {
+            if (!selectedUser?.isGroup) {
+                return;
+            }
+
+            if (!window.confirm(`Leave ${getUserName(selectedUser)}?`)) {
+                return;
+            }
+
+            try {
+                await api.delete(
+                    `/groups/${getId(selectedUser)}/leave`
+                );
+                setGroups(previous =>
+                    previous.filter(group => getId(group) !== getId(selectedUser))
+                );
+                setSelectedUser(null);
+                selectedUserRef.current = null;
+                setMessages([]);
+                setShowGroupDetails(false);
+                setMobileChatOpen(false);
+            } catch (error) {
+                console.error("Leave group error:", error);
+                alert(
+                    error.response?.data?.message ||
+                    "Could not leave the group."
+                );
+            }
+        };
 
 
     /* =====================================================
@@ -4507,7 +4897,13 @@ const onCallMissed =
                 sender:
                     user,
                 receiver:
-                    selectedUser,
+                    selectedUser.isGroup
+                        ? null
+                        : selectedUser,
+                groupId:
+                    selectedUser.isGroup
+                        ? receiver
+                        : undefined,
                 message:
                     text,
                 createdAt:
@@ -4558,16 +4954,21 @@ const onCallMissed =
                 const response =
                     await api.post(
                         "/messages/send",
-                        {
-                            receiver,
-                            message:
-                                text,
-                            replyTo:
-                                getMessageId(
-                                    replySnapshot
-                                ) ||
-                                undefined
-                        }
+                        selectedUser.isGroup
+                            ? {
+                                  groupId: receiver,
+                                  message: text,
+                                  replyTo:
+                                      getMessageId(replySnapshot) ||
+                                      undefined
+                              }
+                            : {
+                                  receiver,
+                                  message: text,
+                                  replyTo:
+                                      getMessageId(replySnapshot) ||
+                                      undefined
+                              }
                     );
 
 
@@ -4582,6 +4983,9 @@ const onCallMissed =
                  */
 
                 if (saved) {
+                    if (selectedUser.isGroup) {
+                        updateGroupPreview(receiver, saved);
+                    }
 
                     setMessages(
                         previous =>
@@ -4605,7 +5009,12 @@ const onCallMissed =
                         {
                             roomId,
                             sender,
-                            receiver,
+                            ...(selectedUser.isGroup
+                                ? {
+                                      groupId: receiver,
+                                      senderName: getUserName(user)
+                                  }
+                                : { receiver }),
                             message:
                                 saved.message ||
                                 text,
@@ -4637,7 +5046,12 @@ const onCallMissed =
                         {
                             roomId,
                             sender,
-                            receiver,
+                            ...(selectedUser.isGroup
+                                ? {
+                                      groupId: receiver,
+                                      senderName: getUserName(user)
+                                  }
+                                : { receiver }),
                             message:
                                 text,
                             createdAt:
@@ -4804,10 +5218,10 @@ const onCallMissed =
 
 
                 formData.append(
-                    "receiver",
-                    getId(
-                        selectedUser
-                    )
+                    selectedUser.isGroup
+                        ? "groupId"
+                        : "receiver",
+                    getId(selectedUser)
                 );
 
 
@@ -4828,6 +5242,13 @@ const onCallMissed =
                     appendMessage(
                         saved
                     );
+
+                    if (selectedUser.isGroup) {
+                        updateGroupPreview(
+                            getId(selectedUser),
+                            saved
+                        );
+                    }
 
                     scrollToBottom();
 
@@ -4860,8 +5281,14 @@ const onCallMissed =
                             roomId,
                             sender:
                                 getId(user),
-                            receiver:
-                                getId(selectedUser),
+                            ...(selectedUser.isGroup
+                                ? {
+                                      groupId: getId(selectedUser),
+                                      senderName: getUserName(user)
+                                  }
+                                : {
+                                      receiver: getId(selectedUser)
+                                  }),
                             message:
                                 saved.message ||
                                 "",
@@ -4957,7 +5384,9 @@ const onCallMissed =
                 );
 
                 formData.append(
-                    "receiver",
+                    selectedUser.isGroup
+                        ? "groupId"
+                        : "receiver",
                     getId(selectedUser)
                 );
 
@@ -4974,6 +5403,13 @@ const onCallMissed =
                 if (saved) {
 
                     appendMessage(saved);
+
+                    if (selectedUser.isGroup) {
+                        updateGroupPreview(
+                            getId(selectedUser),
+                            saved
+                        );
+                    }
 
                     scrollToBottom();
 
@@ -4994,8 +5430,14 @@ const onCallMissed =
                             roomId,
                             sender:
                                 getId(user),
-                            receiver:
-                                getId(selectedUser),
+                            ...(selectedUser.isGroup
+                                ? {
+                                      groupId: getId(selectedUser),
+                                      senderName: getUserName(user)
+                                  }
+                                : {
+                                      receiver: getId(selectedUser)
+                                  }),
                             message:
                                 saved.message ||
                                 "",
@@ -5772,6 +6214,23 @@ const onCallMissed =
             ]
         );
 
+    const filteredGroups =
+        useMemo(
+            () => {
+                const term =
+                    search.trim().toLowerCase();
+
+                return groups.filter(group =>
+                    !term ||
+                    getUserName(group).toLowerCase().includes(term)
+                );
+            },
+            [
+                groups,
+                search
+            ]
+        );
+
 
     const currentBackground =
         useMemo(
@@ -6285,6 +6744,14 @@ const onCallMissed =
     const renderAvatar =
         target => {
 
+            if (target?.isGroup) {
+                return (
+                    <div className="avatar-fallback group-avatar-fallback">
+                        <FaUsers />
+                    </div>
+                );
+            }
+
             const avatar =
                 getUploadUrl(
                     getAvatar(target)
@@ -6406,6 +6873,15 @@ const onCallMissed =
                         }
                     >
                         <FaCog />
+                    </button>
+
+                    <button
+                        type="button"
+                        className="messenger-settings-btn"
+                        title="Create a group"
+                        onClick={() => setShowGroupCreator(true)}
+                    >
+                        <FaPlus />
                     </button>
 
                 </div>
@@ -6569,8 +7045,59 @@ const onCallMissed =
 
                 <div className="user-list">
 
-                    {filteredUsers.length ===
-                    0 ? (
+                    {filteredGroups.length > 0 && (
+                        <section className="messenger-group-list">
+                            <div className="messenger-list-heading">
+                                <span>Groups</span>
+                                <button
+                                    type="button"
+                                    title="Create a group"
+                                    onClick={() => setShowGroupCreator(true)}
+                                >
+                                    <FaPlus />
+                                </button>
+                            </div>
+                            {filteredGroups.map(group => {
+                                const groupId = getId(group);
+                                const unread = unreadUsers[groupId] || 0;
+                                const active =
+                                    selectedUser?.isGroup &&
+                                    getId(selectedUser) === groupId;
+
+                                return (
+                                    <button
+                                        key={groupId}
+                                        type="button"
+                                        className={`chat-user ${active ? "active" : ""}`}
+                                        onClick={() => selectUser(group)}
+                                    >
+                                        <div className="messenger-avatar">
+                                            {renderAvatar(group)}
+                                        </div>
+                                        <div className="chat-user-content">
+                                            <div className="chat-user-top">
+                                                <strong>{getUserName(group)}</strong>
+                                            </div>
+                                            <div className="chat-user-bottom">
+                                                <span>
+                                                    {group.lastMessage?.message ||
+                                                        `${group.participants?.length || 0} members`}
+                                                </span>
+                                                {unread > 0 && (
+                                                    <span className="unread-badge">
+                                                        {unread > 99 ? "99+" : unread}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </section>
+                    )}
+
+                    {filteredUsers.length === 0 &&
+                    filteredGroups.length === 0 ? (
 
                         <div className="no-users">
 
@@ -6650,6 +7177,9 @@ const onCallMissed =
                                                 <strong>
                                                     {getUserName(
                                                         target
+                                                    )}
+                                                    {target.isVerified && (
+                                                        <VerifiedBadge className="verified-badge-small" />
                                                     )}
                                                 </strong>
 
@@ -6763,7 +7293,7 @@ const onCallMissed =
                                     )}
 
 
-                                    {isOnline(
+                                    {!selectedUser.isGroup && isOnline(
                                         selectedUser
                                     ) && (
                                         <span className="online-dot">
@@ -6782,21 +7312,21 @@ const onCallMissed =
                                         {getUserName(
                                             selectedUser
                                         )}
+                                        {!selectedUser.isGroup &&
+                                            selectedUser.isVerified && (
+                                                <VerifiedBadge />
+                                            )}
                                     </h2>
 
 
                                     <span>
-
-                                        {typing
+                                        {selectedUser.isGroup
+                                            ? `${selectedUser.participants?.length || 0} members`
+                                            : typing
                                             ? "typing..."
-                                            : isOnline(
-                                                  selectedUser
-                                              )
+                                            : isOnline(selectedUser)
                                             ? "Active now"
-                                            : formatLastSeen(
-                                                  selectedUser
-                                              )}
-
+                                            : formatLastSeen(selectedUser)}
                                     </span>
 
                                 </div>
@@ -6806,6 +7336,19 @@ const onCallMissed =
 
                             <div className="chat-header-actions">
 
+                                {selectedUser.isGroup ? (
+                                    <button
+                                        type="button"
+                                        title="Group members"
+                                        onClick={() => {
+                                            setGroupMemberSelection([]);
+                                            setShowGroupDetails(true);
+                                        }}
+                                    >
+                                        <FaUsers />
+                                    </button>
+                                ) : (
+                                    <>
                                 <button
                                     type="button"
                                     title="Voice call"
@@ -6830,6 +7373,8 @@ const onCallMissed =
                                 >
                                     <FaVideo />
                                 </button>
+                                    </>
+                                )}
 
 
                                 <button
@@ -6929,18 +7474,18 @@ const onCallMissed =
                                     </button>
 
 
-                                    <button
-                                        type="button"
-                                        className="danger-option"
-                                        onClick={
-                                            handleBlockToggle
-                                        }
-                                    >
-                                        <FaBan />
-                                        {selectedUser?.isBlockedByMe
-                                            ? "Unblock this user"
-                                            : "Block this user"}
-                                    </button>
+                                    {!selectedUser?.isGroup && (
+                                        <button
+                                            type="button"
+                                            className="danger-option"
+                                            onClick={handleBlockToggle}
+                                        >
+                                            <FaBan />
+                                            {selectedUser?.isBlockedByMe
+                                                ? "Unblock this user"
+                                                : "Block this user"}
+                                        </button>
+                                    )}
 
                                 </div>
                             )}
@@ -7313,6 +7858,17 @@ const onCallMissed =
                                                         }`
                                                     }
                                                 >
+
+                                                    {selectedUser.isGroup && !own && (
+                                                        <strong className="group-message-sender">
+                                                            {item.senderName ||
+                                                                getUserName(item.sender)}
+                                                            {item.sender?.isVerified && (
+                                                                <VerifiedBadge className="verified-badge-small" />
+                                                            )}
+                                                        </strong>
+                                                    )}
+
 
                                                     {item.replyTo && (
 
@@ -8061,6 +8617,234 @@ const onCallMissed =
                 )}
 
             </main>
+
+            {showGroupCreator && (
+                <div
+                    className="group-modal-overlay"
+                    onClick={() => setShowGroupCreator(false)}
+                >
+                    <form
+                        className="group-modal"
+                        onSubmit={createGroup}
+                        onClick={event => event.stopPropagation()}
+                    >
+                        <div className="group-modal-header">
+                            <div>
+                                <strong>Create a group</strong>
+                                <span>Start a conversation with your people.</span>
+                            </div>
+                            <button
+                                type="button"
+                                aria-label="Close"
+                                onClick={() => setShowGroupCreator(false)}
+                            >
+                                <FaTimes />
+                            </button>
+                        </div>
+                        <div className="group-modal-body">
+                            <label className="group-name-field">
+                                <span>Group name</span>
+                                <input
+                                    value={groupName}
+                                    maxLength={80}
+                                    onChange={event => setGroupName(event.target.value)}
+                                    placeholder="e.g. Weekend plans"
+                                    autoFocus
+                                />
+                            </label>
+                            <div className="group-member-heading">
+                                Add members <span>{groupMemberIds.length} selected</span>
+                            </div>
+                            <div className="group-member-options">
+                                {users.map(member => {
+                                    const memberId = getId(member);
+                                    const checked = groupMemberIds.includes(memberId);
+
+                                    return (
+                                        <label key={memberId} className="group-member-option">
+                                            <input
+                                                type="checkbox"
+                                                checked={checked}
+                                                onChange={() =>
+                                                    setGroupMemberIds(previous =>
+                                                        checked
+                                                            ? previous.filter(id => id !== memberId)
+                                                            : [...previous, memberId]
+                                                    )
+                                                }
+                                            />
+                                            <span>{getUserName(member)}</span>
+                                        </label>
+                                    );
+                                })}
+                                {users.length === 0 && (
+                                    <p className="group-empty-members">
+                                        No people are available to add yet.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="group-modal-footer">
+                            <button
+                                type="button"
+                                className="group-secondary-btn"
+                                onClick={() => setShowGroupCreator(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="group-primary-btn"
+                                disabled={!groupName.trim() || !groupMemberIds.length}
+                            >
+                                <FaUsers /> Create group
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {showGroupDetails && selectedUser?.isGroup && (
+                <div
+                    className="group-modal-overlay"
+                    onClick={() => setShowGroupDetails(false)}
+                >
+                    <div
+                        className="group-modal"
+                        onClick={event => event.stopPropagation()}
+                    >
+                        <div className="group-modal-header">
+                            <div>
+                                <strong>{getUserName(selectedUser)}</strong>
+                                <span>
+                                    {selectedUser.participants?.length || 0} group members
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                aria-label="Close"
+                                onClick={() => setShowGroupDetails(false)}
+                            >
+                                <FaTimes />
+                            </button>
+                        </div>
+                        <div className="group-modal-body">
+                            <div className="group-member-heading">
+                                Members
+                                {selectedUser.admins?.some(
+                                    admin => getId(admin) === currentUserId
+                                ) && <span>Admin</span>}
+                            </div>
+                            <div className="group-member-options">
+                                {(selectedUser.participants || []).map(member => {
+                                    const memberId = getId(member);
+                                    const isAdmin = selectedUser.admins?.some(
+                                        admin => getId(admin) === memberId
+                                    );
+                                    const currentIsAdmin = selectedUser.admins?.some(
+                                        admin => getId(admin) === currentUserId
+                                    );
+
+                                    return (
+                                        <div key={memberId} className="group-member-option">
+                                            <span>
+                                                {getUserName(member)}
+                                                {memberId === currentUserId ? " (You)" : ""}
+                                                {isAdmin ? " · Admin" : ""}
+                                            </span>
+                                            {currentIsAdmin && memberId !== currentUserId && (
+                                                <button
+                                                    type="button"
+                                                    className="group-remove-member"
+                                                    onClick={() => {
+                                                        if (window.confirm(
+                                                            `Remove ${getUserName(member)} from this group?`
+                                                        )) {
+                                                            removeGroupMember(memberId);
+                                                        }
+                                                    }}
+                                                >
+                                                    Remove
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {selectedUser.admins?.some(
+                                admin => getId(admin) === currentUserId
+                            ) && (
+                                <>
+                                    <div className="group-member-heading">
+                                        Add people
+                                    </div>
+                                    <div className="group-member-options compact">
+                                        {users
+                                            .filter(member =>
+                                                !selectedUser.participants?.some(
+                                                    participant =>
+                                                        getId(participant) === getId(member)
+                                                )
+                                            )
+                                            .map(member => {
+                                                const memberId = getId(member);
+                                                const checked =
+                                                    groupMemberSelection.includes(memberId);
+
+                                                return (
+                                                    <label
+                                                        key={memberId}
+                                                        className="group-member-option"
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={checked}
+                                                            onChange={() =>
+                                                                setGroupMemberSelection(previous =>
+                                                                    checked
+                                                                        ? previous.filter(
+                                                                              id => id !== memberId
+                                                                          )
+                                                                        : [...previous, memberId]
+                                                                )
+                                                            }
+                                                        />
+                                                        <span>{getUserName(member)}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="group-primary-btn group-add-btn"
+                                        disabled={!groupMemberSelection.length}
+                                        onClick={updateGroupDetails}
+                                    >
+                                        <FaUserPlus /> Add selected members
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                        <div className="group-modal-footer">
+                            <button
+                                type="button"
+                                className="group-secondary-btn"
+                                onClick={() => setShowGroupDetails(false)}
+                            >
+                                Done
+                            </button>
+                            <button
+                                type="button"
+                                className="group-leave-btn"
+                                onClick={leaveGroup}
+                            >
+                                Leave group
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
 
            <CallModal

@@ -78,6 +78,9 @@ const safeUser = (user) => {
         profileImage:
             user.profileImage || "",
 
+        isVerified:
+            Boolean(user.isVerified),
+
         createdAt:
             user.createdAt
 

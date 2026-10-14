@@ -33,12 +33,52 @@ const MessageSchema =
                     "User",
 
                 required:
-                    true,
+                    function () {
+
+                        return !this.groupId;
+
+                    },
 
                 index:
                     true
 
             },
+
+
+            groupId: {
+
+                type:
+                    mongoose.Schema.Types.ObjectId,
+
+                ref:
+                    "GroupConversation",
+
+                default:
+                    null,
+
+                index:
+                    true,
+
+                validate: {
+                    validator: function (value) {
+                        return !value || !this.receiver;
+                    },
+                    message:
+                        "A message can belong to either a group or a direct recipient, not both."
+                }
+
+            },
+
+
+            readBy: [
+                {
+                    type:
+                        mongoose.Schema.Types.ObjectId,
+
+                    ref:
+                        "User"
+                }
+            ],
 
 
             message: {
@@ -216,6 +256,10 @@ MessageSchema.index({
     createdAt: 1
 });
 
+MessageSchema.index({
+    groupId: 1,
+    createdAt: 1
+});
 
 module.exports =
     mongoose.model(

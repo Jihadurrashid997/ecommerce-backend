@@ -16,8 +16,10 @@ import {
 
 import { useApp } from "../context/AppContext";
 import ProfileSocial from "../components/ProfileSocial";
+import VerifiedBadge from "../components/VerifiedBadge";
 
 import "../styles/Profile.css";
+import "../styles/VerifiedBadge.css";
 
 const Profile = () => {
 
@@ -162,6 +164,7 @@ const Profile = () => {
 
                         <h1>
                             {userName}
+                            {user?.isVerified && <VerifiedBadge />}
                         </h1>
 
                         <span className="profile-role">

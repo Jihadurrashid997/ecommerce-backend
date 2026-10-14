@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Message = require("../models/Message");
 const User = require("../models/User");
+const GroupConversation = require("../models/GroupConversation");
 
 const getUserId = (req) => {
     return (
@@ -13,6 +14,21 @@ const getUserId = (req) => {
 
 const isValidObjectId = (id) =>
     mongoose.Types.ObjectId.isValid(id);
+
+const canAccessMessage = async (message, userId) => {
+    if (message.groupId) {
+        return Boolean(await GroupConversation.exists({
+            _id: message.groupId,
+            participants: userId
+        }));
+    }
+
+    return [message.sender, message.receiver].some(
+        participant =>
+            participant &&
+            String(participant) === String(userId)
+    );
+};
 
 const populateMessage = (query) =>
     query
@@ -53,6 +69,7 @@ exports.sendMessage = async (req, res) => {
     try {
         const sender = getUserId(req);
         const receiver = req.body?.receiver;
+        const groupId = req.body?.groupId;
 
         const text = String(
             req.body?.message ?? req.body?.text ?? ""
@@ -67,6 +84,100 @@ exports.sendMessage = async (req, res) => {
             return res.status(401).json({
                 success: false,
                 message: "Authentication required"
+            });
+        }
+
+        if (groupId) {
+            if (!isValidObjectId(groupId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid group ID"
+                });
+            }
+
+            if (!text && !file) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A message or file is required"
+                });
+            }
+
+            if (text.length > 5000) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Message is too long"
+                });
+            }
+
+            const group = await GroupConversation.findOne({
+                _id: groupId,
+                participants: sender
+            });
+
+            if (!group) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Group not found"
+                });
+            }
+
+            const messageData = {
+                sender,
+                groupId,
+                message: text,
+                readBy: [sender]
+            };
+
+            if (file) {
+                messageData.fileUrl = `/uploads/${file.filename}`;
+                messageData.fileName = file.originalname;
+                messageData.fileType = file.mimetype;
+            }
+
+            const replyTo = req.body?.replyTo;
+
+            if (replyTo && isValidObjectId(replyTo)) {
+                const original = await Message.exists({
+                    _id: replyTo,
+                    groupId
+                });
+
+                if (original) {
+                    messageData.replyTo = replyTo;
+                }
+            }
+
+            const created = await Message.create(messageData);
+
+            group.lastMessage = {
+                message: text || (file ? "Attachment" : ""),
+                sender,
+                createdAt: created.createdAt
+            };
+            await group.save();
+
+            const populated = await Message.findById(created._id)
+                .populate(
+                    "sender",
+                    "name email role profileImage avatar username fullName displayName firstName"
+                )
+                .populate({
+                    path: "replyTo",
+                    select: "message fileUrl fileName fileType sender createdAt",
+                    populate: {
+                        path: "sender",
+                        select: "name username fullName displayName firstName"
+                    }
+                })
+                .populate(
+                    "reactions.user",
+                    "name username fullName displayName firstName"
+                );
+
+            return res.status(201).json({
+                success: true,
+                message: "Group message sent successfully",
+                data: populated
             });
         }
 
@@ -508,6 +619,13 @@ exports.reactToMessage = async (req, res) => {
             return res.status(404).json({ success: false, message: "Message not found" });
         }
 
+        if (!await canAccessMessage(message, userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have access to this conversation."
+            });
+        }
+
         const existingIndex = message.reactions.findIndex(
             r => String(r.user) === String(userId) && r.emoji === emoji
         );
@@ -559,6 +677,13 @@ exports.editMessage = async (req, res) => {
             return res.status(404).json({ success: false, message: "Message not found" });
         }
 
+        if (!await canAccessMessage(message, userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have access to this conversation."
+            });
+        }
+
         if (String(message.sender) !== String(userId)) {
             return res.status(403).json({ success: false, message: "You can only edit your own messages" });
         }
@@ -603,6 +728,13 @@ exports.deleteMessage = async (req, res) => {
 
         if (!message) {
             return res.status(404).json({ success: false, message: "Message not found" });
+        }
+
+        if (!await canAccessMessage(message, userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have access to this conversation."
+            });
         }
 
         if (String(message.sender) !== String(userId)) {

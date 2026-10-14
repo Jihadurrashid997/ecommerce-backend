@@ -81,6 +81,7 @@ router.get("/control/users", auth(["admin"]), control.listUsers);
 router.get("/control/users/:id", auth(["admin"]), control.getUserDetail);
 router.patch("/control/users/:id/suspend", auth(["admin"]), control.setSuspended);
 router.patch("/control/users/:id/role", auth(["admin"]), control.setRole);
+router.patch("/control/users/:id/verification", auth(["admin"]), control.setVerification);
 router.post("/control/users/:id/reset-password", auth(["admin"]), control.resetPassword);
 router.delete("/control/users/:id", auth(["admin"]), control.deleteUser);
 router.get("/control/content", auth(["admin"]), control.listContent);

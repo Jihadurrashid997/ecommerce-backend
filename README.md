@@ -33,5 +33,6 @@ The frontend is served at `http://localhost:3000`; the API health endpoint is `h
 - Configure SSLCommerz credentials to enable checkout payments. Keep `SSLC_IS_LIVE=false` while testing; set it to `true` only with approved production credentials.
 - Set frontend `REACT_APP_API_URL` to the backend URL (with or without `/api`). If Socket.IO runs on a different host, set `REACT_APP_SOCKET_URL` too. Rebuild the frontend after changing `REACT_APP_*` values.
 - Video and voice calls require HTTPS in deployment and may need a TURN relay; configure the optional `REACT_APP_TURN_*` settings for restrictive networks.
+- Messenger group chats use the authenticated `/api/groups` endpoints and JWT-authenticated Socket.IO connections. Deploy the frontend and backend together so group membership notifications and realtime chat use the same release.
 
 Never commit `.env` files or production secrets.
