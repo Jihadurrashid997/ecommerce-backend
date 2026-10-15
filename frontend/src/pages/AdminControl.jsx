@@ -468,6 +468,128 @@ const Content = () => {
 
 };
 
+/* ------------------------------------------------ shop settings */
+
+const ShopSettings = () => {
+    const [settings, setSettings] = useState(null);
+    const [pendingProducts, setPendingProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState("");
+    const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
+
+    const load = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError("");
+            const [settingsResponse, productsResponse] = await Promise.all([
+                api.get("/admin/settings"),
+                api.get("/admin/products/pending")
+            ]);
+            setSettings(settingsResponse.data.settings);
+            setPendingProducts(productsResponse.data.products || []);
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not load Shop settings.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const save = async (field, value) => {
+        try {
+            setBusy(field);
+            setError("");
+            setNotice("");
+            const response = await api.put("/admin/settings", { [field]: value });
+            setSettings(response.data.settings);
+            setNotice("Shop settings saved.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not save Shop settings.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const approve = async productId => {
+        try {
+            setBusy(productId);
+            setError("");
+            setNotice("");
+            await api.put(`/admin/approve/${productId}`);
+            setPendingProducts(products => products.filter(product => product._id !== productId));
+            setNotice("Product approved and published.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not approve product.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    if (loading) return <p className="ac-note">Loading Shop settings...</p>;
+    if (!settings) return <p className="ac-note error" role="alert">{error}</p>;
+
+    return (
+        <section className="ac-shop-settings">
+            <h3>Shop controls</h3>
+            <p className="ac-note">These controls apply to all buyers and sellers.</p>
+
+            {error && <p className="ac-note error" role="alert">{error}</p>}
+            {notice && <p className="ac-note" role="status">{notice}</p>}
+
+            <label className="ac-setting-row">
+                <span>
+                    <b>Shop is open</b>
+                    <small>When turned off, product browsing and checkout are paused.</small>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={settings.marketplaceEnabled}
+                    disabled={Boolean(busy)}
+                    onChange={event => save("marketplaceEnabled", event.target.checked)}
+                />
+            </label>
+
+            <label className="ac-setting-row">
+                <span>
+                    <b>Require product approval</b>
+                    <small>New and seller-edited products stay hidden until approved.</small>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={settings.requireProductApproval}
+                    disabled={Boolean(busy)}
+                    onChange={event => save("requireProductApproval", event.target.checked)}
+                />
+            </label>
+
+            <h3>Products awaiting approval ({pendingProducts.length})</h3>
+            {pendingProducts.length === 0 ? (
+                <p className="ac-note">There are no products waiting for review.</p>
+            ) : (
+                <div className="ac-list">
+                    {pendingProducts.map(product => (
+                        <div className="ac-item" key={product._id}>
+                            <div className="ac-item-main">
+                                <b>{product.name}</b>
+                                <span>{product.seller?.name || "Seller"} · ৳{Number(product.price || 0).toLocaleString("en-BD")}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => approve(product._id)}
+                                disabled={Boolean(busy)}
+                            >
+                                {busy === product._id ? "Approving..." : "Approve"}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+};
+
 /* ------------------------------------------------ page */
 
 const AdminControl = () => {
@@ -489,7 +611,7 @@ const AdminControl = () => {
             </div>
 
             <div className="ac-tabs">
-                {[["overview", "Overview"], ["users", "Users"], ["content", "Content"]].map(([key, label]) => (
+                {[["overview", "Overview"], ["users", "Users"], ["content", "Content"], ["shop", "Shop"]].map(([key, label]) => (
                     <button type="button" key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>
                         {label}
                     </button>
@@ -499,6 +621,7 @@ const AdminControl = () => {
             {tab === "overview" && <Overview />}
             {tab === "users" && <Users myId={user._id || user.id} />}
             {tab === "content" && <Content />}
+            {tab === "shop" && <ShopSettings />}
 
         </div>
     );

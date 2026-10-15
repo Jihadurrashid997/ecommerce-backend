@@ -7,6 +7,13 @@ const Product =
 const Order =
     require("../models/Order");
 
+const MarketplaceSettings =
+    require("../models/MarketplaceSettings");
+
+const {
+    getMarketplaceSettings
+} = require("../services/marketplaceSettings");
+
 
 // ======================================================
 // ADMIN ANALYTICS
@@ -239,16 +246,92 @@ exports.getAnalytics =
 
 exports.updateMarketplaceSettings =
     async (req, res) => {
+        const updates = {};
 
-        res.json({
+        for (const field of ["marketplaceEnabled", "requireProductApproval"]) {
+            if (!Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
+                continue;
+            }
 
-            success: true,
+            if (typeof req.body[field] !== "boolean") {
+                return res.status(400).json({
+                    success: false,
+                    message: `${field} must be true or false.`
+                });
+            }
 
-            message:
-                "Marketplace settings endpoint is ready."
+            updates[field] = req.body[field];
+        }
 
-        });
+        if (!Object.keys(updates).length) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose at least one marketplace setting to update."
+            });
+        }
 
+        try {
+            const settings = await MarketplaceSettings.findOneAndUpdate(
+                { _id: "global" },
+                { $set: updates },
+                {
+                    new: true,
+                    upsert: true,
+                    runValidators: true,
+                    setDefaultsOnInsert: true
+                }
+            ).lean();
+
+            return res.json({
+                success: true,
+                settings
+            });
+        } catch (error) {
+            console.error("UPDATE MARKETPLACE SETTINGS ERROR:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Could not update marketplace settings."
+            });
+        }
+
+    };
+
+exports.getMarketplaceSettings =
+    async (_req, res) => {
+        try {
+            const settings = await getMarketplaceSettings();
+            return res.json({
+                success: true,
+                settings
+            });
+        } catch (error) {
+            console.error("GET MARKETPLACE SETTINGS ERROR:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Could not load marketplace settings."
+            });
+        }
+    };
+
+exports.getPendingProducts =
+    async (_req, res) => {
+        try {
+            const products = await Product.find({ isApproved: false })
+                .populate("seller", "name")
+                .sort({ createdAt: -1 })
+                .lean();
+
+            return res.json({
+                success: true,
+                products
+            });
+        } catch (error) {
+            console.error("GET PENDING PRODUCTS ERROR:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Could not load pending products."
+            });
+        }
     };
 
 

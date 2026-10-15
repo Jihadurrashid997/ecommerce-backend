@@ -1,7 +1,17 @@
 const Product = require('../models/Product');
 const User = require('../models/User');
+const marketplaceSettings = require('../services/marketplaceSettings');
+
 exports.uploadProduct = async (req, res) => {
     try {
+        const settings = await marketplaceSettings.getMarketplaceSettings();
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: 'The Shop is temporarily closed.'
+            });
+        }
+
         const { name, description, price, category, stock } = req.body;
 
         // মাল্টার থেকে আসা ছবিগুলো ধরার লজিক
@@ -21,7 +31,8 @@ exports.uploadProduct = async (req, res) => {
             category,
             stock,
             images: imagePaths, // এখন আর ফাঁকা নেই, আসল ছবির নাম/পাথ বসবে!
-            seller: req.user.id // টোকেন থেকে সেলার আইডি চলে আসবে
+            seller: req.user.id,
+            isApproved: !settings.requireProductApproval
         });
 
         await newProduct.save();
@@ -38,7 +49,19 @@ exports.uploadProduct = async (req, res) => {
 // ১. সব প্রোডাক্ট তুলে আনার ফাংশন
 exports.getProducts = async (req, res) => {
     try {
-        const products = await Product.find().populate('seller', 'name email');
+        const settings = await marketplaceSettings.getMarketplaceSettings();
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: 'The Shop is temporarily closed.'
+            });
+        }
+
+        const products = await Product.find(
+            settings.requireProductApproval
+                ? { isApproved: { $ne: false } }
+                : {}
+        ).populate('seller', 'name email');
         res.status(200).json(products);
     } catch (error) {
         res.status(500).json({ message: 'Server Error', error: error.message });
@@ -48,8 +71,19 @@ exports.getProducts = async (req, res) => {
 // ২. আইডি দিয়ে নির্দিষ্ট একটা প্রোডাক্ট দেখার ফাংশন
 exports.getProductById = async (req, res) => {
     try {
+        const settings = await marketplaceSettings.getMarketplaceSettings();
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: 'The Shop is temporarily closed.'
+            });
+        }
+
         const product = await Product.findById(req.params.id).populate('seller', 'name email');
         if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+        if (settings.requireProductApproval && product.isApproved === false) {
             return res.status(404).json({ message: 'Product not found' });
         }
         res.status(200).json(product);
@@ -60,6 +94,14 @@ exports.getProductById = async (req, res) => {
 // ৩. প্রোডাক্ট আপডেট করার ফাংশন (সেফ ভার্সন)
 exports.updateProduct = async (req, res) => {
     try {
+        const settings = await marketplaceSettings.getMarketplaceSettings();
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: 'The Shop is temporarily closed.'
+            });
+        }
+
         const { name, description, price, category, stock } = req.body;
         let product = await Product.findById(req.params.id);
 
@@ -78,6 +120,9 @@ exports.updateProduct = async (req, res) => {
         product.price = price || product.price;
         product.category = category || product.category;
         product.stock = stock || product.stock;
+        if (settings.requireProductApproval) {
+            product.isApproved = false;
+        }
 
         if (req.files && req.files.length > 0) {
             product.images = req.files.map(file => file.filename || file.path);

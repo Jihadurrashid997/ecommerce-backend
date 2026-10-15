@@ -1,5 +1,6 @@
 const Order = require("../models/Order");
 const Product = require("../models/Product");
+const marketplaceSettings = require("../services/marketplaceSettings");
 
 // ========================================
 // CREATE ORDER
@@ -7,6 +8,15 @@ const Product = require("../models/Product");
 
 exports.createOrder = async (req, res) => {
     try {
+        const settings =
+            await marketplaceSettings.getMarketplaceSettings();
+
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                message: "The Shop is temporarily closed."
+            });
+        }
+
         const {
             items,
             shippingAddress,
@@ -30,6 +40,15 @@ exports.createOrder = async (req, res) => {
             if (!product) {
                 return res.status(404).json({
                     message: "Product not found"
+                });
+            }
+
+            if (
+                settings.requireProductApproval &&
+                product.isApproved === false
+            ) {
+                return res.status(404).json({
+                    message: "One of the products is not available."
                 });
             }
 

@@ -28,7 +28,7 @@ const SellerDashboard = () => {
 
       const token = localStorage.getItem("token");
 
-      await api.post(
+      const response = await api.post(
         "/products",
         form,
         {
@@ -38,7 +38,9 @@ const SellerDashboard = () => {
         }
       );
 
-      alert("Product Added Successfully");
+      alert(response.data?.isApproved === false
+        ? "Product submitted for admin approval."
+        : "Product added successfully.");
 
       setForm({
         name: "",

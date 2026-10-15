@@ -32,6 +32,11 @@ const productSchema = new mongoose.Schema(
         default:1
     },
 
+    isApproved:{
+        type:Boolean,
+        default:true
+    },
+
     seller:{
         type:mongoose.Schema.Types.ObjectId,
         ref:"User"
