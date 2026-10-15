@@ -51,4 +51,35 @@ describe("messaging API routes", () => {
         );
         expect(put).toHaveBeenCalledWith("/messages/seen/user-123");
     });
+
+    test("sends FormData without JSON content type so uploads include the multipart boundary", async () => {
+        const originalAdapter = api.defaults.adapter;
+        const adapter = jest.fn(async config => ({
+            config,
+            data: {},
+            headers: {},
+            status: 200,
+            statusText: "OK"
+        }));
+        api.defaults.adapter = adapter;
+
+        try {
+            const formData = new FormData();
+            formData.append("receiver", "user-123");
+            formData.append(
+                "file",
+                new Blob(["voice"], { type: "audio/webm" }),
+                "voice.webm"
+            );
+
+            await api.post("/messages/send", formData);
+
+            const request = adapter.mock.calls[0][0];
+            expect(request.data).toBeInstanceOf(FormData);
+            expect(request.headers.getContentType()).toBe(false);
+            expect(request.headers.toJSON()).not.toHaveProperty("Content-Type");
+        } finally {
+            api.defaults.adapter = originalAdapter;
+        }
+    });
 });

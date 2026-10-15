@@ -38,6 +38,18 @@ api.interceptors.request.use(
 
         try {
 
+            if (
+                typeof FormData !== "undefined" &&
+                config.data instanceof FormData
+            ) {
+                config.headers = config.headers || {};
+                if (typeof config.headers.setContentType === "function") {
+                    config.headers.setContentType(false);
+                } else {
+                    config.headers["Content-Type"] = false;
+                }
+            }
+
             const token =
                 localStorage.getItem("token");
 
