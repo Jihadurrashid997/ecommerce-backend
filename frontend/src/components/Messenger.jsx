@@ -5961,10 +5961,16 @@ const onCallMissed =
 
             try {
 
+                const mimeType =
+                    (blob.type || "audio/webm")
+                        .split(";")[0]
+                        .trim()
+                        .toLowerCase();
+
                 const extension =
-                    blob.type.includes("mp4")
+                    mimeType.includes("mp4")
                         ? "m4a"
-                        : blob.type.includes("ogg")
+                        : mimeType.includes("ogg")
                         ? "ogg"
                         : "webm";
 
@@ -5973,9 +5979,7 @@ const onCallMissed =
                         [blob],
                         `voice-${Date.now()}.${extension}`,
                         {
-                            type:
-                                blob.type ||
-                                "audio/webm"
+                            type: mimeType
                         }
                     );
 

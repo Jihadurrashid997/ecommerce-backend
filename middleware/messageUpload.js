@@ -75,7 +75,12 @@ const ALLOWED_MIME_TYPES = [
 
 const fileFilter = (req, file, cb) => {
 
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    const mimeType = String(file.mimetype || "")
+        .split(";")[0]
+        .trim()
+        .toLowerCase();
+
+    if (ALLOWED_MIME_TYPES.includes(mimeType)) {
 
         cb(null, true);
 

@@ -89,7 +89,9 @@ test("Messenger attachment uploads accept common audio formats and reject video 
 
     for (const mimetype of [
         "audio/webm",
+        "audio/webm;codecs=opus",
         "audio/mp4",
+        "audio/mp4; codecs=mp4a.40.2",
         "audio/aac",
         "audio/mpeg",
         "audio/ogg",
