@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const Post = require("../models/Post");
 const Message = require("../models/Message");
+const messageController = require("../controllers/messageController");
 const GroupConversation = require("../models/GroupConversation");
 const groupController = require("../controllers/groupController");
 const User = require("../models/User");
@@ -110,6 +111,145 @@ test("groups validate their name, creator, and participant list", () => {
     });
 
     assert.equal(group.validateSync(), undefined);
+});
+
+test("encrypted messages are marked without changing legacy message validation", () => {
+    const message = new Message({
+        sender: TEST_USER_ID,
+        receiver: OTHER_USER_ID,
+        message: "e2ee:v1:YWJj",
+        isEncrypted: true
+    });
+
+    assert.equal(message.validateSync(), undefined);
+    assert.equal(message.isEncrypted, true);
+
+    const legacyMessage = new Message({
+        sender: TEST_USER_ID,
+        receiver: OTHER_USER_ID,
+        message: "Plaintext remains supported"
+    });
+
+    assert.equal(legacyMessage.validateSync(), undefined);
+    assert.equal(legacyMessage.isEncrypted, false);
+});
+
+test("users can register only public P-256 encryption keys", async () => {
+    const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+    const originalFindById = User.findById;
+    const response = makeResponse();
+    let savedKey;
+
+    User.findById = userId => ({
+        select: async () => {
+            assert.equal(userId, TEST_USER_ID);
+            return { messengerEncryptionPublicKey: "" };
+        }
+    });
+    User.findByIdAndUpdate = async (userId, update) => {
+        assert.equal(userId, TEST_USER_ID);
+        savedKey = JSON.parse(update.$set.messengerEncryptionPublicKey);
+        return {};
+    };
+
+    try {
+        await messageController.saveEncryptionPublicKey(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    publicKey: {
+                        kty: "EC",
+                        crv: "P-256",
+                        x: "A".repeat(43),
+                        y: "B".repeat(43)
+                    }
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(
+            Object.keys(savedKey).sort(),
+            ["crv", "ext", "key_ops", "kty", "x", "y"]
+        );
+        assert.equal(savedKey.kty, "EC");
+    } finally {
+        User.findByIdAndUpdate = originalFindByIdAndUpdate;
+        User.findById = originalFindById;
+    }
+});
+
+test("encryption key registration rejects private key material", async () => {
+    const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+    const response = makeResponse();
+
+    User.findByIdAndUpdate = async () => {
+        throw new Error("Invalid keys must never be saved.");
+    };
+
+    try {
+        await messageController.saveEncryptionPublicKey(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    publicKey: {
+                        kty: "EC",
+                        crv: "P-256",
+                        x: "A".repeat(43),
+                        y: "B".repeat(43),
+                        d: "private material"
+                    }
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 400);
+        assert.equal(response.body.success, false);
+    } finally {
+        User.findByIdAndUpdate = originalFindByIdAndUpdate;
+    }
+});
+
+test("encryption public keys are returned without exposing private key material", async () => {
+    const originalFindById = User.findById;
+    const response = makeResponse();
+    const key = {
+        kty: "EC",
+        crv: "P-256",
+        x: "A".repeat(43),
+        y: "B".repeat(43),
+        ext: true,
+        key_ops: []
+    };
+
+    User.findById = userId => ({
+        select: () => ({
+            lean: async () => {
+                assert.equal(userId, OTHER_USER_ID);
+                return {
+                    messengerEncryptionPublicKey: JSON.stringify(key)
+                };
+            }
+        })
+    });
+
+    try {
+        await messageController.getEncryptionPublicKey(
+            {
+                user: { id: TEST_USER_ID },
+                params: { userId: OTHER_USER_ID }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(response.body.data.publicKey, key);
+        assert.equal("d" in response.body.data.publicKey, false);
+    } finally {
+        User.findById = originalFindById;
+    }
 });
 
 test("non-members cannot load group message history", async () => {

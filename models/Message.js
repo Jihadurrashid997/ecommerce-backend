@@ -105,6 +105,11 @@ const MessageSchema =
 
             },
 
+            isEncrypted: {
+                type: Boolean,
+                default: false
+            },
+
 
             fileUrl: {
 

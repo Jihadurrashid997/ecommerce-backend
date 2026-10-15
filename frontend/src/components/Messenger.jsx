@@ -32,6 +32,7 @@ import {
     FaThumbtack,
     FaArchive,
     FaVolumeMute,
+    FaLock,
     FaMicrophone,
     FaStop,
     FaTrash,
@@ -48,6 +49,17 @@ import {
 import api, {
     getUploadUrl
 } from "../services/api";
+
+import {
+    deriveConversationCipher,
+    decryptMessageRecord,
+    encryptMessageText,
+    ensureMessengerIdentity,
+    getConversationEncryptionId,
+    getPeerEncryptionKey,
+    getSafetyCode,
+    isEncryptedMessage
+} from "../services/messengerEncryption";
 
 import socket, {
     connectSocket
@@ -529,6 +541,21 @@ const Messenger = ({ isActive = true }) => {
     const [chatListView, setChatListView] =
         useState("chats");
 
+    const [encryptionIdentity, setEncryptionIdentity] =
+        useState(null);
+
+    const encryptionIdentityRef =
+        useRef(null);
+
+    const [encryptionError, setEncryptionError] =
+        useState("");
+
+    const [encryptionSafetyCode, setEncryptionSafetyCode] =
+        useState("");
+
+    const [encryptionSafetyPeerId, setEncryptionSafetyPeerId] =
+        useState("");
+
     const [selectedUser, setSelectedUser] =
         useState(null);
 
@@ -643,6 +670,159 @@ const Messenger = ({ isActive = true }) => {
             Boolean(
                 chatPreferencesRef.current[getId(conversationId)]?.muted
             );
+
+    useEffect(() => {
+        encryptionIdentityRef.current = encryptionIdentity;
+    }, [encryptionIdentity]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const userId = getId(user);
+
+        if (!userId) {
+            setEncryptionIdentity(null);
+            encryptionIdentityRef.current = null;
+            return undefined;
+        }
+
+        ensureMessengerIdentity(api, userId)
+            .then(identity => {
+                if (!cancelled) {
+                    setEncryptionIdentity(identity);
+                    encryptionIdentityRef.current = identity;
+                }
+            })
+            .catch(error => {
+                console.error("Messenger encryption setup error:", error);
+                if (!cancelled) {
+                    setEncryptionError(error.message);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user]);
+
+    const getConversationCipher =
+        useCallback(
+            async target => {
+                const userId = getId(user);
+                const peerId = getId(target);
+
+                if (!userId || !peerId || target?.isGroup) {
+                    throw new Error("Encryption is only available in one-to-one chats.");
+                }
+
+                const identity =
+                    encryptionIdentityRef.current ||
+                    await ensureMessengerIdentity(api, userId);
+
+                encryptionIdentityRef.current = identity;
+                setEncryptionIdentity(identity);
+
+                const peerPublicKey =
+                    await getPeerEncryptionKey(api, peerId);
+
+                return {
+                    cipher: await deriveConversationCipher(
+                        identity.privateKey,
+                        peerPublicKey,
+                        getConversationEncryptionId(userId, peerId)
+                    ),
+                    peerPublicKey
+                };
+            },
+            [user]
+        );
+
+    const decryptMessagesForTarget =
+        useCallback(
+            async (items, target) => {
+                if (
+                    !Array.isArray(items) ||
+                    target?.isGroup ||
+                    !items.some(item =>
+                        item?.isEncrypted ||
+                        isEncryptedMessage(item?.message)
+                    )
+                ) {
+                    return items;
+                }
+
+                try {
+                    const { cipher } =
+                        await getConversationCipher(target);
+                    const conversationId = getConversationEncryptionId(
+                        getId(user),
+                        getId(target)
+                    );
+
+                    return Promise.all(
+                        items.map(item =>
+                            decryptMessageRecord(
+                                item,
+                                cipher,
+                                conversationId
+                            )
+                        )
+                    );
+                } catch (error) {
+                    console.error("Messenger message decryption setup error:", error);
+                    return items.map(item =>
+                        item?.isEncrypted || isEncryptedMessage(item?.message)
+                            ? {
+                                  ...item,
+                                  message: "Unable to decrypt this message on this device.",
+                                  isEncrypted: true,
+                                  decryptionFailed: true
+                              }
+                            : item
+                    );
+                }
+            },
+            [getConversationCipher, user]
+        );
+
+    useEffect(() => {
+        const peerId = getId(selectedUser);
+
+        if (
+            !peerId ||
+            selectedUser?.isGroup ||
+            !chatPreferences[peerId]?.encrypted
+        ) {
+            setEncryptionSafetyCode("");
+            setEncryptionSafetyPeerId("");
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        Promise.all([
+            ensureMessengerIdentity(api, getId(user)),
+            getPeerEncryptionKey(api, peerId)
+        ])
+            .then(async ([identity, peerPublicKey]) => ({
+                code: await getSafetyCode(identity.publicKey, peerPublicKey),
+                identity
+            }))
+            .then(({ code, identity }) => {
+                if (!cancelled) {
+                    encryptionIdentityRef.current = identity;
+                    setEncryptionIdentity(identity);
+                    setEncryptionSafetyCode(code);
+                    setEncryptionSafetyPeerId(peerId);
+                }
+            })
+            .catch(error => {
+                console.error("Encryption safety code load error:", error);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedUser, chatPreferences, user]);
 
     useEffect(() => {
         const userId = getId(user);
@@ -2787,14 +2967,14 @@ const acceptCall =
 ------------------------------------------------- */
 
 const onReceiveMessage =
-    incoming => {
+    async incoming => {
 
         if (!incoming) {
             return;
         }
 
 
-        const newMessage =
+        let newMessage =
             incoming.data &&
             typeof incoming.data ===
                 "object"
@@ -2806,6 +2986,31 @@ const onReceiveMessage =
 
                 : incoming;
 
+        if (
+            newMessage.isEncrypted ||
+            isEncryptedMessage(newMessage.message)
+        ) {
+            const senderId = getMessageSenderId(newMessage);
+            const encryptionPeer =
+                newMessage.sender && typeof newMessage.sender === "object"
+                    ? newMessage.sender
+                    : { id: senderId };
+
+            try {
+                [newMessage] = await decryptMessagesForTarget(
+                    [newMessage],
+                    encryptionPeer
+                );
+            } catch (error) {
+                console.error("Incoming encrypted message decryption error:", error);
+                newMessage = {
+                    ...newMessage,
+                    message: "Unable to decrypt this message on this device.",
+                    isEncrypted: true,
+                    decryptionFailed: true
+                };
+            }
+        }
 
         const senderId =
             getMessageSenderId(
@@ -4539,6 +4744,7 @@ const onCallMissed =
         user,
         appendMessage,
         bumpRecent,
+        decryptMessagesForTarget,
         updateGroupPreview,
         cleanupCall,
         createPeer,
@@ -4676,11 +4882,13 @@ const onCallMissed =
                         [];
 
 
-                    setMessages(
-                        Array.isArray(data)
-                            ? data
-                            : []
-                    );
+                    const visibleMessages =
+                        await decryptMessagesForTarget(
+                            Array.isArray(data) ? data : [],
+                            target
+                        );
+
+                    setMessages(visibleMessages);
 
 
                     if (
@@ -4721,6 +4929,7 @@ const onCallMissed =
 
             },
             [
+                decryptMessagesForTarget,
                 getRoomId,
                 scrollToBottom,
                 user
@@ -4796,6 +5005,51 @@ const onCallMissed =
                     : current
             );
         };
+
+    const toggleEncryptedChat =
+        async () => {
+            if (!selectedUser || selectedUser.isGroup) {
+                return;
+            }
+
+            if (getChatPreference(selectedUser).encrypted) {
+                const confirmed = window.confirm(
+                    "Turn off encryption for future messages? Existing encrypted messages will stay encrypted."
+                );
+
+                if (confirmed) {
+                    updateChatPreference(selectedUser, "encrypted", false);
+                }
+
+                setShowMenu(false);
+                return;
+            }
+
+            setEncryptionError("");
+
+            try {
+                const { peerPublicKey } =
+                    await getConversationCipher(selectedUser);
+                const safetyCode =
+                    await getSafetyCode(
+                        encryptionIdentityRef.current.publicKey,
+                        peerPublicKey
+                    );
+
+                setEncryptionSafetyCode(safetyCode);
+                setEncryptionSafetyPeerId(getId(selectedUser));
+                updateChatPreference(selectedUser, "encrypted", true);
+                setShowMenu(false);
+            } catch (error) {
+                console.error("Enable encrypted chat error:", error);
+                setEncryptionError(
+                    error?.response?.data?.message ||
+                    error.message ||
+                    "Could not enable encryption."
+                );
+            }
+        };
+
 
     const createGroup =
         async event => {
@@ -5092,6 +5346,34 @@ const onCallMissed =
                 return;
             }
 
+            const encryptedChat =
+                !selectedUser.isGroup &&
+                getChatPreference(selectedUser).encrypted;
+
+            let storedText = text;
+
+            if (encryptedChat) {
+                try {
+                    const { cipher } =
+                        await getConversationCipher(selectedUser);
+                    storedText = await encryptMessageText(
+                        text,
+                        cipher,
+                        getConversationEncryptionId(sender, receiver)
+                    );
+
+                    if (storedText.length > 5000) {
+                        throw new Error(
+                            "This message is too long to encrypt. Shorten it and try again."
+                        );
+                    }
+                } catch (error) {
+                    setEncryptionError(error.message);
+                    alert(error.message);
+                    return;
+                }
+            }
+
 
             const roomId =
                 currentRoomRef.current ||
@@ -5134,6 +5416,7 @@ const onCallMissed =
                         : undefined,
                 message:
                     text,
+                isEncrypted: encryptedChat,
                 createdAt:
                     new Date().toISOString(),
                 seen:
@@ -5192,7 +5475,8 @@ const onCallMissed =
                               }
                             : {
                                   receiver,
-                                  message: text,
+                                  message: storedText,
+                                  isEncrypted: encryptedChat,
                                   replyTo:
                                       getMessageId(replySnapshot) ||
                                       undefined
@@ -5211,6 +5495,14 @@ const onCallMissed =
                  */
 
                 if (saved) {
+                    const visibleSaved = encryptedChat
+                        ? {
+                              ...saved,
+                              message: text,
+                              isEncrypted: true
+                          }
+                        : saved;
+
                     if (selectedUser.isGroup) {
                         updateGroupPreview(receiver, saved);
                     }
@@ -5221,7 +5513,7 @@ const onCallMissed =
                                 item =>
                                     item._id ===
                                     temporaryId
-                                        ? saved
+                                        ? visibleSaved
                                         : item
                             )
                     );
@@ -5245,7 +5537,8 @@ const onCallMissed =
                                 : { receiver }),
                             message:
                                 saved.message ||
-                                text,
+                                storedText,
+                            isEncrypted: encryptedChat,
                             replyTo:
                                 saved.replyTo ||
                                 undefined,
@@ -5399,6 +5692,16 @@ const onCallMissed =
 
 
             if (!file) {
+                return;
+            }
+
+            if (
+                selectedUser &&
+                !selectedUser.isGroup &&
+                getChatPreference(selectedUser).encrypted
+            ) {
+                alert("Attachments are not encrypted yet. Turn off encryption before sending a file.");
+                event.target.value = "";
                 return;
             }
 
@@ -5745,6 +6048,14 @@ const onCallMissed =
                 !selectedUser ||
                 isConversationBlocked
             ) {
+                return;
+            }
+
+            if (
+                !selectedUser.isGroup &&
+                getChatPreference(selectedUser).encrypted
+            ) {
+                alert("End-to-end encryption currently supports text messages only.");
                 return;
             }
 
@@ -6235,15 +6546,57 @@ const onCallMissed =
             }
 
             try {
+                const encryptedEdit =
+                    !selectedUser?.isGroup &&
+                    (
+                        editingMessage.isEncrypted ||
+                        getChatPreference(selectedUser).encrypted
+                    );
+                let storedText = text;
+                let cipher = null;
+
+                if (encryptedEdit) {
+                    const encryption =
+                        await getConversationCipher(selectedUser);
+                    cipher = encryption.cipher;
+                    storedText = await encryptMessageText(
+                        text,
+                        cipher,
+                        getConversationEncryptionId(
+                            getId(user),
+                            getId(selectedUser)
+                        )
+                    );
+
+                    if (storedText.length > 5000) {
+                        throw new Error(
+                            "This message is too long to encrypt. Shorten it and try again."
+                        );
+                    }
+                }
 
                 const response =
                     await api.put(
                         `/messages/${messageId}`,
-                        { message: text }
+                        {
+                            message: storedText,
+                            isEncrypted: encryptedEdit
+                        }
                     );
 
-                const updated =
+                let updated =
                     response.data?.data;
+
+                if (updated && encryptedEdit) {
+                    updated = await decryptMessageRecord(
+                        updated,
+                        cipher,
+                        getConversationEncryptionId(
+                            getId(user),
+                            getId(selectedUser)
+                        )
+                    );
+                }
 
                 if (updated) {
 
@@ -7604,6 +7957,14 @@ const onCallMissed =
                                             selectedUser
                                         )}
                                         {!selectedUser.isGroup &&
+                                            getChatPreference(selectedUser).encrypted && (
+                                                <FaLock
+                                                    className="encrypted-chat-lock"
+                                                    title="End-to-end encrypted text chat"
+                                                    aria-label="End-to-end encrypted text chat"
+                                                />
+                                            )}
+                                        {!selectedUser.isGroup &&
                                             selectedUser.isVerified && (
                                                 <VerifiedBadge />
                                             )}
@@ -7787,6 +8148,39 @@ const onCallMissed =
 
                             {showMenu && (
                                 <div className="chat-options-menu">
+
+                                    {!selectedUser?.isGroup && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={toggleEncryptedChat}
+                                            >
+                                                <FaLock />
+                                                {getChatPreference(selectedUser).encrypted
+                                                    ? "Turn off encryption"
+                                                    : "Start encrypted chat"}
+                                            </button>
+
+                                            {getChatPreference(selectedUser).encrypted &&
+                                                encryptionSafetyCode &&
+                                                encryptionSafetyPeerId === getId(selectedUser) && (
+                                                    <div className="messenger-encryption-safety-code">
+                                                        <strong>Safety code</strong>
+                                                        <span>{encryptionSafetyCode}</span>
+                                                        <small>
+                                                            Compare this code with the other person out of band.
+                                                            Encryption is for text messages only.
+                                                        </small>
+                                                    </div>
+                                                )}
+
+                                            {encryptionError && (
+                                                <p className="messenger-encryption-error" role="alert">
+                                                    {encryptionError}
+                                                </p>
+                                            )}
+                                        </>
+                                    )}
 
                                     <button
                                         type="button"
@@ -8495,6 +8889,10 @@ const onCallMissed =
                                                             type="button"
                                                             className="message-reply-btn"
                                                             title="Forward"
+                                                            disabled={
+                                                                item.isEncrypted ||
+                                                                item.decryptionFailed
+                                                            }
                                                             onClick={() => {
 
                                                                 setForwardingMessage(
@@ -8855,6 +9253,14 @@ const onCallMissed =
                                 <button
                                     type="button"
                                     title="Attach file"
+                                    disabled={
+                                        !selectedUser ||
+                                        isConversationBlocked ||
+                                        (
+                                            !selectedUser.isGroup &&
+                                            getChatPreference(selectedUser).encrypted
+                                        )
+                                    }
                                     onClick={() =>
                                         fileInputRef
                                             .current
@@ -8868,6 +9274,14 @@ const onCallMissed =
                                 <button
                                     type="button"
                                     title="Image"
+                                    disabled={
+                                        !selectedUser ||
+                                        isConversationBlocked ||
+                                        (
+                                            !selectedUser.isGroup &&
+                                            getChatPreference(selectedUser).encrypted
+                                        )
+                                    }
                                     onClick={() =>
                                         fileInputRef
                                             .current
@@ -8884,6 +9298,14 @@ const onCallMissed =
                                     }
                                     type="file"
                                     hidden
+                                    disabled={
+                                        !selectedUser ||
+                                        isConversationBlocked ||
+                                        (
+                                            !selectedUser.isGroup &&
+                                            getChatPreference(selectedUser).encrypted
+                                        )
+                                    }
                                     accept="image/*,.pdf,.doc,.docx,.txt,.zip"
                                     onChange={
                                         handleFile
