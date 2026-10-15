@@ -2,7 +2,7 @@ import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 
-const PrivateRoute = ({ children }) => {
+const PrivateRoute = ({ children, allowedRoles }) => {
 
     const { user, loading } = useApp();
     const location = useLocation();
@@ -45,6 +45,10 @@ const PrivateRoute = ({ children }) => {
             />
         );
 
+    }
+
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
+        return <Navigate to="/shop" replace />;
     }
 
     // ==========================

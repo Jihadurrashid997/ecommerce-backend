@@ -89,13 +89,7 @@ const Profile = () => {
     // SETTINGS
     // ==========================
 
-    const handleSettings = () => {
-
-        alert(
-            "Account settings will be available soon."
-        );
-
-    };
+    const handleSettings = () => navigate("/edit-profile");
 
     return (
 

@@ -321,10 +321,10 @@ function AppLayout() {
                 <Route path="/shop/wishlist" element={<PrivateRoute><Wishlist /></PrivateRoute>} />
                 <Route path="/shop/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
                 <Route path="/shop/orders" element={<PrivateRoute><OrderHistory /></PrivateRoute>} />
-                <Route path="/shop/edit-product/:id" element={<PrivateRoute><EditProduct /></PrivateRoute>} />
-                <Route path="/shop/seller" element={<PrivateRoute><SellerDashboard /></PrivateRoute>} />
-                <Route path="/shop/seller/products" element={<PrivateRoute><SellerProducts /></PrivateRoute>} />
-                <Route path="/shop/seller/orders" element={<PrivateRoute><SellerOrders /></PrivateRoute>} />
+                <Route path="/shop/seller" element={<PrivateRoute allowedRoles={["seller"]}><SellerDashboard /></PrivateRoute>} />
+                <Route path="/shop/seller/products" element={<PrivateRoute allowedRoles={["seller"]}><SellerProducts /></PrivateRoute>} />
+                <Route path="/shop/seller/orders" element={<PrivateRoute allowedRoles={["seller"]}><SellerOrders /></PrivateRoute>} />
+                <Route path="/shop/edit-product/:id" element={<PrivateRoute allowedRoles={["seller", "admin"]}><EditProduct /></PrivateRoute>} />
 
                 <Route path="/product/:id" element={<ShopRedirect target="/shop/product/:id" />} />
                 <Route path="/payment-success" element={<ShopRedirect target="/shop/payment-success" />} />
