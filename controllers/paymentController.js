@@ -6,6 +6,17 @@ const store_passwd = process.env.SSLC_STORE_PASSWORD;
 
 const is_live = process.env.SSLC_IS_LIVE === "true";
 
+const setSellerPayoutStatus = (order, payoutStatus) => {
+    for (const settlement of order.sellerSettlements || []) {
+        if (
+            settlement.payoutStatus === "awaiting_payment" ||
+            (payoutStatus === "held" && settlement.payoutStatus === "cancelled")
+        ) {
+            settlement.payoutStatus = payoutStatus;
+        }
+    }
+};
+
 exports.getPaymentStatus = async (req, res) => {
     try {
         const transactionId = String(req.params.transactionId || "").trim();
@@ -134,6 +145,18 @@ exports.initPayment = async (req, res) => {
 
         }
 
+        if (order.status === "Cancelled") {
+            return res.status(409).json({
+                message: "Cancelled orders cannot be paid."
+            });
+        }
+
+        if (order.paymentStatus === "paid") {
+            return res.status(409).json({
+                message: "This order has already been paid."
+            });
+        }
+
 
         // Check amount
 
@@ -164,6 +187,8 @@ exports.initPayment = async (req, res) => {
 
         order.paymentStatus =
             "pending";
+
+        setSellerPayoutStatus(order, "awaiting_payment");
 
         order.shippingAddress = {
 
@@ -402,11 +427,12 @@ exports.paymentFail = async (req, res) => {
                 });
 
 
-            if (order) {
+            if (order && order.paymentStatus !== "paid") {
 
                 order.paymentStatus =
                     "failed";
 
+                setSellerPayoutStatus(order, "cancelled");
                 await order.save();
 
             }
@@ -460,11 +486,12 @@ exports.paymentCancel = async (req, res) => {
                 });
 
 
-            if (order) {
+            if (order && order.paymentStatus !== "paid") {
 
                 order.paymentStatus =
                     "cancelled";
 
+                setSellerPayoutStatus(order, "cancelled");
                 await order.save();
 
             }
@@ -548,6 +575,13 @@ exports.paymentIPN = async (req, res) => {
 
         }
 
+        if (order.paymentStatus === "paid") {
+            return res.status(200).json({
+                success: true,
+                message: "Payment was already verified."
+            });
+        }
+
 
         /*
         Failed payment
@@ -560,6 +594,7 @@ exports.paymentIPN = async (req, res) => {
             order.paymentStatus =
                 "failed";
 
+            setSellerPayoutStatus(order, "cancelled");
             await order.save();
 
             return res.status(200).json({
@@ -581,6 +616,7 @@ exports.paymentIPN = async (req, res) => {
             order.paymentStatus =
                 "cancelled";
 
+            setSellerPayoutStatus(order, "cancelled");
             await order.save();
 
             return res.status(200).json({
@@ -686,6 +722,7 @@ exports.paymentIPN = async (req, res) => {
             order.paymentStatus =
                 "failed";
 
+            setSellerPayoutStatus(order, "cancelled");
             await order.save();
 
             return res.status(400).json({
@@ -703,6 +740,7 @@ exports.paymentIPN = async (req, res) => {
         order.paymentStatus =
             "paid";
 
+        setSellerPayoutStatus(order, "held");
 
         await order.save();
 

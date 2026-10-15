@@ -22,6 +22,7 @@ import {
     FaArrowLeft,
     FaCheck,
     FaCheckDouble,
+    FaExclamationCircle,
     FaCircle,
     FaUserCircle,
     FaTimes,
@@ -1132,6 +1133,37 @@ const Messenger = ({ isActive = true }) => {
 
     const [sendingVoice, setSendingVoice] =
         useState(false);
+
+    const [messengerToast, setMessengerToast] =
+        useState(null);
+
+    const messengerToastTimerRef =
+        useRef(null);
+
+    const dismissMessengerToast =
+        useCallback(() => {
+            clearTimeout(messengerToastTimerRef.current);
+            messengerToastTimerRef.current = null;
+            setMessengerToast(null);
+        }, []);
+
+    const showMessengerToast =
+        useCallback((message, type = "error") => {
+            clearTimeout(messengerToastTimerRef.current);
+            setMessengerToast({
+                id: Date.now(),
+                message,
+                type
+            });
+            messengerToastTimerRef.current = setTimeout(
+                () => setMessengerToast(null),
+                4800
+            );
+        }, []);
+
+    useEffect(() => () => {
+        clearTimeout(messengerToastTimerRef.current);
+    }, []);
 
     const mediaRecorderRef =
         useRef(null);
@@ -5773,7 +5805,7 @@ const onCallMissed =
                 !selectedUser.isGroup &&
                 getChatPreference(selectedUser).encrypted
             ) {
-                alert("Attachments are not encrypted yet. Turn off encryption before sending a file.");
+                showMessengerToast("Attachments are unavailable in encrypted chats for now.");
                 event.target.value = "";
                 return;
             }
@@ -5797,9 +5829,7 @@ const onCallMissed =
                 10 * 1024 * 1024
             ) {
 
-                alert(
-                    "Maximum file size is 10MB."
-                );
+                showMessengerToast("Files must be 10MB or smaller.");
 
                 event.target.value =
                     "";
@@ -5810,6 +5840,10 @@ const onCallMissed =
 
 
             try {
+                const recipientId = getId(selectedUser);
+                if (!recipientId) {
+                    throw new Error("Choose a valid conversation before sending an attachment.");
+                }
 
                 const formData =
                     new FormData();
@@ -5825,7 +5859,7 @@ const onCallMissed =
                     selectedUser.isGroup
                         ? "groupId"
                         : "receiver",
-                    getId(selectedUser)
+                    recipientId
                 );
 
 
@@ -5840,6 +5874,9 @@ const onCallMissed =
                     response.data?.data ||
                     response.data?.message;
 
+                if (!saved) {
+                    throw new Error("The server did not confirm the attachment.");
+                }
 
                 if (saved) {
 
@@ -5927,10 +5964,10 @@ const onCallMissed =
                     error
                 );
 
-                alert(
-                    error.response?.data
-                        ?.message ||
-                    "File could not be sent."
+                showMessengerToast(
+                    error.response?.data?.message ||
+                        error.message ||
+                        "Attachment could not be sent."
                 );
 
             } finally {
@@ -5954,6 +5991,12 @@ const onCallMissed =
                 !selectedUser ||
                 !user
             ) {
+                return;
+            }
+
+            const recipientId = getId(selectedUser);
+            if (!recipientId) {
+                showMessengerToast("Choose a conversation before sending a voice note.");
                 return;
             }
 
@@ -5995,7 +6038,7 @@ const onCallMissed =
                     selectedUser.isGroup
                         ? "groupId"
                         : "receiver",
-                    getId(selectedUser)
+                    recipientId
                 );
 
                 const response =
@@ -6008,69 +6051,69 @@ const onCallMissed =
                     response.data?.data ||
                     response.data?.message;
 
-                if (saved) {
-
-                    appendMessage(saved);
-
-                    if (selectedUser.isGroup) {
-                        updateGroupPreview(
-                            getId(selectedUser),
-                            saved
-                        );
-                    }
-
-                    scrollToBottom();
-
-                    bumpRecent(
-                        getId(selectedUser)
-                    );
-
-                    const roomId =
-                        currentRoomRef.current ||
-                        getRoomId(
-                            user,
-                            selectedUser
-                        );
-
-                    socket.emit(
-                        "send-message",
-                        {
-                            roomId,
-                            sender:
-                                getId(user),
-                            ...(selectedUser.isGroup
-                                ? {
-                                      groupId: getId(selectedUser),
-                                      senderName: getUserName(user)
-                                  }
-                                : {
-                                      receiver: getId(selectedUser)
-                                  }),
-                            message:
-                                saved.message ||
-                                "",
-                            fileUrl:
-                                saved.fileUrl ||
-                                "",
-                            fileName:
-                                saved.fileName ||
-                                "",
-                            fileType:
-                                saved.fileType ||
-                                "",
-                            _id:
-                                saved._id ||
-                                saved.id,
-                            id:
-                                saved._id ||
-                                saved.id,
-                            createdAt:
-                                saved.createdAt ||
-                                new Date().toISOString()
-                        }
-                    );
-
+                if (!saved) {
+                    throw new Error("The server did not confirm the voice message.");
                 }
+
+                appendMessage(saved);
+
+                if (selectedUser.isGroup) {
+                    updateGroupPreview(
+                        recipientId,
+                        saved
+                    );
+                }
+
+                scrollToBottom();
+
+                bumpRecent(recipientId);
+
+                const roomId =
+                    currentRoomRef.current ||
+                    getRoomId(
+                        user,
+                        selectedUser
+                    );
+
+                socket.emit(
+                    "send-message",
+                    {
+                        roomId,
+                        sender:
+                            getId(user),
+                        ...(selectedUser.isGroup
+                            ? {
+                                  groupId: recipientId,
+                                  senderName: getUserName(user)
+                              }
+                            : {
+                                  receiver: recipientId
+                              }),
+                        message:
+                            saved.message ||
+                            "",
+                        fileUrl:
+                            saved.fileUrl ||
+                            "",
+                        fileName:
+                            saved.fileName ||
+                            "",
+                        fileType:
+                            saved.fileType ||
+                            "",
+                        _id:
+                            saved._id ||
+                            saved.id,
+                        id:
+                            saved._id ||
+                            saved.id,
+                        createdAt:
+                            saved.createdAt ||
+                            new Date().toISOString()
+                    }
+                );
+
+                showMessengerToast("Voice note sent successfully.", "success");
 
             } catch (error) {
 
@@ -6079,10 +6122,10 @@ const onCallMissed =
                     error
                 );
 
-                alert(
-                    error.response?.data
-                        ?.message ||
-                    "Voice message could not be sent."
+                showMessengerToast(
+                    error.response?.data?.message ||
+                        error.message ||
+                        "Voice note could not be sent."
                 );
 
             } finally {
@@ -6132,7 +6175,7 @@ const onCallMissed =
                 !selectedUser.isGroup &&
                 getChatPreference(selectedUser).encrypted
             ) {
-                alert("End-to-end encryption currently supports text messages only.");
+                showMessengerToast("Voice notes are unavailable in encrypted chats for now.");
                 return;
             }
 
@@ -6206,8 +6249,8 @@ const onCallMissed =
                     error
                 );
 
-                alert(
-                    "Microphone permission is required to send a voice message."
+                showMessengerToast(
+                    "Allow microphone access to record a voice note."
                 );
 
             }
@@ -7528,6 +7571,34 @@ const onCallMissed =
 
     return (
         <div className={`messenger-page ${isActive ? "" : "messenger-persistent-background"}`}>
+
+            {messengerToast && (
+                <div
+                    key={messengerToast.id}
+                    className={`messenger-toast messenger-toast-${messengerToast.type}`}
+                    role={messengerToast.type === "error" ? "alert" : "status"}
+                    aria-live={messengerToast.type === "error" ? "assertive" : "polite"}
+                >
+                    <span className="messenger-toast-icon" aria-hidden="true">
+                        {messengerToast.type === "success"
+                            ? <FaCheckCircle />
+                            : <FaExclamationCircle />}
+                    </span>
+                    <div className="messenger-toast-copy">
+                        <small>MESSENGER · VOICE NOTE</small>
+                        <p>{messengerToast.message}</p>
+                    </div>
+                    <button
+                        type="button"
+                        className="messenger-toast-close"
+                        aria-label="Dismiss notification"
+                        onClick={dismissMessengerToast}
+                    >
+                        <FaTimes />
+                    </button>
+                    <span className="messenger-toast-progress" aria-hidden="true" />
+                </div>
+            )}
 
             <aside
                 className={

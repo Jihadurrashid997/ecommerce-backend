@@ -16,6 +16,22 @@ const userSchema = new mongoose.Schema(
             trim: true
         },
 
+        payoutMethod: {
+            type: String,
+            trim: true,
+            maxlength: 40,
+            default: "",
+            select: false
+        },
+
+        payoutAccount: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            default: "",
+            select: false
+        },
+
         password: {
             type: String,
             required: true,

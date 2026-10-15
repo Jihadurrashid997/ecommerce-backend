@@ -1,4 +1,5 @@
 const Product = require("../models/Product");
+const marketplaceSettings = require("../services/marketplaceSettings");
 
 // ==============================
 // Get All Products
@@ -6,6 +7,15 @@ const Product = require("../models/Product");
 exports.getProducts = async (req, res) => {
 
     try {
+        const settings =
+            await marketplaceSettings.getMarketplaceSettings();
+
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: "The Shop is temporarily closed."
+            });
+        }
 
         const keyword = req.query.keyword
             ? {
@@ -22,10 +32,16 @@ exports.getProducts = async (req, res) => {
             }
             : {};
 
-        const products = await Product.find({
+        const filters = {
             ...keyword,
-            ...category
-        }).populate("seller", "name email");
+            ...category,
+            ...(settings.requireProductApproval
+                ? { isApproved: { $ne: false } }
+                : {})
+        };
+
+        const products = await Product.find(filters)
+            .select("-seller");
 
         res.json(products);
 
@@ -62,9 +78,18 @@ exports.getMyProducts = async (req, res) => {
 exports.getProduct = async (req, res) => {
 
     try {
+        const settings =
+            await marketplaceSettings.getMarketplaceSettings();
+
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: "The Shop is temporarily closed."
+            });
+        }
 
         const product = await Product.findById(req.params.id)
-            .populate("seller", "name email");
+            .select("-seller");
 
         if (!product) {
 
@@ -72,6 +97,15 @@ exports.getProduct = async (req, res) => {
                 message: "Product not found"
             });
 
+        }
+
+        if (
+            settings.requireProductApproval &&
+            product.isApproved === false
+        ) {
+            return res.status(404).json({
+                message: "Product not found"
+            });
         }
 
         res.json(product);
@@ -92,6 +126,15 @@ exports.getProduct = async (req, res) => {
 exports.createProduct = async (req, res) => {
 
     try {
+        const settings =
+            await marketplaceSettings.getMarketplaceSettings();
+
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: "The Shop is temporarily closed."
+            });
+        }
 
         const product = await Product.create({
 
@@ -109,7 +152,8 @@ exports.createProduct = async (req, res) => {
 
             stock: req.body.stock,
 
-            seller: req.user.id
+            seller: req.user.id,
+            isApproved: !settings.requireProductApproval
 
         });
 
@@ -131,6 +175,15 @@ exports.createProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
 
     try {
+        const settings =
+            await marketplaceSettings.getMarketplaceSettings();
+
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: "The Shop is temporarily closed."
+            });
+        }
 
         const product = await Product.findById(req.params.id);
 
@@ -162,10 +215,16 @@ exports.updateProduct = async (req, res) => {
         }
 
         const updatedData = {
-
             ...req.body
-
         };
+        delete updatedData.isApproved;
+
+        if (
+            req.user.role !== "admin" &&
+            settings.requireProductApproval
+        ) {
+            updatedData.isApproved = false;
+        }
 
         if (req.file) {
 

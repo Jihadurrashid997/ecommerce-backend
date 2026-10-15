@@ -510,6 +510,10 @@ const Checkout = () => {
 
                         </div>
 
+                        <p className="checkout-payout-note">
+                            Seller payout stays on hold until you confirm the delivered shipment. Shop administrators then process the transfer manually.
+                        </p>
+
 
                         {/* Pay Button */}
 

@@ -468,6 +468,238 @@ const Content = () => {
 
 };
 
+/* ------------------------------------------------ shop settings */
+
+const ShopSettings = () => {
+    const [settings, setSettings] = useState(null);
+    const [pendingProducts, setPendingProducts] = useState([]);
+    const [readyPayouts, setReadyPayouts] = useState([]);
+    const [payoutForms, setPayoutForms] = useState({});
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState("");
+    const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
+
+    const load = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError("");
+            const [settingsResponse, productsResponse, payoutsResponse] = await Promise.all([
+                api.get("/admin/settings"),
+                api.get("/admin/products/pending"),
+                api.get("/orders/admin/payouts/ready")
+            ]);
+            setSettings(settingsResponse.data.settings);
+            setPendingProducts(productsResponse.data.products || []);
+            setReadyPayouts(payoutsResponse.data.payouts || []);
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not load Shop settings.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const save = async (field, value) => {
+        try {
+            setBusy(field);
+            setError("");
+            setNotice("");
+            const response = await api.put("/admin/settings", { [field]: value });
+            setSettings(response.data.settings);
+            setNotice("Shop settings saved.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not save Shop settings.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const approve = async productId => {
+        try {
+            setBusy(productId);
+            setError("");
+            setNotice("");
+            await api.put(`/admin/approve/${productId}`);
+            setPendingProducts(products => products.filter(product => product._id !== productId));
+            setNotice("Product approved and published.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not approve product.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const updatePayoutForm = (fulfillmentId, field, value) => {
+        setPayoutForms(previous => ({
+            ...previous,
+            [fulfillmentId]: {
+                payoutMethod: "Manual transfer",
+                ...previous[fulfillmentId],
+                [field]: value
+            }
+        }));
+    };
+
+    const markPayoutPaid = async payout => {
+        const form = payoutForms[payout.fulfillmentId] || {};
+        if (!form.payoutMethod?.trim() || !form.payoutReference?.trim()) {
+            setError("Enter the payout method and actual transfer reference before marking it paid.");
+            return;
+        }
+
+        try {
+            setBusy(payout.fulfillmentId);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${payout.orderId}/payout`, {
+                fulfillmentId: payout.fulfillmentId,
+                payoutMethod: form.payoutMethod,
+                payoutReference: form.payoutReference
+            });
+            setPayoutForms(previous => {
+                const next = { ...previous };
+                delete next[payout.fulfillmentId];
+                return next;
+            });
+            setReadyPayouts(previous =>
+                previous.filter(item => item.fulfillmentId !== payout.fulfillmentId)
+            );
+            setNotice("Payout recorded. The transfer reference is saved in the order ledger.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not record payout.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    if (loading) return <p className="ac-note">Loading Shop settings...</p>;
+    if (!settings) return <p className="ac-note error" role="alert">{error}</p>;
+
+    return (
+        <section className="ac-shop-settings">
+            <h3>Shop controls</h3>
+            <p className="ac-note">These controls apply to all buyers and sellers.</p>
+
+            {error && <p className="ac-note error" role="alert">{error}</p>}
+            {notice && <p className="ac-note" role="status">{notice}</p>}
+
+            <label className="ac-setting-row">
+                <span>
+                    <b>Shop is open</b>
+                    <small>When turned off, product browsing and checkout are paused.</small>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={settings.marketplaceEnabled}
+                    disabled={Boolean(busy)}
+                    onChange={event => save("marketplaceEnabled", event.target.checked)}
+                />
+            </label>
+
+            <label className="ac-setting-row">
+                <span>
+                    <b>Require product approval</b>
+                    <small>New and seller-edited products stay hidden until approved.</small>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={settings.requireProductApproval}
+                    disabled={Boolean(busy)}
+                    onChange={event => save("requireProductApproval", event.target.checked)}
+                />
+            </label>
+
+            <h3>Products awaiting approval ({pendingProducts.length})</h3>
+            {pendingProducts.length === 0 ? (
+                <p className="ac-note">There are no products waiting for review.</p>
+            ) : (
+                <div className="ac-list">
+                    {pendingProducts.map(product => (
+                        <div className="ac-item" key={product._id}>
+                            <div className="ac-item-main">
+                                <b>{product.name}</b>
+                                <span>{product.seller?.name || "Seller"} · ৳{Number(product.price || 0).toLocaleString("en-BD")}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => approve(product._id)}
+                                disabled={Boolean(busy)}
+                            >
+                                {busy === product._id ? "Approving..." : "Approve"}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <h3>Seller payouts ready ({readyPayouts.length})</h3>
+            <p className="ac-note">Send the transfer outside the Shop, then record its actual method and reference here. Never mark a payout paid before the transfer succeeds.</p>
+            {readyPayouts.length === 0 ? (
+                <p className="ac-note">No seller payouts are ready.</p>
+            ) : (
+                <div className="ac-list">
+                    {readyPayouts.map(payout => {
+                        const form = payoutForms[payout.fulfillmentId] || {
+                            payoutMethod: "Manual transfer",
+                            payoutReference: ""
+                        };
+                        return (
+                            <div className="ac-payout-card" key={payout.fulfillmentId}>
+                                <div>
+                                    <b>Order #{payout.orderNumber} · ৳{Number(payout.amount || 0).toLocaleString("en-BD")}</b>
+                                    <span>{payout.seller?.name || "Seller"} · {payout.seller?.email || "No email"}</span>
+                                    <span>{payout.seller?.payoutMethod || "Payout method not set"}: {payout.seller?.payoutAccount || "Seller has not added an account"}</span>
+                                </div>
+                                <div className="ac-payout-actions">
+                                    <input
+                                        aria-label={`Payout method for order ${payout.orderNumber}`}
+                                        value={form.payoutMethod}
+                                        onChange={event => updatePayoutForm(
+                                            payout.fulfillmentId,
+                                            "payoutMethod",
+                                            event.target.value
+                                        )}
+                                        maxLength={40}
+                                        placeholder="Method"
+                                    />
+                                    <input
+                                        aria-label={`Transfer reference for order ${payout.orderNumber}`}
+                                        value={form.payoutReference}
+                                        onChange={event => updatePayoutForm(
+                                            payout.fulfillmentId,
+                                            "payoutReference",
+                                            event.target.value
+                                        )}
+                                        maxLength={120}
+                                        placeholder="Actual transfer reference"
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            Boolean(busy) ||
+                                            !payout.seller?.payoutMethod ||
+                                            !payout.seller?.payoutAccount
+                                        }
+                                        onClick={() => markPayoutPaid(payout)}
+                                    >
+                                        {busy === payout.fulfillmentId
+                                            ? "Saving..."
+                                            : !payout.seller?.payoutAccount
+                                                ? "Seller payout details missing"
+                                                : "Record payout"}
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </section>
+    );
+};
+
 /* ------------------------------------------------ page */
 
 const AdminControl = () => {
@@ -489,7 +721,7 @@ const AdminControl = () => {
             </div>
 
             <div className="ac-tabs">
-                {[["overview", "Overview"], ["users", "Users"], ["content", "Content"]].map(([key, label]) => (
+                {[["overview", "Overview"], ["users", "Users"], ["content", "Content"], ["shop", "Shop"]].map(([key, label]) => (
                     <button type="button" key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>
                         {label}
                     </button>
@@ -499,6 +731,7 @@ const AdminControl = () => {
             {tab === "overview" && <Overview />}
             {tab === "users" && <Users myId={user._id || user.id} />}
             {tab === "content" && <Content />}
+            {tab === "shop" && <ShopSettings />}
 
         </div>
     );

@@ -10,8 +10,10 @@ const auth =
 const {
 
     getAnalytics,
+    getMarketplaceSettings,
     updateMarketplaceSettings,
     approveProduct,
+    getPendingProducts,
     getAllRegisteredUsers,
     getDashboardSummary
 
@@ -20,7 +22,7 @@ const {
 
 
 // ======================================================
-// ALL ADMIN ROUTES ARE PROTECTED
+// Marketplace status is public; all administrative changes remain protected.
 // ======================================================
 
 
@@ -53,6 +55,11 @@ router.get(
 
 // MARKETPLACE SETTINGS
 
+router.get(
+    "/settings",
+    getMarketplaceSettings
+);
+
 router.put(
     "/settings",
     auth(["admin"]),
@@ -66,6 +73,12 @@ router.put(
     "/approve/:productId",
     auth(["admin"]),
     approveProduct
+);
+
+router.get(
+    "/products/pending",
+    auth(["admin"]),
+    getPendingProducts
 );
 
 

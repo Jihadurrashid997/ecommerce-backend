@@ -9,6 +9,9 @@ const {
     cancelOrder,
     getSellerOrders,
     updateSellerOrderStatus,
+    confirmOrderReceipt,
+    getReadySellerPayouts,
+    markSellerPayoutPaid,
     getAllOrders,
     updateOrderStatus
 } = require("../controllers/orderController");
@@ -44,6 +47,11 @@ router.put(
     cancelOrder
 );
 
+router.put(
+    "/:id/confirm-received/:fulfillmentId",
+    auth(),
+    confirmOrderReceipt
+);
 
 // ========================================
 // SELLER
@@ -59,6 +67,18 @@ router.put(
     "/seller/:id/status",
     auth(["seller"]),
     updateSellerOrderStatus
+);
+
+router.get(
+    "/admin/payouts/ready",
+    auth(["admin"]),
+    getReadySellerPayouts
+);
+
+router.put(
+    "/admin/:id/payout",
+    auth(["admin"]),
+    markSellerPayoutPaid
 );
 
 

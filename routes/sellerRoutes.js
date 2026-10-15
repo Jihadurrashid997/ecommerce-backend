@@ -8,7 +8,9 @@ const {
     getProducts, 
     getProductById, 
     updateProduct, 
-    deleteProduct 
+    deleteProduct,
+    getPayoutDetails,
+    updatePayoutDetails
 } = require('../controllers/sellerController');
 
 const storage = multer.diskStorage({
@@ -22,6 +24,9 @@ router.post('/upload-product', auth(['seller']), upload.array('images', 20), upl
 
 // ৩. সব প্রোডাক্ট দেখার রাউট (সবাই দেখতে পারবে)
 router.get('/all-products', getProducts);
+
+router.get('/payout-details', auth(['seller']), getPayoutDetails);
+router.put('/payout-details', auth(['seller']), updatePayoutDetails);
 
 // ৪. নির্দিষ্ট প্রোডাক্টের আইডি দিয়ে ডিটেইলস দেখার রাউট
 router.get('/product/:id', getProductById);

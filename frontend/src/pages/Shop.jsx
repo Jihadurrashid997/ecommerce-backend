@@ -32,6 +32,30 @@ const Shop = () => {
     const [error, setError] = useState("");
     const [page, setPage] = useState(1);
     const [retry, setRetry] = useState(0);
+    const [marketplaceState, setMarketplaceState] = useState("loading");
+    const [marketplaceMessage, setMarketplaceMessage] = useState("");
+    const [settingsRetry, setSettingsRetry] = useState(0);
+
+    useEffect(() => {
+        let cancelled = false;
+        api.get("/admin/settings")
+            .then(response => {
+                if (cancelled) return;
+                const enabled = response.data?.settings?.marketplaceEnabled;
+                setMarketplaceState(enabled ? "open" : "closed");
+                setMarketplaceMessage("");
+            })
+            .catch(error => {
+                if (cancelled) return;
+                setMarketplaceState("error");
+                setMarketplaceMessage(
+                    error.response?.data?.message ||
+                    "Shop availability couldn't be checked. Please try again."
+                );
+            });
+
+        return () => { cancelled = true; };
+    }, [settingsRetry]);
 
     useEffect(() => {
         const urlSearch = (searchParams.get("search") || searchParams.get("q") || "").trim();
@@ -50,6 +74,7 @@ const Shop = () => {
     useEffect(() => {
         let cancelled = false;
         const loadProducts = async () => {
+            if (marketplaceState !== "open") return;
             try {
                 setLoading(true);
                 setError("");
@@ -78,7 +103,7 @@ const Shop = () => {
         return () => {
             cancelled = true;
         };
-    }, [retry]);
+    }, [retry, marketplaceState]);
 
     const categories = useMemo(() => (
         Array.from(new Set(products.map(product => product.category).filter(Boolean)))
@@ -92,8 +117,7 @@ const Shop = () => {
             const matchesSearch = !search || [
                 product.name,
                 product.description,
-                product.category,
-                product.seller?.name
+                product.category
             ].some(value => String(value || "").toLocaleLowerCase().includes(search));
 
             return matchesCategory && matchesSearch;
@@ -133,6 +157,28 @@ const Shop = () => {
 
     return (
         <main className="shop-premium">
+            {marketplaceState === "closed" && (
+                <div className="shop-state">
+                    <span className="shop-state-icon"><FaStore /></span>
+                    <h2>The Shop is temporarily closed.</h2>
+                    <p>Please come back later.</p>
+                </div>
+            )}
+            {marketplaceState === "error" && (
+                <div className="shop-state shop-error" role="alert">
+                    <span className="shop-state-icon"><FaBoxOpen /></span>
+                    <h2>Shop status unavailable.</h2>
+                    <p>{marketplaceMessage}</p>
+                    <button type="button" onClick={() => setSettingsRetry(value => value + 1)}>
+                        Try again
+                    </button>
+                </div>
+            )}
+            {marketplaceState === "loading" && (
+                <p className="shop-state" role="status">Checking Shop availability...</p>
+            )}
+            {marketplaceState === "open" && (
+            <>
             <section className="shop-hero">
                 <div className="shop-hero-copy">
                     <span className="shop-kicker"><FaStore /> THE E TOP MARKET</span>
@@ -270,6 +316,8 @@ const Shop = () => {
                 <div><span className="shop-kicker">MORE THAN A MARKETPLACE</span><h2>Every good find has a story.</h2><p>And behind it, a person. Discover the community behind the things you love.</p></div>
                 <Link to="/reels">Meet the community <FaArrowRight /></Link>
             </footer>
+            </>
+            )}
         </main>
     );
 };

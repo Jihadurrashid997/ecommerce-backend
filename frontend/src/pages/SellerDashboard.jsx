@@ -1,8 +1,16 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import api from "../services/api";
 import "../styles/Dashboard.css";
 
 const SellerDashboard = () => {
+  const [payoutDetails, setPayoutDetails] = useState({
+    payoutMethod: "",
+    payoutAccount: ""
+  });
+  const [payoutLoading, setPayoutLoading] = useState(true);
+  const [payoutSaving, setPayoutSaving] = useState(false);
+  const [payoutMessage, setPayoutMessage] = useState("");
+  const [payoutError, setPayoutError] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -12,6 +20,56 @@ const SellerDashboard = () => {
     image: "",
     stock: ""
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api.get("/seller/payout-details")
+      .then(response => {
+        if (!cancelled) {
+          setPayoutDetails({
+            payoutMethod: response.data?.payoutMethod || "",
+            payoutAccount: response.data?.payoutAccount || ""
+          });
+        }
+      })
+      .catch(error => {
+        if (!cancelled) {
+          setPayoutError(
+            error.response?.data?.message ||
+            "Could not load payout details."
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPayoutLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  const savePayoutDetails = async event => {
+    event.preventDefault();
+    setPayoutSaving(true);
+    setPayoutError("");
+    setPayoutMessage("");
+
+    try {
+      const response = await api.put("/seller/payout-details", payoutDetails);
+      setPayoutDetails({
+        payoutMethod: response.data.payoutMethod,
+        payoutAccount: response.data.payoutAccount
+      });
+      setPayoutMessage("Payout details saved privately.");
+    } catch (error) {
+      setPayoutError(
+        error.response?.data?.message ||
+        "Could not save payout details."
+      );
+    } finally {
+      setPayoutSaving(false);
+    }
+  };
 
   const handleChange = (e) => {
     setForm({
@@ -28,7 +86,7 @@ const SellerDashboard = () => {
 
       const token = localStorage.getItem("token");
 
-      await api.post(
+      const response = await api.post(
         "/products",
         form,
         {
@@ -38,7 +96,9 @@ const SellerDashboard = () => {
         }
       );
 
-      alert("Product Added Successfully");
+      alert(response.data?.isApproved === false
+        ? "Product submitted for admin approval."
+        : "Product added successfully.");
 
       setForm({
         name: "",
@@ -65,6 +125,42 @@ const SellerDashboard = () => {
     <div className="dashboard">
 
       <h1>Seller Dashboard</h1>
+
+      <section className="dashboard-payout">
+        <h2>Private payout details</h2>
+        <p>Only you and Shop administrators can view these details. Payouts are sent after the customer confirms delivery.</p>
+        {payoutError && <p className="dashboard-feedback error" role="alert">{payoutError}</p>}
+        {payoutMessage && <p className="dashboard-feedback" role="status">{payoutMessage}</p>}
+        <form className="dashboard-form" onSubmit={savePayoutDetails}>
+          <input
+            name="payoutMethod"
+            placeholder="Payout method (e.g. bKash, bank transfer)"
+            value={payoutDetails.payoutMethod}
+            onChange={event => setPayoutDetails(previous => ({
+              ...previous,
+              payoutMethod: event.target.value
+            }))}
+            maxLength={40}
+            required
+            disabled={payoutLoading || payoutSaving}
+          />
+          <input
+            name="payoutAccount"
+            placeholder="Payout account or wallet number"
+            value={payoutDetails.payoutAccount}
+            onChange={event => setPayoutDetails(previous => ({
+              ...previous,
+              payoutAccount: event.target.value
+            }))}
+            maxLength={120}
+            required
+            disabled={payoutLoading || payoutSaving}
+          />
+          <button type="submit" disabled={payoutLoading || payoutSaving}>
+            {payoutSaving ? "Saving..." : "Save payout details"}
+          </button>
+        </form>
+      </section>
 
       <form
         className="dashboard-form"

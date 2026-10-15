@@ -42,3 +42,31 @@
     text-align: center;
     padding: 60px 20px;
 }
+
+.order-settlement {
+    margin-top: 12px;
+    padding: 14px;
+    border: 1px solid rgba(124, 58, 237, 0.18);
+    border-radius: 14px;
+    background: rgba(124, 58, 237, 0.045);
+}
+
+.order-settlement p {
+    margin: 4px 0 8px;
+}
+
+.confirm-receipt-btn {
+    margin-top: 8px;
+    padding: 10px 15px;
+    border: 0;
+    border-radius: 10px;
+    background: #16a34a;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.confirm-receipt-btn:disabled {
+    opacity: .6;
+    cursor: wait;
+}
