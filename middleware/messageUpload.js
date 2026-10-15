@@ -58,7 +58,16 @@ const ALLOWED_MIME_TYPES = [
     "audio/mp3",
     "audio/mp4",
     "audio/aac",
+    "audio/3gpp",
+    "audio/3gpp2",
+    "audio/aiff",
+    "audio/flac",
+    "audio/m4a",
+    "audio/opus",
     "audio/wav",
+    "audio/x-aiff",
+    "audio/x-caf",
+    "audio/x-flac",
     "audio/x-wav",
     "audio/x-m4a"
 
@@ -74,7 +83,7 @@ const fileFilter = (req, file, cb) => {
 
         cb(
             new Error(
-                "Unsupported file type. Allowed: images, PDF, DOC/DOCX, TXT, ZIP."
+                "Unsupported file type. Allowed: images, audio, PDF, DOC/DOCX, TXT, ZIP."
             ),
             false
         );
@@ -83,7 +92,7 @@ const fileFilter = (req, file, cb) => {
 
 };
 
-module.exports = multer({
+const upload = multer({
 
     storage,
 
@@ -98,3 +107,7 @@ module.exports = multer({
     }
 
 });
+
+upload.fileFilter = fileFilter;
+
+module.exports = upload;

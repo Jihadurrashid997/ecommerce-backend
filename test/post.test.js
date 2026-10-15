@@ -9,6 +9,7 @@ const User = require("../models/User");
 const adminControlController = require("../controllers/adminControlController");
 const { forgotPassword } = require("../controllers/authController");
 const jwt = require("jsonwebtoken");
+const messageUpload = require("../middleware/messageUpload");
 
 const TEST_USER_ID = "507f1f77bcf86cd799439011";
 const OTHER_USER_ID = "507f191e810c19729de860ea";
@@ -75,6 +76,36 @@ test("direct messages still require a receiver", () => {
 
     assert.ok(error);
     assert.ok(error.errors.receiver);
+});
+
+test("Messenger attachment uploads accept common audio formats and reject video files", () => {
+    const filterFile = mimetype => {
+        let result;
+        messageUpload.fileFilter({}, { mimetype }, (error, accepted) => {
+            result = { error, accepted };
+        });
+        return result;
+    };
+
+    for (const mimetype of [
+        "audio/webm",
+        "audio/mp4",
+        "audio/aac",
+        "audio/mpeg",
+        "audio/ogg",
+        "audio/wav",
+        "audio/flac",
+        "audio/m4a",
+        "audio/opus",
+        "audio/3gpp"
+    ]) {
+        assert.deepEqual(filterFile(mimetype), {
+            error: null,
+            accepted: true
+        });
+    }
+
+    assert.match(filterFile("video/mp4").error.message, /images, audio/i);
 });
 
 test("group messages use a group ID instead of a direct receiver", () => {

@@ -37,6 +37,7 @@ The frontend is served at `http://localhost:3000`; the API health endpoint is `h
 - Communities support public membership and private admin-approved requests. Community posts are kept out of the global/profile feed, and private community posts are available only to members.
 - Messenger group calls use a LiveKit SFU. Configure `LIVEKIT_URL` (the project's WebSocket URL, usually `wss://...`), `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the backend from a LiveKit Cloud project or your self-hosted LiveKit server; keep the API secret private and restart/redeploy the backend after setting them. Group members receive a short-lived room token only after server-side membership is verified.
 - Messenger end-to-end encryption is opt-in and currently covers direct text messages only. The private key stays in that browser's local storage; clearing browser data or switching devices can make encrypted history unreadable, and there is no recovery flow. Compare the displayed safety code with the other person through a trusted channel. Group messages, attachments, voice notes, and calls are not encrypted by this feature.
+- Messenger attachments support common audio formats including WebM, Ogg, MP3, M4A/MP4, AAC, WAV, FLAC, and Opus, alongside images and documents, up to 10MB per file.
 - Messenger location sharing sends a one-time pin rounded to four decimal places only after the user confirms the selected conversation. It does not continuously track location; browser location access requires HTTPS or localhost.
 
 Never commit `.env` files or production secrets.
