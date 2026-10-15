@@ -1056,6 +1056,75 @@
     background: rgba(255, 255, 255, 0.18);
 }
 
+.message-location-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    min-width: 210px;
+    max-width: 280px;
+    margin-bottom: 6px;
+    padding: 13px;
+    border: 1px solid rgba(102, 87, 217, 0.14);
+    border-radius: 14px;
+    background: #f7f6ff;
+    color: #333249;
+}
+
+.message-bubble.own .message-location-card {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.13);
+    color: inherit;
+}
+
+.message-location-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 34px;
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+    background: rgba(102, 87, 217, 0.12);
+    color: #6254cf;
+}
+
+.message-bubble.own .message-location-icon {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.message-location-card > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.message-location-card strong {
+    font-size: 13px;
+}
+
+.message-location-card span:not(.message-location-icon) {
+    font-size: 11px;
+    opacity: 0.75;
+}
+
+.message-location-card a {
+    width: fit-content;
+    margin-top: 3px;
+    color: #6254cf;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.message-bubble.own .message-location-card a {
+    color: #fff;
+}
+
+.message-location-card a:hover {
+    text-decoration: underline;
+}
+
 
 .message-attachment-file span {
     overflow: hidden;

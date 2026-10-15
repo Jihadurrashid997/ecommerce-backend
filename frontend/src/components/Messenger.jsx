@@ -43,7 +43,8 @@ import {
     FaCheckCircle,
     FaUsers,
     FaPlus,
-    FaUserPlus
+    FaUserPlus,
+    FaMapMarkerAlt
 } from "react-icons/fa";
 
 import api, {
@@ -60,6 +61,10 @@ import {
     getSafetyCode,
     isEncryptedMessage
 } from "../services/messengerEncryption";
+import {
+    createLocationMessage,
+    parseLocationMessage
+} from "../services/messengerLocation";
 
 import socket, {
     connectSocket
@@ -5334,13 +5339,13 @@ const onCallMissed =
     ===================================================== */
 
     const sendMessage =
-        async event => {
+        async (event, messageOverride = message) => {
 
-            event.preventDefault();
+            event?.preventDefault?.();
 
 
             const text =
-                message.trim();
+                String(messageOverride || "").trim();
 
 
             if (
@@ -5447,7 +5452,6 @@ const onCallMissed =
                     replyingTo ||
                     undefined
             };
-
 
             const replySnapshot =
                 replyingTo;
@@ -5633,6 +5637,55 @@ const onCallMissed =
 
             }
 
+        };
+
+    const shareCurrentLocation =
+        async () => {
+            if (!selectedUser || isConversationBlocked) {
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                alert("This browser does not support location sharing.");
+                return;
+            }
+
+            const audience = selectedUser.isGroup
+                ? `all ${selectedUser.participants?.length || "group"} members`
+                : getUserName(selectedUser);
+
+            if (!window.confirm(
+                `Share your approximate current location with ${audience}? This sends a one-time pin in the chat; it does not track you.`
+            )) {
+                return;
+            }
+
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(
+                        resolve,
+                        reject,
+                        {
+                            enableHighAccuracy: false,
+                            maximumAge: 0,
+                            timeout: 12000
+                        }
+                    );
+                });
+                await sendMessage(null, createLocationMessage(
+                    position.coords.latitude,
+                    position.coords.longitude
+                ));
+            } catch (error) {
+                const messageByCode = {
+                    1: "Location permission was denied. Allow location access in your browser to share a pin.",
+                    2: "Your current location is unavailable. Try again when your device can determine its location.",
+                    3: "Location lookup timed out. Please try again."
+                };
+
+                console.error("Messenger location sharing error:", error);
+                alert(messageByCode[error.code] || error.message || "Unable to share your location.");
+            }
         };
 
 
@@ -8543,6 +8596,12 @@ const onCallMissed =
                                             item.content ||
                                             "";
 
+                                        const location =
+                                            !item.isDeleted &&
+                                            !item.decryptionFailed
+                                                ? parseLocationMessage(text)
+                                                : null;
+
 
                                         const fileUrl =
                                             getUploadUrl(
@@ -8873,17 +8932,37 @@ const onCallMissed =
 
                                                     ) : (
 
-                                                        text && (
-
-                                                            <p>
-                                                                {text}
-                                                                {item.isEdited && (
-                                                                    <span className="edited-tag">
-                                                                        {" "}(edited)
+                                                        location ? (
+                                                            <div className="message-location-card">
+                                                                <span className="message-location-icon">
+                                                                    <FaMapMarkerAlt />
+                                                                </span>
+                                                                <div>
+                                                                    <strong>Approximate location</strong>
+                                                                    <span>
+                                                                        {location.latitude.toFixed(4)},{" "}
+                                                                        {location.longitude.toFixed(4)}
                                                                     </span>
-                                                                )}
-                                                            </p>
-
+                                                                    <a
+                                                                        href={location.mapUrl}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                    >
+                                                                        Open in Google Maps
+                                                                    </a>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            text && (
+                                                                <p>
+                                                                    {text}
+                                                                    {item.isEdited && (
+                                                                        <span className="edited-tag">
+                                                                            {" "}(edited)
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                            )
                                                         )
 
                                                     )}
@@ -9309,6 +9388,19 @@ const onCallMissed =
                                     }
                                 >
                                     <FaImage />
+                                </button>
+
+                                <button
+                                    type="button"
+                                    title="Share approximate location"
+                                    aria-label="Share approximate location"
+                                    disabled={
+                                        !selectedUser ||
+                                        isConversationBlocked
+                                    }
+                                    onClick={shareCurrentLocation}
+                                >
+                                    <FaMapMarkerAlt />
                                 </button>
 
 
