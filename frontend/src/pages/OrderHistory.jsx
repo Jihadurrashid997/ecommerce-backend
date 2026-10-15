@@ -15,6 +15,9 @@ const OrderHistory = () => {
     const [error, setError] =
         useState("");
 
+    const [confirmingFulfillment, setConfirmingFulfillment] =
+        useState("");
+
 
     const fetchOrders = async () => {
 
@@ -64,6 +67,25 @@ const OrderHistory = () => {
         fetchOrders();
 
     }, []);
+
+    const confirmReceipt = async (orderId, fulfillmentId) => {
+        setConfirmingFulfillment(fulfillmentId);
+        setError("");
+
+        try {
+            await api.put(
+                `/orders/${orderId}/confirm-received/${fulfillmentId}`
+            );
+            await fetchOrders();
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                "Could not confirm delivery."
+            );
+        } finally {
+            setConfirmingFulfillment("");
+        }
+    };
 
 
     const getPaymentStatusClass =
@@ -334,6 +356,48 @@ const OrderHistory = () => {
                                 ))}
 
                             </div>
+
+
+                            {order.sellerSettlements?.length > 0 && (
+                                <div className="order-shipping">
+                                    <h3>Private delivery and payout</h3>
+                                    <p>Seller profiles and contact details stay private. Confirm each delivered shipment to make its seller payout eligible for manual processing.</p>
+                                    {order.sellerSettlements.map((settlement, index) => (
+                                        <div className="order-settlement" key={settlement._id}>
+                                            <p>
+                                                <strong>Shipment {index + 1}:</strong>{" "}
+                                                {settlement.deliveryStatus}
+                                            </p>
+                                            <p>
+                                                Seller payout:{" "}
+                                                {settlement.payoutStatus === "held"
+                                                    ? "Held until you confirm receipt"
+                                                    : settlement.payoutStatus === "ready"
+                                                        ? "Receipt confirmed; awaiting admin payout"
+                                                        : settlement.payoutStatus === "paid"
+                                                            ? "Paid by Shop admin"
+                                                            : settlement.payoutStatus === "cancelled"
+                                                                ? "Not payable"
+                                                                : "Waiting for payment"}
+                                            </p>
+                                            {order.paymentStatus === "paid" &&
+                                                settlement.deliveryStatus === "Delivered" &&
+                                                settlement.payoutStatus === "held" && (
+                                                    <button
+                                                        type="button"
+                                                        className="confirm-receipt-btn"
+                                                        disabled={confirmingFulfillment === settlement._id}
+                                                        onClick={() => confirmReceipt(order._id, settlement._id)}
+                                                    >
+                                                        {confirmingFulfillment === settlement._id
+                                                            ? "Confirming..."
+                                                            : "Confirm product received"}
+                                                    </button>
+                                                )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
 
 
                             {/* =========================

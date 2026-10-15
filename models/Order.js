@@ -34,6 +34,71 @@ const OrderItemSchema = new mongoose.Schema(
     }
 );
 
+const SellerSettlementSchema = new mongoose.Schema(
+    {
+        seller: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        },
+        amount: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        deliveryStatus: {
+            type: String,
+            enum: [
+                "Pending",
+                "Processing",
+                "Shipped",
+                "Delivered",
+                "Cancelled"
+            ],
+            default: "Pending"
+        },
+        receiptConfirmedAt: {
+            type: Date,
+            default: null
+        },
+        payoutStatus: {
+            type: String,
+            enum: [
+                "awaiting_payment",
+                "held",
+                "ready",
+                "paid",
+                "cancelled"
+            ],
+            default: "awaiting_payment"
+        },
+        payoutMethod: {
+            type: String,
+            trim: true,
+            maxlength: 40,
+            default: ""
+        },
+        payoutReference: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            default: ""
+        },
+        payoutPaidAt: {
+            type: Date,
+            default: null
+        },
+        payoutPaidBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        }
+    },
+    {
+        timestamps: true
+    }
+);
+
 const OrderSchema = new mongoose.Schema(
     {
         user: {
@@ -45,6 +110,11 @@ const OrderSchema = new mongoose.Schema(
         items: {
             type: [OrderItemSchema],
             required: true
+        },
+
+        sellerSettlements: {
+            type: [SellerSettlementSchema],
+            default: []
         },
 
         totalPrice: {

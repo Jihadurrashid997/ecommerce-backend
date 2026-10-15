@@ -92,6 +92,15 @@
     cursor: not-allowed;
 }
 
+.checkout-payout-note {
+    padding: 12px 14px;
+    border-left: 3px solid #7c3aed;
+    border-radius: 8px;
+    background: rgba(124, 58, 237, 0.08);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
 .summary-item {
     display: flex;
     justify-content: space-between;

@@ -128,28 +128,15 @@ const SellerOrders = () => {
                             </div>
 
 
-                            {/* Customer */}
-
                             <p>
-
-                                <strong>
-                                    Customer:
-                                </strong>{" "}
-
-                                {order.user?.name || "Unknown"}
-
+                                Buyer account details are private. Use the shipping details below only to deliver this order.
                             </p>
 
-
-                            <p>
-
-                                <strong>
-                                    Email:
-                                </strong>{" "}
-
-                                {order.user?.email || "N/A"}
-
-                            </p>
+                            <h4>Delivery details</h4>
+                            <p><strong>Recipient:</strong> {order.shippingAddress?.name || "N/A"}</p>
+                            <p><strong>Phone:</strong> {order.shippingAddress?.phone || "N/A"}</p>
+                            <p><strong>Address:</strong> {order.shippingAddress?.address || "N/A"}</p>
+                            <p><strong>City:</strong> {order.shippingAddress?.city || "N/A"}</p>
 
 
                             {/* Products */}
@@ -213,6 +200,19 @@ const SellerOrders = () => {
 
                                 {order.paymentStatus}
 
+                            </p>
+
+                            <p>
+                                <strong>Seller payout:</strong>{" "}
+                                {order.payout?.status === "held"
+                                    ? "Held until customer confirms receipt"
+                                    : order.payout?.status === "ready"
+                                        ? "Customer confirmed; awaiting admin payout"
+                                        : order.payout?.status === "paid"
+                                            ? "Paid by Shop admin"
+                                            : order.payout?.status === "cancelled"
+                                                ? "Not payable"
+                                                : "Waiting for payment"}
                             </p>
 
 

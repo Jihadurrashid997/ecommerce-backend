@@ -84,7 +84,7 @@ test("product browse filters pending listings when approval is required", async 
     Product.find = query => {
         filter = query;
         return {
-            populate: async () => []
+            select: async () => []
         };
     };
 

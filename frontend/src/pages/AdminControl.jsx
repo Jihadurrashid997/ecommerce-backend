@@ -473,6 +473,8 @@ const Content = () => {
 const ShopSettings = () => {
     const [settings, setSettings] = useState(null);
     const [pendingProducts, setPendingProducts] = useState([]);
+    const [readyPayouts, setReadyPayouts] = useState([]);
+    const [payoutForms, setPayoutForms] = useState({});
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState("");
     const [error, setError] = useState("");
@@ -482,12 +484,14 @@ const ShopSettings = () => {
         try {
             setLoading(true);
             setError("");
-            const [settingsResponse, productsResponse] = await Promise.all([
+            const [settingsResponse, productsResponse, payoutsResponse] = await Promise.all([
                 api.get("/admin/settings"),
-                api.get("/admin/products/pending")
+                api.get("/admin/products/pending"),
+                api.get("/orders/admin/payouts/ready")
             ]);
             setSettings(settingsResponse.data.settings);
             setPendingProducts(productsResponse.data.products || []);
+            setReadyPayouts(payoutsResponse.data.payouts || []);
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not load Shop settings.");
         } finally {
@@ -522,6 +526,49 @@ const ShopSettings = () => {
             setNotice("Product approved and published.");
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not approve product.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const updatePayoutForm = (fulfillmentId, field, value) => {
+        setPayoutForms(previous => ({
+            ...previous,
+            [fulfillmentId]: {
+                payoutMethod: "Manual transfer",
+                ...previous[fulfillmentId],
+                [field]: value
+            }
+        }));
+    };
+
+    const markPayoutPaid = async payout => {
+        const form = payoutForms[payout.fulfillmentId] || {};
+        if (!form.payoutMethod?.trim() || !form.payoutReference?.trim()) {
+            setError("Enter the payout method and actual transfer reference before marking it paid.");
+            return;
+        }
+
+        try {
+            setBusy(payout.fulfillmentId);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${payout.orderId}/payout`, {
+                fulfillmentId: payout.fulfillmentId,
+                payoutMethod: form.payoutMethod,
+                payoutReference: form.payoutReference
+            });
+            setPayoutForms(previous => {
+                const next = { ...previous };
+                delete next[payout.fulfillmentId];
+                return next;
+            });
+            setReadyPayouts(previous =>
+                previous.filter(item => item.fulfillmentId !== payout.fulfillmentId)
+            );
+            setNotice("Payout recorded. The transfer reference is saved in the order ledger.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not record payout.");
         } finally {
             setBusy("");
         }
@@ -584,6 +631,69 @@ const ShopSettings = () => {
                             </button>
                         </div>
                     ))}
+                </div>
+            )}
+
+            <h3>Seller payouts ready ({readyPayouts.length})</h3>
+            <p className="ac-note">Send the transfer outside the Shop, then record its actual method and reference here. Never mark a payout paid before the transfer succeeds.</p>
+            {readyPayouts.length === 0 ? (
+                <p className="ac-note">No seller payouts are ready.</p>
+            ) : (
+                <div className="ac-list">
+                    {readyPayouts.map(payout => {
+                        const form = payoutForms[payout.fulfillmentId] || {
+                            payoutMethod: "Manual transfer",
+                            payoutReference: ""
+                        };
+                        return (
+                            <div className="ac-payout-card" key={payout.fulfillmentId}>
+                                <div>
+                                    <b>Order #{payout.orderNumber} · ৳{Number(payout.amount || 0).toLocaleString("en-BD")}</b>
+                                    <span>{payout.seller?.name || "Seller"} · {payout.seller?.email || "No email"}</span>
+                                    <span>{payout.seller?.payoutMethod || "Payout method not set"}: {payout.seller?.payoutAccount || "Seller has not added an account"}</span>
+                                </div>
+                                <div className="ac-payout-actions">
+                                    <input
+                                        aria-label={`Payout method for order ${payout.orderNumber}`}
+                                        value={form.payoutMethod}
+                                        onChange={event => updatePayoutForm(
+                                            payout.fulfillmentId,
+                                            "payoutMethod",
+                                            event.target.value
+                                        )}
+                                        maxLength={40}
+                                        placeholder="Method"
+                                    />
+                                    <input
+                                        aria-label={`Transfer reference for order ${payout.orderNumber}`}
+                                        value={form.payoutReference}
+                                        onChange={event => updatePayoutForm(
+                                            payout.fulfillmentId,
+                                            "payoutReference",
+                                            event.target.value
+                                        )}
+                                        maxLength={120}
+                                        placeholder="Actual transfer reference"
+                                    />
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            Boolean(busy) ||
+                                            !payout.seller?.payoutMethod ||
+                                            !payout.seller?.payoutAccount
+                                        }
+                                        onClick={() => markPayoutPaid(payout)}
+                                    >
+                                        {busy === payout.fulfillmentId
+                                            ? "Saving..."
+                                            : !payout.seller?.payoutAccount
+                                                ? "Seller payout details missing"
+                                                : "Record payout"}
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </section>

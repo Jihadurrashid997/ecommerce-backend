@@ -5805,7 +5805,7 @@ const onCallMissed =
                 !selectedUser.isGroup &&
                 getChatPreference(selectedUser).encrypted
             ) {
-                alert("Attachments are not encrypted yet. Turn off encryption before sending a file.");
+                showMessengerToast("Attachments are unavailable in encrypted chats for now.");
                 event.target.value = "";
                 return;
             }
@@ -5829,9 +5829,7 @@ const onCallMissed =
                 10 * 1024 * 1024
             ) {
 
-                alert(
-                    "Maximum file size is 10MB."
-                );
+                showMessengerToast("Files must be 10MB or smaller.");
 
                 event.target.value =
                     "";
@@ -5842,6 +5840,10 @@ const onCallMissed =
 
 
             try {
+                const recipientId = getId(selectedUser);
+                if (!recipientId) {
+                    throw new Error("Choose a valid conversation before sending an attachment.");
+                }
 
                 const formData =
                     new FormData();
@@ -5857,7 +5859,7 @@ const onCallMissed =
                     selectedUser.isGroup
                         ? "groupId"
                         : "receiver",
-                    getId(selectedUser)
+                    recipientId
                 );
 
 
@@ -5872,6 +5874,9 @@ const onCallMissed =
                     response.data?.data ||
                     response.data?.message;
 
+                if (!saved) {
+                    throw new Error("The server did not confirm the attachment.");
+                }
 
                 if (saved) {
 
@@ -5959,10 +5964,10 @@ const onCallMissed =
                     error
                 );
 
-                alert(
-                    error.response?.data
-                        ?.message ||
-                    "File could not be sent."
+                showMessengerToast(
+                    error.response?.data?.message ||
+                        error.message ||
+                        "Attachment could not be sent."
                 );
 
             } finally {

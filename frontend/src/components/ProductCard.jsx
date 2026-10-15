@@ -59,7 +59,7 @@ const ProductCard = ({ product }) => {
         <div className="product-content">
 
           <span className="shop-product-maker">
-            {product.seller?.name || "E Top community"}
+            Private seller
           </span>
           <h3>{product.name}</h3>
           {product.description && <p className="shop-product-description">{product.description}</p>}

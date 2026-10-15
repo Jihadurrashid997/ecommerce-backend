@@ -2,6 +2,66 @@ const Product = require('../models/Product');
 const User = require('../models/User');
 const marketplaceSettings = require('../services/marketplaceSettings');
 
+exports.getPayoutDetails = async (req, res) => {
+    try {
+        const seller = await User.findById(req.user.id)
+            .select("+payoutMethod +payoutAccount");
+
+        if (!seller) {
+            return res.status(404).json({ message: "Seller not found." });
+        }
+
+        return res.json({
+            payoutMethod: seller.payoutMethod || "",
+            payoutAccount: seller.payoutAccount || ""
+        });
+    } catch (error) {
+        console.error("GET SELLER PAYOUT DETAILS ERROR:", error);
+        return res.status(500).json({
+            message: "Could not load payout details."
+        });
+    }
+};
+
+exports.updatePayoutDetails = async (req, res) => {
+    const payoutMethod = String(req.body?.payoutMethod || "").trim();
+    const payoutAccount = String(req.body?.payoutAccount || "").trim();
+
+    if (
+        payoutMethod.length < 2 ||
+        payoutMethod.length > 40 ||
+        payoutAccount.length < 4 ||
+        payoutAccount.length > 120
+    ) {
+        return res.status(400).json({
+            message: "Enter a valid payout method and account/number."
+        });
+    }
+
+    try {
+        const seller = await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: { payoutMethod, payoutAccount } },
+            { new: true, runValidators: true }
+        ).select("+payoutMethod +payoutAccount");
+
+        if (!seller) {
+            return res.status(404).json({ message: "Seller not found." });
+        }
+
+        return res.json({
+            success: true,
+            payoutMethod: seller.payoutMethod,
+            payoutAccount: seller.payoutAccount
+        });
+    } catch (error) {
+        console.error("UPDATE SELLER PAYOUT DETAILS ERROR:", error);
+        return res.status(500).json({
+            message: "Could not save payout details."
+        });
+    }
+};
+
 exports.uploadProduct = async (req, res) => {
     try {
         const settings = await marketplaceSettings.getMarketplaceSettings();
@@ -61,7 +121,7 @@ exports.getProducts = async (req, res) => {
             settings.requireProductApproval
                 ? { isApproved: { $ne: false } }
                 : {}
-        ).populate('seller', 'name email');
+        ).select("-seller");
         res.status(200).json(products);
     } catch (error) {
         res.status(500).json({ message: 'Server Error', error: error.message });
@@ -79,7 +139,7 @@ exports.getProductById = async (req, res) => {
             });
         }
 
-        const product = await Product.findById(req.params.id).populate('seller', 'name email');
+        const product = await Product.findById(req.params.id).select("-seller");
         if (!product) {
             return res.status(404).json({ message: 'Product not found' });
         }

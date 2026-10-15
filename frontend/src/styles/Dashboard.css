@@ -31,3 +31,29 @@
     cursor:pointer;
     font-size:16px;
 }
+
+.dashboard-payout{
+    margin-bottom:28px;
+    padding:22px;
+    border:1px solid #e2e8f0;
+    border-radius:18px;
+    background:#f8fafc;
+}
+
+.dashboard-payout h2{
+    margin:0 0 8px;
+}
+
+.dashboard-payout > p{
+    color:#64748b;
+    line-height:1.55;
+}
+
+.dashboard-feedback.error{
+    color:#b91c1c;
+}
+
+.dashboard-payout button:disabled{
+    opacity:.6;
+    cursor:wait;
+}

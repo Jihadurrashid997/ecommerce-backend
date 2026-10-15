@@ -41,7 +41,7 @@ exports.getProducts = async (req, res) => {
         };
 
         const products = await Product.find(filters)
-            .populate("seller", "name email");
+            .select("-seller");
 
         res.json(products);
 
@@ -89,7 +89,7 @@ exports.getProduct = async (req, res) => {
         }
 
         const product = await Product.findById(req.params.id)
-            .populate("seller", "name email");
+            .select("-seller");
 
         if (!product) {
 

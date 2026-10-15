@@ -117,8 +117,7 @@ const Shop = () => {
             const matchesSearch = !search || [
                 product.name,
                 product.description,
-                product.category,
-                product.seller?.name
+                product.category
             ].some(value => String(value || "").toLocaleLowerCase().includes(search));
 
             return matchesCategory && matchesSearch;
