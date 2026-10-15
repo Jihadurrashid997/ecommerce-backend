@@ -11,6 +11,8 @@ const messageUpload =
 
 const {
     sendMessage,
+    saveEncryptionPublicKey,
+    getEncryptionPublicKey,
     getConversation,
     getRecentConversations,
     markSeen,
@@ -91,6 +93,18 @@ router.post(
     auth(),
     handleUpload,
     sendMessage
+);
+
+router.put(
+    "/encryption-key",
+    auth(),
+    saveEncryptionPublicKey
+);
+
+router.get(
+    "/encryption-key/:userId",
+    auth(),
+    getEncryptionPublicKey
 );
 
 

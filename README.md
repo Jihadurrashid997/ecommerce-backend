@@ -35,5 +35,6 @@ The frontend is served at `http://localhost:3000`; the API health endpoint is `h
 - Video and voice calls require HTTPS in deployment and may need a TURN relay; configure the optional `REACT_APP_TURN_*` settings for restrictive networks.
 - Messenger group chats use the authenticated `/api/groups` endpoints and JWT-authenticated Socket.IO connections. Deploy the frontend and backend together so group membership notifications and realtime chat use the same release.
 - Messenger group calls use a LiveKit SFU. Configure `LIVEKIT_URL` (the project's WebSocket URL, usually `wss://...`), `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` on the backend from a LiveKit Cloud project or your self-hosted LiveKit server; keep the API secret private and restart/redeploy the backend after setting them. Group members receive a short-lived room token only after server-side membership is verified.
+- Messenger end-to-end encryption is opt-in and currently covers direct text messages only. The private key stays in that browser's local storage; clearing browser data or switching devices can make encrypted history unreadable, and there is no recovery flow. Compare the displayed safety code with the other person through a trusted channel. Group messages, attachments, voice notes, and calls are not encrypted by this feature.
 
 Never commit `.env` files or production secrets.

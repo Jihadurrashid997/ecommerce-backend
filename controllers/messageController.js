@@ -15,6 +15,17 @@ const getUserId = (req) => {
 const isValidObjectId = (id) =>
     mongoose.Types.ObjectId.isValid(id);
 
+const isValidEncryptionPublicKey = key =>
+    key &&
+    typeof key === "object" &&
+    key.kty === "EC" &&
+    key.crv === "P-256" &&
+    typeof key.x === "string" &&
+    /^[A-Za-z0-9_-]{40,50}$/.test(key.x) &&
+    typeof key.y === "string" &&
+    /^[A-Za-z0-9_-]{40,50}$/.test(key.y) &&
+    key.d === undefined;
+
 const canAccessMessage = async (message, userId) => {
     if (message.groupId) {
         return Boolean(await GroupConversation.exists({
@@ -61,6 +72,168 @@ const populateMessage = (query) =>
             "name username fullName displayName firstName"
         );
 
+exports.saveEncryptionPublicKey = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const publicKey = req.body?.publicKey;
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        if (!isValidEncryptionPublicKey(publicKey)) {
+            return res.status(400).json({
+                success: false,
+                message: "A valid P-256 public key is required."
+            });
+        }
+
+        const currentUser = await User.findById(userId)
+            .select("+messengerEncryptionPublicKey");
+
+        if (!currentUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        if (currentUser.messengerEncryptionPublicKey) {
+            let currentKey;
+
+            try {
+                currentKey = JSON.parse(
+                    currentUser.messengerEncryptionPublicKey
+                );
+            } catch (error) {
+                console.error("INVALID SAVED ENCRYPTION PUBLIC KEY:", error);
+            }
+
+            if (
+                !currentKey ||
+                currentKey.kty !== publicKey.kty ||
+                currentKey.crv !== publicKey.crv ||
+                currentKey.x !== publicKey.x ||
+                currentKey.y !== publicKey.y
+            ) {
+                return res.status(409).json({
+                    success: false,
+                    message: "An encryption key is already registered for this account. Use the original device; replacing the key would make old encrypted messages unreadable."
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: "Encryption public key is already registered."
+            });
+        }
+
+        await User.findByIdAndUpdate(userId, {
+            $set: {
+                messengerEncryptionPublicKey: JSON.stringify({
+                    kty: publicKey.kty,
+                    crv: publicKey.crv,
+                    x: publicKey.x,
+                    y: publicKey.y,
+                    ext: true,
+                    key_ops: []
+                })
+            }
+        });
+
+        return res.json({
+            success: true,
+            message: "Encryption public key saved."
+        });
+    } catch (error) {
+        console.error("SAVE ENCRYPTION PUBLIC KEY ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to save the encryption public key."
+        });
+    }
+};
+
+exports.getEncryptionPublicKey = async (req, res) => {
+    try {
+        const targetUserId = req.params.userId;
+
+        if (!getUserId(req)) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        if (!isValidObjectId(targetUserId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user ID."
+            });
+        }
+
+        const user = await User.findById(targetUserId)
+            .select("+messengerEncryptionPublicKey")
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        if (!user.messengerEncryptionPublicKey) {
+            return res.status(404).json({
+                success: false,
+                message: "This person has not set up an encryption key yet."
+            });
+        }
+
+        let publicKey;
+
+        try {
+            publicKey = JSON.parse(user.messengerEncryptionPublicKey);
+        } catch (error) {
+            console.error("INVALID SAVED ENCRYPTION PUBLIC KEY:", error);
+            return res.status(500).json({
+                success: false,
+                message: "The saved encryption key is invalid."
+            });
+        }
+
+        if (!isValidEncryptionPublicKey(publicKey)) {
+            return res.status(500).json({
+                success: false,
+                message: "The saved encryption key is invalid."
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: {
+                publicKey: {
+                    kty: publicKey.kty,
+                    crv: publicKey.crv,
+                    x: publicKey.x,
+                    y: publicKey.y,
+                    ext: true,
+                    key_ops: []
+                }
+            }
+        });
+    } catch (error) {
+        console.error("GET ENCRYPTION PUBLIC KEY ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load the encryption public key."
+        });
+    }
+};
+
 /* =========================================================
    SEND MESSAGE
 ========================================================= */
@@ -79,6 +252,7 @@ exports.sendMessage = async (req, res) => {
         // puts the uploaded file here when the request came
         // from the chat's attach/image buttons.
         const file = req.file;
+        const isEncrypted = req.body?.isEncrypted === true;
 
         if (!sender) {
             return res.status(401).json({
@@ -88,6 +262,13 @@ exports.sendMessage = async (req, res) => {
         }
 
         if (groupId) {
+            if (isEncrypted) {
+                return res.status(400).json({
+                    success: false,
+                    message: "End-to-end encryption is currently supported for one-to-one text messages only."
+                });
+            }
+
             if (!isValidObjectId(groupId)) {
                 return res.status(400).json({
                     success: false,
@@ -214,8 +395,8 @@ exports.sendMessage = async (req, res) => {
         }
 
         const [senderDoc, receiverDoc] = await Promise.all([
-            User.findById(sender).select("blockedUsers"),
-            User.findById(receiver).select("blockedUsers")
+            User.findById(sender).select("blockedUsers +messengerEncryptionPublicKey"),
+            User.findById(receiver).select("blockedUsers +messengerEncryptionPublicKey")
         ]);
 
         const senderBlockedReceiver =
@@ -242,6 +423,23 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
+        if (
+            isEncrypted &&
+            (
+                !text.startsWith("e2ee:v1:") ||
+                !/^e2ee:v1:[A-Za-z0-9+/]+=*$/.test(text) ||
+                file ||
+                forwardSource ||
+                !senderDoc?.messengerEncryptionPublicKey ||
+                !receiverDoc?.messengerEncryptionPublicKey
+            )
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Encrypted messages require valid ciphertext, registered keys for both users, and no attachment or forwarded content."
+            });
+        }
+
         if (text.length > 5000) {
             return res.status(400).json({
                 success: false,
@@ -253,6 +451,7 @@ exports.sendMessage = async (req, res) => {
             sender,
             receiver,
             message: text,
+            isEncrypted,
             isSeen: false
         };
 
@@ -692,7 +891,23 @@ exports.editMessage = async (req, res) => {
             return res.status(400).json({ success: false, message: "Cannot edit a deleted message" });
         }
 
+        const isEncryptedPayload =
+            text.startsWith("e2ee:v1:") &&
+            /^e2ee:v1:[A-Za-z0-9+/]+=*$/.test(text);
+
+        if (
+            (message.isEncrypted || req.body?.isEncrypted === true) &&
+            !isEncryptedPayload
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Encrypted messages must remain encrypted when edited."
+            });
+        }
+
         message.message = text;
+        message.isEncrypted =
+            message.isEncrypted || req.body?.isEncrypted === true;
         message.isEdited = true;
 
         await message.save();
