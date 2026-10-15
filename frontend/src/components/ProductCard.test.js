@@ -29,6 +29,7 @@ describe("ProductCard marketplace actions", () => {
             stock: 3
         });
 
+        expect(screen.getByRole("link")).toHaveAttribute("href", "/shop/product/product-1");
         fireEvent.click(screen.getByRole("button", { name: "Add Handmade mug to wishlist" }));
         expect(screen.getByRole("button", { name: "Remove Handmade mug from wishlist" }))
             .toHaveAttribute("aria-pressed", "true");

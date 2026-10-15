@@ -65,7 +65,7 @@ const PaymentFailed = () => {
                 <div className="payment-actions">
 
                     <Link
-                        to="/checkout"
+                        to="/shop/checkout"
                         className="payment-btn"
                     >
                         Try Again
@@ -73,7 +73,7 @@ const PaymentFailed = () => {
 
 
                     <Link
-                        to="/cart"
+                        to="/shop/cart"
                         className="payment-btn secondary-btn"
                     >
                         Back to Cart

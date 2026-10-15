@@ -12,7 +12,6 @@ import {
 import {
     FaSearch,
     FaUserCircle,
-    FaBoxOpen,
     FaArrowLeft,
     FaComments
 } from "react-icons/fa";
@@ -36,9 +35,6 @@ const SearchResults = () => {
 
 
     const [users, setUsers] =
-        useState([]);
-
-    const [products, setProducts] =
         useState([]);
 
     const [loading, setLoading] =
@@ -146,51 +142,6 @@ const SearchResults = () => {
 
 
     // ==================================================
-    // NORMALIZE PRODUCTS
-    // ==================================================
-
-    const normalizeProducts =
-        (response) => {
-
-            const data =
-                response?.data;
-
-            if (
-                Array.isArray(data)
-            ) {
-                return data;
-            }
-
-            if (
-                Array.isArray(
-                    data?.products
-                )
-            ) {
-                return data.products;
-            }
-
-            if (
-                Array.isArray(
-                    data?.data
-                )
-            ) {
-                return data.data;
-            }
-
-            if (
-                Array.isArray(
-                    data?.results
-                )
-            ) {
-                return data.results;
-            }
-
-            return [];
-
-        };
-
-
-    // ==================================================
     // SEARCH
     // ==================================================
 
@@ -203,7 +154,6 @@ const SearchResults = () => {
             if (!keyword) {
 
                 setUsers([]);
-                setProducts([]);
                 setError("");
                 setLoading(false);
                 setSearched(false);
@@ -223,27 +173,9 @@ const SearchResults = () => {
                 );
 
 
-            const [
-                userResult,
-                productResult
-            ] =
-                await Promise.allSettled([
-
-                    api.get(
-                        `/users/search?q=${encoded}`,
-                        {
-                            timeout: 12000
-                        }
-                    ),
-
-                    api.get(
-                        `/products?keyword=${encoded}`,
-                        {
-                            timeout: 12000
-                        }
-                    )
-
-                ]);
+            const [userResult] = await Promise.allSettled([
+                api.get(`/users/search?q=${encoded}`, { timeout: 12000 })
+            ]);
 
 
             if (cancelled) {
@@ -252,9 +184,6 @@ const SearchResults = () => {
 
 
             let foundUsers = [];
-            let foundProducts = [];
-
-
             // USERS
 
             if (
@@ -277,48 +206,16 @@ const SearchResults = () => {
             }
 
 
-            // PRODUCTS
-
-            if (
-                productResult.status ===
-                "fulfilled"
-            ) {
-
-                foundProducts =
-                    normalizeProducts(
-                        productResult.value
-                    );
-
-            } else {
-
-                console.error(
-                    "Product search failed:",
-                    productResult.reason
-                );
-
-            }
-
-
             setUsers(
                 Array.isArray(foundUsers)
                     ? foundUsers
                     : []
             );
 
-            setProducts(
-                Array.isArray(foundProducts)
-                    ? foundProducts
-                    : []
-            );
-
-
-            if (
-                userResult.status === "rejected" &&
-                productResult.status === "rejected"
-            ) {
+            if (userResult.status === "rejected") {
 
                 setError(
-                    "Search service is temporarily unavailable."
+                    "People search is temporarily unavailable."
                 );
 
             }
@@ -359,7 +256,7 @@ const SearchResults = () => {
                         <FaSearch />
 
                         <h2>
-                            Search Marketplace
+                            Search people
                         </h2>
 
                         <p>
@@ -372,7 +269,7 @@ const SearchResults = () => {
                             className="profile-result-btn"
                         >
                             <FaArrowLeft />
-                            Back to Marketplace
+                            Back
                         </Link>
 
                     </div>
@@ -403,11 +300,11 @@ const SearchResults = () => {
                         <div className="search-spinner"></div>
 
                         <h2>
-                            Searching Marketplace
+                            Searching people
                         </h2>
 
                         <p>
-                            Finding products and people...
+                            Finding people...
                         </p>
 
                     </div>
@@ -578,7 +475,7 @@ const SearchResults = () => {
                                                 <h3>
                                                     {
                                                         person.name ||
-                                                        "Marketplace User"
+                                                        "E Top user"
                                                     }
                                                 </h3>
 
@@ -648,155 +545,10 @@ const SearchResults = () => {
                 </section>
 
 
-                {/* ==========================================
-                    PRODUCTS
-                =========================================== */}
-
-                <section className="search-section">
-
-                    <div className="section-heading">
-
-                        <h2>
-                            🛍️ Products
-                        </h2>
-
-                        <span>
-                            {products.length}
-                        </span>
-
-                    </div>
-
-
-                    {products.length === 0 ? (
-
-                        <div className="no-results-small">
-
-                            <FaBoxOpen />
-
-                            <p>
-                                No products found for{" "}
-                                <strong>
-                                    "{keyword}"
-                                </strong>
-                            </p>
-
-                        </div>
-
-                    ) : (
-
-                        <div className="product-grid">
-
-                            {products.map(
-                                (product) => {
-
-                                    const id =
-                                        product._id ||
-                                        product.id;
-
-                                    if (!id) {
-                                        return null;
-                                    }
-
-                                    return (
-
-                                        <Link
-                                            key={id}
-                                            to={`/product/${id}`}
-                                            className="search-product-card"
-                                        >
-
-                                            <div className="search-product-image">
-
-                                                {product.image ||
-                                                product.imageUrl ||
-                                                product.productImage ||
-                                                (
-                                                    Array.isArray(
-                                                        product.images
-                                                    )
-                                                        ? product.images[0]
-                                                        : null
-                                                ) ? (
-
-                                                    <img
-                                                        src={
-                                                            getImageUrl(
-                                                                product.image ||
-                                                                product.imageUrl ||
-                                                                product.productImage ||
-                                                                product.images?.[0]
-                                                            )
-                                                        }
-                                                        alt={
-                                                            product.name ||
-                                                            product.title ||
-                                                            "Product"
-                                                        }
-                                                    />
-
-                                                ) : (
-
-                                                    <div>
-                                                        📦
-                                                    </div>
-
-                                                )}
-
-                                            </div>
-
-
-                                            <div className="search-product-info">
-
-                                                <h3>
-                                                    {
-                                                        product.name ||
-                                                        product.title ||
-                                                        "Product"
-                                                    }
-                                                </h3>
-
-                                                {product.price !== undefined && (
-
-                                                    <strong>
-                                                        ৳{" "}
-                                                        {
-                                                            product.price
-                                                        }
-                                                    </strong>
-
-                                                )}
-
-                                                {product.category && (
-
-                                                    <small>
-                                                        {
-                                                            product.category
-                                                        }
-                                                    </small>
-
-                                                )}
-
-                                            </div>
-
-                                        </Link>
-
-                                    );
-
-                                }
-                            )}
-
-                        </div>
-
-                    )}
-
-                </section>
-
-
                 {/* NOTHING */}
 
                 {searched &&
                     users.length === 0 &&
-                    products.length === 0 &&
                     !error && (
 
                         <div className="no-results">
@@ -808,8 +560,7 @@ const SearchResults = () => {
                             </h2>
 
                             <p>
-                                Try another name,
-                                email or product keyword.
+                                Try another name or username.
                             </p>
 
                         </div>

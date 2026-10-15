@@ -45,7 +45,7 @@ exports.postUpload = makeUploader({
     maxFiles: 5
 });
 
-// Reels: one video, 80MB max (a 60s phone video is usually 10-50MB)
+// Reels: one video, 80MB max for five-minute uploads.
 exports.reelUpload = makeUploader({
     allowed: VIDEO_TYPES,
     maxSize: 80 * 1024 * 1024,

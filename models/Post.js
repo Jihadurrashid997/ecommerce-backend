@@ -5,7 +5,7 @@ const mongoose = require("mongoose");
 POST  (used for both Home feed photo posts and Reels)
 
 kind = "post"  -> Home feed. Photos only (1-5 images) + caption.
-kind = "reel"  -> Reels. Exactly one video, max 60 seconds.
+kind = "reel"  -> Reels. Exactly one video, max 5 minutes.
 =========================================================
 */
 

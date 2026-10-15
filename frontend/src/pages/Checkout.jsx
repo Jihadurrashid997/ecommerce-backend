@@ -69,7 +69,7 @@ const Checkout = () => {
             cart.length === 0
         ) {
 
-            navigate("/cart");
+            navigate("/shop/cart");
 
         }
 
@@ -145,7 +145,7 @@ const Checkout = () => {
                 "Your cart is empty."
             );
 
-            navigate("/cart");
+            navigate("/shop/cart");
 
             return;
 

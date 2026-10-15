@@ -9,7 +9,8 @@ import { useApp } from "../context/AppContext";
 import CommentsPanel from "../components/CommentsPanel";
 import "../styles/Social.css";
 
-const MAX_SECONDS = 60;
+const MAX_MINUTES = 5;
+const MAX_SECONDS = MAX_MINUTES * 60;
 
 /* ---------------- one reel ---------------- */
 
@@ -200,7 +201,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 
             if (probe.duration > MAX_SECONDS + 0.5) {
                 URL.revokeObjectURL(url);
-                setError(`Reels can be at most ${MAX_SECONDS} seconds. This video is ${Math.round(probe.duration)}s.`);
+                setError(`Reels can be at most ${MAX_MINUTES} minutes. This video is ${Math.round(probe.duration)}s.`);
                 return;
             }
 
@@ -263,7 +264,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
                 {!file ? (
                     <label className="pick-video">
                         <FaPlus />
-                        <span>Choose a video (max {MAX_SECONDS}s)</span>
+                        <span>Choose a video (max {MAX_MINUTES} min)</span>
                         <input
                             type="file"
                             accept="video/mp4,video/webm,video/quicktime,video/x-matroska,video/3gpp"
@@ -352,7 +353,7 @@ const Reels = () => {
             {error && <p className="social-note error">{error}</p>}
 
             {!loading && !error && reels.length === 0 && (
-                <p className="social-note">No reels yet. Tap “+ Reel” to share a video up to 60 seconds.</p>
+                <p className="social-note">No reels yet. Tap “+ Reel” to share a video up to 5 minutes.</p>
             )}
 
             {reels.map(reel => (

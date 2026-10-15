@@ -177,9 +177,10 @@ exports.createPost = async (req, res) => {
 
 };
 
-/* ------------------------------ CREATE REEL (1 video, max 60s) */
+/* ------------------------------ CREATE REEL (1 video, max 5 min) */
 
-const MAX_REEL_SECONDS = 60;
+const MAX_REEL_MINUTES = 5;
+const MAX_REEL_SECONDS = MAX_REEL_MINUTES * 60;
 
 exports.createReel = async (req, res) => {
 
@@ -201,7 +202,7 @@ exports.createReel = async (req, res) => {
         if (clientDuration > MAX_REEL_SECONDS + 0.5) {
             return res.status(400).json({
                 success: false,
-                message: `Reels can be at most ${MAX_REEL_SECONDS} seconds.`
+                message: `Reels can be at most ${MAX_REEL_MINUTES} minutes.`
             });
         }
 
@@ -213,7 +214,7 @@ exports.createReel = async (req, res) => {
 
             return res.status(400).json({
                 success: false,
-                message: `Reels can be at most ${MAX_REEL_SECONDS} seconds.`
+                message: `Reels can be at most ${MAX_REEL_MINUTES} minutes.`
             });
 
         }

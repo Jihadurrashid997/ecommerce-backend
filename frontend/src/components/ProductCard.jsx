@@ -32,7 +32,7 @@ const ProductCard = ({ product }) => {
     <article className="product-card shop-product-card">
 
       <Link
-        to={`/product/${product._id || product.id}`}
+        to={`/shop/product/${product._id || product.id}`}
         className="product-link"
       >
 
