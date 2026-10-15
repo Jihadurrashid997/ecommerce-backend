@@ -79,7 +79,7 @@ const LoadingScreen = ({ onComplete }) => {
                 <div className="loading-brand loading-brand-etop">
                     <img
                         className="loading-logo-image"
-                        src={`${process.env.PUBLIC_URL}/brand/etop-loading-logo.jpg`}
+                        src={`${process.env.PUBLIC_URL}/brand/etop-loading-logo.png`}
                         alt="E Top"
                     />
                 </div>
