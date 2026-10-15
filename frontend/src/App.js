@@ -60,6 +60,7 @@ import PaymentFailed from "./pages/PaymentFailed";
 import EditProfile from "./pages/EditProfile";
 import SearchResults from "./pages/SearchResults";
 import UserProfile from "./pages/UserProfile";
+import Communities from "./pages/Communities";
 
 
 // ======================================================
@@ -241,6 +242,24 @@ function AppLayout() {
                     element={
                         <PrivateRoute>
                             <Reels />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
+                    path="/communities"
+                    element={
+                        <PrivateRoute>
+                            <Communities />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
+                    path="/communities/:id"
+                    element={
+                        <PrivateRoute>
+                            <Communities />
                         </PrivateRoute>
                     }
                 />
