@@ -39,6 +39,23 @@ exports.getProducts = async (req, res) => {
 
 };
 
+exports.getMyProducts = async (req, res) => {
+    try {
+        const products = await Product.find({
+            seller: req.user.id
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json(products);
+    } catch (err) {
+        console.error("GET SELLER PRODUCTS ERROR:", err);
+        res.status(500).json({
+            message: "Could not load your products."
+        });
+    }
+};
+
 // ==============================
 // Get Single Product
 // ==============================

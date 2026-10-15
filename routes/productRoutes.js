@@ -4,6 +4,7 @@ const upload = require("../middleware/upload");
 
 const {
     getProducts,
+    getMyProducts,
     getProduct,
     createProduct,
     updateProduct,
@@ -14,6 +15,7 @@ const auth = require("../middleware/auth");
 
 // Public Routes
 router.get("/", getProducts);
+router.get("/mine", auth(["seller"]), getMyProducts);
 router.get("/:id", getProduct);
 
 // Seller/Admin Routes

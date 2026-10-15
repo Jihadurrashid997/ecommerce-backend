@@ -6,6 +6,8 @@ import "../styles/SellerProducts.css";
 const SellerProducts = () => {
 
   const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     loadProducts();
@@ -15,14 +17,15 @@ const SellerProducts = () => {
 
     try {
 
-      const res = await api.get("/products");
+      const res = await api.get("/products/mine");
 
       setProducts(res.data);
 
     } catch (err) {
-
-      console.log(err);
-
+      console.error("Could not load seller products:", err);
+      setError(err.response?.data?.message || "Could not load your products.");
+    } finally {
+      setLoading(false);
     }
 
   };
@@ -53,6 +56,11 @@ const SellerProducts = () => {
 
       <h1>My Products</h1>
 
+      {loading && <p>Loading your products...</p>}
+      {error && <p role="alert">{error}</p>}
+      {!loading && !error && products.length === 0 && <p>You have not listed any products yet.</p>}
+
+      {!loading && !error && products.length > 0 && (
       <table>
 
         <thead>
@@ -116,6 +124,7 @@ const SellerProducts = () => {
         </tbody>
 
       </table>
+      )}
 
     </div>
 
