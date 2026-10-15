@@ -1170,6 +1170,12 @@ const Messenger = ({ isActive = true }) => {
     const [callState, setCallState] =
         useState(null);
 
+    const callStateRef =
+        useRef(callState);
+
+    callStateRef.current =
+        callState;
+
     const [activeGroupCall, setActiveGroupCall] =
         useState(null);
 
@@ -1251,13 +1257,12 @@ const currentUserId =
    Starts only after call is connected
 ===================================================== */
 
+const callConnectedAt =
+    callState?.connectedAt;
+
 useEffect(() => {
 
-    if (
-        !callState ||
-        callState.status !==
-            "connected"
-    ) {
+    if (callState?.status !== "connected") {
 
         setCallDuration(0);
 
@@ -1266,8 +1271,8 @@ useEffect(() => {
     }
 
 
-    const connectedAt =
-        callState.connectedAt ||
+    const callStartedAt =
+        callConnectedAt ||
         Date.now();
 
 
@@ -1277,7 +1282,7 @@ useEffect(() => {
             Math.floor(
                 (
                     Date.now() -
-                    connectedAt
+                    callStartedAt
                 ) / 1000
             );
 
@@ -1312,7 +1317,7 @@ useEffect(() => {
 
 }, [
     callState?.status,
-    callState?.connectedAt
+    callConnectedAt
 ]);
 
 
@@ -2174,6 +2179,20 @@ onTrack:
 
                 }
 
+            },
+
+        onIceConnectionStateChange:
+            state => {
+                console.log(
+                    "🧊 WebRTC ICE connection state:",
+                    state
+                );
+
+                if (state === "failed") {
+                    console.error(
+                        "WebRTC could not find a network path. A dedicated TURN relay may be required."
+                    );
+                }
             }
 
         });
@@ -4085,7 +4104,7 @@ const onIceCandidate =
 
                 const call =
                     callRef.current ||
-                    callState ||
+                    callStateRef.current ||
                     data;
 
 
@@ -4191,7 +4210,7 @@ const onIceCandidate =
 
                 const call =
                     callRef.current ||
-                    callState ||
+                    callStateRef.current ||
                     data;
 
 
@@ -4332,7 +4351,7 @@ const durationText =
 
                 const call =
                     callRef.current ||
-                    callState ||
+                    callStateRef.current ||
                     data;
 
 
@@ -4748,7 +4767,8 @@ const onCallMissed =
         updateGroupPreview,
         cleanupCall,
         createPeer,
-        scrollToBottom
+        scrollToBottom,
+        currentUserId
     ]);
 
 

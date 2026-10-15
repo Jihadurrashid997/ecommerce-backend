@@ -48,6 +48,9 @@ const CallModal = ({
     const [cameraOff, setCameraOff] =
         useState(type !== "video");
 
+    const [playbackBlocked, setPlaybackBlocked] =
+        useState(false);
+
     const isIncoming =
         mode === "incoming";
 
@@ -57,6 +60,32 @@ const CallModal = ({
 
     const isVideo =
         type === "video";
+
+    const hasRemoteVideo =
+        remoteStream
+            ?.getVideoTracks()
+            .some(track => track.readyState === "live");
+
+    const playRemoteMedia =
+        useCallback(
+            async () => {
+                const elements = [
+                    isVideo ? remoteVideoRef.current : null,
+                    remoteAudioRef.current
+                ].filter(Boolean);
+
+                try {
+                    await Promise.all(
+                        elements.map(element => element.play())
+                    );
+                    setPlaybackBlocked(false);
+                } catch (error) {
+                    console.warn("Remote media playback needs user interaction:", error);
+                    setPlaybackBlocked(true);
+                }
+            },
+            [isVideo]
+        );
 
 
     /*
@@ -127,85 +156,19 @@ const CallModal = ({
         }
 
 
-        const video =
-            remoteVideoRef.current;
+        const video = remoteVideoRef.current;
+        const audio = remoteAudioRef.current;
 
-        const audio =
-            remoteAudioRef.current;
-
-
-        /*
-        Video calls:
-        video element carries both video + audio.
-        */
-
-        if (
-            isVideo &&
-            video
-        ) {
-
-            video.srcObject =
-                remoteStream;
-
-
-            const playVideo =
-                async () => {
-
-                    try {
-
-                        await video.play();
-
-                    } catch (error) {
-
-                        console.warn(
-                            "Remote video play failed:",
-                            error
-                        );
-
-                    }
-
-                };
-
-            playVideo();
-
+        if (isVideo && video) {
+            video.srcObject = remoteStream;
+            video.muted = true;
         }
 
-
-        /*
-        Audio calls:
-        dedicated audio element.
-        */
-
-        if (
-            !isVideo &&
-            audio
-        ) {
-
-            audio.srcObject =
-                remoteStream;
-
-
-            const playAudio =
-                async () => {
-
-                    try {
-
-                        await audio.play();
-
-                    } catch (error) {
-
-                        console.warn(
-                            "Remote audio play failed:",
-                            error
-                        );
-
-                    }
-
-                };
-
-            playAudio();
-
+        if (audio) {
+            audio.srcObject = remoteStream;
         }
+
+        playRemoteMedia();
 
 
         return () => {
@@ -230,7 +193,8 @@ const CallModal = ({
 
     }, [
         remoteStream,
-        isVideo
+        isVideo,
+        playRemoteMedia
     ]);
 
 
@@ -264,25 +228,16 @@ const CallModal = ({
 
                     video.srcObject =
                         remoteStream;
-
-                    video.play()
-                        .catch(() => {});
+                    video.muted = true;
 
                 }
 
-
-                if (
-                    !isVideo &&
-                    audio
-                ) {
-
+                if (audio) {
                     audio.srcObject =
                         remoteStream;
-
-                    audio.play()
-                        .catch(() => {});
-
                 }
+
+                playRemoteMedia();
 
             };
 
@@ -304,7 +259,8 @@ const CallModal = ({
 
     }, [
         remoteStream,
-        isVideo
+        isVideo,
+        playRemoteMedia
     ]);
 
 
@@ -587,7 +543,7 @@ const CallModal = ({
                 ================================================= */}
 
                 {isVideo &&
-                remoteStream ? (
+                hasRemoteVideo ? (
 
                     <video
                         ref={
@@ -596,7 +552,7 @@ const CallModal = ({
                         autoPlay
                         playsInline
                         controls={false}
-                        muted={false}
+                        muted
                         onLoadedMetadata={event => {
 
                             event.currentTarget
@@ -672,7 +628,6 @@ const CallModal = ({
 
                         )}
 
-
                         <h2
                             style={{
                                 margin:
@@ -735,6 +690,30 @@ const CallModal = ({
 
                     </div>
 
+                )}
+
+                {playbackBlocked && remoteStream && (
+                    <button
+                        type="button"
+                        onClick={playRemoteMedia}
+                        aria-label="Enable call audio and video"
+                        style={{
+                            position: "absolute",
+                            zIndex: 3,
+                            top: "50%",
+                            left: "50%",
+                            transform: "translate(-50%, -50%)",
+                            border: "none",
+                            borderRadius: 12,
+                            padding: "12px 18px",
+                            background: "#1877f2",
+                            color: "#fff",
+                            fontWeight: 700,
+                            cursor: "pointer"
+                        }}
+                    >
+                        Tap to enable call audio
+                    </button>
                 )}
 
 
