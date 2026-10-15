@@ -517,6 +517,21 @@
     background: #e7f3ff;
 }
 
+.chat-header-actions button.notification-enabled {
+    background: #e7f3ff;
+    color: #0866ff;
+}
+
+.chat-header-actions button.notification-denied {
+    background: #fff1f0;
+    color: #c62828;
+}
+
+.chat-header-actions button:disabled {
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
 
 .mobile-back-btn {
     display: none;
@@ -1611,10 +1626,10 @@
 
 @media (max-width: 430px) {
 
-    .chat-header-actions button:nth-child(3) {
+    .chat-header-actions button.chat-search-button,
+    .chat-header-actions button.chat-background-button {
         display: none;
     }
-
 
     .composer-actions button:nth-child(3) {
         display: none;

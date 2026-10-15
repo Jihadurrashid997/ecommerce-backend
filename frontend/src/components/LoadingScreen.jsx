@@ -121,10 +121,10 @@ const LoadingScreen = ({ onComplete }) => {
 
                 <div className="loading-company">
                     <img
-                        src={`${process.env.PUBLIC_URL}/brand/jr-group-logo.jpg`}
+                        src={`${process.env.PUBLIC_URL}/brand/jr-group-logo.png`}
                         alt="JR Group of Company"
                     />
-                    <span>Powered by JR Group of Company</span>
+                    <span>Powered by</span>
                 </div>
 
             </div>
