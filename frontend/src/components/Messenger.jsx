@@ -67,6 +67,7 @@ import {
 } from "../services/notification";
 
 import CallModal from "./CallModal";
+import GroupCallModal from "./GroupCallModal";
 import VerifiedBadge from "./VerifiedBadge";
 
 import "../styles/Messenger.css";
@@ -881,6 +882,12 @@ const Messenger = ({ isActive = true }) => {
         };
 
     const [callState, setCallState] =
+        useState(null);
+
+    const [activeGroupCall, setActiveGroupCall] =
+        useState(null);
+
+    const [incomingGroupCall, setIncomingGroupCall] =
         useState(null);
 
     const [callDuration, setCallDuration] =
@@ -1943,6 +1950,11 @@ const startCall =
     useCallback(
         async (type) => {
 
+            if (activeGroupCall) {
+                alert("Leave the group call before starting a one-to-one call.");
+                return;
+            }
+
             const target =
                 selectedUserRef.current;
 
@@ -2112,6 +2124,7 @@ const startCall =
 
         },
         [
+            activeGroupCall,
             cleanupCall,
             getRoomId
         ]
@@ -3024,6 +3037,18 @@ const onReceiveMessage =
                 } catch (error) {
                     console.error("Refresh groups error:", error);
                 }
+            };
+
+        const onGroupCallIncoming =
+            invitation => {
+                if (
+                    !invitation?.groupId ||
+                    getId(invitation.callerId) === currentId
+                ) {
+                    return;
+                }
+
+                setIncomingGroupCall(invitation);
             };
 
 
@@ -4191,6 +4216,11 @@ const onCallMissed =
         );
 
         socket.on(
+            "group-call-incoming",
+            onGroupCallIncoming
+        );
+
+        socket.on(
             "user-typing",
             onTyping
         );
@@ -4306,6 +4336,11 @@ const onCallMissed =
             socket.off(
                 "group-updated",
                 onGroupUpdated
+            );
+
+            socket.off(
+                "group-call-incoming",
+                onGroupCallIncoming
             );
 
             socket.off(
@@ -4576,6 +4611,76 @@ const onCallMissed =
                 user
             ]
         );
+
+    const startGroupCall =
+        type => {
+            if (!selectedUser?.isGroup || activeGroupCall) {
+                return;
+            }
+
+            if (callState) {
+                alert("End your current one-to-one call before joining a group call.");
+                return;
+            }
+
+            setActiveGroupCall({
+                group: selectedUser,
+                type,
+                inviteOthers: true
+            });
+        };
+
+    const acceptGroupCall =
+        async () => {
+            if (callState || activeGroupCall || !incomingGroupCall) {
+                return;
+            }
+
+            const group = groups.find(
+                item => getId(item) === getId(incomingGroupCall.groupId)
+            );
+
+            if (!group) {
+                setIncomingGroupCall(null);
+                alert("You are no longer a member of this group.");
+                return;
+            }
+
+            const invitation = incomingGroupCall;
+            const target = {
+                ...group,
+                isGroup: true
+            };
+
+            setIncomingGroupCall(null);
+            await selectUser(target);
+            setActiveGroupCall({
+                group: target,
+                type: invitation.type === "video" ? "video" : "audio",
+                inviteOthers: false
+            });
+        };
+
+    const announceGroupCall =
+        () => {
+            if (!activeGroupCall?.inviteOthers) {
+                return;
+            }
+
+            socket.emit("group-call-invite", {
+                groupId: getId(activeGroupCall.group),
+                type: activeGroupCall.type
+            });
+
+            setActiveGroupCall(current =>
+                current
+                    ? {
+                          ...current,
+                          inviteOthers: false
+                      }
+                    : current
+            );
+        };
 
     const createGroup =
         async event => {
@@ -7345,16 +7450,34 @@ const onCallMissed =
                             <div className="chat-header-actions">
 
                                 {selectedUser.isGroup ? (
-                                    <button
-                                        type="button"
-                                        title="Group members"
-                                        onClick={() => {
-                                            setGroupMemberSelection([]);
-                                            setShowGroupDetails(true);
-                                        }}
-                                    >
-                                        <FaUsers />
-                                    </button>
+                                    <>
+                                        <button
+                                            type="button"
+                                            title="Group members"
+                                            onClick={() => {
+                                                setGroupMemberSelection([]);
+                                                setShowGroupDetails(true);
+                                            }}
+                                        >
+                                            <FaUsers />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            title="Start group voice call"
+                                            aria-label="Start group voice call"
+                                            onClick={() => startGroupCall("audio")}
+                                        >
+                                            <FaPhone />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            title="Start group video call"
+                                            aria-label="Start group video call"
+                                            onClick={() => startGroupCall("video")}
+                                        >
+                                            <FaVideo />
+                                        </button>
+                                    </>
                                 ) : (
                                     <>
                                 <button
@@ -8885,6 +9008,44 @@ const onCallMissed =
                 </div>
             )}
 
+            {incomingGroupCall && !activeGroupCall && (
+                <div className="group-call-invite" role="alertdialog" aria-live="assertive">
+                    <div className="group-call-invite-icon">
+                        {incomingGroupCall.type === "video" ? <FaVideo /> : <FaPhone />}
+                    </div>
+                    <div className="group-call-invite-copy">
+                        <strong>{incomingGroupCall.groupName || "Group call"}</strong>
+                        <span>
+                            {incomingGroupCall.callerName || "A group member"} started a{" "}
+                            {incomingGroupCall.type === "video" ? "video" : "voice"} call
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        className="group-call-invite-decline"
+                        onClick={() => setIncomingGroupCall(null)}
+                    >
+                        Decline
+                    </button>
+                    <button
+                        type="button"
+                        className="group-call-invite-join"
+                        disabled={Boolean(callState)}
+                        onClick={acceptGroupCall}
+                    >
+                        Join
+                    </button>
+                </div>
+            )}
+
+            {activeGroupCall && (
+                <GroupCallModal
+                    group={activeGroupCall.group}
+                    type={activeGroupCall.type}
+                    onConnected={announceGroupCall}
+                    onClose={() => setActiveGroupCall(null)}
+                />
+            )}
 
            <CallModal
     visible={Boolean(callState)}

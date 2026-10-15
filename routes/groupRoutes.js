@@ -4,6 +4,7 @@ const {
     listGroups,
     createGroup,
     getGroupMessages,
+    createGroupCallToken,
     markGroupMessagesSeen,
     addGroupMembers,
     removeGroupMember
@@ -14,6 +15,7 @@ const router = express.Router();
 router.use(auth());
 router.get("/", listGroups);
 router.post("/", createGroup);
+router.post("/:groupId/call-token", createGroupCallToken);
 router.get("/:groupId/messages", getGroupMessages);
 router.put("/:groupId/seen", markGroupMessagesSeen);
 router.post("/:groupId/members", addGroupMembers);
