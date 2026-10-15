@@ -371,18 +371,25 @@ const OrderHistory = () => {
                                             <p>
                                                 Seller payout:{" "}
                                                 {settlement.payoutStatus === "held"
-                                                    ? "Held until you confirm receipt"
+                                                    ? "Held until you and the seller confirm"
                                                     : settlement.payoutStatus === "ready"
-                                                        ? "Receipt confirmed; awaiting admin payout"
+                                                        ? "Both confirmations received; awaiting admin payout"
                                                         : settlement.payoutStatus === "paid"
                                                             ? "Paid by Shop admin"
                                                             : settlement.payoutStatus === "cancelled"
                                                                 ? "Not payable"
                                                                 : "Waiting for payment"}
                                             </p>
+                                            <p>
+                                                Seller confirmation:{" "}
+                                                {settlement.sellerConfirmedAt
+                                                    ? "Confirmed"
+                                                    : "Waiting for seller"}
+                                            </p>
                                             {order.paymentStatus === "paid" &&
                                                 settlement.deliveryStatus === "Delivered" &&
-                                                settlement.payoutStatus === "held" && (
+                                                settlement.payoutStatus === "held" &&
+                                                !settlement.receiptConfirmedAt && (
                                                     <button
                                                         type="button"
                                                         className="confirm-receipt-btn"
@@ -391,7 +398,7 @@ const OrderHistory = () => {
                                                     >
                                                         {confirmingFulfillment === settlement._id
                                                             ? "Confirming..."
-                                                            : "Confirm product received"}
+                                                            : `Confirm receipt & ৳${Number(settlement.amount).toLocaleString("en-BD")} amount`}
                                                     </button>
                                                 )}
                                         </div>

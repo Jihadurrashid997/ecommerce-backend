@@ -8,6 +8,7 @@ const SellerOrders = () => {
 
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [confirmingFulfillment, setConfirmingFulfillment] = useState("");
 
     const fetchOrders = async () => {
 
@@ -65,6 +66,29 @@ const SellerOrders = () => {
 
         }
 
+    };
+
+    const confirmPayout = async (orderId, payout) => {
+        const fulfillmentId = payout.id;
+        setConfirmingFulfillment(fulfillmentId);
+
+        try {
+            await api.put(
+                `/orders/seller/${orderId}/confirm-payout/${fulfillmentId}`,
+                {
+                    payoutMethod: payout.payoutMethod,
+                    payoutAccount: payout.payoutAccount
+                }
+            );
+            await fetchOrders();
+        } catch (err) {
+            alert(
+                err.response?.data?.message ||
+                "Failed to confirm the shipment and payout amount."
+            );
+        } finally {
+            setConfirmingFulfillment("");
+        }
     };
 
 
@@ -205,15 +229,82 @@ const SellerOrders = () => {
                             <p>
                                 <strong>Seller payout:</strong>{" "}
                                 {order.payout?.status === "held"
-                                    ? "Held until customer confirms receipt"
+                                    ? "Held until both you and the customer confirm"
                                     : order.payout?.status === "ready"
-                                        ? "Customer confirmed; awaiting admin payout"
+                                        ? "Both confirmations received; awaiting admin payout"
                                         : order.payout?.status === "paid"
                                             ? "Paid by Shop admin"
                                             : order.payout?.status === "cancelled"
                                                 ? "Not payable"
                                                 : "Waiting for payment"}
                             </p>
+
+                            {order.paymentStatus === "paid" &&
+                                order.status === "Delivered" &&
+                                order.payout?.status === "held" && (
+                                    <>
+                                        <p>
+                                            <strong>Customer receipt:</strong>{" "}
+                                            {order.payout.receiptConfirmedAt
+                                                ? "Confirmed"
+                                                : "Waiting for customer"}
+                                        </p>
+                                        <p>
+                                            <strong>Your confirmation:</strong>{" "}
+                                            {order.payout.sellerConfirmedAt
+                                                ? "Confirmed"
+                                                : "Required"}
+                                        </p>
+                                        <p>
+                                            <strong>Payout destination:</strong>{" "}
+                                            {order.payout.payoutMethod || "Not set"} ·{" "}
+                                            {order.payout.payoutAccount || "Not set"}
+                                        </p>
+                                        {!order.payout.sellerConfirmedAt && (
+                                            <button
+                                                type="button"
+                                                className="seller-confirm-payout"
+                                                disabled={
+                                                    confirmingFulfillment === order.payout.id ||
+                                                    !order.payout.payoutMethod ||
+                                                    !order.payout.payoutAccount
+                                                }
+                                                onClick={() => confirmPayout(order._id, order.payout)}
+                                            >
+                                                {confirmingFulfillment === order.payout.id
+                                                    ? "Confirming..."
+                                                    : !order.payout.payoutAccount
+                                                        ? "Add payout details in Seller Dashboard"
+                                                        : `Confirm delivery, ৳${Number(order.payout.amount).toLocaleString("en-BD")} & payout method`}
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+
+                            {order.payout?.receiptConfirmedAt &&
+                                order.payout?.sellerConfirmedAt && (
+                                    <div className="seller-payout-instruction">
+                                        {order.payout.status === "paid" ? (
+                                            <>
+                                                <p>
+                                                    <strong>English:</strong> Your payout has been sent to your saved payout account. Please check your account. If it has not arrived, contact Shop support with this order number.
+                                                </p>
+                                                <p lang="bn">
+                                                    <strong>বাংলা:</strong> আপনার সংরক্ষিত পেআউট অ্যাকাউন্টে টাকা পাঠানো হয়েছে। অ্যাকাউন্ট যাচাই করুন। টাকা না পেলে এই অর্ডার নম্বর দিয়ে Shop support-এর সঙ্গে যোগাযোগ করুন।
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p>
+                                                    <strong>English:</strong> You and the customer have confirmed delivery, the ৳{Number(order.payout.amount).toLocaleString("en-BD")} payout amount, and the {order.payout.payoutMethod} account ending {order.payout.payoutAccount.slice(-4)}. The Shop admin will send the money to this confirmed account after review. This is a manual transfer, not an automatic payment. Never share your OTP or PIN.
+                                                </p>
+                                                <p lang="bn">
+                                                    <strong>বাংলা:</strong> আপনি ও ক্রেতা ডেলিভারি, ৳{Number(order.payout.amount).toLocaleString("en-BD")} পেআউটের পরিমাণ এবং {order.payout.payoutMethod} অ্যাকাউন্টের শেষ ৪ সংখ্যা {order.payout.payoutAccount.slice(-4)} নিশ্চিত করেছেন। যাচাই শেষে Shop admin এই নিশ্চিত অ্যাকাউন্টে টাকা পাঠাবেন। এটি ম্যানুয়াল ট্রান্সফার, স্বয়ংক্রিয় পেমেন্ট নয়। OTP বা PIN কারও সঙ্গে শেয়ার করবেন না।
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
 
 
                             {/* Date */}

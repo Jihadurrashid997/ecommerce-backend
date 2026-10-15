@@ -61,6 +61,22 @@ const SellerSettlementSchema = new mongoose.Schema(
             type: Date,
             default: null
         },
+        sellerConfirmedAt: {
+            type: Date,
+            default: null
+        },
+        sellerPayoutMethod: {
+            type: String,
+            trim: true,
+            maxlength: 40,
+            default: ""
+        },
+        sellerPayoutAccount: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            default: ""
+        },
         payoutStatus: {
             type: String,
             enum: [

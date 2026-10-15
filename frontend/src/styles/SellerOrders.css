@@ -56,3 +56,31 @@
     border-radius: 8px;
     cursor: pointer;
 }
+
+.seller-confirm-payout {
+    margin: 8px 0;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 8px;
+    background: #2563eb;
+    color: #fff;
+    cursor: pointer;
+}
+
+.seller-confirm-payout:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+.seller-payout-instruction {
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid rgba(37, 99, 235, .28);
+    border-radius: 10px;
+    background: rgba(37, 99, 235, .08);
+    line-height: 1.6;
+}
+
+.seller-payout-instruction p {
+    margin: 4px 0 10px;
+}

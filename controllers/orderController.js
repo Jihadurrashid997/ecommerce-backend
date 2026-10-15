@@ -12,6 +12,7 @@ const getCustomerOrder = order => {
             amount: settlement.amount,
             deliveryStatus: settlement.deliveryStatus,
             receiptConfirmedAt: settlement.receiptConfirmedAt,
+            sellerConfirmedAt: settlement.sellerConfirmedAt,
             payoutStatus: settlement.payoutStatus
         })
     );
@@ -318,6 +319,8 @@ exports.cancelOrder = async (req, res) => {
 exports.getSellerOrders = async (req, res) => {
     try {
 
+        const seller = await User.findById(req.user.id)
+            .select("+payoutMethod +payoutAccount");
         const products = await Product.find({
             seller: req.user.id
         }).select("_id");
@@ -385,7 +388,12 @@ exports.getSellerOrders = async (req, res) => {
                           id: settlement._id,
                           amount: settlement.amount,
                           status: settlement.payoutStatus,
-                          receiptConfirmedAt: settlement.receiptConfirmedAt
+                          receiptConfirmedAt: settlement.receiptConfirmedAt,
+                          sellerConfirmedAt: settlement.sellerConfirmedAt,
+                          payoutMethod: settlement.sellerPayoutMethod ||
+                              seller?.payoutMethod || "",
+                          payoutAccount: settlement.sellerPayoutAccount ||
+                              seller?.payoutAccount || ""
                       }
                     : null,
                 shippingAddress: order.shippingAddress,
@@ -482,11 +490,11 @@ exports.updateSellerOrderStatus = async (
 
         if (settlement) {
             if (
-                settlement.receiptConfirmedAt &&
+                (settlement.receiptConfirmedAt || settlement.sellerConfirmedAt) &&
                 status !== "Delivered"
             ) {
                 return res.status(400).json({
-                    message: "Delivery cannot be changed after the customer confirms receipt."
+                    message: "Delivery cannot be changed after either party confirms the delivered shipment."
                 });
             }
 
@@ -512,6 +520,28 @@ exports.updateSellerOrderStatus = async (
         });
     }
 };
+
+const markSettlementReadyForPayout = (orderId, fulfillmentId) =>
+    Order.updateOne(
+        {
+            _id: orderId,
+            paymentStatus: "paid",
+            sellerSettlements: {
+                $elemMatch: {
+                    _id: fulfillmentId,
+                    deliveryStatus: "Delivered",
+                    payoutStatus: "held",
+                    receiptConfirmedAt: { $ne: null },
+                    sellerConfirmedAt: { $ne: null }
+                }
+            }
+        },
+        {
+            $set: {
+                "sellerSettlements.$.payoutStatus": "ready"
+            }
+        }
+    );
 
 // ========================================
 // CUSTOMER - CONFIRM RECEIPT
@@ -545,8 +575,7 @@ exports.confirmOrderReceipt = async (req, res) => {
             },
             {
                 $set: {
-                    "sellerSettlements.$.receiptConfirmedAt": new Date(),
-                    "sellerSettlements.$.payoutStatus": "ready"
+                    "sellerSettlements.$.receiptConfirmedAt": new Date()
                 }
             },
             { new: true }
@@ -559,15 +588,110 @@ exports.confirmOrderReceipt = async (req, res) => {
             });
         }
 
+        await markSettlementReadyForPayout(
+            req.params.id,
+            req.params.fulfillmentId
+        );
+
         return res.json({
             success: true,
-            message: "Receipt confirmed. Seller payout is ready for admin processing."
+            message: "Receipt confirmed. Payout becomes ready after the seller also confirms."
         });
     } catch (error) {
         console.error("CONFIRM ORDER RECEIPT ERROR:", error);
         return res.status(500).json({
             success: false,
             message: "Could not confirm order receipt."
+        });
+    }
+};
+
+// ========================================
+// SELLER - CONFIRM DELIVERY AND PAYOUT AMOUNT
+// ========================================
+
+exports.confirmSellerPayout = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.params.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+
+    try {
+        const payoutMethod = String(req.body?.payoutMethod || "").trim();
+        const payoutAccount = String(req.body?.payoutAccount || "").trim();
+        const seller = await User.findById(req.user.id)
+            .select("+payoutMethod +payoutAccount");
+
+        if (
+            !seller?.payoutMethod ||
+            !seller?.payoutAccount
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Save your payout method and account in your Seller Dashboard before confirming."
+            });
+        }
+
+        if (
+            payoutMethod !== seller.payoutMethod ||
+            payoutAccount !== seller.payoutAccount
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "Your payout details changed. Refresh the order and review them before confirming."
+            });
+        }
+
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.params.fulfillmentId,
+                        seller: req.user.id,
+                        deliveryStatus: "Delivered",
+                        payoutStatus: "held",
+                        sellerConfirmedAt: null
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$.sellerConfirmedAt": new Date(),
+                    "sellerSettlements.$.sellerPayoutMethod": seller.payoutMethod,
+                    "sellerSettlements.$.sellerPayoutAccount": seller.payoutAccount
+                }
+            },
+            { new: true }
+        );
+
+        if (!order) {
+            return res.status(409).json({
+                success: false,
+                message: "You can confirm only your paid, delivered shipment, and only once."
+            });
+        }
+
+        await markSettlementReadyForPayout(
+            req.params.id,
+            req.params.fulfillmentId
+        );
+
+        return res.json({
+            success: true,
+            message: "Shipment and payout amount confirmed. Payout becomes ready after the buyer also confirms receipt."
+        });
+    } catch (error) {
+        console.error("CONFIRM SELLER PAYOUT ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not confirm the shipment and payout amount."
         });
     }
 };
@@ -584,13 +708,14 @@ exports.getReadySellerPayouts = async (_req, res) => {
                 $elemMatch: {
                     deliveryStatus: "Delivered",
                     payoutStatus: "ready",
-                    receiptConfirmedAt: { $ne: null }
+                    receiptConfirmedAt: { $ne: null },
+                    sellerConfirmedAt: { $ne: null }
                 }
             }
         })
             .populate({
                 path: "sellerSettlements.seller",
-                select: "name email +payoutMethod +payoutAccount"
+                select: "name email"
             })
             .sort({ updatedAt: -1 });
 
@@ -600,6 +725,7 @@ exports.getReadySellerPayouts = async (_req, res) => {
                     settlement.payoutStatus === "ready" &&
                     settlement.deliveryStatus === "Delivered" &&
                     settlement.receiptConfirmedAt &&
+                    settlement.sellerConfirmedAt &&
                     settlement.seller
                 )
                 .map(settlement => ({
@@ -612,10 +738,11 @@ exports.getReadySellerPayouts = async (_req, res) => {
                         id: settlement.seller._id,
                         name: settlement.seller.name,
                         email: settlement.seller.email,
-                        payoutMethod: settlement.seller.payoutMethod || "",
-                        payoutAccount: settlement.seller.payoutAccount || ""
+                        payoutMethod: settlement.sellerPayoutMethod || "",
+                        payoutAccount: settlement.sellerPayoutAccount || ""
                     },
-                    receiptConfirmedAt: settlement.receiptConfirmedAt
+                    receiptConfirmedAt: settlement.receiptConfirmedAt,
+                    sellerConfirmedAt: settlement.sellerConfirmedAt
                 }))
         );
 
@@ -666,12 +793,13 @@ exports.markSellerPayoutPaid = async (req, res) => {
                     _id: req.body.fulfillmentId,
                     deliveryStatus: "Delivered",
                     payoutStatus: "ready",
-                    receiptConfirmedAt: { $ne: null }
+                    receiptConfirmedAt: { $ne: null },
+                    sellerConfirmedAt: { $ne: null }
                 }
             }
         }).populate({
             path: "sellerSettlements.seller",
-            select: "+payoutMethod +payoutAccount"
+            select: "name email"
         });
 
         const settlement = order?.sellerSettlements?.find(
@@ -686,12 +814,12 @@ exports.markSellerPayoutPaid = async (req, res) => {
         }
 
         if (
-            !settlement.seller?.payoutMethod ||
-            !settlement.seller?.payoutAccount
+            !settlement.sellerPayoutMethod ||
+            !settlement.sellerPayoutAccount
         ) {
             return res.status(400).json({
                 success: false,
-                message: "The seller must add private payout details before a payout can be recorded."
+                message: "The seller's confirmed payout details are missing."
             });
         }
 
@@ -704,7 +832,8 @@ exports.markSellerPayoutPaid = async (req, res) => {
                         _id: req.body.fulfillmentId,
                         deliveryStatus: "Delivered",
                         payoutStatus: "ready",
-                        receiptConfirmedAt: { $ne: null }
+                        receiptConfirmedAt: { $ne: null },
+                        sellerConfirmedAt: { $ne: null }
                     }
                 }
             },
@@ -721,7 +850,9 @@ exports.markSellerPayoutPaid = async (req, res) => {
                 arrayFilters: [{
                     "settlement._id": req.body.fulfillmentId,
                     "settlement.deliveryStatus": "Delivered",
-                    "settlement.payoutStatus": "ready"
+                    "settlement.payoutStatus": "ready",
+                    "settlement.receiptConfirmedAt": { $ne: null },
+                    "settlement.sellerConfirmedAt": { $ne: null }
                 }]
             }
         );
@@ -819,12 +950,12 @@ exports.updateOrderStatus = async (
 
         if (
             (order.sellerSettlements || []).some(settlement =>
-                settlement.receiptConfirmedAt &&
+                (settlement.receiptConfirmedAt || settlement.sellerConfirmedAt) &&
                 status !== "Delivered"
             )
         ) {
             return res.status(400).json({
-                message: "An order cannot be changed after the customer confirms receipt."
+                message: "An order cannot be changed after either party confirms the delivered shipment."
             });
         }
 
