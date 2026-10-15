@@ -14,6 +14,7 @@ const {
     createPost,
     createReel,
     getFeed,
+    getCommunityPosts,
     getReels,
     getUserPosts,
     toggleLike,
@@ -31,6 +32,13 @@ POSTS & REELS   (mounted at /api/posts)
 
 // Home feed (photo posts)
 router.get("/feed", auth(), getFeed);
+router.get("/community/:communityId/feed", auth(), getCommunityPosts);
+router.post(
+    "/community/:communityId",
+    auth(),
+    handle(postUpload, "photos"),
+    createPost
+);
 router.post("/", auth(), handle(postUpload, "photos"), createPost);
 
 // Reels

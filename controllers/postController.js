@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Post = require("../models/Post");
 const User = require("../models/User");
+const Community = require("../models/Community");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
 
 const AUTHOR_FIELDS = "name username profileImage avatar role";
@@ -19,6 +20,7 @@ const shape = (post, userId) => {
     return {
         _id: post._id,
         kind: post.kind,
+        community: post.community || null,
         author: post.author,
         caption: post.caption,
         media: post.media,
@@ -29,6 +31,35 @@ const shape = (post, userId) => {
         createdAt: post.createdAt
     };
 
+};
+
+const canAccessPost = async (post, userId) => {
+    if (!post?.community) {
+        return true;
+    }
+
+    const community = await Community.findById(post.community)
+        .select("privacy members")
+        .lean();
+
+    if (!community) {
+        return false;
+    }
+
+    return community.privacy !== "private" ||
+        (community.members || []).some(member => String(member) === String(userId));
+};
+
+const requirePostAccess = async (post, userId, res) => {
+    if (await canAccessPost(post, userId)) {
+        return true;
+    }
+
+    res.status(404).json({
+        success: false,
+        message: "Post not found."
+    });
+    return false;
 };
 
 const listQuery = async (filter, req) => {
@@ -73,6 +104,7 @@ exports.createPost = async (req, res) => {
 
         const files = req.files || [];
         const caption = String(req.body?.caption || "").trim().slice(0, 2200);
+        const communityId = req.params?.communityId || null;
 
         if (files.length === 0 && !caption) {
             return res.status(400).json({
@@ -88,6 +120,27 @@ exports.createPost = async (req, res) => {
             });
         }
 
+        if (communityId) {
+            if (!isId(communityId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid community."
+                });
+            }
+
+            const community = await Community.findOne({
+                _id: communityId,
+                members: req.user.id
+            }).select("_id");
+
+            if (!community) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Join the community before publishing a post."
+                });
+            }
+        }
+
         const media = [];
 
         for (const file of files) {
@@ -96,6 +149,7 @@ exports.createPost = async (req, res) => {
 
         const post = await Post.create({
             author: req.user.id,
+            community: communityId,
             kind: "post",
             caption,
             media
@@ -198,7 +252,7 @@ exports.createReel = async (req, res) => {
 exports.getFeed = async (req, res) => {
 
     try {
-        const filter = { kind: "post" };
+        const filter = { kind: "post", community: null };
 
         if (req.query.scope === "following") {
             const user = await User
@@ -225,7 +279,7 @@ exports.getFeed = async (req, res) => {
 exports.getReels = async (req, res) => {
 
     try {
-        return res.json(await listQuery({ kind: "reel" }, req));
+        return res.json(await listQuery({ kind: "reel", community: null }, req));
     } catch (error) {
         console.error("GET REELS ERROR:", error);
         return res.status(500).json({ success: false, message: "Could not load reels." });
@@ -241,7 +295,7 @@ exports.getUserPosts = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid user." });
         }
 
-        const filter = { author: req.params.userId };
+        const filter = { author: req.params.userId, community: null };
 
         if (["post", "reel"].includes(req.query.kind)) {
             filter.kind = req.query.kind;
@@ -256,6 +310,38 @@ exports.getUserPosts = async (req, res) => {
 
 };
 
+exports.getCommunityPosts = async (req, res) => {
+    try {
+        const { communityId } = req.params;
+
+        if (!isId(communityId)) {
+            return res.status(400).json({ success: false, message: "Invalid community." });
+        }
+
+        const community = await Community.findById(communityId)
+            .select("privacy members")
+            .lean();
+
+        if (!community) {
+            return res.status(404).json({ success: false, message: "Community not found." });
+        }
+
+        if (
+            community.privacy === "private" &&
+            !(community.members || []).some(member => String(member) === String(req.user.id))
+        ) {
+            return res.status(404).json({ success: false, message: "Community not found." });
+        }
+
+        return res.json(
+            await listQuery({ kind: "post", community: communityId }, req)
+        );
+    } catch (error) {
+        console.error("GET COMMUNITY POSTS ERROR:", error);
+        return res.status(500).json({ success: false, message: "Could not load community posts." });
+    }
+};
+
 /* ------------------------------ LIKE (toggle) */
 
 exports.toggleLike = async (req, res) => {
@@ -266,10 +352,14 @@ exports.toggleLike = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid post." });
         }
 
-        const post = await Post.findById(req.params.id).select("likes");
+        const post = await Post.findById(req.params.id).select("likes community");
 
         if (!post) {
             return res.status(404).json({ success: false, message: "Post not found." });
+        }
+
+        if (!await requirePostAccess(post, req.user.id, res)) {
+            return;
         }
 
         const userId = String(req.user.id);
@@ -307,12 +397,16 @@ exports.getComments = async (req, res) => {
         }
 
         const post = await Post.findById(req.params.id)
-            .select("comments")
+            .select("comments community")
             .populate("comments.user", AUTHOR_FIELDS)
             .lean();
 
         if (!post) {
             return res.status(404).json({ success: false, message: "Post not found." });
+        }
+
+        if (!await requirePostAccess(post, req.user.id, res)) {
+            return;
         }
 
         return res.json({
@@ -341,10 +435,14 @@ exports.addComment = async (req, res) => {
             return res.status(400).json({ success: false, message: "Comment can't be empty." });
         }
 
-        const post = await Post.findById(req.params.id).select("comments");
+        const post = await Post.findById(req.params.id).select("comments community");
 
         if (!post) {
             return res.status(404).json({ success: false, message: "Post not found." });
+        }
+
+        if (!await requirePostAccess(post, req.user.id, res)) {
+            return;
         }
 
         post.comments.push({ user: req.user.id, text: text.slice(0, 1000) });
@@ -383,14 +481,22 @@ exports.addView = async (req, res) => {
 
     try {
 
-        if (isId(req.params.id)) {
-            await Post.updateOne({ _id: req.params.id }, { $inc: { views: 1 } });
+        if (!isId(req.params.id)) {
+            return res.status(400).json({ success: false, message: "Invalid post." });
         }
 
+        const post = await Post.findById(req.params.id).select("community");
+        if (!post) {
+            return res.status(404).json({ success: false, message: "Post not found." });
+        }
+        if (!await requirePostAccess(post, req.user.id, res)) return;
+
+        await Post.updateOne({ _id: req.params.id }, { $inc: { views: 1 } });
         return res.json({ success: true });
 
     } catch (error) {
-        return res.json({ success: false });
+        console.error("ADD POST VIEW ERROR:", error);
+        return res.status(500).json({ success: false, message: "Could not record the view." });
     }
 
 };
@@ -412,8 +518,16 @@ exports.deletePost = async (req, res) => {
         }
 
         const isOwner = String(post.author) === String(req.user.id);
+        let isCommunityAdmin = false;
 
-        if (!isOwner && req.user.role !== "admin") {
+        if (post.community) {
+            isCommunityAdmin = Boolean(await Community.exists({
+                _id: post.community,
+                admins: req.user.id
+            }));
+        }
+
+        if (!isOwner && !isCommunityAdmin && req.user.role !== "admin") {
             return res.status(403).json({ success: false, message: "Not allowed." });
         }
 

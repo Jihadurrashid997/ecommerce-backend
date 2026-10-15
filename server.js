@@ -191,6 +191,10 @@ app.use(
     "/api/posts",
     require("./routes/postRoutes")
 );
+app.use(
+    "/api/communities",
+    require("./routes/communityRoutes")
+);
 
 /* =========================================================
    404

@@ -45,6 +45,13 @@ const postSchema = new mongoose.Schema(
             index: true
         },
 
+        community: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Community",
+            default: null,
+            index: true
+        },
+
         kind: {
             type: String,
             enum: ["post", "reel"],
@@ -90,5 +97,6 @@ const postSchema = new mongoose.Schema(
 );
 
 postSchema.index({ kind: 1, createdAt: -1 });
+postSchema.index({ community: 1, kind: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Post", postSchema);
