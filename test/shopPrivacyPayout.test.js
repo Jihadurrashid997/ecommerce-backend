@@ -111,7 +111,9 @@ test("customer order responses do not expose seller account IDs", async () => {
             amount: 100,
             deliveryStatus: "Delivered",
             payoutStatus: "held",
-            receiptConfirmedAt: null
+            receiptConfirmedAt: null,
+            sellerConfirmedAt: null,
+            sellerPayoutAccount: "private-account"
         }],
         toObject() {
             return {
@@ -139,9 +141,11 @@ test("customer order responses do not expose seller account IDs", async () => {
             amount: 100,
             deliveryStatus: "Delivered",
             receiptConfirmedAt: null,
+            sellerConfirmedAt: null,
             payoutStatus: "held"
         }]);
         assert.equal(JSON.stringify(response.body).includes("seller-private-id"), false);
+        assert.equal(JSON.stringify(response.body).includes("private-account"), false);
     } finally {
         Order.find = originalFind;
     }
@@ -149,12 +153,18 @@ test("customer order responses do not expose seller account IDs", async () => {
 
 test("only the order owner can confirm receipt after paid delivery", async () => {
     const originalFindOneAndUpdate = Order.findOneAndUpdate;
+    const originalUpdateOne = Order.updateOne;
     let filter;
     let update;
+    let readinessFilter;
     Order.findOneAndUpdate = async (nextFilter, nextUpdate) => {
         filter = nextFilter;
         update = nextUpdate;
         return { _id: "order-a" };
+    };
+    Order.updateOne = async nextFilter => {
+        readinessFilter = nextFilter;
+        return { modifiedCount: 0 };
     };
 
     try {
@@ -179,18 +189,105 @@ test("only the order owner can confirm receipt after paid delivery", async () =>
             receiptConfirmedAt: null
         });
         assert.equal(
-            update.$set["sellerSettlements.$.payoutStatus"],
-            "ready"
+            update.$set["sellerSettlements.$.receiptConfirmedAt"] instanceof Date,
+            true
+        );
+        assert.equal("sellerSettlements.$.payoutStatus" in update.$set, false);
+        assert.deepEqual(readinessFilter.sellerSettlements.$elemMatch, {
+            _id: "507f1f77bcf86cd799439012",
+            deliveryStatus: "Delivered",
+            payoutStatus: "held",
+            receiptConfirmedAt: { $ne: null },
+            sellerConfirmedAt: { $ne: null }
+        });
+        assert.equal(response.statusCode, 200);
+    } finally {
+        Order.findOneAndUpdate = originalFindOneAndUpdate;
+        Order.updateOne = originalUpdateOne;
+    }
+});
+
+test("seller must confirm their own paid delivered shipment before payout readiness", async () => {
+    const originalFindOneAndUpdate = Order.findOneAndUpdate;
+    const originalUpdateOne = Order.updateOne;
+    const originalUserFindById = User.findById;
+    let filter;
+    let update;
+    let readinessFilter;
+    User.findById = () => ({
+        select: async () => ({
+            payoutMethod: "bKash",
+            payoutAccount: "01700000000"
+        })
+    });
+    Order.findOneAndUpdate = async (nextFilter, nextUpdate) => {
+        filter = nextFilter;
+        update = nextUpdate;
+        return { _id: "order-a" };
+    };
+    Order.updateOne = async nextFilter => {
+        readinessFilter = nextFilter;
+        return { modifiedCount: 0 };
+    };
+
+    try {
+        const response = makeResponse();
+        await orderController.confirmSellerPayout(
+            {
+                params: {
+                    id: "507f1f77bcf86cd799439011",
+                    fulfillmentId: "507f1f77bcf86cd799439012"
+                },
+                body: {
+                    payoutMethod: "bKash",
+                    payoutAccount: "01700000000"
+                },
+                user: { id: "seller-a" }
+            },
+            response
+        );
+
+        assert.deepEqual(filter.sellerSettlements.$elemMatch, {
+            _id: "507f1f77bcf86cd799439012",
+            seller: "seller-a",
+            deliveryStatus: "Delivered",
+            payoutStatus: "held",
+            sellerConfirmedAt: null
+        });
+        assert.equal(
+            update.$set["sellerSettlements.$.sellerConfirmedAt"] instanceof Date,
+            true
+        );
+        assert.equal(
+            update.$set["sellerSettlements.$.sellerPayoutMethod"],
+            "bKash"
+        );
+        assert.equal(
+            update.$set["sellerSettlements.$.sellerPayoutAccount"],
+            "01700000000"
+        );
+        assert.equal(
+            readinessFilter.sellerSettlements.$elemMatch.receiptConfirmedAt.$ne,
+            null
         );
         assert.equal(response.statusCode, 200);
     } finally {
         Order.findOneAndUpdate = originalFindOneAndUpdate;
+        Order.updateOne = originalUpdateOne;
+        User.findById = originalUserFindById;
     }
 });
 
 test("seller order responses omit buyer profile data and seller IDs", async () => {
     const originalProductFind = Product.find;
     const originalOrderFind = Order.find;
+    const originalUserFindById = User.findById;
+    User.findById = () => ({
+        select: async () => ({
+            payoutMethod: "bKash",
+            payoutAccount: "01700000000"
+        })
+    });
     Product.find = () => ({
         select: async () => [{ _id: "product-a" }]
     });
@@ -229,7 +326,10 @@ test("seller order responses omit buyer profile data and seller IDs", async () =
                 amount: 50,
                 deliveryStatus: "Pending",
                 payoutStatus: "held",
-                receiptConfirmedAt: null
+                receiptConfirmedAt: null,
+                sellerConfirmedAt: null,
+                sellerPayoutMethod: "",
+                sellerPayoutAccount: ""
             }],
             paymentMethod: "sslcommerz",
             paymentStatus: "paid",
@@ -249,9 +349,12 @@ test("seller order responses omit buyer profile data and seller IDs", async () =
         assert.equal("user" in response.body[0], false);
         assert.equal("seller" in response.body[0].items[0].product, false);
         assert.equal(response.body[0].shippingAddress.name, "Recipient");
+        assert.equal(response.body[0].payout.sellerConfirmedAt, null);
+        assert.equal(response.body[0].payout.payoutAccount, "01700000000");
     } finally {
         Product.find = originalProductFind;
         Order.find = originalOrderFind;
+        User.findById = originalUserFindById;
     }
 });
 
@@ -318,6 +421,66 @@ test("seller payout cannot be recorded before receipt confirmation", async () =>
     }
 });
 
+test("admin payout queue requires both buyer and seller confirmations", async () => {
+    const originalFind = Order.find;
+    let filter;
+    const confirmedAt = new Date();
+    const seller = {
+        _id: "seller-a",
+        name: "Seller",
+        email: "seller@example.com"
+    };
+    Order.find = nextFilter => {
+        filter = nextFilter;
+        return {
+            populate() {
+                return this;
+            },
+            sort: async () => [{
+                _id: "507f1f77bcf86cd799439011",
+                sellerSettlements: [
+                    {
+                        _id: "fulfillment-ready",
+                        seller,
+                        amount: 50,
+                        deliveryStatus: "Delivered",
+                        payoutStatus: "ready",
+                        receiptConfirmedAt: confirmedAt,
+                        sellerConfirmedAt: confirmedAt,
+                        sellerPayoutMethod: "bKash",
+                        sellerPayoutAccount: "01700000000"
+                    },
+                    {
+                        _id: "fulfillment-waiting",
+                        seller,
+                        amount: 30,
+                        deliveryStatus: "Delivered",
+                        payoutStatus: "ready",
+                        receiptConfirmedAt: confirmedAt,
+                        sellerConfirmedAt: null
+                    }
+                ]
+            }]
+        };
+    };
+
+    try {
+        const response = makeResponse();
+        await orderController.getReadySellerPayouts({}, response);
+
+        assert.deepEqual(filter.sellerSettlements.$elemMatch, {
+            deliveryStatus: "Delivered",
+            payoutStatus: "ready",
+            receiptConfirmedAt: { $ne: null },
+            sellerConfirmedAt: { $ne: null }
+        });
+        assert.equal(response.body.payouts.length, 1);
+        assert.equal(response.body.payouts[0].fulfillmentId, "fulfillment-ready");
+    } finally {
+        Order.find = originalFind;
+    }
+});
+
 test("admin can record a seller payout only against a ready shipment", async () => {
     const originalUpdateOne = Order.updateOne;
     const originalFindOne = Order.findOne;
@@ -329,9 +492,11 @@ test("admin can record a seller payout only against a ready shipment", async () 
             sellerSettlements: [{
                 _id: "507f1f77bcf86cd799439012",
                 seller: {
-                    payoutMethod: "bKash",
-                    payoutAccount: "01700000000"
-                }
+                    _id: "seller-a",
+                    name: "Seller"
+                },
+                sellerPayoutMethod: "bKash",
+                sellerPayoutAccount: "01700000000"
             }]
         })
     });
@@ -369,13 +534,19 @@ test("admin can record a seller payout only against a ready shipment", async () 
             "Delivered"
         );
         assert.equal(
+            updateFilter.sellerSettlements.$elemMatch.sellerConfirmedAt.$ne,
+            null
+        );
+        assert.equal(
             update.$set["sellerSettlements.$[settlement].payoutStatus"],
             "paid"
         );
         assert.deepEqual(options.arrayFilters, [{
             "settlement._id": "507f1f77bcf86cd799439012",
             "settlement.deliveryStatus": "Delivered",
-            "settlement.payoutStatus": "ready"
+            "settlement.payoutStatus": "ready",
+            "settlement.receiptConfirmedAt": { $ne: null },
+            "settlement.sellerConfirmedAt": { $ne: null }
         }]);
         assert.equal(
             update.$set["sellerSettlements.$[settlement].payoutReference"],
@@ -444,4 +615,5 @@ test("seller settlement records track receipt and payout audit data", () => {
     assert.equal(order.sellerSettlements[0].payoutStatus, "awaiting_payment");
     assert.equal(order.sellerSettlements[0].deliveryStatus, "Pending");
     assert.equal(order.sellerSettlements[0].receiptConfirmedAt, null);
+        assert.equal(order.sellerSettlements[0].sellerConfirmedAt, null);
 });

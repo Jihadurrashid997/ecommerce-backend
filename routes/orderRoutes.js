@@ -9,6 +9,7 @@ const {
     cancelOrder,
     getSellerOrders,
     updateSellerOrderStatus,
+    confirmSellerPayout,
     confirmOrderReceipt,
     getReadySellerPayouts,
     markSellerPayoutPaid,
@@ -67,6 +68,12 @@ router.put(
     "/seller/:id/status",
     auth(["seller"]),
     updateSellerOrderStatus
+);
+
+router.put(
+    "/seller/:id/confirm-payout/:fulfillmentId",
+    auth(["seller"]),
+    confirmSellerPayout
 );
 
 router.get(
