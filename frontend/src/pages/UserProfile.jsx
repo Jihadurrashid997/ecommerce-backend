@@ -243,7 +243,7 @@ const UserProfile = () => {
 
                         <FaArrowLeft />
 
-                        Back to Marketplace
+                        Back
 
                     </Link>
 

@@ -367,8 +367,7 @@ const EditProfile = () => {
                         </h1>
 
                         <p>
-                            Update your Marketplace
-                            profile information.
+                            Update your profile information.
                         </p>
 
                     </div>

@@ -193,13 +193,13 @@ exports.initPayment = async (req, res) => {
 
             // Customer will be redirected here
             success_url:
-                `${process.env.CLIENT_URL}/payment-success?transactionId=${transactionId}`,
+                `${process.env.CLIENT_URL}/shop/payment-success?transactionId=${transactionId}`,
 
             fail_url:
-                `${process.env.CLIENT_URL}/payment-fail?transactionId=${transactionId}`,
+                `${process.env.CLIENT_URL}/shop/payment-fail?transactionId=${transactionId}`,
 
             cancel_url:
-                `${process.env.CLIENT_URL}/payment-cancel?transactionId=${transactionId}`,
+                `${process.env.CLIENT_URL}/shop/payment-cancel?transactionId=${transactionId}`,
 
 
             // SSLCommerz server will call this
@@ -327,7 +327,7 @@ exports.paymentSuccess = async (req, res) => {
         if (!transactionId) {
 
             return res.redirect(
-                `${process.env.CLIENT_URL}/payment-fail?reason=Transaction%20ID%20missing`
+                `${process.env.CLIENT_URL}/shop/payment-fail?reason=Transaction%20ID%20missing`
             );
 
         }
@@ -342,7 +342,7 @@ exports.paymentSuccess = async (req, res) => {
         if (!order) {
 
             return res.redirect(
-                `${process.env.CLIENT_URL}/payment-fail?reason=Order%20not%20found`
+                `${process.env.CLIENT_URL}/shop/payment-fail?reason=Order%20not%20found`
             );
 
         }
@@ -358,7 +358,7 @@ exports.paymentSuccess = async (req, res) => {
 
         res.redirect(
 
-            `${process.env.CLIENT_URL}/payment-success?transactionId=${transactionId}`
+            `${process.env.CLIENT_URL}/shop/payment-success?transactionId=${transactionId}`
 
         );
 
@@ -372,7 +372,7 @@ exports.paymentSuccess = async (req, res) => {
 
 
         res.redirect(
-            `${process.env.CLIENT_URL}/payment-fail`
+            `${process.env.CLIENT_URL}/shop/payment-fail`
         );
 
     }
@@ -416,7 +416,7 @@ exports.paymentFail = async (req, res) => {
 
         res.redirect(
 
-            `${process.env.CLIENT_URL}/payment-fail?transactionId=${transactionId || ""}`
+            `${process.env.CLIENT_URL}/shop/payment-fail?transactionId=${transactionId || ""}`
 
         );
 
@@ -430,7 +430,7 @@ exports.paymentFail = async (req, res) => {
 
 
         res.redirect(
-            `${process.env.CLIENT_URL}/payment-fail`
+            `${process.env.CLIENT_URL}/shop/payment-fail`
         );
 
     }
@@ -474,7 +474,7 @@ exports.paymentCancel = async (req, res) => {
 
         res.redirect(
 
-            `${process.env.CLIENT_URL}/payment-cancel?transactionId=${transactionId || ""}`
+            `${process.env.CLIENT_URL}/shop/payment-cancel?transactionId=${transactionId || ""}`
 
         );
 
@@ -488,7 +488,7 @@ exports.paymentCancel = async (req, res) => {
 
 
         res.redirect(
-            `${process.env.CLIENT_URL}/payment-cancel`
+            `${process.env.CLIENT_URL}/shop/payment-cancel`
         );
 
     }

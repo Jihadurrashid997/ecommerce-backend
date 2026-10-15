@@ -119,7 +119,7 @@ const PaymentSuccess = () => {
                 <div className="payment-actions">
 
                     <Link
-                        to="/orders"
+                        to="/shop/orders"
                         className="payment-btn"
                     >
                         View My Orders
@@ -127,7 +127,7 @@ const PaymentSuccess = () => {
 
 
                     <Link
-                        to="/"
+                        to="/shop"
                         className="payment-btn secondary-btn"
                     >
                         Continue Shopping

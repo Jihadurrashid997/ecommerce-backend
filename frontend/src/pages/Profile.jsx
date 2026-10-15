@@ -6,9 +6,6 @@ import {
     FaSignOutAlt,
     FaEnvelope,
     FaUserTag,
-    FaShoppingBag,
-    FaHeart,
-    FaBoxOpen,
     FaComments,
     FaEdit,
     FaCog
@@ -44,7 +41,7 @@ const Profile = () => {
     // ==========================
 
     const userName =
-        user.name || "Marketplace User";
+        user.name || "E Top user";
 
     const userEmail =
         user.email || "No email available";
@@ -60,7 +57,7 @@ const Profile = () => {
 
     const bio =
         user.bio ||
-        "Welcome to my Marketplace profile.";
+        "Welcome to my profile.";
 
     const location =
         user.location ||
@@ -115,7 +112,7 @@ const Profile = () => {
                     <div className="cover-content">
 
                         <span>
-                            Marketplace Profile
+                            Your Profile
                         </span>
 
                     </div>
@@ -273,24 +270,6 @@ const Profile = () => {
                         </div>
 
 
-                        <div className="profile-detail">
-
-                            <FaShoppingBag />
-
-                            <div>
-
-                                <span>
-                                    Marketplace
-                                </span>
-
-                                <strong>
-                                    Buyer & Seller Community
-                                </strong>
-
-                            </div>
-
-                        </div>
-
                     </div>
 
 
@@ -306,50 +285,6 @@ const Profile = () => {
 
 
                         <div className="profile-actions-grid">
-
-                            <Link
-                                to="/orders"
-                                className="profile-action-card"
-                            >
-
-                                <FaBoxOpen />
-
-                                <div>
-
-                                    <strong>
-                                        My Orders
-                                    </strong>
-
-                                    <span>
-                                        Track your orders
-                                    </span>
-
-                                </div>
-
-                            </Link>
-
-
-                            <Link
-                                to="/wishlist"
-                                className="profile-action-card"
-                            >
-
-                                <FaHeart />
-
-                                <div>
-
-                                    <strong>
-                                        Wishlist
-                                    </strong>
-
-                                    <span>
-                                        Saved products
-                                    </span>
-
-                                </div>
-
-                            </Link>
-
 
                             <Link
                                 to="/messenger"
@@ -373,27 +308,6 @@ const Profile = () => {
                             </Link>
 
 
-                            <Link
-                                to="/dashboard"
-                                className="profile-action-card"
-                            >
-
-                                <FaShoppingBag />
-
-                                <div>
-
-                                    <strong>
-                                        Dashboard
-                                    </strong>
-
-                                    <span>
-                                        Manage your account
-                                    </span>
-
-                                </div>
-
-                            </Link>
-
                         </div>
 
                     </div>
@@ -412,7 +326,7 @@ const Profile = () => {
                             </h2>
 
                             <p>
-                                Manage your Marketplace account.
+                                Manage your account.
                             </p>
 
                         </div>

@@ -64,7 +64,7 @@ const EditProduct = () => {
 
             alert("Product Updated Successfully");
 
-            navigate("/seller-products");
+            navigate("/shop/seller/products");
 
         }
 

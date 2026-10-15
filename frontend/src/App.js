@@ -4,7 +4,10 @@ import {
     BrowserRouter,
     Routes,
     Route,
-    useLocation
+    useLocation,
+    useParams,
+    Navigate,
+    Link
 } from "react-router-dom";
 import { useApp } from "./context/AppContext";
 
@@ -20,6 +23,7 @@ import "./styles/Dashboard.css";
 import "./styles/Messenger.css";
 import "./styles/Responsive.css";
 import "./styles/Animation.css";
+import "./styles/Shop.css";
 
 
 // ======================================================
@@ -48,6 +52,7 @@ import TopTabs from "./components/TopTabs";
 import Profile from "./pages/Profile";
 import SellerDashboard from "./pages/SellerDashboard";
 import SellerOrders from "./pages/SellerOrders";
+import SellerProducts from "./pages/SellerProducts";
 import Cart from "./pages/Cart";
 import Wishlist from "./pages/Wishlist";
 import ProductDetails from "./pages/ProductDetails";
@@ -80,7 +85,7 @@ function Footer() {
                 </h2>
 
                 <p>
-                    Buy • Sell • Chat • Secure Payment
+                    Share • Connect • Chat
                 </p>
 
                 <p>
@@ -124,6 +129,33 @@ function NotFound() {
 
 }
 
+function ShopRedirect({ target }) {
+    const location = useLocation();
+    const { id } = useParams();
+    const path = target.replace(":id", id || "");
+
+    return <Navigate to={`${path}${location.search}`} replace />;
+}
+
+function ShopSectionNavigation({ user }) {
+    return (
+        <nav className="shop-section-nav" aria-label="Shop">
+            <Link to="/shop">Browse</Link>
+            <Link to="/shop/cart">Cart</Link>
+            <Link to="/shop/wishlist">Wishlist</Link>
+            <Link to="/shop/orders">Orders</Link>
+            {user?.role === "seller" && (
+                <>
+                    <Link to="/shop/dashboard">Dashboard</Link>
+                    <Link to="/shop/seller">Add product</Link>
+                    <Link to="/shop/seller/products">My products</Link>
+                    <Link to="/shop/seller/orders">Seller orders</Link>
+                </>
+            )}
+        </nav>
+    );
+}
+
 
 // ======================================================
 // APP LAYOUT
@@ -134,6 +166,9 @@ function AppLayout() {
     const location =
         useLocation();
     const { user } = useApp();
+    const shopSection =
+        location.pathname === "/shop" ||
+        location.pathname.startsWith("/shop/");
 
 
     // ==================================================
@@ -162,6 +197,10 @@ function AppLayout() {
 
         {!authPage && location.pathname !== "/forgot-password" && (
             <TopTabs />
+        )}
+
+        {!authPage && shopSection && (
+            <ShopSectionNavigation user={user} />
         )}
 
 
@@ -273,23 +312,36 @@ function AppLayout() {
                     }
                 />
 
+                <Route path="/shop/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+                <Route path="/shop/product/:id" element={<PrivateRoute><ProductDetails /></PrivateRoute>} />
+                <Route path="/shop/payment-success" element={<PrivateRoute><PaymentSuccess /></PrivateRoute>} />
+                <Route path="/shop/payment-fail" element={<PrivateRoute><PaymentFailed /></PrivateRoute>} />
+                <Route path="/shop/payment-cancel" element={<PrivateRoute><PaymentFailed /></PrivateRoute>} />
+                <Route path="/shop/cart" element={<PrivateRoute><Cart /></PrivateRoute>} />
+                <Route path="/shop/wishlist" element={<PrivateRoute><Wishlist /></PrivateRoute>} />
+                <Route path="/shop/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
+                <Route path="/shop/orders" element={<PrivateRoute><OrderHistory /></PrivateRoute>} />
+                <Route path="/shop/edit-product/:id" element={<PrivateRoute><EditProduct /></PrivateRoute>} />
+                <Route path="/shop/seller" element={<PrivateRoute><SellerDashboard /></PrivateRoute>} />
+                <Route path="/shop/seller/products" element={<PrivateRoute><SellerProducts /></PrivateRoute>} />
+                <Route path="/shop/seller/orders" element={<PrivateRoute><SellerOrders /></PrivateRoute>} />
+
+                <Route path="/product/:id" element={<ShopRedirect target="/shop/product/:id" />} />
+                <Route path="/payment-success" element={<ShopRedirect target="/shop/payment-success" />} />
+                <Route path="/payment-fail" element={<ShopRedirect target="/shop/payment-fail" />} />
+                <Route path="/payment-cancel" element={<ShopRedirect target="/shop/payment-cancel" />} />
+                <Route path="/cart" element={<ShopRedirect target="/shop/cart" />} />
+                <Route path="/wishlist" element={<ShopRedirect target="/shop/wishlist" />} />
+                <Route path="/checkout" element={<ShopRedirect target="/shop/checkout" />} />
+                <Route path="/orders" element={<ShopRedirect target="/shop/orders" />} />
+                <Route path="/dashboard" element={<ShopRedirect target="/shop/dashboard" />} />
+                <Route path="/edit-product/:id" element={<ShopRedirect target="/shop/edit-product/:id" />} />
+                <Route path="/seller" element={<ShopRedirect target="/shop/seller" />} />
+                <Route path="/seller/orders" element={<ShopRedirect target="/shop/seller/orders" />} />
 
                 {/* ==========================
                     PRODUCT DETAILS
                 =========================== */}
-
-                <Route
-                    path="/product/:id"
-                    element={
-
-                        <PrivateRoute>
-
-                            <ProductDetails />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
@@ -338,54 +390,18 @@ function AppLayout() {
                     PAYMENT SUCCESS
                 =========================== */}
 
-                <Route
-                    path="/payment-success"
-                    element={
-
-                        <PrivateRoute>
-
-                            <PaymentSuccess />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
                     PAYMENT FAILED
                 =========================== */}
 
-                <Route
-                    path="/payment-fail"
-                    element={
-
-                        <PrivateRoute>
-
-                            <PaymentFailed />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
                     PAYMENT CANCEL
                 =========================== */}
 
-                <Route
-                    path="/payment-cancel"
-                    element={
-
-                        <PrivateRoute>
-
-                            <PaymentFailed />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
 
@@ -434,108 +450,36 @@ function AppLayout() {
                     DASHBOARD
                 =========================== */}
 
-                <Route
-                    path="/dashboard"
-                    element={
-
-                        <PrivateRoute>
-
-                            <Dashboard />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
                     CART
                 =========================== */}
 
-                <Route
-                    path="/cart"
-                    element={
-
-                        <PrivateRoute>
-
-                            <Cart />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
                     WISHLIST
                 =========================== */}
 
-                <Route
-                    path="/wishlist"
-                    element={
-
-                        <PrivateRoute>
-
-                            <Wishlist />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
                     CHECKOUT
                 =========================== */}
 
-                <Route
-                    path="/checkout"
-                    element={
-
-                        <PrivateRoute>
-
-                            <Checkout />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
                     ORDER HISTORY
                 =========================== */}
 
-                <Route
-                    path="/orders"
-                    element={
-
-                        <PrivateRoute>
-
-                            <OrderHistory />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
                     EDIT PRODUCT
                 =========================== */}
 
-                <Route
-                    path="/edit-product/:id"
-                    element={
-
-                        <PrivateRoute>
-
-                            <EditProduct />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
@@ -564,36 +508,12 @@ function AppLayout() {
                     SELLER DASHBOARD
                 =========================== */}
 
-                <Route
-                    path="/seller"
-                    element={
-
-                        <PrivateRoute>
-
-                            <SellerDashboard />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
                 {/* ==========================
                     SELLER ORDERS
                 =========================== */}
 
-                <Route
-                    path="/seller/orders"
-                    element={
-
-                        <PrivateRoute>
-
-                            <SellerOrders />
-
-                        </PrivateRoute>
-
-                    }
-                />
 
 
 

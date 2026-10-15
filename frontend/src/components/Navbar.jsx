@@ -2,18 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 
 import {
-    FaShoppingCart,
-    FaHeart,
     FaComments,
     FaUserCircle,
     FaBars,
     FaTimes,
     FaSearch,
     FaSignOutAlt,
-    FaBoxOpen,
     FaHome,
-    FaTachometerAlt,
-    FaStore,
     FaUserShield,
     FaBell,
     FaCog,
@@ -24,7 +19,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useApp } from "../context/AppContext";
-import { useCart } from "../context/CartContext";
 import EtopLogo from "./EtopLogo";
 import "../styles/EtopLogo.css";
 
@@ -47,8 +41,6 @@ const Navbar = () => {
         clearNotifications,
         unreadNotificationCount
     } = useApp();
-    const { cart } = useCart();
-
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -73,18 +65,6 @@ const Navbar = () => {
             document.removeEventListener("keydown", closeOnEscape);
         };
     }, []);
-
-
-    // ==========================
-    // CART COUNT
-    // ==========================
-
-    const cartCount =
-        (cart || []).reduce(
-            (total, item) =>
-                total + Number(item.quantity || 1),
-            0
-        );
 
 
     // ==========================
@@ -306,8 +286,8 @@ const Navbar = () => {
                         onChange={(e) =>
                             setSearchText(e.target.value)
                         }
-                        placeholder="Search products or people..."
-                        aria-label="Search products or people"
+                        placeholder="Search people..."
+                        aria-label="Search people"
                     />
 
 
@@ -407,44 +387,6 @@ const Navbar = () => {
                 )}
 
 
-                {/* DASHBOARD */}
-
-                {user && (
-
-                    <motion.li variants={navItem}>
-
-                        <NavItem
-                            to="/dashboard"
-                            icon={<FaTachometerAlt />}
-                            label="Dashboard"
-                            active={isActive("/dashboard")}
-                            onClick={closeMenu}
-                        />
-
-                    </motion.li>
-
-                )}
-
-
-                {/* SELLER */}
-
-                {user?.role === "seller" && (
-
-                    <motion.li variants={navItem}>
-
-                        <NavItem
-                            to="/seller"
-                            icon={<FaStore />}
-                            label="Seller"
-                            active={isActive("/seller")}
-                            onClick={closeMenu}
-                        />
-
-                    </motion.li>
-
-                )}
-
-
                 {/* ADMIN */}
 
                 {user?.role === "admin" && (
@@ -517,118 +459,6 @@ const Navbar = () => {
 
                 )}
 
-
-                {/* WISHLIST */}
-
-                {user && (
-
-                    <motion.li variants={navItem}>
-
-                        <NavItem
-                            to="/wishlist"
-                            icon={<FaHeart />}
-                            label="Wishlist"
-                            active={isActive("/wishlist")}
-                            onClick={closeMenu}
-                        />
-
-                    </motion.li>
-
-                )}
-
-
-                {/* ORDERS */}
-
-                {user && (
-
-                    <motion.li variants={navItem}>
-
-                        <NavItem
-                            to="/orders"
-                            icon={<FaBoxOpen />}
-                            label="Orders"
-                            active={isActive("/orders")}
-                            onClick={closeMenu}
-                        />
-
-                    </motion.li>
-
-                )}
-
-
-                {/* CART */}
-
-                {user && (
-
-                    <motion.li variants={navItem}>
-
-                        <Link
-                            to="/cart"
-                            onClick={closeMenu}
-                            className={
-                                isActive("/cart")
-                                    ? "jr-nav-item active"
-                                    : "jr-nav-item"
-                            }
-                        >
-
-                            <motion.span
-                                className="nav-icon"
-
-                                whileHover={{
-                                    y: -2,
-                                    scale: 1.12
-                                }}
-                            >
-
-                                <FaShoppingCart />
-
-                                <AnimatePresence>
-
-                                    {cartCount > 0 && (
-
-                                        <motion.span
-                                            className="cart-count"
-
-                                            initial={{
-                                                scale: 0,
-                                                opacity: 0
-                                            }}
-
-                                            animate={{
-                                                scale: 1,
-                                                opacity: 1
-                                            }}
-
-                                            exit={{
-                                                scale: 0,
-                                                opacity: 0
-                                            }}
-
-                                            transition={{
-                                                type: "spring",
-                                                stiffness: 500,
-                                                damping: 18
-                                            }}
-                                        >
-                                            {cartCount}
-                                        </motion.span>
-
-                                    )}
-
-                                </AnimatePresence>
-
-                            </motion.span>
-
-                            <span>
-                                Cart
-                            </span>
-
-                        </Link>
-
-                    </motion.li>
-
-                )}
 
 
                 {/* LOGIN */}

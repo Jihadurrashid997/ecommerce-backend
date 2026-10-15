@@ -75,7 +75,7 @@ const Cart = () => {
 
                             className="continue-btn"
 
-                            to="/"
+                            to="/shop"
 
                         >
 
@@ -205,7 +205,7 @@ const Cart = () => {
 
                                 className="checkout-btn"
 
-                                to="/checkout"
+                                to="/shop/checkout"
 
                             >
 

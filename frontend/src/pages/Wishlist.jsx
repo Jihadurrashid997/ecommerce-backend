@@ -42,7 +42,7 @@ const Wishlist = () => {
 
                         <Link
                         className="continue-btn"
-                        to="/">
+                        to="/shop">
 
                             Continue Shopping
 

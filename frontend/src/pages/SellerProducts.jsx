@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../services/api";
 import "../styles/SellerProducts.css";
 
@@ -95,17 +96,9 @@ const SellerProducts = () => {
 
               <td>
 
-                import { Link } from "react-router-dom";
-                
-                <Link to={`/edit-product/${product._id}`}>
-
-    <button className="edit-btn">
-
-        Edit
-
-    </button>
-
-</Link>
+                <Link to={`/shop/edit-product/${product._id}`}>
+                  <button className="edit-btn">Edit</button>
+                </Link>
 
                 <button
                   className="delete-btn"

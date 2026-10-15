@@ -6,7 +6,6 @@ import {
     FaImage,
     FaPlay,
     FaPlus,
-    FaShoppingBag,
     FaSyncAlt,
     FaTimes,
     FaUsers
@@ -172,7 +171,6 @@ const Home = () => {
                     <h1>Good things happen<br /><em>when we share.</em></h1>
                     <p>A community for the things you love, the people you meet, and the finds you discover.</p>
                     <div className="home-welcome-actions">
-                        <Link to="/shop" className="home-primary-link">Explore the shop <FaArrowRight /></Link>
                         <Link to="/reels" className="home-text-link"><FaPlay /> Watch reels</Link>
                     </div>
                 </div>
@@ -186,7 +184,6 @@ const Home = () => {
 
             <section className="home-shortcuts" aria-label="Explore E Top">
                 <Link to="/reels"><span className="home-shortcut-icon violet"><FaPlay /></span><span><b>Reels</b><small>See what's moving</small></span><FaArrowRight /></Link>
-                <Link to="/shop"><span className="home-shortcut-icon amber"><FaShoppingBag /></span><span><b>Marketplace</b><small>Shop independent</small></span><FaArrowRight /></Link>
                 <Link to="/messenger"><span className="home-shortcut-icon mint"><FaUsers /></span><span><b>Your people</b><small>Pick up a conversation</small></span><FaArrowRight /></Link>
             </section>
 
@@ -360,15 +357,8 @@ const Home = () => {
                         <span className="home-editorial-mark">E</span>
                         <span className="home-eyebrow">THE E TOP EDIT</span>
                         <h3>More than a feed.<br /><em>A feeling.</em></h3>
-                        <p>Discover independent finds, meet your people, and make this corner of the internet yours.</p>
-                        <Link to="/shop">Explore the edit <FaArrowRight /></Link>
-                    </section>
-                    <section className="home-side-card home-creator-card">
-                        <div className="home-creator-icon"><FaShoppingBag /></div>
-                        <span className="home-eyebrow">MADE BY PEOPLE</span>
-                        <h3>Good finds.<br />Good stories.</h3>
-                        <p>Meet the independent sellers bringing something different to the table.</p>
-                        <Link to="/shop">Meet the makers <FaArrowRight /></Link>
+                        <p>Meet your people and make this corner of the internet yours.</p>
+                        <Link to="/communities">Explore communities <FaArrowRight /></Link>
                     </section>
                     <p className="home-footer-note">A little corner of the internet, made for everyone.<br />© 2026 E Top</p>
                 </aside>
