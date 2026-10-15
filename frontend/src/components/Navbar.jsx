@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 
 import {
@@ -14,7 +14,11 @@ import {
     FaHome,
     FaTachometerAlt,
     FaStore,
-    FaUserShield
+    FaUserShield,
+    FaBell,
+    FaCog,
+    FaCheck,
+    FaTrash
 } from "react-icons/fa";
 
 import { motion, AnimatePresence } from "framer-motion";
@@ -31,15 +35,44 @@ const Navbar = () => {
 
     const [menuOpen, setMenuOpen] = useState(false);
     const [searchText, setSearchText] = useState("");
+    const [notificationsOpen, setNotificationsOpen] = useState(false);
+    const notificationRef = useRef(null);
 
     const {
         user,
-        logout
+        logout,
+        notifications,
+        setNotifications,
+        markNotificationRead,
+        clearNotifications,
+        unreadNotificationCount
     } = useApp();
     const { cart } = useCart();
 
     const navigate = useNavigate();
     const location = useLocation();
+
+    useEffect(() => {
+        const closeNotifications = event => {
+            if (!notificationRef.current?.contains(event.target)) {
+                setNotificationsOpen(false);
+            }
+        };
+
+        const closeOnEscape = event => {
+            if (event.key === "Escape") {
+                setNotificationsOpen(false);
+            }
+        };
+
+        document.addEventListener("mousedown", closeNotifications);
+        document.addEventListener("keydown", closeOnEscape);
+
+        return () => {
+            document.removeEventListener("mousedown", closeNotifications);
+            document.removeEventListener("keydown", closeOnEscape);
+        };
+    }, []);
 
 
     // ==========================
@@ -763,6 +796,115 @@ const Navbar = () => {
                 </AnimatePresence>
 
             </motion.button>
+
+            {user && (
+                <div className="jr-header-actions">
+                    <div className="jr-notification-wrap" ref={notificationRef}>
+                        <button
+                            type="button"
+                            className={`jr-header-action${notificationsOpen ? " is-active" : ""}`}
+                            aria-label={`Notifications${unreadNotificationCount ? `, ${unreadNotificationCount} unread` : ""}`}
+                            aria-expanded={notificationsOpen}
+                            aria-controls="jr-notifications-panel"
+                            title="Notifications"
+                            onClick={() => setNotificationsOpen(open => !open)}
+                        >
+                            <FaBell />
+                            {unreadNotificationCount > 0 && (
+                                <span className="jr-notification-count">
+                                    {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                                </span>
+                            )}
+                        </button>
+
+                        {notificationsOpen && (
+                            <section
+                                className="jr-notifications-panel"
+                                id="jr-notifications-panel"
+                                aria-label="Notifications"
+                            >
+                                <div className="jr-notifications-heading">
+                                    <div>
+                                        <h2>Notifications</h2>
+                                        <span>
+                                            {unreadNotificationCount
+                                                ? `${unreadNotificationCount} unread`
+                                                : "You're all caught up"}
+                                        </span>
+                                    </div>
+                                    <div className="jr-notification-tools">
+                                        {unreadNotificationCount > 0 && (
+                                            <button
+                                                type="button"
+                                                title="Mark all as read"
+                                                aria-label="Mark all notifications as read"
+                                                onClick={() =>
+                                                    setNotifications(previous =>
+                                                        previous.map(notification => ({
+                                                            ...notification,
+                                                            read: true
+                                                        }))
+                                                    )
+                                                }
+                                            >
+                                                <FaCheck />
+                                            </button>
+                                        )}
+                                        {notifications.length > 0 && (
+                                            <button
+                                                type="button"
+                                                title="Clear notifications"
+                                                aria-label="Clear all notifications"
+                                                onClick={clearNotifications}
+                                            >
+                                                <FaTrash />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {notifications.length ? (
+                                    <div className="jr-notification-list">
+                                        {notifications.slice(0, 8).map(notification => (
+                                            <button
+                                                type="button"
+                                                key={notification.id}
+                                                className={`jr-notification-item${notification.read ? "" : " is-unread"}`}
+                                                onClick={() => markNotificationRead(notification.id)}
+                                            >
+                                                <span className={`jr-notification-dot type-${notification.type || "info"}`} />
+                                                <span className="jr-notification-content">
+                                                    <span>{notification.message}</span>
+                                                    <time dateTime={notification.createdAt}>
+                                                        {notification.createdAt
+                                                            ? new Date(notification.createdAt).toLocaleString()
+                                                            : ""}
+                                                    </time>
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="jr-notifications-empty">
+                                        <FaBell />
+                                        <p>No notifications yet</p>
+                                    </div>
+                                )}
+                            </section>
+                        )}
+                    </div>
+
+                    <Link
+                        to="/edit-profile"
+                        className="jr-header-action jr-settings-action"
+                        aria-label="Settings"
+                        title="Settings"
+                        onClick={closeMenu}
+                    >
+                        <FaCog />
+                    </Link>
+                </div>
+            )}
 
         </motion.nav>
 
