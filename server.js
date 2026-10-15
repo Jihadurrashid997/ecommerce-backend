@@ -681,6 +681,58 @@ io.on(
             }
         );
 
+        socket.on(
+            "group-call-invite",
+            async payload => {
+                const callerId = socket.userId;
+                const groupId = normalizeId(payload?.groupId);
+
+                if (
+                    !callerId ||
+                    !groupId ||
+                    !/^[a-f\d]{24}$/i.test(groupId)
+                ) {
+                    return;
+                }
+
+                try {
+                    const group = await GroupConversation.findOne({
+                        _id: groupId,
+                        participants: callerId
+                    }).select("name participants");
+
+                    if (!group) {
+                        return;
+                    }
+
+                    const caller = await User.findById(callerId)
+                        .select("name profileImage")
+                        .lean();
+                    const invitation = {
+                        groupId,
+                        groupName: group.name,
+                        callerId,
+                        callerName: caller?.name || "Group member",
+                        callerAvatar: caller?.profileImage || "",
+                        type: payload?.type === "video" ? "video" : "audio",
+                        startedAt: Date.now()
+                    };
+
+                    group.participants.forEach(memberId => {
+                        if (String(memberId) !== callerId) {
+                            sendToUser(
+                                String(memberId),
+                                "group-call-incoming",
+                                invitation
+                            );
+                        }
+                    });
+                } catch (error) {
+                    console.error("Group call invitation error:", error);
+                }
+            }
+        );
+
         /* =================================================
            SEND MESSAGE
         ================================================= */

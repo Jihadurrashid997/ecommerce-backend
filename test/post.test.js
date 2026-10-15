@@ -7,6 +7,7 @@ const groupController = require("../controllers/groupController");
 const User = require("../models/User");
 const adminControlController = require("../controllers/adminControlController");
 const { forgotPassword } = require("../controllers/authController");
+const jwt = require("jsonwebtoken");
 
 const TEST_USER_ID = "507f1f77bcf86cd799439011";
 const OTHER_USER_ID = "507f191e810c19729de860ea";
@@ -137,6 +138,145 @@ test("non-members cannot load group message history", async () => {
         assert.equal(response.statusCode, 404);
     } finally {
         GroupConversation.findOne = originalFindOne;
+    }
+});
+
+test("non-members cannot receive group call tokens", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const response = makeResponse();
+
+    GroupConversation.findOne = filter => ({
+        select: async () => {
+            assert.deepEqual(filter, {
+                _id: OTHER_USER_ID,
+                participants: TEST_USER_ID
+            });
+            return null;
+        }
+    });
+
+    try {
+        await groupController.createGroupCallToken(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 404);
+        assert.equal(response.body.success, false);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+    }
+});
+
+test("group calls fail explicitly when LiveKit is not configured", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalUrl = process.env.LIVEKIT_URL;
+    const originalKey = process.env.LIVEKIT_API_KEY;
+    const originalSecret = process.env.LIVEKIT_API_SECRET;
+    const response = makeResponse();
+
+    delete process.env.LIVEKIT_URL;
+    delete process.env.LIVEKIT_API_KEY;
+    delete process.env.LIVEKIT_API_SECRET;
+    GroupConversation.findOne = () => ({
+        select: async () => ({
+            _id: OTHER_USER_ID,
+            name: "Weekend plans"
+        })
+    });
+
+    try {
+        await groupController.createGroupCallToken(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 503);
+        assert.match(response.body.message, /not configured/i);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        if (originalUrl === undefined) delete process.env.LIVEKIT_URL;
+        else process.env.LIVEKIT_URL = originalUrl;
+        if (originalKey === undefined) delete process.env.LIVEKIT_API_KEY;
+        else process.env.LIVEKIT_API_KEY = originalKey;
+        if (originalSecret === undefined) delete process.env.LIVEKIT_API_SECRET;
+        else process.env.LIVEKIT_API_SECRET = originalSecret;
+    }
+});
+
+test("group call tokens are scoped to the authorized group and user", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalUserFindById = User.findById;
+    const originalUrl = process.env.LIVEKIT_URL;
+    const originalKey = process.env.LIVEKIT_API_KEY;
+    const originalSecret = process.env.LIVEKIT_API_SECRET;
+    const response = makeResponse();
+    const secret = "livekit-test-secret";
+
+    process.env.LIVEKIT_URL = "wss://calls.example.com";
+    process.env.LIVEKIT_API_KEY = "livekit-test-key";
+    process.env.LIVEKIT_API_SECRET = secret;
+    GroupConversation.findOne = filter => ({
+        select: async () => {
+            assert.deepEqual(filter, {
+                _id: OTHER_USER_ID,
+                participants: TEST_USER_ID
+            });
+            return {
+                _id: OTHER_USER_ID,
+                name: "Weekend plans"
+            };
+        }
+    });
+    User.findById = userId => ({
+        select: () => ({
+            lean: async () => {
+                assert.equal(userId, TEST_USER_ID);
+                return { name: "Test User" };
+            }
+        })
+    });
+
+    try {
+        await groupController.createGroupCallToken(
+            {
+                user: {
+                    id: TEST_USER_ID,
+                    name: "Test User"
+                },
+                params: { groupId: OTHER_USER_ID }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.data.serverUrl, "wss://calls.example.com");
+        assert.equal(response.body.data.roomName, `group-${OTHER_USER_ID}`);
+        assert.equal(response.body.data.groupName, "Weekend plans");
+
+        const claims = jwt.verify(response.body.data.token, secret);
+        assert.equal(claims.sub, TEST_USER_ID);
+        assert.equal(claims.iss, "livekit-test-key");
+        assert.equal(claims.name, "Test User");
+        assert.equal(claims.video.roomJoin, true);
+        assert.equal(claims.video.room, `group-${OTHER_USER_ID}`);
+        assert.equal(claims.video.canPublish, true);
+        assert.equal(claims.video.canSubscribe, true);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        User.findById = originalUserFindById;
+        if (originalUrl === undefined) delete process.env.LIVEKIT_URL;
+        else process.env.LIVEKIT_URL = originalUrl;
+        if (originalKey === undefined) delete process.env.LIVEKIT_API_KEY;
+        else process.env.LIVEKIT_API_KEY = originalKey;
+        if (originalSecret === undefined) delete process.env.LIVEKIT_API_SECRET;
+        else process.env.LIVEKIT_API_SECRET = originalSecret;
     }
 });
 

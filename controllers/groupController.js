@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 const GroupConversation = require("../models/GroupConversation");
 const Message = require("../models/Message");
 const User = require("../models/User");
+const {
+    AccessToken,
+    RoomServiceClient
+} = require("livekit-server-sdk");
 
 const getUserId = req =>
     req.user?._id ||
@@ -43,6 +47,36 @@ const removeMemberFromRoom = (req, groupId, memberId) => {
 
     if (io) {
         io.in(`user:${String(memberId)}`).socketsLeave(`group:${String(groupId)}`);
+    }
+};
+
+const disconnectGroupCallParticipant = async (groupId, userId) => {
+    const { LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET } = process.env;
+
+    if (!LIVEKIT_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+        return;
+    }
+
+    const roomName = `group-${String(groupId)}`;
+
+    try {
+        const roomService = new RoomServiceClient(
+            LIVEKIT_URL
+                .replace(/^wss:/i, "https:")
+                .replace(/^ws:/i, "http:"),
+            LIVEKIT_API_KEY,
+            LIVEKIT_API_SECRET
+        );
+        const rooms = await roomService.listRooms([roomName]);
+
+        if (rooms.some(room => room.name === roomName)) {
+            await roomService.removeParticipant(
+                roomName,
+                String(userId)
+            );
+        }
+    } catch (error) {
+        console.error("REMOVE GROUP CALL PARTICIPANT ERROR:", error);
     }
 };
 
@@ -216,6 +250,75 @@ exports.getGroupMessages = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Unable to load group messages."
+        });
+    }
+};
+
+exports.createGroupCallToken = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { groupId } = req.params;
+
+        if (!isValidObjectId(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID."
+            });
+        }
+
+        const group = await GroupConversation.findOne({
+            _id: groupId,
+            participants: userId
+        }).select("name");
+
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found."
+            });
+        }
+
+        const livekitUrl = process.env.LIVEKIT_URL;
+        const apiKey = process.env.LIVEKIT_API_KEY;
+        const apiSecret = process.env.LIVEKIT_API_SECRET;
+
+        if (!livekitUrl || !apiKey || !apiSecret) {
+            return res.status(503).json({
+                success: false,
+                message: "Group calling is not configured yet. Ask the administrator to set up the media server."
+            });
+        }
+
+        const user = await User.findById(userId)
+            .select("name")
+            .lean();
+        const token = new AccessToken(apiKey, apiSecret, {
+            identity: String(userId),
+            name: user?.name || "Group member",
+            ttl: "1h"
+        });
+        token.addGrant({
+            roomJoin: true,
+            room: `group-${String(group._id)}`,
+            canPublish: true,
+            canSubscribe: true,
+            canPublishData: true
+        });
+
+        return res.json({
+            success: true,
+            data: {
+                serverUrl: livekitUrl,
+                token: await token.toJwt(),
+                roomName: `group-${String(group._id)}`,
+                groupName: group.name
+            }
+        });
+    } catch (error) {
+        console.error("CREATE GROUP CALL TOKEN ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to start the group call."
         });
     }
 };
@@ -407,6 +510,9 @@ exports.removeGroupMember = async (req, res) => {
                 Message.deleteMany({ groupId })
             ]);
 
+            previousMemberIds.forEach(memberId => {
+                void disconnectGroupCallParticipant(groupId, memberId);
+            });
             previousMemberIds.forEach(memberId =>
                 removeMemberFromRoom(req, groupId, memberId)
             );
@@ -420,6 +526,7 @@ exports.removeGroupMember = async (req, res) => {
 
         await group.save();
 
+        void disconnectGroupCallParticipant(groupId, userId);
         removeMemberFromRoom(req, groupId, userId);
         notifyMembers(req, groupId, previousMemberIds);
 
