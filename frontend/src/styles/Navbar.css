@@ -896,6 +896,205 @@
 
 
 /* =========================================================
+   GLOBAL NOTIFICATIONS AND SETTINGS
+========================================================= */
+
+.jr-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.jr-notification-wrap {
+    position: relative;
+}
+
+.jr-header-action {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(108, 92, 231, 0.12);
+    border-radius: 14px;
+    background: rgba(108, 92, 231, 0.08);
+    color: var(--jr-primary);
+    cursor: pointer;
+    font-size: 17px;
+    text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.jr-header-action:hover,
+.jr-header-action.is-active {
+    transform: translateY(-1px);
+    background: linear-gradient(135deg, #5b4de8, #806df4);
+    color: #fff;
+}
+
+.jr-notification-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    min-width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: 2px solid #fff;
+    border-radius: 20px;
+    background: #ef476f;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.jr-notifications-panel {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: -52px;
+    z-index: 10010;
+    width: min(370px, calc(100vw - 24px));
+    overflow: hidden;
+    border: 1px solid rgba(108, 92, 231, 0.14);
+    border-radius: 18px;
+    background: #fff;
+    color: #172033;
+    box-shadow: 0 20px 60px rgba(24, 31, 56, 0.2);
+}
+
+.jr-notifications-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 1px solid #edf0f6;
+}
+
+.jr-notifications-heading h2 {
+    margin: 0;
+    color: #172033;
+    font-size: 16px;
+    font-weight: 750;
+}
+
+.jr-notifications-heading span {
+    display: block;
+    margin-top: 4px;
+    color: #798197;
+    font-size: 12px;
+}
+
+.jr-notification-tools {
+    display: flex;
+    gap: 6px;
+}
+
+.jr-notification-tools button {
+    width: 32px;
+    height: 32px;
+    display: inline-grid;
+    place-items: center;
+    border: 0;
+    border-radius: 9px;
+    background: #f3f4fa;
+    color: #646d82;
+    cursor: pointer;
+}
+
+.jr-notification-tools button:hover {
+    background: #e9e8ff;
+    color: var(--jr-primary);
+}
+
+.jr-notification-list {
+    max-height: min(420px, 65vh);
+    overflow-y: auto;
+}
+
+.jr-notification-item {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 13px 16px;
+    border: 0;
+    border-bottom: 1px solid #f0f1f5;
+    background: #fff;
+    color: #31394c;
+    cursor: pointer;
+    text-align: left;
+}
+
+.jr-notification-item:hover {
+    background: #f8f8ff;
+}
+
+.jr-notification-item.is-unread {
+    background: #f7f6ff;
+}
+
+.jr-notification-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 auto;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: #a5aabb;
+}
+
+.jr-notification-item.is-unread .jr-notification-dot {
+    background: #6c5ce7;
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.12);
+}
+
+.jr-notification-dot.type-success {
+    background: #16a36a;
+}
+
+.jr-notification-dot.type-error {
+    background: #e5484d;
+}
+
+.jr-notification-content {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.jr-notification-content time {
+    color: #8a91a3;
+    font-size: 11px;
+}
+
+.jr-notifications-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 30px 16px;
+    color: #979db0;
+}
+
+.jr-notifications-empty svg {
+    font-size: 22px;
+}
+
+.jr-notifications-empty p {
+    margin: 0;
+    font-size: 13px;
+}
+
+
+/* =========================================================
    TABLET
 ========================================================= */
 
@@ -1007,6 +1206,28 @@
     .jr-menu-btn {
 
         display: flex;
+        order: 3;
+        margin-left: 0;
+    }
+
+    .jr-logo {
+        order: 1;
+    }
+
+    .jr-header-actions {
+        order: 2;
+        margin-left: auto;
+        gap: 7px;
+    }
+
+    .jr-header-action {
+        width: 42px;
+        height: 42px;
+        border-radius: 13px;
+    }
+
+    .jr-notifications-panel {
+        right: -52px;
     }
 
 
