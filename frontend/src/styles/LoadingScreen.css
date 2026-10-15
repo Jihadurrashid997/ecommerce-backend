@@ -134,13 +134,31 @@
 }
 
 .loading-brand-etop {
+    position: relative;
+    isolation: isolate;
     width: 100%;
     display: flex;
     justify-content: center;
     margin: 0 0 14px;
 }
 
+.loading-brand-etop::before {
+    position: absolute;
+    z-index: -1;
+    inset: -26% -22%;
+    content: "";
+    pointer-events: none;
+    background: radial-gradient(
+        ellipse at center,
+        rgba(1, 4, 14, 0.92) 0%,
+        rgba(2, 8, 23, 0.7) 48%,
+        rgba(3, 8, 20, 0) 78%
+    );
+    filter: blur(12px);
+}
+
 .loading-logo-image {
+    position: relative;
     width: min(370px, 88vw);
     display: block;
     object-fit: contain;
