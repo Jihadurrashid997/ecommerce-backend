@@ -143,6 +143,8 @@ function AppLayout() {
     const authPage =
         location.pathname === "/login" ||
         location.pathname === "/register";
+    const messengerPage =
+        location.pathname === "/messenger";
 
 
   return (
@@ -626,7 +628,7 @@ function AppLayout() {
                 FOOTER
             ================================================== */}
 
-            {!authPage && (
+            {!authPage && !messengerPage && (
                 <Footer />
             )}
 

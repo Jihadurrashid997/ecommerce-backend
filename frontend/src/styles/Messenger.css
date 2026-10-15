@@ -2451,8 +2451,9 @@
 
 .messenger-page:not(.messenger-persistent-background) {
     box-sizing: border-box;
-    height: calc(100vh - 80px);
-    min-height: 520px;
+    height: calc(100vh - 130px);
+    height: calc(100dvh - 130px);
+    min-height: 0;
     gap: 16px;
     padding: 16px 22px 20px;
 }
@@ -2939,8 +2940,8 @@
 
 @media (max-width: 700px) {
     .messenger-page:not(.messenger-persistent-background) {
-        height: calc(100vh - 65px);
-        height: calc(100dvh - 65px);
+        height: calc(100vh - 116px);
+        height: calc(100dvh - 116px);
         min-height: 0;
         gap: 0;
         padding: 0;
