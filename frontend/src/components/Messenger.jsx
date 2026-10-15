@@ -29,6 +29,9 @@ import {
     FaPalette,
     FaCog,
     FaBan,
+    FaThumbtack,
+    FaArchive,
+    FaVolumeMute,
     FaMicrophone,
     FaStop,
     FaTrash,
@@ -433,6 +436,17 @@ const VoiceMessagePlayer = ({ url, own }) => {
    COMPONENT
 ========================================================= */
 
+const ConversationStateIcons = ({ preference = {} }) => (
+    <span className="conversation-state-icons" aria-label="Conversation status">
+        {preference.pinned && (
+            <FaThumbtack title="Pinned chat" aria-label="Pinned chat" />
+        )}
+        {preference.muted && (
+            <FaVolumeMute title="Notifications muted" aria-label="Notifications muted" />
+        )}
+    </span>
+);
+
 const Messenger = ({ isActive = true }) => {
 
     /*
@@ -505,6 +519,15 @@ const Messenger = ({ isActive = true }) => {
 
     const [groups, setGroups] =
         useState([]);
+
+    const [chatPreferences, setChatPreferences] =
+        useState({});
+
+    const [chatPreferencesOwner, setChatPreferencesOwner] =
+        useState(null);
+
+    const [chatListView, setChatListView] =
+        useState("chats");
 
     const [selectedUser, setSelectedUser] =
         useState(null);
@@ -590,6 +613,89 @@ const Messenger = ({ isActive = true }) => {
 
     const [unreadUsers, setUnreadUsers] =
         useState({});
+
+    const chatPreferencesRef =
+        useRef({});
+
+    const updateChatPreference =
+        (conversationId, key, value) => {
+            const id = getId(conversationId);
+
+            if (!id) {
+                return;
+            }
+
+            setChatPreferences(previous => ({
+                ...previous,
+                [id]: {
+                    ...previous[id],
+                    [key]: value
+                }
+            }));
+        };
+
+    const getChatPreference =
+        conversationId =>
+            chatPreferences[getId(conversationId)] || {};
+
+    const isChatMuted =
+        conversationId =>
+            Boolean(
+                chatPreferencesRef.current[getId(conversationId)]?.muted
+            );
+
+    useEffect(() => {
+        const userId = getId(user);
+
+        if (!userId) {
+            setChatPreferences({});
+            setChatPreferencesOwner(null);
+            return;
+        }
+
+        try {
+            const savedPreferences = localStorage.getItem(
+                `jr-messenger-chat-preferences-${userId}`
+            );
+            const parsedPreferences = savedPreferences
+                ? JSON.parse(savedPreferences)
+                : {};
+
+            setChatPreferences(
+                parsedPreferences &&
+                typeof parsedPreferences === "object" &&
+                !Array.isArray(parsedPreferences)
+                    ? parsedPreferences
+                    : {}
+            );
+        } catch (error) {
+            console.error("Messenger chat preferences load error:", error);
+            setChatPreferences({});
+        }
+
+        setChatPreferencesOwner(userId);
+    }, [user]);
+
+    useEffect(() => {
+        chatPreferencesRef.current = chatPreferences;
+    }, [chatPreferences]);
+
+    useEffect(() => {
+        const userId = getId(user);
+
+        if (!userId || chatPreferencesOwner !== userId) {
+            return;
+        }
+
+        try {
+            localStorage.setItem(
+                `jr-messenger-chat-preferences-${userId}`,
+                JSON.stringify(chatPreferences)
+            );
+        } catch (error) {
+            console.error("Messenger chat preferences save error:", error);
+        }
+    }, [chatPreferences, chatPreferencesOwner, user]);
 
     /*
      * Maps userId -> ms timestamp of the most recent
@@ -2844,7 +2950,10 @@ const onReceiveMessage =
             --------------------------------------
             */
 
-            if (settingsRef.current.soundEnabled) {
+            if (
+                settingsRef.current.soundEnabled &&
+                !isChatMuted(senderId)
+            ) {
 
                 showMessageNotification({
 
@@ -2898,7 +3007,10 @@ const onReceiveMessage =
             --------------------------------------
             */
 
-            if (settingsRef.current.soundEnabled) {
+            if (
+                settingsRef.current.soundEnabled &&
+                !isChatMuted(senderId)
+            ) {
 
                 showMessageNotification({
 
@@ -2979,7 +3091,10 @@ const onReceiveMessage =
                     [groupId]: (previous[groupId] || 0) + 1
                 }));
 
-                if (settingsRef.current.soundEnabled) {
+                if (
+                    settingsRef.current.soundEnabled &&
+                    !isChatMuted(groupId)
+                ) {
                     showMessageNotification({
                         senderName:
                             incoming.senderName ||
@@ -6245,6 +6360,14 @@ const onCallMissed =
 
                 return [...users].sort(
                     (a, b) => {
+                        const pinnedA =
+                            chatPreferences[getId(a)]?.pinned ? 1 : 0;
+                        const pinnedB =
+                            chatPreferences[getId(b)]?.pinned ? 1 : 0;
+
+                        if (pinnedA !== pinnedB) {
+                            return pinnedB - pinnedA;
+                        }
 
                         const timeA =
                             recentTimestamps[
@@ -6264,7 +6387,8 @@ const onCallMissed =
             },
             [
                 users,
-                recentTimestamps
+                recentTimestamps,
+                chatPreferences
             ]
         );
 
@@ -6279,13 +6403,18 @@ const onCallMissed =
                         .toLowerCase();
 
 
-                if (!term) {
-                    return sortedUsers;
-                }
-
-
                 return sortedUsers.filter(
                     target => {
+                        const archived =
+                            Boolean(chatPreferences[getId(target)]?.archived);
+
+                        if (archived !== (chatListView === "archived")) {
+                            return false;
+                        }
+
+                        if (!term) {
+                            return true;
+                        }
 
                         const name =
                             getUserName(
@@ -6323,7 +6452,9 @@ const onCallMissed =
             },
             [
                 sortedUsers,
-                search
+                search,
+                chatPreferences,
+                chatListView
             ]
         );
 
@@ -6333,14 +6464,33 @@ const onCallMissed =
                 const term =
                     search.trim().toLowerCase();
 
-                return groups.filter(group =>
-                    !term ||
-                    getUserName(group).toLowerCase().includes(term)
-                );
+                return groups
+                    .filter(group => {
+                        const archived =
+                            Boolean(chatPreferences[getId(group)]?.archived);
+
+                        return (
+                            archived === (chatListView === "archived") &&
+                            (!term ||
+                                getUserName(group)
+                                    .toLowerCase()
+                                    .includes(term))
+                        );
+                    })
+                    .sort((a, b) => {
+                        const pinnedA =
+                            chatPreferences[getId(a)]?.pinned ? 1 : 0;
+                        const pinnedB =
+                            chatPreferences[getId(b)]?.pinned ? 1 : 0;
+
+                        return pinnedB - pinnedA;
+                    });
             },
             [
                 groups,
-                search
+                search,
+                chatPreferences,
+                chatListView
             ]
         );
 
@@ -7155,6 +7305,24 @@ const onCallMissed =
 
                 </div>
 
+                <div className="messenger-chat-filters" aria-label="Conversation list">
+                    <button
+                        type="button"
+                        aria-pressed={chatListView === "chats"}
+                        className={chatListView === "chats" ? "active" : ""}
+                        onClick={() => setChatListView("chats")}
+                    >
+                        Chats
+                    </button>
+                    <button
+                        type="button"
+                        aria-pressed={chatListView === "archived"}
+                        className={chatListView === "archived" ? "active" : ""}
+                        onClick={() => setChatListView("archived")}
+                    >
+                        Archived
+                    </button>
+                </div>
 
                 <div className="user-list">
 
@@ -7190,6 +7358,9 @@ const onCallMissed =
                                         <div className="chat-user-content">
                                             <div className="chat-user-top">
                                                 <strong>{getUserName(group)}</strong>
+                                                <ConversationStateIcons
+                                                    preference={getChatPreference(groupId)}
+                                                />
                                             </div>
                                             <div className="chat-user-bottom">
                                                 <span>
@@ -7217,11 +7388,15 @@ const onCallMissed =
                             <FaUserCircle />
 
                             <p>
-                                No users found
+                                {chatListView === "archived"
+                                    ? "No archived chats"
+                                    : "No conversations found"}
                             </p>
 
                             <small>
-                                Try another name or email
+                                {chatListView === "archived"
+                                    ? "Chats you archive will appear here."
+                                    : "Try another name or email"}
                             </small>
 
                         </div>
@@ -7295,6 +7470,9 @@ const onCallMissed =
                                                         <VerifiedBadge className="verified-badge-small" />
                                                     )}
                                                 </strong>
+                                                <ConversationStateIcons
+                                                    preference={getChatPreference(id)}
+                                                />
 
                                             </div>
 
@@ -7609,6 +7787,65 @@ const onCallMissed =
 
                             {showMenu && (
                                 <div className="chat-options-menu">
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            updateChatPreference(
+                                                selectedUser,
+                                                "pinned",
+                                                !getChatPreference(selectedUser).pinned
+                                            );
+                                            setShowMenu(false);
+                                        }}
+                                    >
+                                        <FaThumbtack />
+                                        {getChatPreference(selectedUser).pinned
+                                            ? "Unpin chat"
+                                            : "Pin chat"}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const shouldArchive =
+                                                !getChatPreference(selectedUser).archived;
+
+                                            updateChatPreference(
+                                                selectedUser,
+                                                "archived",
+                                                shouldArchive
+                                            );
+
+                                            if (!shouldArchive) {
+                                                setChatListView("chats");
+                                            }
+
+                                            setShowMenu(false);
+                                        }}
+                                    >
+                                        <FaArchive />
+                                        {getChatPreference(selectedUser).archived
+                                            ? "Unarchive chat"
+                                            : "Archive chat"}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            updateChatPreference(
+                                                selectedUser,
+                                                "muted",
+                                                !getChatPreference(selectedUser).muted
+                                            );
+                                            setShowMenu(false);
+                                        }}
+                                    >
+                                        <FaVolumeMute />
+                                        {getChatPreference(selectedUser).muted
+                                            ? "Unmute notifications"
+                                            : "Mute notifications"}
+                                    </button>
 
                                     <button
                                         type="button"

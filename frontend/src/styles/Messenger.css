@@ -54,6 +54,42 @@
     z-index: 5;
 }
 
+.messenger-chat-filters {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px 4px;
+}
+
+.messenger-chat-filters button {
+    min-height: 34px;
+    padding: 0 14px;
+    border: 0;
+    border-radius: 18px;
+    background: #f0f2f5;
+    color: #536070;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.messenger-chat-filters button.active {
+    background: #e7f3ff;
+    color: #0866ff;
+}
+
+.conversation-state-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 7px;
+    color: #748094;
+    font-size: 11px;
+}
+
+.conversation-state-icons svg {
+    flex: 0 0 auto;
+}
+
 
 .messenger-sidebar-header {
     padding: 24px 22px 16px;
