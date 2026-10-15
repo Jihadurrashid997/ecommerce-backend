@@ -9351,7 +9351,8 @@ const onCallMissed =
 
                                 <button
                                     type="button"
-                                    title="Attach file"
+                                    title="Attach image, audio, or document"
+                                    aria-label="Attach image, audio, or document"
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked ||
@@ -9418,7 +9419,8 @@ const onCallMissed =
                                             getChatPreference(selectedUser).encrypted
                                         )
                                     }
-                                    accept="image/*,.pdf,.doc,.docx,.txt,.zip"
+                                    accept="image/*,audio/*,.pdf,.doc,.docx,.txt,.zip"
+                                    aria-label="Attach an image, audio, or document"
                                     onChange={
                                         handleFile
                                     }
