@@ -16,9 +16,9 @@ import {
     FaSmile,
     FaPaperclip,
     FaEllipsisH,
+    FaBell,
     FaPhone,
     FaVideo,
-    FaInfoCircle,
     FaArrowLeft,
     FaCheck,
     FaCheckDouble,
@@ -698,6 +698,13 @@ const Messenger = ({ isActive = true }) => {
     const [showMenu, setShowMenu] =
         useState(false);
 
+    const [notificationPermission, setNotificationPermission] =
+        useState(
+            typeof Notification === "undefined"
+                ? "unsupported"
+                : Notification.permission
+        );
+
     /*
      * In-conversation message search ("premium" feature):
      * lets the user find old messages inside the currently
@@ -1084,12 +1091,13 @@ useEffect(() => {
        NOTIFICATION
     ===================================================== */
 
-    useEffect(() => {
+    const enableNotifications = async () => {
+        const permission =
+            await requestNotificationPermission();
 
-        requestNotificationPermission()
-            .catch(() => {});
-
-    }, []);
+        setNotificationPermission(permission);
+        setShowMenu(false);
+    };
 
 
     /* =====================================================
@@ -7379,6 +7387,7 @@ const onCallMissed =
 
                                 <button
                                     type="button"
+                                    className="chat-search-button"
                                     title="Search in conversation"
                                     onClick={() => {
 
@@ -7403,6 +7412,7 @@ const onCallMissed =
 
                                 <button
                                     type="button"
+                                    className="chat-background-button"
                                     title="Chat background"
                                     onClick={() => {
 
@@ -7418,6 +7428,37 @@ const onCallMissed =
                                     }}
                                 >
                                     <FaPalette />
+                                </button>
+
+
+                                <button
+                                    type="button"
+                                    disabled={notificationPermission === "unsupported"}
+                                    className={
+                                        notificationPermission === "granted"
+                                            ? "notification-enabled"
+                                            : notificationPermission === "denied"
+                                                ? "notification-denied"
+                                            : ""
+                                    }
+                                    aria-label={
+                                        notificationPermission === "granted"
+                                            ? "Notifications are enabled"
+                                            : "Enable message and call notifications"
+                                    }
+                                    aria-pressed={notificationPermission === "granted"}
+                                    title={
+                                        notificationPermission === "unsupported"
+                                            ? "Notifications are not supported in this browser"
+                                            : notificationPermission === "granted"
+                                                ? "Notifications are enabled"
+                                                : notificationPermission === "denied"
+                                                    ? "Allow notifications in your browser settings"
+                                                    : "Enable message and call notifications"
+                                    }
+                                    onClick={enableNotifications}
+                                >
+                                    <FaBell />
                                 </button>
 
 
@@ -7448,11 +7489,9 @@ const onCallMissed =
 
                                     <button
                                         type="button"
-                                        onClick={() =>
-                                            requestNotificationPermission()
-                                        }
+                                        onClick={enableNotifications}
                                     >
-                                        <FaInfoCircle />
+                                        <FaBell />
                                         Notifications
                                     </button>
 
