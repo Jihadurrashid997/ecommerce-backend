@@ -48,6 +48,23 @@
     font-size: 12px;
 }
 
+.group-call-encryption-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.group-call-encryption-status.is-encrypted {
+    color: #86efac;
+}
+
+.group-call-encryption-status.is-unencrypted {
+    color: #fbbf24;
+}
+
 .group-call-close,
 .group-call-controls button {
     width: 46px;

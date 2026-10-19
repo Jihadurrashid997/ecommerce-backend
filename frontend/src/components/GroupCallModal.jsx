@@ -7,7 +7,15 @@ import {
     RoomEvent,
     Track
 } from "livekit-client";
-import { FaMicrophone, FaMicrophoneSlash, FaPhoneSlash, FaVideo, FaVideoSlash } from "react-icons/fa";
+import {
+    FaExclamationTriangle,
+    FaLock,
+    FaMicrophone,
+    FaMicrophoneSlash,
+    FaPhoneSlash,
+    FaVideo,
+    FaVideoSlash
+} from "react-icons/fa";
 import api from "../services/api";
 import {
     createGroupCallKeyEnvelopes,
@@ -32,6 +40,7 @@ const GroupCallModal = ({
     const [revision, setRevision] = useState(0);
     const [status, setStatus] = useState("Connecting to group call...");
     const [error, setError] = useState("");
+    const [callEncrypted, setCallEncrypted] = useState(false);
     const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
     const [cameraEnabled, setCameraEnabled] = useState(type === "video");
 
@@ -49,6 +58,11 @@ const GroupCallModal = ({
         let cancelled = false;
         let callRoom;
         let encryptionWorker;
+        const terminateEncryptionWorker = () => {
+            encryptionWorker?.terminate();
+            encryptionWorker = null;
+            workerRef.current = null;
+        };
 
         const connect = async () => {
             try {
@@ -193,6 +207,9 @@ const GroupCallModal = ({
                     .on(RoomEvent.Disconnected, () => {
                         if (!cancelled) {
                             setStatus("Call disconnected");
+                            setRoom(null);
+                            setParticipants([]);
+                            setCallEncrypted(false);
                         }
                     })
                     .on(RoomEvent.EncryptionError, encryptionError => {
@@ -208,12 +225,15 @@ const GroupCallModal = ({
                             "End-to-end encryption failed. The call has been disconnected to protect your media."
                         );
                         setStatus("Encryption error");
+                        setRoom(null);
+                        setParticipants([]);
+                        setCallEncrypted(false);
                         void callRoom.disconnect().catch(disconnectError => {
                             console.error(
                                 "Group call disconnect after encryption error:",
                                 disconnectError
                             );
-                        });
+                        }).finally(terminateEncryptionWorker);
                     });
 
                 await callRoom.connect(data.serverUrl, data.token);
@@ -245,6 +265,7 @@ const GroupCallModal = ({
 
                 if (!cancelled) {
                     setStatus("Connected");
+                    setCallEncrypted(encryptedCall);
                     refreshParticipants();
                     onConnectedRef.current?.();
                 }
@@ -272,8 +293,7 @@ const GroupCallModal = ({
                         );
                     }
                 }
-                encryptionWorker?.terminate();
-                workerRef.current = null;
+                terminateEncryptionWorker();
             }
         };
 
@@ -295,13 +315,9 @@ const GroupCallModal = ({
                             disconnectError
                         );
                     })
-                    .finally(() => {
-                        workerRef.current?.terminate();
-                        workerRef.current = null;
-                    });
+                    .finally(terminateEncryptionWorker);
             } else {
-                workerRef.current?.terminate();
-                workerRef.current = null;
+                terminateEncryptionWorker();
             }
             roomRef.current = null;
         };
@@ -337,6 +353,26 @@ const GroupCallModal = ({
                     <div>
                         <h2>{groupName}</h2>
                         <p>{participants.length} in call · {status}</p>
+                        {status === "Connected" && (
+                            <span
+                                className={`group-call-encryption-status ${
+                                    callEncrypted ? "is-encrypted" : "is-unencrypted"
+                                }`}
+                                role="status"
+                                aria-label={
+                                    callEncrypted
+                                        ? "End-to-end encrypted group call"
+                                        : "Group call is not end-to-end encrypted"
+                                }
+                            >
+                                {callEncrypted
+                                    ? <FaLock aria-hidden="true" />
+                                    : <FaExclamationTriangle aria-hidden="true" />}
+                                {callEncrypted
+                                    ? "End-to-end encrypted"
+                                    : "Not end-to-end encrypted"}
+                            </span>
+                        )}
                     </div>
                     <button type="button" className="group-call-close" onClick={onClose} aria-label="Leave call">
                         <FaPhoneSlash />
