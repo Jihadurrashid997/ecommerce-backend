@@ -490,6 +490,9 @@ const CallModal = ({
 
         <div
             className="messenger-call-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${isIncoming ? "Incoming" : "Active"} ${isVideo ? "video" : "voice"} call`}
             style={{
                 position: "fixed",
                 inset: 0,
@@ -499,7 +502,7 @@ const CallModal = ({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                padding: 16
+                padding: "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))"
             }}
         >
 
@@ -525,8 +528,9 @@ const CallModal = ({
                     width:
                         "min(560px,100%)",
                     height:
-                        "min(720px,92vh)",
-                    minHeight: 480,
+                        "min(720px, calc(var(--messenger-viewport-height, 100dvh) - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))))",
+                    minHeight:
+                        "min(480px, calc(var(--messenger-viewport-height, 100dvh) - max(16px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))))",
                     position: "relative",
                     overflow: "hidden",
                     borderRadius: 26,
