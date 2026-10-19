@@ -38,8 +38,6 @@ import {
     FaMicrophone,
     FaStop,
     FaTrash,
-    FaPlay,
-    FaPause,
     FaReply,
     FaShare,
     FaCheckCircle,
@@ -77,6 +75,10 @@ import {
     createLocationMessage,
     parseLocationMessage
 } from "../services/messengerLocation";
+import {
+    finishVoiceRecording,
+    startVoiceRecording
+} from "../services/voiceRecorder";
 
 import socket, {
     connectSocket
@@ -101,6 +103,9 @@ import {
 import CallModal from "./CallModal";
 import GroupCallModal from "./GroupCallModal";
 import VerifiedBadge from "./VerifiedBadge";
+import VoiceMessagePlayer, {
+    formatDuration
+} from "./VoiceMessagePlayer";
 
 import "../styles/Messenger.css";
 import "../styles/VerifiedBadge.css";
@@ -284,209 +289,6 @@ const getMessageId = (item) => {
 
 };
 
-
-const formatDuration = seconds => {
-
-    const total =
-        Math.max(
-            0,
-            Math.floor(seconds || 0)
-        );
-
-    const mins =
-        Math.floor(total / 60);
-
-    const secs =
-        total % 60;
-
-    return `${mins}:${
-        String(secs).padStart(2, "0")
-    }`;
-
-};
-
-
-/* =========================================================
-   VOICE MESSAGE PLAYER
-
-   Compact play/pause + progress bar + duration player for
-   voice-message bubbles.
-========================================================= */
-
-const VoiceMessagePlayer = ({ url, own }) => {
-
-    const audioRef =
-        useRef(null);
-
-    const [playing, setPlaying] =
-        useState(false);
-
-    const [duration, setDuration] =
-        useState(0);
-
-    const [currentTime, setCurrentTime] =
-        useState(0);
-
-    useEffect(() => {
-
-        const audio =
-            audioRef.current;
-
-        if (!audio) {
-            return undefined;
-        }
-
-        const onLoadedMetadata = () => {
-
-            if (
-                Number.isFinite(audio.duration)
-            ) {
-
-                setDuration(audio.duration);
-
-            }
-
-        };
-
-        const onTimeUpdate = () => {
-
-            setCurrentTime(audio.currentTime);
-
-        };
-
-        const onEnded = () => {
-
-            setPlaying(false);
-
-            setCurrentTime(0);
-
-        };
-
-        audio.addEventListener("loadedmetadata", onLoadedMetadata);
-        audio.addEventListener("timeupdate", onTimeUpdate);
-        audio.addEventListener("ended", onEnded);
-
-        return () => {
-
-            audio.removeEventListener("loadedmetadata", onLoadedMetadata);
-            audio.removeEventListener("timeupdate", onTimeUpdate);
-            audio.removeEventListener("ended", onEnded);
-
-        };
-
-    }, []);
-
-    const togglePlay = () => {
-
-        const audio =
-            audioRef.current;
-
-        if (!audio) {
-            return;
-        }
-
-        if (playing) {
-
-            audio.pause();
-
-            setPlaying(false);
-
-        } else {
-
-            audio.play()
-                .then(() => setPlaying(true))
-                .catch(
-                    error =>
-                        console.error(
-                            "Voice playback error:",
-                            error
-                        )
-                );
-
-        }
-
-    };
-
-    const progressPercent =
-        duration > 0
-            ? (currentTime / duration) * 100
-            : 0;
-
-    const handleSeek = event => {
-
-        const audio =
-            audioRef.current;
-
-        if (!audio || !duration) {
-            return;
-        }
-
-        const rect =
-            event.currentTarget.getBoundingClientRect();
-
-        const ratio =
-            Math.min(
-                1,
-                Math.max(
-                    0,
-                    (event.clientX - rect.left) / rect.width
-                )
-            );
-
-        audio.currentTime =
-            ratio * duration;
-
-        setCurrentTime(audio.currentTime);
-
-    };
-
-    return (
-        <div
-            className={
-                `voice-message-player ${own ? "own" : ""}`
-            }
-        >
-
-            <audio
-                ref={audioRef}
-                src={url}
-                preload="metadata"
-            />
-
-            <button
-                type="button"
-                className="voice-play-btn"
-                onClick={togglePlay}
-            >
-                {playing ? <FaPause /> : <FaPlay />}
-            </button>
-
-            <div
-                className="voice-progress-track"
-                onClick={handleSeek}
-            >
-                <div
-                    className="voice-progress-fill"
-                    style={{
-                        width: `${progressPercent}%`
-                    }}
-                />
-            </div>
-
-            <span className="voice-duration">
-                {formatDuration(
-                    duration > 0
-                        ? (playing || currentTime
-                            ? duration - currentTime
-                            : duration)
-                        : 0
-                )}
-            </span>
-
-        </div>
-    );
-
-};
 
 const EncryptedMediaAttachment = ({ url, media, own }) => {
     const [objectUrl, setObjectUrl] = useState("");
@@ -1506,6 +1308,9 @@ const Messenger = ({ isActive = true }) => {
     const [sendingVoice, setSendingVoice] =
         useState(false);
 
+    const [startingVoiceRecording, setStartingVoiceRecording] =
+        useState(false);
+
     const [messengerToast, setMessengerToast] =
         useState(null);
 
@@ -1548,6 +1353,12 @@ const Messenger = ({ isActive = true }) => {
 
     const recordingTimerRef =
         useRef(null);
+
+    const recordingStartRef =
+        useRef(false);
+
+    const finishingVoiceRef =
+        useRef(false);
 
     const updateSetting =
         (key, value) => {
@@ -6694,8 +6505,6 @@ const onCallMissed =
                 return;
             }
 
-            setSendingVoice(true);
-
             try {
 
                 const mimeType =
@@ -6707,8 +6516,15 @@ const onCallMissed =
                 const extension =
                     mimeType.includes("mp4")
                         ? "m4a"
+                        : mimeType.includes("aac")
+                        ? "aac"
                         : mimeType.includes("ogg")
                         ? "ogg"
+                        : mimeType.includes("mpeg") ||
+                          mimeType.includes("mp3")
+                        ? "mp3"
+                        : mimeType.includes("wav")
+                        ? "wav"
                         : "webm";
 
                 const file =
@@ -6736,10 +6552,6 @@ const onCallMissed =
                         error.message ||
                         "Voice note could not be sent."
                 );
-
-            } finally {
-
-                setSendingVoice(false);
 
             }
 
@@ -6775,57 +6587,28 @@ const onCallMissed =
 
             if (
                 !selectedUser ||
-                isConversationBlocked
+                isConversationBlocked ||
+                recordingStreamRef.current ||
+                recordingStartRef.current
             ) {
                 return;
             }
 
+            recordingStartRef.current = true;
+            setStartingVoiceRecording(true);
             try {
 
-                const stream =
-                    await navigator.mediaDevices.getUserMedia({
-                        audio: true
-                    });
-
-                recordingStreamRef.current = stream;
-
-                recordedChunksRef.current = [];
-
-                const mimeType =
-                    [
-                        "audio/webm;codecs=opus",
-                        "audio/webm",
-                        "audio/mp4"
-                    ].find(
-                        type =>
-                            window.MediaRecorder
-                                ?.isTypeSupported?.(type)
-                    ) || "";
-
-                const recorder =
-                    mimeType
-                        ? new MediaRecorder(stream, { mimeType })
-                        : new MediaRecorder(stream);
-
-                recorder.ondataavailable =
-                    event => {
-
-                        if (
-                            event.data &&
-                            event.data.size > 0
-                        ) {
-
-                            recordedChunksRef.current.push(
-                                event.data
-                            );
-
-                        }
-
-                    };
-
+                const recording = await startVoiceRecording({
+                    getUserMedia:
+                        navigator.mediaDevices?.getUserMedia?.bind(
+                            navigator.mediaDevices
+                        ),
+                    MediaRecorderClass: window.MediaRecorder
+                });
+                recordingStreamRef.current = recording.stream;
+                recordedChunksRef.current = recording.chunks;
+                const recorder = recording.recorder;
                 mediaRecorderRef.current = recorder;
-
-                recorder.start();
 
                 setIsRecording(true);
 
@@ -6845,72 +6628,61 @@ const onCallMissed =
 
             } catch (error) {
 
+                stopRecordingTracks();
+
                 console.error(
                     "Start recording error:",
                     error
                 );
 
                 showMessengerToast(
-                    "Allow microphone access to record a voice note."
+                    error.name === "NotSupportedError"
+                        ? error.message
+                        : "Allow microphone access to record a voice note."
                 );
+
+            } finally {
+
+                recordingStartRef.current = false;
+                setStartingVoiceRecording(false);
 
             }
 
         };
 
 
-    const finishRecording =
-        () =>
-            new Promise(resolve => {
-
-                const recorder =
-                    mediaRecorderRef.current;
-
-                if (!recorder) {
-
-                    resolve(null);
-
-                    return;
-
-                }
-
-                recorder.onstop =
-                    () => {
-
-                        const blob =
-                            new Blob(
-                                recordedChunksRef.current,
-                                {
-                                    type:
-                                        recorder.mimeType ||
-                                        "audio/webm"
-                                }
-                            );
-
-                        resolve(blob);
-
-                    };
-
-                recorder.stop();
-
-            });
+    const finishRecording = () =>
+        finishVoiceRecording(
+            mediaRecorderRef.current,
+            recordedChunksRef.current
+        );
 
 
     const stopAndSendRecording =
         async () => {
 
-            const blob =
-                await finishRecording();
+            if (finishingVoiceRef.current) {
+                return;
+            }
 
-            stopRecordingTracks();
-
-            if (
-                blob &&
-                blob.size > 0
-            ) {
-
-                await uploadVoiceMessage(blob);
-
+            finishingVoiceRef.current = true;
+            setSendingVoice(true);
+            try {
+                const blob = await finishRecording();
+                stopRecordingTracks();
+                if (blob?.size > 0) {
+                    await uploadVoiceMessage(blob);
+                }
+            } catch (error) {
+                stopRecordingTracks();
+                console.error("Finish voice recording error:", error);
+                showMessengerToast(
+                    error.message || "Voice note could not be sent."
+                );
+            } finally {
+                recordedChunksRef.current = [];
+                setSendingVoice(false);
+                finishingVoiceRef.current = false;
             }
 
         };
@@ -10423,6 +10195,7 @@ const onCallMissed =
                                     title="Record voice message"
                                     disabled={
                                         sendingVoice ||
+                                        startingVoiceRecording ||
                                         !selectedUser ||
                                         isConversationBlocked
                                     }

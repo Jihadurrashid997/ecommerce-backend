@@ -1159,6 +1159,70 @@
     background: rgba(255, 255, 255, 0.18);
 }
 
+.voice-message-player {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    min-width: 210px;
+    max-width: 280px;
+    margin: 4px 0;
+}
+
+.voice-message-player audio {
+    display: none;
+}
+
+.voice-message-player .voice-play-btn {
+    display: inline-flex;
+    flex: 0 0 36px;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+}
+
+.voice-progress-track {
+    flex: 1;
+    min-width: 35px;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(108, 92, 231, 0.18);
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.voice-progress-track:focus-visible {
+    outline: 2px solid #6c5ce7;
+    outline-offset: 3px;
+}
+
+.voice-progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    transition: width 100ms linear;
+}
+
+.voice-duration {
+    min-width: 34px;
+    color: inherit;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.voice-playback-error {
+    flex-basis: 100%;
+    color: #b91c1c;
+    font-size: 12px;
+}
+
 .message-location-card {
     display: flex;
     align-items: flex-start;
