@@ -1,16 +1,30 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
     createLocalTracks,
+    ExternalE2EEKeyProvider,
+    isE2EESupported,
     Room,
     RoomEvent,
     Track
 } from "livekit-client";
 import { FaMicrophone, FaMicrophoneSlash, FaPhoneSlash, FaVideo, FaVideoSlash } from "react-icons/fa";
 import api from "../services/api";
+import {
+    createGroupCallKeyEnvelopes,
+    ensureMessengerIdentity,
+    unwrapGroupCallKey
+} from "../services/messengerEncryption";
 import "../styles/GroupCallModal.css";
 
-const GroupCallModal = ({ group, type = "audio", onClose, onConnected }) => {
+const GroupCallModal = ({
+    group,
+    currentUser,
+    type = "audio",
+    onClose,
+    onConnected
+}) => {
     const roomRef = useRef(null);
+    const workerRef = useRef(null);
     const onConnectedRef = useRef(onConnected);
     const [room, setRoom] = useState(null);
     const [participants, setParticipants] = useState([]);
@@ -22,6 +36,9 @@ const GroupCallModal = ({ group, type = "audio", onClose, onConnected }) => {
 
     const groupId = String(group?._id || group?.id || "");
     const groupName = group?.name || "Group call";
+    const currentUserId = String(
+        currentUser?._id || currentUser?.id || currentUser?.userId || ""
+    );
 
     useEffect(() => {
         onConnectedRef.current = onConnected;
@@ -30,6 +47,7 @@ const GroupCallModal = ({ group, type = "audio", onClose, onConnected }) => {
     useEffect(() => {
         let cancelled = false;
         let callRoom;
+        let encryptionWorker;
 
         const connect = async () => {
             try {
@@ -45,11 +63,117 @@ const GroupCallModal = ({ group, type = "audio", onClose, onConnected }) => {
                     );
                 }
 
+                let encryptionOptions;
+                let encryptedCall = Boolean(data.isEncrypted);
+                let keyResponse;
+
+                try {
+                    keyResponse = await api.get(
+                        `/groups/${groupId}/call-key`
+                    );
+                    encryptedCall = true;
+                } catch (keyError) {
+                    if (keyError.response?.status === 404) {
+                        encryptedCall = true;
+                    } else if (
+                        keyError.response?.data?.code !==
+                            "GROUP_CALL_E2EE_DISABLED" ||
+                        encryptedCall
+                    ) {
+                        throw keyError;
+                    }
+                }
+
+                if (encryptedCall) {
+                    if (!isE2EESupported()) {
+                        throw new Error(
+                            "This browser cannot provide end-to-end encrypted group calls. Update your browser or use a supported device; this group call will not fall back to an unencrypted connection."
+                        );
+                    }
+
+                    if (!currentUserId) {
+                        throw new Error(
+                            "Your account could not be verified for this encrypted group call."
+                        );
+                    }
+
+                    const identity = await ensureMessengerIdentity(
+                        api,
+                        currentUserId
+                    );
+
+                    if (!keyResponse) {
+                        const callKey = await createGroupCallKeyEnvelopes({
+                            api,
+                            groupId,
+                            userId: currentUserId,
+                            participants: data.participants || [],
+                            identity
+                        });
+                        keyResponse = await api.post(
+                            `/groups/${groupId}/call-key`,
+                            {
+                                keyId: callKey.keyId,
+                                envelopes: callKey.envelopes
+                            }
+                        );
+                    }
+
+                    const keyData = keyResponse.data?.data;
+                    if (
+                        !keyData?.keyId ||
+                        !keyData?.senderId ||
+                        !keyData?.envelope
+                    ) {
+                        throw new Error(
+                            keyResponse.data?.message ||
+                            "The encrypted group call key could not be loaded."
+                        );
+                    }
+
+                    let rawKey;
+                    try {
+                        rawKey = await unwrapGroupCallKey({
+                            api,
+                            groupId,
+                            userId: currentUserId,
+                            senderId: keyData.senderId,
+                            keyId: keyData.keyId,
+                            envelope: keyData.envelope,
+                            identity
+                        });
+                    } catch (keyError) {
+                        throw new Error(
+                            `Could not unlock this encrypted group call key: ${keyError.message}`
+                        );
+                    }
+                    const keyProvider = new ExternalE2EEKeyProvider();
+                    await keyProvider.setKey(rawKey);
+                    encryptionWorker = new Worker(
+                        new URL(
+                            "livekit-client/e2ee-worker",
+                            import.meta.url
+                        )
+                    );
+                    workerRef.current = encryptionWorker;
+                    encryptionOptions = {
+                        keyProvider,
+                        worker: encryptionWorker
+                    };
+                }
+
                 callRoom = new Room({
                     adaptiveStream: true,
-                    dynacast: true
+                    dynacast: true,
+                    ...(encryptionOptions
+                        ? { encryption: encryptionOptions }
+                        : {})
                 });
                 roomRef.current = callRoom;
+
+                if (encryptedCall) {
+                    await callRoom.setE2EEEnabled(true);
+                }
 
                 const refreshParticipants = () => {
                     if (cancelled) {
@@ -74,6 +198,26 @@ const GroupCallModal = ({ group, type = "audio", onClose, onConnected }) => {
                         if (!cancelled) {
                             setStatus("Call disconnected");
                         }
+                    })
+                    .on(RoomEvent.EncryptionError, encryptionError => {
+                        if (!encryptedCall || cancelled) {
+                            return;
+                        }
+
+                        console.error(
+                            "Group call encryption error:",
+                            encryptionError
+                        );
+                        setError(
+                            "End-to-end encryption failed. The call has been disconnected to protect your media."
+                        );
+                        setStatus("Encryption error");
+                        void callRoom.disconnect().catch(disconnectError => {
+                            console.error(
+                                "Group call disconnect after encryption error:",
+                                disconnectError
+                            );
+                        });
                     });
 
                 await callRoom.connect(data.serverUrl, data.token);
@@ -112,6 +256,8 @@ const GroupCallModal = ({ group, type = "audio", onClose, onConnected }) => {
                 console.error("Group call connection error:", callError);
 
                 if (!cancelled) {
+                    setRoom(null);
+                    setParticipants([]);
                     setError(
                         callError?.response?.data?.message ||
                         callError?.message ||
@@ -121,8 +267,17 @@ const GroupCallModal = ({ group, type = "audio", onClose, onConnected }) => {
                 }
 
                 if (callRoom) {
-                    await callRoom.disconnect();
+                    try {
+                        await callRoom.disconnect();
+                    } catch (disconnectError) {
+                        console.error(
+                            "Group call disconnect after failure:",
+                            disconnectError
+                        );
+                    }
                 }
+                encryptionWorker?.terminate();
+                workerRef.current = null;
             }
         };
 
@@ -137,11 +292,24 @@ const GroupCallModal = ({ group, type = "audio", onClose, onConnected }) => {
         return () => {
             cancelled = true;
             if (callRoom) {
-                callRoom.disconnect();
+                void callRoom.disconnect()
+                    .catch(disconnectError => {
+                        console.error(
+                            "Group call disconnect during cleanup:",
+                            disconnectError
+                        );
+                    })
+                    .finally(() => {
+                        workerRef.current?.terminate();
+                        workerRef.current = null;
+                    });
+            } else {
+                workerRef.current?.terminate();
+                workerRef.current = null;
             }
             roomRef.current = null;
         };
-    }, [groupId, type]);
+    }, [currentUserId, groupId, type]);
 
     const toggleMicrophone = async () => {
         const nextValue = !microphoneEnabled;

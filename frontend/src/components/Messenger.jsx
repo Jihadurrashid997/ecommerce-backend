@@ -10819,6 +10819,7 @@ const onCallMissed =
             {activeGroupCall && (
                 <GroupCallModal
                     group={activeGroupCall.group}
+                    currentUser={user}
                     type={activeGroupCall.type}
                     onConnected={announceGroupCall}
                     onClose={() => setActiveGroupCall(null)}

@@ -4,6 +4,7 @@ const Post = require("../models/Post");
 const Message = require("../models/Message");
 const messageController = require("../controllers/messageController");
 const GroupConversation = require("../models/GroupConversation");
+const GroupCallKey = require("../models/GroupCallKey");
 const groupController = require("../controllers/groupController");
 const User = require("../models/User");
 const adminControlController = require("../controllers/adminControlController");
@@ -1179,7 +1180,9 @@ test("group call tokens are scoped to the authorized group and user", async () =
             });
             return {
                 _id: OTHER_USER_ID,
-                name: "Weekend plans"
+                name: "Weekend plans",
+                isEncrypted: false,
+                participants: [TEST_USER_ID, OTHER_USER_ID]
             };
         }
     });
@@ -1208,6 +1211,11 @@ test("group call tokens are scoped to the authorized group and user", async () =
         assert.equal(response.body.data.serverUrl, "wss://calls.example.com");
         assert.equal(response.body.data.roomName, `group-${OTHER_USER_ID}`);
         assert.equal(response.body.data.groupName, "Weekend plans");
+        assert.equal(response.body.data.isEncrypted, false);
+        assert.deepEqual(
+            response.body.data.participants,
+            [TEST_USER_ID, OTHER_USER_ID]
+        );
 
         const claims = jwt.verify(response.body.data.token, secret);
         assert.equal(claims.sub, TEST_USER_ID);
@@ -1226,6 +1234,102 @@ test("group call tokens are scoped to the authorized group and user", async () =
         else process.env.LIVEKIT_API_KEY = originalKey;
         if (originalSecret === undefined) delete process.env.LIVEKIT_API_SECRET;
         else process.env.LIVEKIT_API_SECRET = originalSecret;
+    }
+});
+
+test("encrypted group call key setup stores only per-member envelopes", async () => {
+    const originalGroupFindOne = GroupConversation.findOne;
+    const originalKeyFindOne = GroupCallKey.findOne;
+    const originalKeyCreate = GroupCallKey.create;
+    const response = makeResponse();
+    let storedKey;
+    const participants = [TEST_USER_ID, OTHER_USER_ID];
+    const envelopes = participants.map(userId => ({
+        userId,
+        iv: "A".repeat(16),
+        wrappedKey: "B".repeat(64)
+    }));
+
+    GroupConversation.findOne = filter => ({
+        select: async () => {
+            assert.deepEqual(filter, {
+                _id: OTHER_USER_ID,
+                participants: TEST_USER_ID
+            });
+            return {
+                isEncrypted: true,
+                participants
+            };
+        }
+    });
+    GroupCallKey.findOne = async () => null;
+    GroupCallKey.create = async key => {
+        storedKey = key;
+        return {
+            ...key,
+            _id: "507f191e810c19729de860ef",
+            envelopes: key.envelopes.map(envelope => ({
+                ...envelope,
+                userId: envelope.userId
+            }))
+        };
+    };
+
+    try {
+        await groupController.createGroupCallKey(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID },
+                body: {
+                    keyId: "C".repeat(22),
+                    envelopes
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.data.senderId, TEST_USER_ID);
+        assert.equal(response.body.data.envelope.iv, "A".repeat(16));
+        assert.equal(response.body.data.envelope.wrappedKey, "B".repeat(64));
+        assert.equal(storedKey.createdBy, TEST_USER_ID);
+        assert.deepEqual(storedKey.participants, participants);
+        assert.deepEqual(storedKey.envelopes, envelopes);
+        assert.equal("key" in storedKey, false);
+    } finally {
+        GroupConversation.findOne = originalGroupFindOne;
+        GroupCallKey.findOne = originalKeyFindOne;
+        GroupCallKey.create = originalKeyCreate;
+    }
+});
+
+test("group call encryption keys are never returned to non-members", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const response = makeResponse();
+
+    GroupConversation.findOne = filter => ({
+        select: async () => {
+            assert.deepEqual(filter, {
+                _id: OTHER_USER_ID,
+                participants: TEST_USER_ID
+            });
+            return null;
+        }
+    });
+
+    try {
+        await groupController.getGroupCallKey(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 404);
+        assert.equal(response.body.success, false);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
     }
 });
 
