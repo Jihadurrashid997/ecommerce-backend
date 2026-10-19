@@ -101,7 +101,7 @@ const MessageSchema =
                     true,
 
                 maxlength:
-                    5000
+                    128000
 
             },
 

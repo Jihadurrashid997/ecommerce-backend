@@ -28,6 +28,26 @@ const findMemberGroup = (groupId, userId) =>
         participants: userId
     });
 
+const hasRegisteredEncryptionKey = user => {
+    if (!user?.messengerEncryptionPublicKey) {
+        return false;
+    }
+
+    try {
+        const key = JSON.parse(user.messengerEncryptionPublicKey);
+        return key?.kty === "EC" &&
+            key?.crv === "P-256" &&
+            typeof key.x === "string" &&
+            /^[A-Za-z0-9_-]{40,50}$/.test(key.x) &&
+            typeof key.y === "string" &&
+            /^[A-Za-z0-9_-]{40,50}$/.test(key.y) &&
+            key.d === undefined;
+    } catch (error) {
+        console.error("INVALID GROUP ENCRYPTION PUBLIC KEY:", error);
+        return false;
+    }
+};
+
 const notifyMembers = (req, groupId, memberIds) => {
     const io = req.app.get("io");
 
@@ -77,6 +97,85 @@ const disconnectGroupCallParticipant = async (groupId, userId) => {
         }
     } catch (error) {
         console.error("REMOVE GROUP CALL PARTICIPANT ERROR:", error);
+    }
+};
+
+exports.setGroupEncryption = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { groupId } = req.params;
+        const isEncrypted = req.body?.isEncrypted;
+
+        if (!isValidObjectId(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID."
+            });
+        }
+
+        if (typeof isEncrypted !== "boolean") {
+            return res.status(400).json({
+                success: false,
+                message: "Encryption must be enabled or disabled explicitly."
+            });
+        }
+
+        const group = await findMemberGroup(groupId, userId);
+
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found."
+            });
+        }
+
+        if (!group.admins.some(id => String(id) === String(userId))) {
+            return res.status(403).json({
+                success: false,
+                message: "Only group admins can change encryption settings."
+            });
+        }
+
+        if (isEncrypted) {
+            const users = await User.find({
+                _id: { $in: group.participants }
+            })
+                .select("+messengerEncryptionPublicKey")
+                .lean();
+            const readyUserIds = new Set(
+                users.filter(hasRegisteredEncryptionKey).map(user =>
+                    String(user._id)
+                )
+            );
+            const missingKeys = group.participants
+                .map(String)
+                .filter(participantId => !readyUserIds.has(participantId));
+
+            if (missingKeys.length) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Every group member must open Messenger and set up encryption before group encryption can be enabled.",
+                    membersWithoutKeys: missingKeys
+                });
+            }
+        }
+
+        group.isEncrypted = isEncrypted;
+        await group.save();
+        notifyMembers(req, group._id, group.participants);
+
+        return res.json({
+            success: true,
+            data: await groupPopulation(
+                GroupConversation.findById(group._id)
+            )
+        });
+    } catch (error) {
+        console.error("SET GROUP ENCRYPTION ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to update group encryption."
+        });
     }
 };
 
@@ -460,6 +559,30 @@ exports.addGroupMembers = async (req, res) => {
                 success: false,
                 message: "One or more selected users could not be found."
             });
+        }
+
+        if (group.isEncrypted && newIds.length) {
+            const newUsers = await User.find({
+                _id: { $in: newIds }
+            })
+                .select("+messengerEncryptionPublicKey")
+                .lean();
+            const readyUserIds = new Set(
+                newUsers.filter(hasRegisteredEncryptionKey).map(user =>
+                    String(user._id)
+                )
+            );
+            const missingKeys = newIds.filter(
+                memberId => !readyUserIds.has(memberId)
+            );
+
+            if (missingKeys.length) {
+                return res.status(409).json({
+                    success: false,
+                    message: "New members must open Messenger and set up encryption before joining this encrypted group.",
+                    membersWithoutKeys: missingKeys
+                });
+            }
         }
 
         group.participants.push(...newIds);

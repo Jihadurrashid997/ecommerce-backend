@@ -1,4 +1,5 @@
 const ENCRYPTED_MESSAGE_PREFIX = "e2ee:v1:";
+const ENCRYPTED_GROUP_MESSAGE_PREFIX = "e2eg:v1:";
 const KEY_STORAGE_PREFIX = "jr-messenger-e2ee-v1:";
 const KEY_BACKUP_ITERATIONS = 600000;
 const KEY_BACKUP_VERSION = 1;
@@ -112,6 +113,10 @@ const isValidBackupEnvelope = backup =>
 export const isEncryptedMessage = message =>
     typeof message === "string" &&
     message.startsWith(ENCRYPTED_MESSAGE_PREFIX);
+
+export const isEncryptedGroupMessage = message =>
+    typeof message === "string" &&
+    message.startsWith(ENCRYPTED_GROUP_MESSAGE_PREFIX);
 
 export const getConversationEncryptionId = (firstUserId, secondUserId) =>
     [String(firstUserId), String(secondUserId)].sort().join(":");
@@ -408,6 +413,254 @@ export const deriveConversationCipher = async (
     );
 };
 
+export const encryptGroupMessageText = async ({
+    api,
+    text,
+    groupId,
+    senderId,
+    identity,
+    participants,
+    resolvePublicKey = peerId => getPeerEncryptionKey(api, peerId)
+}) => {
+    if (
+        typeof text !== "string" ||
+        !text.trim() ||
+        text.length > 5000 ||
+        !groupId ||
+        !senderId ||
+        !identity?.privateKey ||
+        !isValidPublicJwk(identity.publicKey) ||
+        !Array.isArray(participants)
+    ) {
+        throw new Error("A valid group encryption identity and message are required.");
+    }
+
+    const participantIds = [
+        ...new Set([
+            senderId,
+            ...participants.map(participant =>
+                String(
+                    typeof participant === "object"
+                        ? participant._id || participant.id || ""
+                        : participant
+                )
+            )
+        ])
+    ];
+
+    if (
+        participantIds.length < 2 ||
+        participantIds.length > 100 ||
+        !participantIds.includes(String(senderId)) ||
+        participantIds.some(id => !/^[a-f\d]{24}$/i.test(id))
+    ) {
+        throw new Error("The encrypted group has an invalid member list.");
+    }
+
+    const subtle = getSubtleCrypto();
+    const contentKey = await subtle.generateKey(
+        {
+            name: "AES-GCM",
+            length: 256
+        },
+        true,
+        ["encrypt", "decrypt"]
+    );
+    const contentIv = window.crypto.getRandomValues(new Uint8Array(12));
+    const contentCiphertext = await subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv: contentIv,
+            additionalData: new TextEncoder().encode(
+                `jr-messenger-group-content-v1:${groupId}`
+            )
+        },
+        contentKey,
+        new TextEncoder().encode(text)
+    );
+    const rawContentKey = await subtle.exportKey("raw", contentKey);
+    const wrappedKeys = await Promise.all(
+        participantIds.map(async recipientId => {
+            const publicKey =
+                recipientId === String(senderId)
+                    ? identity.publicKey
+                    : await resolvePublicKey(recipientId);
+            const pairwiseKey = await deriveConversationCipher(
+                identity.privateKey,
+                publicKey,
+                `group:${groupId}:${getConversationEncryptionId(
+                    senderId,
+                    recipientId
+                )}`
+            );
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const wrappedKey = await subtle.encrypt(
+                {
+                    name: "AES-GCM",
+                    iv,
+                    additionalData: new TextEncoder().encode(
+                        `jr-messenger-group-key-v1:${groupId}:${recipientId}`
+                    )
+                },
+                pairwiseKey,
+                rawContentKey
+            );
+
+            return {
+                userId: recipientId,
+                iv: toBase64Url(iv),
+                wrappedKey: toBase64Url(new Uint8Array(wrappedKey))
+            };
+        })
+    );
+
+    return `${ENCRYPTED_GROUP_MESSAGE_PREFIX}${toBase64Url(
+        new TextEncoder().encode(
+            JSON.stringify({
+                version: 1,
+                groupId: String(groupId),
+                iv: toBase64Url(contentIv),
+                ciphertext: toBase64Url(
+                    new Uint8Array(contentCiphertext)
+                ),
+                keys: wrappedKeys
+            })
+        )
+    )}`;
+};
+
+export const decryptGroupMessageRecord = async (
+    api,
+    message,
+    groupId,
+    userId,
+    identity,
+    resolvePublicKey = peerId => getPeerEncryptionKey(api, peerId)
+) => {
+    if (!message || typeof message !== "object") {
+        return message;
+    }
+
+    let decryptedMessage = message;
+
+    if (isEncryptedGroupMessage(message.message)) {
+        try {
+            const encodedEnvelope = message.message.slice(
+                ENCRYPTED_GROUP_MESSAGE_PREFIX.length
+            );
+            const envelope = JSON.parse(
+                new TextDecoder().decode(fromBase64Url(encodedEnvelope))
+            );
+
+            if (
+                envelope?.version !== 1 ||
+                String(envelope.groupId) !== String(groupId) ||
+                !Array.isArray(envelope.keys) ||
+                envelope.keys.length > 100 ||
+                typeof envelope.iv !== "string" ||
+                typeof envelope.ciphertext !== "string"
+            ) {
+                throw new Error("The encrypted group message is invalid.");
+            }
+
+            const keyEnvelope = envelope.keys.find(
+                item => String(item.userId) === String(userId)
+            );
+
+            if (!keyEnvelope) {
+                throw new Error("This encrypted message was sent before you joined the group.");
+            }
+
+            const senderId = String(
+                message.sender?._id ||
+                message.sender?.id ||
+                message.sender ||
+                message.senderId ||
+                ""
+            );
+            const senderPublicKey =
+                senderId === String(userId)
+                    ? identity.publicKey
+                    : await resolvePublicKey(senderId);
+            const pairwiseKey = await deriveConversationCipher(
+                identity.privateKey,
+                senderPublicKey,
+                `group:${groupId}:${getConversationEncryptionId(
+                    senderId,
+                    userId
+                )}`
+            );
+            const rawContentKey = await getSubtleCrypto().decrypt(
+                {
+                    name: "AES-GCM",
+                    iv: fromBase64Url(keyEnvelope.iv),
+                    additionalData: new TextEncoder().encode(
+                        `jr-messenger-group-key-v1:${groupId}:${userId}`
+                    )
+                },
+                pairwiseKey,
+                fromBase64Url(keyEnvelope.wrappedKey)
+            );
+            const contentKey = await getSubtleCrypto().importKey(
+                "raw",
+                rawContentKey,
+                "AES-GCM",
+                false,
+                ["decrypt"]
+            );
+            const plaintext = await getSubtleCrypto().decrypt(
+                {
+                    name: "AES-GCM",
+                    iv: fromBase64Url(envelope.iv),
+                    additionalData: new TextEncoder().encode(
+                        `jr-messenger-group-content-v1:${groupId}`
+                    )
+                },
+                contentKey,
+                fromBase64Url(envelope.ciphertext)
+            );
+
+            decryptedMessage = {
+                ...message,
+                message: new TextDecoder().decode(plaintext),
+                isEncrypted: true
+            };
+        } catch (error) {
+            console.error("Encrypted group message could not be decrypted:", error);
+            decryptedMessage = {
+                ...message,
+                message: error.message.includes("before you joined")
+                    ? error.message
+                    : "Unable to decrypt this message on this device.",
+                isEncrypted: true,
+                decryptionFailed: true
+            };
+        }
+    }
+
+    const nested = {};
+
+    for (const field of ["replyTo", "forwardedFrom"]) {
+        const value = message[field];
+
+        if (value && typeof value === "object") {
+            nested[field] = await decryptGroupMessageRecord(
+                api,
+                value,
+                groupId,
+                userId,
+                identity,
+                resolvePublicKey
+            );
+        }
+    }
+
+    return {
+        ...decryptedMessage,
+        ...nested
+    };
+};
+
 export const getSafetyCode = async (firstPublicJwk, secondPublicJwk) => {
     const subtle = getSubtleCrypto();
     const canonicalKeys = [firstPublicJwk, secondPublicJwk]
@@ -422,6 +675,40 @@ export const getSafetyCode = async (firstPublicJwk, secondPublicJwk) => {
         .sort()
         .join("|");
     const digest = await subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(canonicalKeys)
+    );
+
+    return Array.from(new Uint8Array(digest))
+        .map(byte => byte.toString(16).padStart(2, "0"))
+        .join("")
+        .toUpperCase()
+        .match(/.{1,4}/g)
+        .join(" ");
+};
+
+export const getGroupSafetyCode = async memberKeys => {
+    if (!Array.isArray(memberKeys) || memberKeys.length < 2) {
+        throw new Error("At least two group encryption keys are required.");
+    }
+
+    const canonicalKeys = memberKeys
+        .map(({ userId, publicKey }) => {
+            if (!userId || !isValidPublicJwk(publicKey)) {
+                throw new Error("A group member encryption key is invalid.");
+            }
+
+            return JSON.stringify({
+                userId: String(userId),
+                crv: publicKey.crv,
+                kty: publicKey.kty,
+                x: publicKey.x,
+                y: publicKey.y
+            });
+        })
+        .sort()
+        .join("|");
+    const digest = await getSubtleCrypto().digest(
         "SHA-256",
         new TextEncoder().encode(canonicalKeys)
     );

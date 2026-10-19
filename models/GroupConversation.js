@@ -15,6 +15,10 @@ const GroupConversationSchema = new mongoose.Schema(
             maxlength: 500,
             default: ""
         },
+        isEncrypted: {
+            type: Boolean,
+            default: false
+        },
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
