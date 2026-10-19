@@ -788,6 +788,16 @@ io.on(
                               }).populate(
                                   "sender",
                                   "name username fullName displayName isVerified"
+                              ).populate({
+                                  path: "replyTo",
+                                  select: "message fileUrl fileName fileType sender createdAt",
+                                  populate: {
+                                      path: "sender",
+                                      select: "name username fullName displayName"
+                                  }
+                              }).populate(
+                                  "reactions.user",
+                                  "name username fullName displayName"
                               )
                             : null;
 
@@ -797,11 +807,11 @@ io.on(
 
                         const roomId = `group:${groupId}`;
                         const message = {
+                            ...storedMessage.toObject(),
                             _id: String(storedMessage._id),
                             id: String(storedMessage._id),
                             groupId,
                             roomId,
-                            sender: storedMessage.sender,
                             senderId,
                             senderName:
                                 storedMessage.sender?.name ||
@@ -811,11 +821,6 @@ io.on(
                                 "Group member",
                             receiver: null,
                             receiverId: null,
-                            message: storedMessage.message || "",
-                            fileUrl: storedMessage.fileUrl || "",
-                            fileName: storedMessage.fileName || "",
-                            fileType: storedMessage.fileType || "",
-                            createdAt: storedMessage.createdAt,
                             timestamp: new Date(storedMessage.createdAt).getTime()
                         };
 
@@ -835,18 +840,7 @@ io.on(
                     return;
                 }
 
-                const roomId =
-                    payload.roomId ||
-                    null;
-
-                const senderId =
-                    normalizeId(
-                        payload.sender
-                    ) ||
-                    normalizeId(
-                        payload.senderId
-                    ) ||
-                    socket.userId;
+                const senderId = socket.userId;
 
                 const receiverId =
                     normalizeId(
@@ -863,42 +857,70 @@ io.on(
                     return;
                 }
 
+                const messageId =
+                    normalizeId(payload._id || payload.id);
+
+                if (!senderId || !receiverId || !messageId) {
+                    return;
+                }
+
+                let storedMessage;
+
+                try {
+                    storedMessage = await Message.findOne({
+                        _id: messageId,
+                        sender: senderId,
+                        receiver: receiverId
+                    })
+                        .populate(
+                            "sender",
+                            "name email role profileImage avatar username fullName displayName firstName isVerified"
+                        )
+                        .populate(
+                            "receiver",
+                            "name email role profileImage avatar username fullName displayName firstName"
+                        )
+                        .populate({
+                            path: "replyTo",
+                            select: "message fileUrl fileName fileType sender createdAt",
+                            populate: {
+                                path: "sender",
+                                select: "name username fullName displayName firstName"
+                            }
+                        })
+                        .populate({
+                            path: "forwardedFrom",
+                            select: "message fileUrl fileName fileType sender createdAt",
+                            populate: {
+                                path: "sender",
+                                select: "name username fullName displayName firstName"
+                            }
+                        })
+                        .populate(
+                            "reactions.user",
+                            "name username fullName displayName firstName"
+                        );
+                } catch (error) {
+                    console.error("Load direct message for socket error:", error);
+                    return;
+                }
+
+                if (!storedMessage) {
+                    return;
+                }
+
+                const roomId = [senderId, receiverId].sort().join("_");
                 const message = {
-
-                    ...payload,
-
-                    sender:
-                        senderId,
-
+                    ...storedMessage.toObject(),
+                    _id: String(storedMessage._id),
+                    id: String(storedMessage._id),
+                    roomId,
                     senderId,
-
-                    receiver:
-                        receiverId,
-
                     receiverId,
-
-                    createdAt:
-                        payload.createdAt ||
-                        new Date().toISOString(),
-
-                    timestamp:
-                        payload.timestamp ||
-                        Date.now()
-
+                    timestamp: new Date(storedMessage.createdAt).getTime()
                 };
 
-                if (roomId) {
-
-                    io
-                        .to(
-                            String(roomId)
-                        )
-                        .emit(
-                            "receive-message",
-                            message
-                        );
-
-                }
+                io.to(roomId).emit("receive-message", message);
 
                 const wasDelivered =
                     sendToUser(
@@ -919,10 +941,6 @@ io.on(
                  * open the chat (that's what flips it to
                  * "seen" instead, via message-seen).
                  */
-
-                const messageId =
-                    message._id ||
-                    message.id;
 
                 if (
                     wasDelivered &&
@@ -1067,61 +1085,48 @@ io.on(
 
         socket.on(
             "message-seen",
-            payload => {
+            async payload => {
 
                 if (!payload) {
                     return;
                 }
 
-                const data = {
+                const senderId = normalizeId(payload.senderId);
+                const messageId = normalizeId(payload.messageId);
+                const receiverId = socket.userId;
 
-                    roomId:
-                        payload.roomId ||
-                        null,
-
-                    senderId:
-                        normalizeId(
-                            payload.senderId
-                        ),
-
-                    receiverId:
-                        normalizeId(
-                            payload.receiverId
-                        ),
-
-                    messageId:
-                        payload.messageId ||
-                        null
-
-                };
-
-                if (data.roomId) {
-
-                    io
-                        .to(
-                            String(
-                                data.roomId
-                            )
-                        )
-                        .emit(
-                            "messages-seen",
-                            data
-                        );
-
+                if (!senderId || !messageId || !receiverId) {
+                    return;
                 }
 
-                if (
-                    data.senderId
-                ) {
+                try {
+                    const message = await Message.findOneAndUpdate(
+                        {
+                            _id: messageId,
+                            sender: senderId,
+                            receiver: receiverId
+                        },
+                        {
+                            $set: {
+                                isSeen: true,
+                                isDelivered: true
+                            }
+                        },
+                        { new: true }
+                    ).select("_id");
 
-                    sendToUser(
-                        data.senderId,
-                        "messages-seen",
-                        data
-                    );
+                    if (!message) {
+                        return;
+                    }
 
+                    sendToUser(senderId, "messages-seen", {
+                        senderId,
+                        receiverId,
+                        messageId: String(message._id)
+                    });
+                } catch (error) {
+                    console.error("Message seen socket validation error:", error);
                 }
-
             }
         );
 
@@ -1185,40 +1190,49 @@ io.on(
                     return;
                 }
 
-                const receiverId =
+                const messageId =
                     normalizeId(
-                        payload.receiverId
+                        payload.message._id ||
+                        payload.message.id
                     );
+                const actorId = socket.userId;
 
-                if (payload.roomId) {
-
-                    io
-                        .to(
-                            String(
-                                payload.roomId
-                            )
-                        )
-                        .emit(
-                            "message-reaction",
-                            {
-                                message:
-                                    payload.message
-                            }
-                        );
-
+                if (!messageId || !actorId) {
+                    return;
                 }
 
-                if (receiverId) {
+                try {
+                    const storedMessage = await Message.findById(messageId)
+                        .populate(
+                            "sender reactions.user",
+                            "name username fullName displayName"
+                        )
+                        .populate(
+                            "receiver",
+                            "name username fullName displayName"
+                        );
 
-                    sendToUser(
-                        receiverId,
-                        "message-reaction",
-                        {
-                            message:
-                                payload.message
-                        }
-                    );
+                    if (!storedMessage) {
+                        return;
+                    }
 
+                    const senderId = normalizeId(storedMessage.sender?._id);
+                    const receiverId = normalizeId(storedMessage.receiver?._id);
+
+                    if (![senderId, receiverId].includes(actorId)) {
+                        return;
+                    }
+
+                    const message = storedMessage.toObject();
+                    const event = { message };
+
+                    [senderId, receiverId]
+                        .filter(Boolean)
+                        .forEach(userId => {
+                            sendToUser(userId, "message-reaction", event);
+                        });
+                } catch (error) {
+                    console.error("Direct message reaction validation error:", error);
                 }
 
             }
