@@ -6,8 +6,10 @@ const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
+const isDatabaseReady = require("./services/databaseHealth");
 const Message = require("./models/Message");
 const User = require("./models/User");
 const GroupConversation = require("./models/GroupConversation");
@@ -111,12 +113,16 @@ app.use(
 app.get(
     "/",
     (req, res) => {
+        const databaseReady =
+            isDatabaseReady(mongoose.connection.readyState);
 
-        res.status(200).json({
-            success: true,
-            message: "JR Store API is running",
+        res.status(databaseReady ? 200 : 503).json({
+            success: databaseReady,
+            message: databaseReady
+                ? "JR Store API is running"
+                : "JR Store API database is unavailable",
             service: "ecommerce-backend",
-            database: "connected",
+            database: databaseReady ? "connected" : "disconnected",
             socket: "enabled",
             timestamp: new Date().toISOString()
         });
@@ -127,10 +133,15 @@ app.get(
 app.get(
     "/api/health",
     (req, res) => {
+        const databaseReady =
+            isDatabaseReady(mongoose.connection.readyState);
 
-        res.status(200).json({
-            success: true,
-            message: "JR Store API is healthy",
+        res.status(databaseReady ? 200 : 503).json({
+            success: databaseReady,
+            message: databaseReady
+                ? "JR Store API is healthy"
+                : "JR Store API database is unavailable",
+            database: databaseReady ? "connected" : "disconnected",
             socket: "enabled",
             timestamp: new Date().toISOString()
         });
