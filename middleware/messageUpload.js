@@ -69,7 +69,10 @@ const ALLOWED_MIME_TYPES = [
     "audio/x-caf",
     "audio/x-flac",
     "audio/x-wav",
-    "audio/x-m4a"
+    "audio/x-m4a",
+
+    // Encrypted Messenger media is uploaded as opaque bytes.
+    "application/octet-stream"
 
 ];
 
@@ -105,9 +108,8 @@ const upload = multer({
 
     limits: {
 
-        // Matches the 10MB limit already enforced
-        // client-side in Messenger.jsx's handleFile.
-        fileSize: 10 * 1024 * 1024
+        // A 10MB client file gains a 16-byte AES-GCM tag.
+        fileSize: 10 * 1024 * 1024 + 16
 
     }
 

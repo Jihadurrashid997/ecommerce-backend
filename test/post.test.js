@@ -27,6 +27,15 @@ const makeResponse = () => ({
     }
 });
 
+const makeMessageQuery = document => ({
+    populate() {
+        return this;
+    },
+    then(resolve, reject) {
+        return Promise.resolve(document).then(resolve, reject);
+    }
+});
+
 const makePost = fields => new Post({
     author: "507f1f77bcf86cd799439011",
     kind: "post",
@@ -357,6 +366,7 @@ test("Messenger attachment uploads accept common audio formats and reject video 
     };
 
     for (const mimetype of [
+        "application/octet-stream",
         "audio/webm",
         "audio/webm;codecs=opus",
         "audio/mp4",
@@ -578,6 +588,164 @@ test("group messages cannot bypass enabled end-to-end encryption", async () => {
         assert.match(response.body.message, /requires end-to-end encrypted/);
     } finally {
         GroupConversation.findOne = originalFindOne;
+    }
+});
+
+test("encrypted group attachments store only opaque ciphertext metadata", async () => {
+    const originalGroupFindOne = GroupConversation.findOne;
+    const originalMessageCreate = Message.create;
+    const originalMessageFindById = Message.findById;
+    const group = {
+        _id: "507f191e810c19729de860eb",
+        isEncrypted: true,
+        participants: [TEST_USER_ID],
+        save: async () => {}
+    };
+    const response = makeResponse();
+    let storedMessage;
+    const created = {
+        _id: "507f191e810c19729de860ec",
+        createdAt: new Date().toISOString()
+    };
+
+    GroupConversation.findOne = async () => group;
+    Message.create = async document => {
+        storedMessage = document;
+        return created;
+    };
+    Message.findById = () =>
+        makeMessageQuery({ ...created, ...storedMessage });
+
+    try {
+        await messageController.sendMessage(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    groupId: group._id,
+                    message: "e2eg:v1:YWJj",
+                    isEncrypted: "true"
+                },
+                file: {
+                    filename: "stored-ciphertext.bin",
+                    originalname: "encrypted-media.bin",
+                    mimetype: "application/octet-stream"
+                },
+                app: { get: () => null }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 201);
+        assert.equal(storedMessage.isEncrypted, true);
+        assert.equal(storedMessage.fileType, "application/octet-stream");
+        assert.equal(storedMessage.fileName, "encrypted-media.bin");
+        assert.equal(storedMessage.fileUrl, "/uploads/stored-ciphertext.bin");
+        assert.equal(group.lastMessage.message, "🔒 Encrypted message");
+    } finally {
+        GroupConversation.findOne = originalGroupFindOne;
+        Message.create = originalMessageCreate;
+        Message.findById = originalMessageFindById;
+    }
+});
+
+test("unencrypted direct messages cannot upload opaque ciphertext files", async () => {
+    const originalUserFindById = User.findById;
+    const publicKey = JSON.stringify({
+        kty: "EC",
+        crv: "P-256",
+        x: "A".repeat(43),
+        y: "B".repeat(43)
+    });
+    const response = makeResponse();
+
+    User.findById = () => ({
+        select: async () => ({
+            blockedUsers: [],
+            messengerEncryptionPublicKey: publicKey
+        })
+    });
+
+    try {
+        await messageController.sendMessage(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    receiver: OTHER_USER_ID,
+                    message: "",
+                    isEncrypted: "false"
+                },
+                file: {
+                    filename: "ciphertext.bin",
+                    originalname: "encrypted-media.bin",
+                    mimetype: "application/octet-stream"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 400);
+        assert.match(response.body.message, /opaque ciphertext/i);
+    } finally {
+        User.findById = originalUserFindById;
+    }
+});
+
+test("encrypted direct messages accept client-encrypted opaque files", async () => {
+    const originalUserFindById = User.findById;
+    const originalMessageCreate = Message.create;
+    const originalMessageFindById = Message.findById;
+    const publicKey = JSON.stringify({
+        kty: "EC",
+        crv: "P-256",
+        x: "A".repeat(43),
+        y: "B".repeat(43)
+    });
+    const response = makeResponse();
+    let storedMessage;
+    const created = {
+        _id: "507f191e810c19729de860ec",
+        createdAt: new Date().toISOString()
+    };
+
+    User.findById = () => ({
+        select: async () => ({
+            blockedUsers: [],
+            messengerEncryptionPublicKey: publicKey
+        })
+    });
+    Message.create = async document => {
+        storedMessage = document;
+        return created;
+    };
+    Message.findById = () =>
+        makeMessageQuery({ ...created, ...storedMessage });
+
+    try {
+        await messageController.sendMessage(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    receiver: OTHER_USER_ID,
+                    message: "e2ee:v1:YWJj",
+                    isEncrypted: "true"
+                },
+                file: {
+                    filename: "stored-ciphertext.bin",
+                    originalname: "encrypted-media.bin",
+                    mimetype: "application/octet-stream"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 201);
+        assert.equal(storedMessage.isEncrypted, true);
+        assert.equal(storedMessage.fileType, "application/octet-stream");
+        assert.equal(storedMessage.fileName, "encrypted-media.bin");
+    } finally {
+        User.findById = originalUserFindById;
+        Message.create = originalMessageCreate;
+        Message.findById = originalMessageFindById;
     }
 });
 

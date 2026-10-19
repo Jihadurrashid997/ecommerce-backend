@@ -351,7 +351,7 @@ exports.getGroupMessages = async (req, res) => {
             )
             .populate({
                 path: "replyTo",
-                select: "message fileUrl fileName fileType sender createdAt",
+                select: "message fileUrl fileName fileType sender createdAt isEncrypted",
                 populate: {
                     path: "sender",
                     select: "name username fullName displayName"
