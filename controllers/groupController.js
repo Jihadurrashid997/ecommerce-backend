@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const GroupConversation = require("../models/GroupConversation");
+const GroupCallKey = require("../models/GroupCallKey");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const {
@@ -100,6 +101,86 @@ const disconnectGroupCallParticipant = async (groupId, userId) => {
     }
 };
 
+const endGroupCallRoom = async groupId => {
+    const { LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET } = process.env;
+
+    if (!LIVEKIT_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+        return;
+    }
+
+    const roomName = `group-${String(groupId)}`;
+
+    try {
+        const roomService = new RoomServiceClient(
+            LIVEKIT_URL
+                .replace(/^wss:/i, "https:")
+                .replace(/^ws:/i, "http:"),
+            LIVEKIT_API_KEY,
+            LIVEKIT_API_SECRET
+        );
+        const rooms = await roomService.listRooms([roomName]);
+
+        if (rooms.some(room => room.name === roomName)) {
+            await roomService.deleteRoom(roomName);
+        }
+    } catch (error) {
+        console.error("END GROUP CALL ROOM ERROR:", error);
+    }
+};
+
+const hasActiveGroupCall = async groupId => {
+    const { LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET } = process.env;
+
+    if (!LIVEKIT_URL || !LIVEKIT_API_KEY || !LIVEKIT_API_SECRET) {
+        throw new Error("Group call service is not configured.");
+    }
+
+    const roomName = `group-${String(groupId)}`;
+    const roomService = new RoomServiceClient(
+        LIVEKIT_URL
+            .replace(/^wss:/i, "https:")
+            .replace(/^ws:/i, "http:"),
+        LIVEKIT_API_KEY,
+        LIVEKIT_API_SECRET
+    );
+    const rooms = await roomService.listRooms([roomName]);
+
+    if (!rooms.some(room => room.name === roomName)) {
+        return false;
+    }
+
+    const participants = await roomService.listParticipants(roomName);
+    return participants.length > 0;
+};
+
+const getGroupCallKeyResponse = (keyRecord, userId) => {
+    const envelope = keyRecord.envelopes.find(
+        item => String(item.userId) === String(userId)
+    );
+
+    if (!envelope) {
+        return null;
+    }
+
+    return {
+        keyId: keyRecord.keyId,
+        senderId: String(keyRecord.createdBy),
+        envelope: {
+            iv: envelope.iv,
+            wrappedKey: envelope.wrappedKey
+        },
+        expiresAt: keyRecord.expiresAt
+    };
+};
+
+const groupCallKeyHasCurrentMembers = (keyRecord, group) => {
+    const keyMembers = keyRecord.participants.map(String).sort();
+    const groupMembers = group.participants.map(String).sort();
+
+    return keyMembers.length === groupMembers.length &&
+        keyMembers.every((memberId, index) => memberId === groupMembers[index]);
+};
+
 exports.setGroupEncryption = async (req, res) => {
     try {
         const userId = getUserId(req);
@@ -160,8 +241,15 @@ exports.setGroupEncryption = async (req, res) => {
             }
         }
 
+        const encryptionChanged = group.isEncrypted !== isEncrypted;
         group.isEncrypted = isEncrypted;
         await group.save();
+
+        if (encryptionChanged) {
+            await GroupCallKey.deleteOne({ groupId: group._id });
+            void endGroupCallRoom(group._id);
+        }
+
         notifyMembers(req, group._id, group.participants);
 
         return res.json({
@@ -400,7 +488,7 @@ exports.createGroupCallToken = async (req, res) => {
         const group = await GroupConversation.findOne({
             _id: groupId,
             participants: userId
-        }).select("name");
+        }).select("name isEncrypted participants");
 
         if (!group) {
             return res.status(404).json({
@@ -426,7 +514,7 @@ exports.createGroupCallToken = async (req, res) => {
         const token = new AccessToken(apiKey, apiSecret, {
             identity: String(userId),
             name: user?.name || "Group member",
-            ttl: "1h"
+            ttl: "10m"
         });
         token.addGrant({
             roomJoin: true,
@@ -442,7 +530,9 @@ exports.createGroupCallToken = async (req, res) => {
                 serverUrl: livekitUrl,
                 token: await token.toJwt(),
                 roomName: `group-${String(group._id)}`,
-                groupName: group.name
+                groupName: group.name,
+                isEncrypted: group.isEncrypted,
+                participants: group.participants.map(String)
             }
         });
     } catch (error) {
@@ -450,6 +540,229 @@ exports.createGroupCallToken = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Unable to start the group call."
+        });
+    }
+};
+
+exports.getGroupCallKey = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { groupId } = req.params;
+
+        if (!isValidObjectId(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID."
+            });
+        }
+
+        const group = await GroupConversation.findOne({
+            _id: groupId,
+            participants: userId
+        }).select("isEncrypted participants");
+
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found."
+            });
+        }
+
+        if (!group.isEncrypted) {
+            return res.status(409).json({
+                success: false,
+                code: "GROUP_CALL_E2EE_DISABLED",
+                message: "End-to-end call encryption is not enabled for this group."
+            });
+        }
+
+        let keyRecord = await GroupCallKey.findOne({ groupId });
+
+        if (keyRecord && !groupCallKeyHasCurrentMembers(keyRecord, group)) {
+            await GroupCallKey.deleteOne({ _id: keyRecord._id });
+            keyRecord = null;
+        }
+
+        if (!keyRecord) {
+            return res.status(404).json({
+                success: false,
+                message: "A current group call encryption key is not available."
+            });
+        }
+
+        if (keyRecord.expiresAt <= new Date()) {
+            if (!await hasActiveGroupCall(groupId)) {
+                await GroupCallKey.deleteOne({ _id: keyRecord._id });
+                return res.status(404).json({
+                    success: false,
+                    message: "The previous group call encryption key has expired."
+                });
+            }
+
+            keyRecord.expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
+            await keyRecord.save();
+        }
+
+        const data = getGroupCallKeyResponse(keyRecord, userId);
+
+        if (!data) {
+            return res.status(409).json({
+                success: false,
+                code: "GROUP_CALL_KEY_UNAVAILABLE",
+                message: "A group call key is not available for this member."
+            });
+        }
+
+        return res.json({ success: true, data });
+    } catch (error) {
+        console.error("GET GROUP CALL KEY ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load the group call encryption key."
+        });
+    }
+};
+
+exports.createGroupCallKey = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { groupId } = req.params;
+        const { keyId, envelopes } = req.body || {};
+
+        if (!isValidObjectId(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID."
+            });
+        }
+
+        const group = await GroupConversation.findOne({
+            _id: groupId,
+            participants: userId
+        }).select("isEncrypted participants");
+
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found."
+            });
+        }
+
+        if (!group.isEncrypted) {
+            return res.status(409).json({
+                success: false,
+                message: "End-to-end call encryption is not enabled for this group."
+            });
+        }
+
+        const memberIds = group.participants.map(String).sort();
+        const envelopeIds = Array.isArray(envelopes)
+            ? envelopes.map(envelope => String(envelope?.userId)).sort()
+            : [];
+
+        if (
+            typeof keyId !== "string" ||
+            !/^[A-Za-z0-9_-]{22}$/.test(keyId) ||
+            !Array.isArray(envelopes) ||
+            envelopes.length !== memberIds.length ||
+            new Set(envelopeIds).size !== envelopeIds.length ||
+            envelopeIds.some((memberId, index) => memberId !== memberIds[index]) ||
+            envelopes.some(envelope =>
+                typeof envelope?.iv !== "string" ||
+                !/^[A-Za-z0-9_-]{16}$/.test(envelope.iv) ||
+                typeof envelope?.wrappedKey !== "string" ||
+                !/^[A-Za-z0-9_-]{64}$/.test(envelope.wrappedKey)
+            )
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "The group call encryption key envelopes are invalid."
+            });
+        }
+
+        const now = new Date();
+        let keyRecord = await GroupCallKey.findOne({ groupId });
+
+        if (keyRecord && !groupCallKeyHasCurrentMembers(keyRecord, group)) {
+            await GroupCallKey.deleteOne({ _id: keyRecord._id });
+            keyRecord = null;
+        }
+
+        if (keyRecord && keyRecord.expiresAt > now) {
+            const data = getGroupCallKeyResponse(keyRecord, userId);
+
+            return data
+                ? res.json({ success: true, data })
+                : res.status(409).json({
+                      success: false,
+                      message: "A group call key is not available for this member."
+                  });
+        }
+
+        if (keyRecord && await hasActiveGroupCall(groupId)) {
+            keyRecord.expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
+            await keyRecord.save();
+            const data = getGroupCallKeyResponse(keyRecord, userId);
+
+            return data
+                ? res.json({ success: true, data })
+                : res.status(409).json({
+                      success: false,
+                      message: "A group call key is not available for this member."
+                  });
+        }
+
+        const replacement = {
+            groupId,
+            keyId,
+            createdBy: userId,
+            participants: group.participants,
+            envelopes,
+            expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000)
+        };
+
+        if (keyRecord) {
+            keyRecord = await GroupCallKey.findOneAndReplace(
+                { _id: keyRecord._id, expiresAt: { $lte: now } },
+                replacement,
+                { new: true, runValidators: true }
+            );
+        } else {
+            try {
+                keyRecord = await GroupCallKey.create(replacement);
+            } catch (error) {
+                if (error.code !== 11000) {
+                    throw error;
+                }
+
+                keyRecord = await GroupCallKey.findOne({ groupId });
+            }
+        }
+
+        if (!keyRecord) {
+            keyRecord = await GroupCallKey.findOne({ groupId });
+        }
+
+        if (!keyRecord || !groupCallKeyHasCurrentMembers(keyRecord, group)) {
+            return res.status(409).json({
+                success: false,
+                message: "Could not establish a current group call encryption key."
+            });
+        }
+
+        const data = getGroupCallKeyResponse(keyRecord, userId);
+
+        return data
+            ? res.json({ success: true, data })
+            : res.status(409).json({
+                  success: false,
+                  message: "A group call key is not available for this member."
+              });
+    } catch (error) {
+        console.error("CREATE GROUP CALL KEY ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to establish the group call encryption key."
         });
     }
 };
@@ -588,6 +901,11 @@ exports.addGroupMembers = async (req, res) => {
         group.participants.push(...newIds);
         await group.save();
 
+        if (newIds.length) {
+            await GroupCallKey.deleteOne({ groupId: group._id });
+            void endGroupCallRoom(group._id);
+        }
+
         notifyMembers(req, group._id, group.participants);
 
         return res.json({
@@ -662,9 +980,11 @@ exports.removeGroupMember = async (req, res) => {
         if (!group.participants.length) {
             await Promise.all([
                 GroupConversation.deleteOne({ _id: groupId }),
+                GroupCallKey.deleteOne({ groupId }),
                 Message.deleteMany({ groupId })
             ]);
 
+            void endGroupCallRoom(groupId);
             previousMemberIds.forEach(memberId => {
                 void disconnectGroupCallParticipant(groupId, memberId);
             });
@@ -681,6 +1001,8 @@ exports.removeGroupMember = async (req, res) => {
 
         await group.save();
 
+        await GroupCallKey.deleteOne({ groupId: group._id });
+        void endGroupCallRoom(group._id);
         void disconnectGroupCallParticipant(groupId, userId);
         removeMemberFromRoom(req, groupId, userId);
         notifyMembers(req, groupId, previousMemberIds);

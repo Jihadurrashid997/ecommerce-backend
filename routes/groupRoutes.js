@@ -6,6 +6,8 @@ const {
     setGroupEncryption,
     getGroupMessages,
     createGroupCallToken,
+    getGroupCallKey,
+    createGroupCallKey,
     markGroupMessagesSeen,
     addGroupMembers,
     removeGroupMember
@@ -18,6 +20,8 @@ router.get("/", listGroups);
 router.post("/", createGroup);
 router.put("/:groupId/encryption", setGroupEncryption);
 router.post("/:groupId/call-token", createGroupCallToken);
+router.get("/:groupId/call-key", getGroupCallKey);
+router.post("/:groupId/call-key", createGroupCallKey);
 router.get("/:groupId/messages", getGroupMessages);
 router.put("/:groupId/seen", markGroupMessagesSeen);
 router.post("/:groupId/members", addGroupMembers);

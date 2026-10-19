@@ -15,6 +15,8 @@ import {
     decryptGroupMessageRecord,
     getSafetyCode,
     restoreMessengerIdentity,
+    createGroupCallKeyEnvelopes,
+    unwrapGroupCallKey,
     isEncryptedGroupMessage
 } from "./messengerEncryption";
 
@@ -411,6 +413,94 @@ test("group verification codes are stable regardless of participant order", asyn
     ).resolves.toBe(
         await getGroupSafetyCode([bobKey, aliceKey])
     );
+});
+
+test("group call keys are wrapped for each member and reject outsiders or tampering", async () => {
+    const users = [
+        "507f1f77bcf86cd799439011",
+        "507f191e810c19729de860ea",
+        "507f191e810c19729de860eb"
+    ];
+    const registrationApi = {
+        get: jest.fn().mockRejectedValue({ response: { status: 404 } }),
+        put: jest.fn().mockResolvedValue({ data: { success: true } })
+    };
+    const identities = await Promise.all(
+        users.map(userId => ensureMessengerIdentity(registrationApi, userId))
+    );
+    const publicKeys = new Map(
+        users.map((userId, index) => [userId, identities[index].publicKey])
+    );
+    const api = {
+        get: jest.fn(async path => ({
+            data: {
+                data: {
+                    publicKey: publicKeys.get(path.split("/").pop())
+                }
+            }
+        }))
+    };
+    const groupId = "507f191e810c19729de860ec";
+    const callKey = await createGroupCallKeyEnvelopes({
+        api,
+        groupId,
+        userId: users[0],
+        participants: users.slice(0, 2),
+        identity: identities[0]
+    });
+    const bobEnvelope = callKey.envelopes.find(
+        envelope => envelope.userId === users[1]
+    );
+    const bobKey = await unwrapGroupCallKey({
+        api,
+        groupId,
+        userId: users[1],
+        senderId: users[0],
+        keyId: callKey.keyId,
+        envelope: bobEnvelope,
+        identity: identities[1]
+    });
+    const aliceKey = await unwrapGroupCallKey({
+        api,
+        groupId,
+        userId: users[0],
+        senderId: users[0],
+        keyId: callKey.keyId,
+        envelope: callKey.envelopes.find(
+            envelope => envelope.userId === users[0]
+        ),
+        identity: identities[0]
+    });
+
+    expect(Array.from(new Uint8Array(bobKey))).toEqual(
+        Array.from(new Uint8Array(aliceKey))
+    );
+    expect(new Uint8Array(aliceKey)).toEqual(new Uint8Array(callKey.key));
+    await expect(
+        unwrapGroupCallKey({
+            api,
+            groupId,
+            userId: users[2],
+            senderId: users[0],
+            keyId: callKey.keyId,
+            envelope: bobEnvelope,
+            identity: identities[2]
+        })
+    ).rejects.toThrow();
+    await expect(
+        unwrapGroupCallKey({
+            api,
+            groupId,
+            userId: users[1],
+            senderId: users[0],
+            keyId: callKey.keyId,
+            envelope: {
+                ...bobEnvelope,
+                iv: `${bobEnvelope.iv[0] === "A" ? "B" : "A"}${bobEnvelope.iv.slice(1)}`
+            },
+            identity: identities[1]
+        })
+    ).rejects.toThrow();
 });
 
 test("Messenger media encryption hides file bytes and restores metadata and content", async () => {

@@ -521,6 +521,116 @@ export const deriveConversationCipher = async (
     );
 };
 
+const getGroupCallKeyAdditionalData = (groupId, keyId, userId) =>
+    new TextEncoder().encode(
+        `jr-messenger-group-call-key-v1:${groupId}:${keyId}:${userId}`
+    );
+
+export const createGroupCallKeyEnvelopes = async ({
+    api,
+    groupId,
+    userId,
+    participants,
+    identity
+}) => {
+    const memberIds = [...new Set(
+        participants.map(participant =>
+            String(participant?._id || participant?.id || participant)
+        )
+    )].sort();
+
+    if (!memberIds.includes(String(userId))) {
+        throw new Error("Your account is not listed as a member of this group.");
+    }
+
+    const subtle = getSubtleCrypto();
+    const rawKey = window.crypto.getRandomValues(new Uint8Array(32));
+    const keyId = toBase64Url(window.crypto.getRandomValues(new Uint8Array(16)));
+    const envelopes = await Promise.all(memberIds.map(async recipientId => {
+        const recipientPublicKey = recipientId === String(userId)
+            ? identity.publicKey
+            : await getPeerEncryptionKey(api, recipientId);
+        const pairwiseKey = await deriveConversationCipher(
+            identity.privateKey,
+            recipientPublicKey,
+            `group-call:${groupId}:${getConversationEncryptionId(
+                userId,
+                recipientId
+            )}`
+        );
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const wrappedKey = await subtle.encrypt(
+            {
+                name: "AES-GCM",
+                iv,
+                additionalData: getGroupCallKeyAdditionalData(
+                    groupId,
+                    keyId,
+                    recipientId
+                )
+            },
+            pairwiseKey,
+            rawKey
+        );
+
+        return {
+            userId: recipientId,
+            iv: toBase64Url(iv),
+            wrappedKey: toBase64Url(new Uint8Array(wrappedKey))
+        };
+    }));
+
+    return {
+        keyId,
+        envelopes,
+        key: rawKey.buffer.slice(
+            rawKey.byteOffset,
+            rawKey.byteOffset + rawKey.byteLength
+        )
+    };
+};
+
+export const unwrapGroupCallKey = async ({
+    api,
+    groupId,
+    userId,
+    senderId,
+    keyId,
+    envelope,
+    identity
+}) => {
+    const senderPublicKey = String(senderId) === String(userId)
+        ? identity.publicKey
+        : await getPeerEncryptionKey(api, senderId);
+    const pairwiseKey = await deriveConversationCipher(
+        identity.privateKey,
+        senderPublicKey,
+        `group-call:${groupId}:${getConversationEncryptionId(
+            userId,
+            senderId
+        )}`
+    );
+    const rawKey = await getSubtleCrypto().decrypt(
+        {
+            name: "AES-GCM",
+            iv: fromBase64Url(envelope.iv),
+            additionalData: getGroupCallKeyAdditionalData(
+                groupId,
+                keyId,
+                userId
+            )
+        },
+        pairwiseKey,
+        fromBase64Url(envelope.wrappedKey)
+    );
+
+    if (rawKey.byteLength !== 32) {
+        throw new Error("The group call encryption key is invalid.");
+    }
+
+    return rawKey;
+};
+
 export const encryptGroupMessageText = async ({
     api,
     text,
