@@ -153,6 +153,11 @@ test("unencrypted groups retain the existing LiveKit call flow", async () => {
         audio: true,
         video: false
     });
+    expect(
+        await screen.findByRole("status", {
+            name: "Group call is not end-to-end encrypted"
+        })
+    ).toHaveTextContent("Not end-to-end encrypted");
 });
 
 test("encrypted group calls enable E2EE before connecting or publishing media", async () => {
@@ -201,6 +206,11 @@ test("encrypted group calls enable E2EE before connecting or publishing media", 
         "wss://calls.example.com",
         "call-token"
     );
+    expect(
+        await screen.findByRole("status", {
+            name: "End-to-end encrypted group call"
+        })
+    ).toHaveTextContent("End-to-end encrypted");
     expect(createLiveKitE2EEWorker).toHaveBeenCalledTimes(1);
     expect(unwrapGroupCallKey).toHaveBeenCalledWith(
         expect.objectContaining({
