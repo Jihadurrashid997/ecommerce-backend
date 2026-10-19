@@ -14,6 +14,7 @@ import {
     ensureMessengerIdentity,
     unwrapGroupCallKey
 } from "../services/messengerEncryption";
+import { createLiveKitE2EEWorker } from "../services/livekitE2EEWorker";
 import "../styles/GroupCallModal.css";
 
 const GroupCallModal = ({
@@ -149,12 +150,7 @@ const GroupCallModal = ({
                     }
                     const keyProvider = new ExternalE2EEKeyProvider();
                     await keyProvider.setKey(rawKey);
-                    encryptionWorker = new Worker(
-                        new URL(
-                            "livekit-client/e2ee-worker",
-                            import.meta.url
-                        )
-                    );
+                    encryptionWorker = createLiveKitE2EEWorker();
                     workerRef.current = encryptionWorker;
                     encryptionOptions = {
                         keyProvider,
