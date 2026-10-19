@@ -217,9 +217,35 @@ exports.getGroupMessages = async (req, res) => {
             });
         }
 
+        const page = Number(req.query?.page ?? 1);
+        const requestedLimit = Number(req.query?.limit ?? 50);
+
+        if (
+            !Number.isSafeInteger(page) ||
+            page < 1 ||
+            !Number.isSafeInteger(requestedLimit) ||
+            requestedLimit < 1
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Page and limit must be positive integers."
+            });
+        }
+
+        const limit = Math.min(requestedLimit, 100);
+        const skip = (page - 1) * limit;
+
+        if (!Number.isSafeInteger(skip)) {
+            return res.status(400).json({
+                success: false,
+                message: "Page is too large."
+            });
+        }
+
         const messages = await Message.find({ groupId })
-            .sort({ createdAt: -1 })
-            .limit(1000)
+            .sort({ createdAt: -1, _id: -1 })
+            .skip(skip)
+            .limit(limit + 1)
             .populate(
                 "sender",
                 "name username fullName displayName profileImage avatar isVerified"
@@ -234,7 +260,10 @@ exports.getGroupMessages = async (req, res) => {
             })
             .populate("reactions.user", "name username fullName displayName");
 
-        messages.reverse();
+        const hasMore = messages.length > limit;
+        const pageMessages = messages
+            .slice(0, limit)
+            .reverse();
 
         await Message.updateMany(
             { groupId, sender: { $ne: userId } },
@@ -243,7 +272,10 @@ exports.getGroupMessages = async (req, res) => {
 
         return res.json({
             success: true,
-            data: messages
+            data: pageMessages,
+            page,
+            limit,
+            hasMore
         });
     } catch (error) {
         console.error("GET GROUP MESSAGES ERROR:", error);

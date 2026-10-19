@@ -78,6 +78,87 @@ test("direct messages still require a receiver", () => {
     assert.ok(error.errors.receiver);
 });
 
+test("direct conversation history returns the requested page and indicates older messages", async () => {
+    const originalFind = Message.find;
+    const newest = { _id: "newest" };
+    const older = { _id: "older" };
+    const extra = { _id: "extra" };
+    const response = makeResponse();
+    const query = {
+        sort(value) {
+            assert.deepEqual(value, { createdAt: -1, _id: -1 });
+            return this;
+        },
+        skip(value) {
+            assert.equal(value, 2);
+            return this;
+        },
+        limit(value) {
+            assert.equal(value, 3);
+            return this;
+        },
+        populate() {
+            return this;
+        },
+        then(resolve, reject) {
+            return Promise.resolve([newest, older, extra]).then(resolve, reject);
+        }
+    };
+
+    Message.find = filter => {
+        assert.deepEqual(filter, {
+            $or: [
+                { sender: TEST_USER_ID, receiver: OTHER_USER_ID },
+                { sender: OTHER_USER_ID, receiver: TEST_USER_ID }
+            ]
+        });
+        return query;
+    };
+
+    try {
+        await messageController.getConversation(
+            {
+                user: { id: TEST_USER_ID },
+                params: { userId: OTHER_USER_ID },
+                query: { page: "2", limit: "2" }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(response.body.data, [older, newest]);
+        assert.equal(response.body.page, 2);
+        assert.equal(response.body.limit, 2);
+        assert.equal(response.body.hasMore, true);
+    } finally {
+        Message.find = originalFind;
+    }
+});
+
+test("direct conversation history rejects invalid pagination", async () => {
+    const originalFind = Message.find;
+    const response = makeResponse();
+    Message.find = () => {
+        throw new Error("Invalid pagination must not query messages.");
+    };
+
+    try {
+        await messageController.getConversation(
+            {
+                user: { id: TEST_USER_ID },
+                params: { userId: OTHER_USER_ID },
+                query: { page: "0", limit: "50" }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 400);
+        assert.equal(response.body.success, false);
+    } finally {
+        Message.find = originalFind;
+    }
+});
+
 test("Messenger attachment uploads accept common audio formats and reject video files", () => {
     const filterFile = mimetype => {
         let result;
@@ -311,6 +392,75 @@ test("non-members cannot load group message history", async () => {
         assert.equal(response.statusCode, 404);
     } finally {
         GroupConversation.findOne = originalFindOne;
+    }
+});
+
+test("group conversation history supports paging and preserves chronological order", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalFind = Message.find;
+    const originalUpdateMany = Message.updateMany;
+    const newest = { _id: "newest" };
+    const older = { _id: "older" };
+    const extra = { _id: "extra" };
+    const response = makeResponse();
+    const query = {
+        sort(value) {
+            assert.deepEqual(value, { createdAt: -1, _id: -1 });
+            return this;
+        },
+        skip(value) {
+            assert.equal(value, 2);
+            return this;
+        },
+        limit(value) {
+            assert.equal(value, 3);
+            return this;
+        },
+        populate() {
+            return this;
+        },
+        then(resolve, reject) {
+            return Promise.resolve([newest, older, extra]).then(resolve, reject);
+        }
+    };
+
+    GroupConversation.findOne = filter => {
+        assert.deepEqual(filter, {
+            _id: OTHER_USER_ID,
+            participants: TEST_USER_ID
+        });
+        return Promise.resolve({ _id: OTHER_USER_ID });
+    };
+    Message.find = filter => {
+        assert.deepEqual(filter, { groupId: OTHER_USER_ID });
+        return query;
+    };
+    Message.updateMany = async filter => {
+        assert.deepEqual(filter, {
+            groupId: OTHER_USER_ID,
+            sender: { $ne: TEST_USER_ID }
+        });
+    };
+
+    try {
+        await groupController.getGroupMessages(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID },
+                query: { page: "2", limit: "2" }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(response.body.data, [older, newest]);
+        assert.equal(response.body.page, 2);
+        assert.equal(response.body.limit, 2);
+        assert.equal(response.body.hasMore, true);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        Message.find = originalFind;
+        Message.updateMany = originalUpdateMany;
     }
 });
 

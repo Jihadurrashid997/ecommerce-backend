@@ -38,6 +38,21 @@ describe("messaging API routes", () => {
         );
     });
 
+    test("requests a selected message-history page", async () => {
+        const get = jest.spyOn(api, "get").mockResolvedValue({});
+
+        await getMessages({
+            receiverId: "user-123",
+            page: 3,
+            limit: 25
+        });
+
+        expect(get).toHaveBeenCalledWith(
+            "/messages/conversation/user-123",
+            { params: { page: 3, limit: 25 } }
+        );
+    });
+
     test("sends and marks messages seen using implemented backend routes", async () => {
         const post = jest.spyOn(api, "post").mockResolvedValue({});
         const put = jest.spyOn(api, "put").mockResolvedValue({});

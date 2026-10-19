@@ -1,6 +1,7 @@
 import React, {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState
@@ -49,6 +50,7 @@ import {
 } from "react-icons/fa";
 
 import api, {
+    getMessages,
     getUploadUrl
 } from "../services/api";
 
@@ -481,10 +483,29 @@ const Messenger = ({ isActive = true }) => {
     const messagesEndRef =
         useRef(null);
 
+    const messagesContainerRef =
+        useRef(null);
+
+    const messageHistoryRef =
+        useRef({
+            page: 1,
+            hasMore: false,
+            loading: false
+        });
+
+    const conversationLoadRef =
+        useRef(0);
+
+    const pendingHistoryScrollRef =
+        useRef(null);
+
     const typingTimeoutRef =
         useRef(null);
 
     const fileInputRef =
+        useRef(null);
+
+    const messageInputRef =
         useRef(null);
 
     const currentUserRef =
@@ -571,11 +592,64 @@ const Messenger = ({ isActive = true }) => {
     const [message, setMessage] =
         useState("");
 
+    useEffect(() => {
+        if (!isActive) {
+            return undefined;
+        }
+
+        const visualViewport = window.visualViewport;
+        const updateViewportHeight = () => {
+            const height =
+                visualViewport?.height ||
+                window.innerHeight;
+
+            document.documentElement.style.setProperty(
+                "--messenger-viewport-height",
+                `${Math.round(height)}px`
+            );
+        };
+
+        updateViewportHeight();
+        visualViewport?.addEventListener("resize", updateViewportHeight);
+        window.addEventListener("resize", updateViewportHeight);
+
+        return () => {
+            visualViewport?.removeEventListener("resize", updateViewportHeight);
+            window.removeEventListener("resize", updateViewportHeight);
+            document.documentElement.style.removeProperty(
+                "--messenger-viewport-height"
+            );
+        };
+    }, [isActive]);
+
+    useEffect(() => {
+        const input = messageInputRef.current;
+        if (!input) {
+            return;
+        }
+
+        input.style.height = "auto";
+        input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+        input.style.overflowY =
+            input.scrollHeight > 120
+                ? "auto"
+                : "hidden";
+    }, [message]);
+
     const [loading, setLoading] =
         useState(true);
 
     const [chatLoading, setChatLoading] =
         useState(false);
+
+    const [hasMoreMessages, setHasMoreMessages] =
+        useState(false);
+
+    const [loadingOlderMessages, setLoadingOlderMessages] =
+        useState(false);
+
+    const [olderMessagesError, setOlderMessagesError] =
+        useState("");
 
     const [search, setSearch] =
         useState("");
@@ -4828,6 +4902,9 @@ const onCallMissed =
                 const targetId =
                     getId(target);
 
+                const loadId =
+                    ++conversationLoadRef.current;
+
                 const roomId =
                     target.isGroup
                         ? `group:${targetId}`
@@ -4875,6 +4952,15 @@ const onCallMissed =
                 );
 
                 setMessages([]);
+                setHasMoreMessages(false);
+                setLoadingOlderMessages(false);
+                setOlderMessagesError("");
+                pendingHistoryScrollRef.current = null;
+                messageHistoryRef.current = {
+                    page: 1,
+                    hasMore: false,
+                    loading: false
+                };
 
                 setTyping(false);
 
@@ -4924,13 +5010,16 @@ const onCallMissed =
                         true
                     );
 
-
-                    const response =
-                        await api.get(
-                            target.isGroup
-                                ? `/groups/${targetId}/messages`
-                                : `/messages/conversation/${targetId}`
-                        );
+                    const response = target.isGroup
+                        ? await api.get(
+                              `/groups/${targetId}/messages`,
+                              { params: { page: 1, limit: 50 } }
+                          )
+                        : await getMessages({
+                              receiverId: targetId,
+                              page: 1,
+                              limit: 50
+                          });
 
 
                     const data =
@@ -4938,6 +5027,13 @@ const onCallMissed =
                         response.data?.messages ||
                         [];
 
+                    if (
+                        loadId !== conversationLoadRef.current ||
+                        String(getId(selectedUserRef.current)) !==
+                        String(targetId)
+                    ) {
+                        return;
+                    }
 
                     const visibleMessages =
                         await decryptMessagesForTarget(
@@ -4945,7 +5041,26 @@ const onCallMissed =
                             target
                         );
 
+                    if (
+                        loadId !== conversationLoadRef.current ||
+                        String(getId(selectedUserRef.current)) !==
+                        String(targetId)
+                    ) {
+                        return;
+                    }
+
+                    const hasMore =
+                        typeof response.data?.hasMore === "boolean"
+                            ? response.data.hasMore
+                            : data.length >= 50;
+
                     setMessages(visibleMessages);
+                    setHasMoreMessages(hasMore);
+                    messageHistoryRef.current = {
+                        page: 1,
+                        hasMore,
+                        loading: false
+                    };
 
 
                     if (
@@ -4978,9 +5093,13 @@ const onCallMissed =
 
                 } finally {
 
-                    setChatLoading(
-                        false
-                    );
+                    if (
+                        loadId === conversationLoadRef.current &&
+                        String(getId(selectedUserRef.current)) ===
+                        String(targetId)
+                    ) {
+                        setChatLoading(false);
+                    }
 
                 }
 
@@ -4992,6 +5111,134 @@ const onCallMissed =
                 user
             ]
         );
+
+    const loadOlderMessages =
+        useCallback(
+            async () => {
+                const target = selectedUserRef.current;
+                const targetId = getId(target);
+                const history = messageHistoryRef.current;
+                const container = messagesContainerRef.current;
+
+                if (
+                    !target ||
+                    !targetId ||
+                    !history.hasMore ||
+                    history.loading ||
+                    !container
+                ) {
+                    return;
+                }
+
+                history.loading = true;
+                setLoadingOlderMessages(true);
+                setOlderMessagesError("");
+                pendingHistoryScrollRef.current = {
+                    height: container.scrollHeight,
+                    top: container.scrollTop
+                };
+
+                const page = history.page + 1;
+
+                try {
+                    const response = target.isGroup
+                        ? await api.get(
+                              `/groups/${targetId}/messages`,
+                              { params: { page, limit: 50 } }
+                          )
+                        : await getMessages({
+                              receiverId: targetId,
+                              page,
+                              limit: 50
+                          });
+
+                    if (
+                        messageHistoryRef.current !== history ||
+                        String(getId(selectedUserRef.current)) !==
+                        String(targetId)
+                    ) {
+                        pendingHistoryScrollRef.current = null;
+                        return;
+                    }
+
+                    const data =
+                        response.data?.data ||
+                        response.data?.messages ||
+                        [];
+                    const visibleMessages =
+                        await decryptMessagesForTarget(
+                            Array.isArray(data) ? data : [],
+                            target
+                        );
+
+                    if (
+                        messageHistoryRef.current !== history ||
+                        String(getId(selectedUserRef.current)) !==
+                        String(targetId)
+                    ) {
+                        pendingHistoryScrollRef.current = null;
+                        return;
+                    }
+
+                    const existingIds = new Set(
+                        messages.map(item => String(getId(item)))
+                    );
+                    const olderMessages = visibleMessages.filter(
+                        item => !existingIds.has(String(getId(item)))
+                    );
+                    const hasMore =
+                        typeof response.data?.hasMore === "boolean"
+                            ? response.data.hasMore
+                            : data.length >= 50;
+
+                    setMessages(previous => [
+                        ...olderMessages.filter(
+                            item =>
+                                !previous.some(
+                                    current =>
+                                        String(getId(current)) ===
+                                        String(getId(item))
+                                )
+                        ),
+                        ...previous
+                    ]);
+                    history.page = page;
+                    history.hasMore = hasMore;
+                    setHasMoreMessages(hasMore);
+                } catch (error) {
+                    pendingHistoryScrollRef.current = null;
+                    if (
+                        messageHistoryRef.current === history &&
+                        String(getId(selectedUserRef.current)) ===
+                        String(targetId)
+                    ) {
+                        console.error("Load older messages error:", error);
+                        setOlderMessagesError(
+                            error.response?.data?.message ||
+                            "Could not load older messages. Please try again."
+                        );
+                    }
+                } finally {
+                    history.loading = false;
+                    if (messageHistoryRef.current === history) {
+                        setLoadingOlderMessages(false);
+                    }
+                }
+            },
+            [decryptMessagesForTarget, messages]
+        );
+
+    useLayoutEffect(() => {
+        const pending = pendingHistoryScrollRef.current;
+        const container = messagesContainerRef.current;
+
+        if (pending && container) {
+            container.scrollTop =
+                pending.top +
+                (container.scrollHeight - pending.height);
+            pendingHistoryScrollRef.current = null;
+        }
+    }, [messages]);
 
     const startGroupCall =
         type => {
@@ -8058,6 +8305,7 @@ const onCallMissed =
 
                                 <button
                                     type="button"
+                                    aria-label="Back to conversations"
                                     className="mobile-back-btn"
                                     onClick={() => {
 
@@ -8140,13 +8388,17 @@ const onCallMissed =
                                     <>
                                         <button
                                             type="button"
+                                            className="mobile-group-members-button"
                                             title="Group members"
+                                            aria-label="Group members"
                                             onClick={() => {
                                                 setGroupMemberSelection([]);
                                                 setShowGroupDetails(true);
+                                                setShowMenu(false);
                                             }}
                                         >
                                             <FaUsers />
+                                            Group members
                                         </button>
                                         <button
                                             type="button"
@@ -8170,6 +8422,7 @@ const onCallMissed =
                                 <button
                                     type="button"
                                     title="Voice call"
+                                    aria-label="Start voice call"
                                     onClick={() =>
                                         startCall(
                                             "audio"
@@ -8183,6 +8436,7 @@ const onCallMissed =
                                 <button
                                     type="button"
                                     title="Video call"
+                                    aria-label="Start video call"
                                     onClick={() =>
                                         startCall(
                                             "video"
@@ -8199,6 +8453,8 @@ const onCallMissed =
                                     type="button"
                                     className="chat-search-button"
                                     title="Search in conversation"
+                                    aria-label="Search in conversation"
+                                    aria-expanded={showConvSearch}
                                     onClick={() => {
 
                                         setShowConvSearch(
@@ -8224,6 +8480,8 @@ const onCallMissed =
                                     type="button"
                                     className="chat-background-button"
                                     title="Chat background"
+                                    aria-label="Chat background"
+                                    aria-expanded={showBackgrounds}
                                     onClick={() => {
 
                                         setShowBackgrounds(
@@ -8244,13 +8502,13 @@ const onCallMissed =
                                 <button
                                     type="button"
                                     disabled={notificationPermission === "unsupported"}
-                                    className={
+                                    className={`chat-notifications-button ${
                                         notificationPermission === "granted"
                                             ? "notification-enabled"
                                             : notificationPermission === "denied"
                                                 ? "notification-denied"
-                                            : ""
-                                    }
+                                                : ""
+                                    }`}
                                     aria-label={
                                         notificationPermission === "granted"
                                             ? "Notifications are enabled"
@@ -8275,6 +8533,8 @@ const onCallMissed =
                                 <button
                                     type="button"
                                     title="More"
+                                    aria-label="More conversation options"
+                                    aria-expanded={showMenu}
                                     onClick={() => {
 
                                         setShowMenu(
@@ -8296,6 +8556,46 @@ const onCallMissed =
 
                             {showMenu && (
                                 <div className="chat-options-menu">
+
+                                    <button
+                                        type="button"
+                                        className="mobile-toolbar-option"
+                                        onClick={() => {
+                                            setShowConvSearch(value => !value);
+                                            setShowBackgrounds(false);
+                                            setShowMenu(false);
+                                        }}
+                                    >
+                                        <FaSearch />
+                                        Search in conversation
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        className="mobile-toolbar-option"
+                                        onClick={() => {
+                                            setShowBackgrounds(value => !value);
+                                            setShowConvSearch(false);
+                                            setShowMenu(false);
+                                        }}
+                                    >
+                                        <FaPalette />
+                                        Chat theme
+                                    </button>
+
+                                    {selectedUser?.isGroup && (
+                                        <button
+                                            type="button"
+                                            className="mobile-toolbar-option"
+                                            onClick={() => {
+                                                setGroupMemberSelection([]);
+                                                setShowGroupDetails(true);
+                                                setShowMenu(false);
+                                            }}
+                                        >
+                                            <FaUsers />
+                                        </button>
+                                    )}
 
                                     {!selectedUser?.isGroup && (
                                         <>
@@ -8585,6 +8885,7 @@ const onCallMissed =
 
 
                         <section
+                            ref={messagesContainerRef}
                             className="messages-container"
                             style={{
                                 background:
@@ -8592,6 +8893,30 @@ const onCallMissed =
                                     undefined
                             }}
                         >
+
+                            {!chatLoading &&
+                                messages.length > 0 &&
+                                (hasMoreMessages ||
+                                    olderMessagesError) && (
+                                    <div className="older-messages-control">
+                                        <button
+                                            type="button"
+                                            onClick={loadOlderMessages}
+                                            disabled={loadingOlderMessages}
+                                        >
+                                            {loadingOlderMessages
+                                                ? "Loading older messages..."
+                                                : olderMessagesError
+                                                  ? "Try again"
+                                                  : "Load older messages"}
+                                        </button>
+                                        {olderMessagesError && (
+                                            <span role="alert">
+                                                {olderMessagesError}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
 
                             {chatLoading ? (
 
@@ -9413,6 +9738,7 @@ const onCallMissed =
                                 <button
                                     type="button"
                                     title="Emoji"
+                                    aria-label="Choose emoji"
                                     onClick={() =>
                                         setShowEmoji(
                                             value =>
@@ -9449,6 +9775,7 @@ const onCallMissed =
                                 <button
                                     type="button"
                                     title="Image"
+                                    aria-label="Attach image"
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked ||
@@ -9506,8 +9833,9 @@ const onCallMissed =
 
                             <div className="message-input-wrapper">
 
-                                <input
-                                    type="text"
+                                <textarea
+                                    ref={messageInputRef}
+                                    aria-label="Write a message"
                                     value={message}
                                     onChange={
                                         handleTyping
@@ -9516,17 +9844,18 @@ const onCallMissed =
                                         event => {
 
                                             if (
-                                                event.key ===
-                                                    "Enter" &&
-                                                !settings.enterToSend
+                                                event.key === "Enter" &&
+                                                settings.enterToSend &&
+                                                !event.shiftKey &&
+                                                !event.nativeEvent.isComposing
                                             ) {
-
                                                 event.preventDefault();
-
+                                                sendMessage(event);
                                             }
 
                                         }
                                     }
+                                    rows={1}
                                     placeholder="Write a message..."
                                     autoComplete="off"
                                 />
