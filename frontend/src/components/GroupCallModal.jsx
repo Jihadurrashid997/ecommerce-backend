@@ -49,6 +49,12 @@ const GroupCallModal = ({
     const currentUserId = String(
         currentUser?._id || currentUser?.id || currentUser?.userId || ""
     );
+    const groupParticipantIds = (group?.participants || [])
+        .map(participant =>
+            String(participant?._id || participant?.id || participant)
+        )
+        .sort()
+        .join(",");
 
     useEffect(() => {
         onConnectedRef.current = onConnected;
@@ -66,40 +72,24 @@ const GroupCallModal = ({
 
         const connect = async () => {
             try {
-                const response = await api.post(
-                    `/groups/${groupId}/call-token`
-                );
-                const data = response.data?.data;
-
-                if (!data?.serverUrl || !data?.token) {
-                    throw new Error(
-                        response.data?.message ||
-                        "The group call service did not return a connection token."
-                    );
-                }
-
                 let encryptionOptions;
-                let encryptedCall = Boolean(data.isEncrypted);
-                let keyResponse;
+                let data;
+                let encryptedCall = false;
 
                 try {
-                    keyResponse = await api.get(
-                        `/groups/${groupId}/call-key`
+                    const tokenResponse = await api.post(
+                        `/groups/${groupId}/call-token`
                     );
-                    encryptedCall = true;
-                } catch (keyError) {
-                    if (keyError.response?.status === 404) {
-                        encryptedCall = true;
-                    } else if (
-                        keyError.response?.data?.code !==
-                            "GROUP_CALL_E2EE_DISABLED" ||
-                        encryptedCall
+                    data = tokenResponse.data?.data;
+                } catch (tokenError) {
+                    if (
+                        tokenError.response?.data?.code !==
+                        "GROUP_CALL_E2EE_KEY_REQUIRED"
                     ) {
-                        throw keyError;
+                        throw tokenError;
                     }
-                }
 
-                if (encryptedCall) {
+                    encryptedCall = true;
                     if (!isE2EESupported()) {
                         throw new Error(
                             "This browser cannot provide end-to-end encrypted group calls. Update your browser or use a supported device; this group call will not fall back to an unencrypted connection."
@@ -117,12 +107,23 @@ const GroupCallModal = ({
                         currentUserId
                     );
 
-                    if (!keyResponse) {
+                    let keyResponse;
+                    try {
+                        keyResponse = await api.get(
+                            `/groups/${groupId}/call-key`
+                        );
+                    } catch (keyError) {
+                        if (keyError.response?.status !== 404) {
+                            throw keyError;
+                        }
+
                         const callKey = await createGroupCallKeyEnvelopes({
                             api,
                             groupId,
                             userId: currentUserId,
-                            participants: data.participants || [],
+                            participants: groupParticipantIds
+                                ? groupParticipantIds.split(",")
+                                : [],
                             identity
                         });
                         keyResponse = await api.post(
@@ -170,6 +171,25 @@ const GroupCallModal = ({
                         keyProvider,
                         worker: encryptionWorker
                     };
+
+                    const tokenResponse = await api.post(
+                        `/groups/${groupId}/call-token`,
+                        { keyId: keyData.keyId }
+                    );
+                    data = tokenResponse.data?.data;
+
+                    if (!data?.isEncrypted) {
+                        throw new Error(
+                            "The server did not confirm end-to-end encryption for this group call."
+                        );
+                    }
+                }
+
+                if (!data?.serverUrl || !data?.token) {
+                    throw new Error(
+                        data?.message ||
+                        "The group call service did not return a connection token."
+                    );
                 }
 
                 callRoom = new Room({
@@ -321,7 +341,7 @@ const GroupCallModal = ({
             }
             roomRef.current = null;
         };
-    }, [currentUserId, groupId, type]);
+    }, [currentUserId, groupId, groupParticipantIds, type]);
 
     const toggleMicrophone = async () => {
         const nextValue = !microphoneEnabled;

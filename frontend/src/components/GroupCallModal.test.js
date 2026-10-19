@@ -102,17 +102,12 @@ beforeEach(() => {
 });
 
 test("encrypted group calls fail closed when the browser lacks E2EE support", async () => {
-    api.post.mockResolvedValue({
-        data: {
-            data: {
-                serverUrl: "wss://calls.example.com",
-                token: "call-token",
-                isEncrypted: true,
-                participants: [member._id]
-            }
+    api.post.mockRejectedValue({
+        response: {
+            status: 409,
+            data: { code: "GROUP_CALL_E2EE_KEY_REQUIRED" }
         }
     });
-    api.get.mockRejectedValue({ response: { status: 404 } });
     jest.spyOn(console, "error").mockImplementation(() => {});
 
     render(
@@ -164,16 +159,23 @@ test("encrypted group calls enable E2EE before connecting or publishing media", 
     const onConnected = jest.fn();
     const track = { stop: jest.fn() };
 
-    api.post.mockResolvedValue({
-        data: {
-            data: {
-                serverUrl: "wss://calls.example.com",
-                token: "call-token",
-                isEncrypted: true,
-                participants: [member._id]
+    api.post
+        .mockRejectedValueOnce({
+            response: {
+                status: 409,
+                data: { code: "GROUP_CALL_E2EE_KEY_REQUIRED" }
             }
-        }
-    });
+        })
+        .mockResolvedValueOnce({
+            data: {
+                data: {
+                    serverUrl: "wss://calls.example.com",
+                    token: "call-token",
+                    isEncrypted: true,
+                    participants: [member._id]
+                }
+            }
+        });
     api.get.mockResolvedValue({
         data: {
             data: {
@@ -211,6 +213,11 @@ test("encrypted group calls enable E2EE before connecting or publishing media", 
             name: "End-to-end encrypted group call"
         })
     ).toHaveTextContent("End-to-end encrypted");
+    expect(api.post).toHaveBeenNthCalledWith(
+        2,
+        "/groups/507f191e810c19729de860ec/call-token",
+        { keyId: "key-id" }
+    );
     expect(createLiveKitE2EEWorker).toHaveBeenCalledTimes(1);
     expect(unwrapGroupCallKey).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -1237,6 +1237,137 @@ test("group call tokens are scoped to the authorized group and user", async () =
     }
 });
 
+test("encrypted group calls do not issue LiveKit tokens without a current member key", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalKeyFindOne = GroupCallKey.findOne;
+    const originalUrl = process.env.LIVEKIT_URL;
+    const originalKey = process.env.LIVEKIT_API_KEY;
+    const originalSecret = process.env.LIVEKIT_API_SECRET;
+    const response = makeResponse();
+
+    process.env.LIVEKIT_URL = "wss://calls.example.com";
+    process.env.LIVEKIT_API_KEY = "livekit-test-key";
+    process.env.LIVEKIT_API_SECRET = "livekit-test-secret";
+    GroupConversation.findOne = filter => ({
+        select: async () => {
+            assert.deepEqual(filter, {
+                _id: OTHER_USER_ID,
+                participants: TEST_USER_ID
+            });
+            return {
+                _id: OTHER_USER_ID,
+                name: "Private plans",
+                isEncrypted: true,
+                participants: [TEST_USER_ID, OTHER_USER_ID]
+            };
+        }
+    });
+    GroupCallKey.findOne = async () => null;
+
+    try {
+        await groupController.createGroupCallToken(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID },
+                body: {}
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.equal(response.body.code, "GROUP_CALL_E2EE_KEY_REQUIRED");
+        assert.equal(response.body.success, false);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        GroupCallKey.findOne = originalKeyFindOne;
+        if (originalUrl === undefined) delete process.env.LIVEKIT_URL;
+        else process.env.LIVEKIT_URL = originalUrl;
+        if (originalKey === undefined) delete process.env.LIVEKIT_API_KEY;
+        else process.env.LIVEKIT_API_KEY = originalKey;
+        if (originalSecret === undefined) delete process.env.LIVEKIT_API_SECRET;
+        else process.env.LIVEKIT_API_SECRET = originalSecret;
+    }
+});
+
+test("encrypted group calls issue tokens only for a current caller key envelope", async () => {
+    const originalGroupFindOne = GroupConversation.findOne;
+    const originalCallKeyFindOne = GroupCallKey.findOne;
+    const originalUserFindById = User.findById;
+    const originalUrl = process.env.LIVEKIT_URL;
+    const originalKey = process.env.LIVEKIT_API_KEY;
+    const originalSecret = process.env.LIVEKIT_API_SECRET;
+    const response = makeResponse();
+    const keyId = "C".repeat(22);
+    const participants = [TEST_USER_ID, OTHER_USER_ID];
+
+    process.env.LIVEKIT_URL = "wss://calls.example.com";
+    process.env.LIVEKIT_API_KEY = "livekit-test-key";
+    process.env.LIVEKIT_API_SECRET = "livekit-test-secret";
+    GroupConversation.findOne = filter => ({
+        select: async () => {
+            assert.deepEqual(filter, {
+                _id: OTHER_USER_ID,
+                participants: TEST_USER_ID
+            });
+            return {
+                _id: OTHER_USER_ID,
+                name: "Private plans",
+                isEncrypted: true,
+                participants
+            };
+        }
+    });
+    GroupCallKey.findOne = async filter => {
+        assert.deepEqual(filter, {
+            groupId: OTHER_USER_ID,
+            keyId
+        });
+        return {
+            keyId,
+            participants,
+            expiresAt: new Date(Date.now() + 60_000),
+            envelopes: [{
+                userId: TEST_USER_ID,
+                iv: "A".repeat(16),
+                wrappedKey: "B".repeat(64)
+            }]
+        };
+    };
+    User.findById = userId => ({
+        select: () => ({
+            lean: async () => {
+                assert.equal(userId, TEST_USER_ID);
+                return { name: "Test User" };
+            }
+        })
+    });
+
+    try {
+        await groupController.createGroupCallToken(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID },
+                body: { keyId }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.data.isEncrypted, true);
+        assert.equal(response.body.data.roomName, `group-${OTHER_USER_ID}`);
+    } finally {
+        GroupConversation.findOne = originalGroupFindOne;
+        GroupCallKey.findOne = originalCallKeyFindOne;
+        User.findById = originalUserFindById;
+        if (originalUrl === undefined) delete process.env.LIVEKIT_URL;
+        else process.env.LIVEKIT_URL = originalUrl;
+        if (originalKey === undefined) delete process.env.LIVEKIT_API_KEY;
+        else process.env.LIVEKIT_API_KEY = originalKey;
+        if (originalSecret === undefined) delete process.env.LIVEKIT_API_SECRET;
+        else process.env.LIVEKIT_API_SECRET = originalSecret;
+    }
+});
+
 test("encrypted group call key setup stores only per-member envelopes", async () => {
     const originalGroupFindOne = GroupConversation.findOne;
     const originalKeyFindOne = GroupCallKey.findOne;
