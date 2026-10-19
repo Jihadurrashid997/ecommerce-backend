@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
+const crypto = require("crypto");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
@@ -1279,6 +1280,7 @@ socket.on(
             payload.type === "video"
                 ? "video"
                 : "audio";
+        const callId = crypto.randomUUID();
 
         if (
             !callerId ||
@@ -1309,6 +1311,7 @@ socket.on(
                     roomId,
                     callerId,
                     receiverId,
+                    callId,
                     type: callType,
                     status: "busy"
                 }
@@ -1333,6 +1336,7 @@ socket.on(
                     roomId,
                     callerId,
                     receiverId,
+                    callId,
                     type: callType,
                     status: "busy"
                 }
@@ -1349,6 +1353,8 @@ socket.on(
         const callData = {
 
             roomId,
+
+            callId,
 
             callerId,
 

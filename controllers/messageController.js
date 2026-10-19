@@ -1,4 +1,6 @@
 const mongoose = require("mongoose");
+const fs = require("node:fs/promises");
+const path = require("node:path");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const GroupConversation = require("../models/GroupConversation");
@@ -27,6 +29,8 @@ const isValidEncryptionPublicKey = key =>
     key.d === undefined;
 
 const ENCRYPTION_BACKUP_ITERATIONS = 600000;
+const MESSAGE_DELETE_FOR_EVERYONE_WINDOW_MS = 15 * 60 * 1000;
+const UPLOADS_DIRECTORY = path.resolve(__dirname, "..", "uploads");
 const isValidEncryptionKeyBackup = backup =>
     backup &&
     typeof backup === "object" &&
@@ -815,6 +819,7 @@ exports.getConversation = async (req, res) => {
 
         const messages = await populateMessage(
             Message.find({
+                deletedFor: { $ne: currentUser },
                 $or: [
                     {
                         sender: currentUser,
@@ -878,7 +883,8 @@ exports.markSeen = async (req, res) => {
         const unseenFilter = {
             sender: otherUserId,
             receiver: currentUser,
-            isSeen: false
+            isSeen: false,
+            deletedFor: { $ne: currentUser }
         };
         const unseenMessages = await Message.find(unseenFilter)
             .select("_id")
@@ -935,7 +941,8 @@ exports.getUnreadCount = async (req, res) => {
 
         const count = await Message.countDocuments({
             receiver: currentUser,
-            isSeen: false
+            isSeen: false,
+            deletedFor: { $ne: currentUser }
         });
 
         return res.status(200).json({
@@ -973,7 +980,10 @@ exports.getUnreadByUser = async (req, res) => {
                     receiver: new mongoose.Types.ObjectId(
                         String(currentUser)
                     ),
-                    isSeen: false
+                    isSeen: false,
+                    deletedFor: { $ne: new mongoose.Types.ObjectId(
+                        String(currentUser)
+                    ) }
                 }
             },
             {
@@ -1022,6 +1032,7 @@ exports.getRecentConversations = async (req, res) => {
         }
 
         const messages = await Message.find({
+            deletedFor: { $ne: currentUser },
             $or: [
                 { sender: currentUser },
                 { receiver: currentUser }
@@ -1270,18 +1281,113 @@ exports.deleteMessage = async (req, res) => {
             });
         }
 
-        if (String(message.sender) !== String(userId)) {
-            return res.status(403).json({ success: false, message: "You can only delete your own messages" });
+        const deleteFor = req.body?.deleteFor || "everyone";
+        if (!["me", "everyone"].includes(deleteFor)) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose whether to delete the message for you or everyone."
+            });
         }
 
+        if (message.isDeleted) {
+            return res.status(409).json({
+                success: false,
+                message: "This message has already been deleted for everyone."
+            });
+        }
+
+        if (deleteFor === "me") {
+            const alreadyHidden = (message.deletedFor || [])
+                .some(deletedUser => String(deletedUser) === String(userId));
+            if (!alreadyHidden) {
+                message.deletedFor = message.deletedFor || [];
+                message.deletedFor.push(userId);
+                await message.save();
+            }
+
+            const hiddenForUser = req.app?.get("io");
+            if (hiddenForUser) {
+                hiddenForUser.to(`user:${String(userId)}`).emit(
+                    "message-updated",
+                    { message }
+                );
+            }
+
+            return res.json({ success: true, data: message });
+        }
+
+        if (String(message.sender) !== String(userId)) {
+            return res.status(403).json({
+                success: false,
+                message: "Only the sender can delete a message for everyone."
+            });
+        }
+
+        const createdAt = new Date(message.createdAt).getTime();
+        const messageAge = Date.now() - createdAt;
+        if (
+            !Number.isFinite(createdAt) ||
+            messageAge < 0 ||
+            messageAge > MESSAGE_DELETE_FOR_EVERYONE_WINDOW_MS
+        ) {
+            return res.status(409).json({
+                success: false,
+                code: "DELETE_FOR_EVERYONE_EXPIRED",
+                message: "Messages can only be deleted for everyone within 15 minutes."
+            });
+        }
+
+        const deletedFileUrl = message.fileUrl;
         message.isDeleted = true;
-        message.message = "";
+        message.message = "This message was deleted.";
         message.fileUrl = "";
         message.fileName = "";
         message.fileType = "";
         message.reactions = [];
 
         await message.save();
+
+        if (deletedFileUrl && /^\/uploads\/[^/\\]+$/.test(deletedFileUrl)) {
+            try {
+                const sharedReference = await Message.exists({
+                    _id: { $ne: message._id },
+                    fileUrl: deletedFileUrl
+                });
+                if (!sharedReference) {
+                    const uploadPath = path.resolve(
+                        UPLOADS_DIRECTORY,
+                        path.basename(deletedFileUrl)
+                    );
+                    if (path.dirname(uploadPath) === UPLOADS_DIRECTORY) {
+                        await fs.unlink(uploadPath);
+                    }
+                }
+            } catch (fileError) {
+                if (fileError.code !== "ENOENT") {
+                    console.error(
+                        "DELETE MESSAGE ATTACHMENT ERROR:",
+                        fileError
+                    );
+                }
+            }
+        }
+
+        if (message.groupId) {
+            try {
+                const group = await GroupConversation.findById(message.groupId);
+                const lastMessageTime =
+                    new Date(group?.lastMessage?.createdAt || 0).getTime();
+                if (
+                    group?.lastMessage &&
+                    lastMessageTime === createdAt
+                ) {
+                    group.lastMessage.message = "Message deleted";
+                    await group.save();
+                }
+            } catch (previewError) {
+                console.error("DELETE GROUP PREVIEW UPDATE ERROR:", previewError);
+            }
+        }
 
         const populated = await populateMessage(Message.findById(id));
         try {
@@ -1295,5 +1401,145 @@ exports.deleteMessage = async (req, res) => {
     } catch (error) {
         console.error("DELETE MESSAGE ERROR:", error);
         return res.status(500).json({ success: false, message: "Unable to delete message." });
+    }
+};
+
+exports.createCallLog = async (req, res) => {
+    try {
+        const actorId = getUserId(req);
+        const {
+            callId,
+            callerId: requestedCallerId,
+            otherUserId,
+            callType,
+            status,
+            duration
+        } = req.body || {};
+
+        if (!actorId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        if (
+            typeof callId !== "string" ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(callId) ||
+            !isValidObjectId(requestedCallerId) ||
+            !isValidObjectId(otherUserId) ||
+            String(requestedCallerId) === String(otherUserId) ||
+            !["voice", "video"].includes(callType) ||
+            !["ended", "missed", "declined", "busy"].includes(status) ||
+            !Number.isSafeInteger(duration) ||
+            duration < 0 ||
+            duration > 24 * 60 * 60
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid call details."
+            });
+        }
+
+        if (
+            String(actorId) !== String(requestedCallerId) &&
+            String(actorId) !== String(otherUserId)
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "You don't have access to this call."
+            });
+        }
+
+        const caller = await User.findById(requestedCallerId)
+            .select("_id")
+            .lean();
+        const otherUser = await User.findById(otherUserId)
+            .select("_id")
+            .lean();
+
+        if (!caller || !otherUser) {
+            return res.status(404).json({
+                success: false,
+                message: "Call participant not found."
+            });
+        }
+
+        const statusText = {
+            ended: "ended",
+            missed: "missed",
+            declined: "declined",
+            busy: "User was busy"
+        }[status];
+        const durationText = status === "ended" && duration > 0
+            ? ` • ${String(Math.floor(duration / 60)).padStart(2, "0")}:${String(duration % 60).padStart(2, "0")}`
+            : "";
+        const callLabel = callType === "video" ? "Video" : "Voice";
+        const logData = {
+            sender: requestedCallerId,
+            receiver: otherUserId,
+            message: `📞 ${callLabel} call ${statusText}${durationText}`,
+            type: "call-log",
+            callId,
+            callType,
+            callStatus: status,
+            callDuration: status === "ended" ? duration : 0,
+            isSeen: true,
+            isDelivered: true,
+            readBy: [actorId]
+        };
+
+        let callMessage;
+        try {
+            callMessage = await Message.findOneAndUpdate(
+                { callId },
+                { $setOnInsert: logData },
+                {
+                    new: true,
+                    upsert: true,
+                    setDefaultsOnInsert: true
+                }
+            );
+        } catch (error) {
+            if (error.code !== 11000) {
+                throw error;
+            }
+            callMessage = await Message.findOne({ callId });
+        }
+
+        const populated = await populateMessage(
+            Message.findById(callMessage._id)
+        );
+
+        const io = req.app?.get("io");
+        if (io && populated) {
+            const serialized = {
+                ...populated.toObject(),
+                _id: String(populated._id),
+                id: String(populated._id),
+                senderId: String(requestedCallerId),
+                receiverId: String(otherUserId),
+                roomId: [String(requestedCallerId), String(otherUserId)]
+                    .sort()
+                    .join("_"),
+                timestamp: new Date(populated.createdAt).getTime()
+            };
+            io.to(serialized.roomId).emit("receive-message", serialized);
+            io.to(`user:${String(otherUserId)}`).emit(
+                "direct-message",
+                serialized
+            );
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: populated
+        });
+    } catch (error) {
+        console.error("CREATE CALL LOG ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to save call details."
+        });
     }
 };
