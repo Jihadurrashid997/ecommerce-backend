@@ -554,6 +554,110 @@ test("encryption public keys are returned without exposing private key material"
     }
 });
 
+test("users can store and retrieve only their passphrase-encrypted Messenger key backup", async () => {
+    const originalFindById = User.findById;
+    const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+    const backup = {
+        version: 1,
+        kdf: "PBKDF2-SHA-256",
+        iterations: 600000,
+        salt: "A".repeat(22),
+        iv: "B".repeat(16),
+        ciphertext: "C".repeat(120)
+    };
+    let savedBackup;
+    const response = makeResponse();
+
+    User.findById = userId => ({
+        select: async () => {
+            assert.equal(userId, TEST_USER_ID);
+            return {
+                messengerEncryptionPublicKey: "{\"kty\":\"EC\"}"
+            };
+        }
+    });
+    User.findByIdAndUpdate = async (userId, update) => {
+        assert.equal(userId, TEST_USER_ID);
+        savedBackup = JSON.parse(update.$set.messengerEncryptionKeyBackup);
+        return {};
+    };
+
+    try {
+        await messageController.saveEncryptionKeyBackup(
+            {
+                user: { id: TEST_USER_ID },
+                body: { backup }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(savedBackup, backup);
+        assert.equal("passphrase" in savedBackup, false);
+
+        User.findById = userId => ({
+            select: () => ({
+                lean: async () => {
+                    assert.equal(userId, TEST_USER_ID);
+                    return {
+                        messengerEncryptionKeyBackup: JSON.stringify(savedBackup)
+                    };
+                }
+            })
+        });
+        const getResponse = makeResponse();
+
+        await messageController.getEncryptionKeyBackup(
+            { user: { id: TEST_USER_ID } },
+            getResponse
+        );
+
+        assert.equal(getResponse.statusCode, 200);
+        assert.deepEqual(getResponse.body.data.backup, backup);
+    } finally {
+        User.findById = originalFindById;
+        User.findByIdAndUpdate = originalFindByIdAndUpdate;
+    }
+});
+
+test("Messenger key backup rejects invalid encryption metadata", async () => {
+    const originalFindById = User.findById;
+    const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+    const response = makeResponse();
+
+    User.findById = async () => {
+        throw new Error("Invalid backup metadata must be rejected before lookup.");
+    };
+    User.findByIdAndUpdate = async () => {
+        throw new Error("Invalid backup metadata must never be stored.");
+    };
+
+    try {
+        await messageController.saveEncryptionKeyBackup(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    backup: {
+                        version: 1,
+                        kdf: "PBKDF2-SHA-256",
+                        iterations: 1,
+                        salt: "short",
+                        iv: "short",
+                        ciphertext: "not encrypted"
+                    }
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 400);
+        assert.equal(response.body.success, false);
+    } finally {
+        User.findById = originalFindById;
+        User.findByIdAndUpdate = originalFindByIdAndUpdate;
+    }
+});
+
 test("non-members cannot load group message history", async () => {
     const originalFindOne = GroupConversation.findOne;
     const response = makeResponse();

@@ -26,6 +26,23 @@ const isValidEncryptionPublicKey = key =>
     /^[A-Za-z0-9_-]{40,50}$/.test(key.y) &&
     key.d === undefined;
 
+const ENCRYPTION_BACKUP_ITERATIONS = 600000;
+const isValidEncryptionKeyBackup = backup =>
+    backup &&
+    typeof backup === "object" &&
+    !Array.isArray(backup) &&
+    Object.keys(backup).sort().join(",") ===
+        "ciphertext,iterations,iv,kdf,salt,version" &&
+    backup.version === 1 &&
+    backup.kdf === "PBKDF2-SHA-256" &&
+    backup.iterations === ENCRYPTION_BACKUP_ITERATIONS &&
+    typeof backup.salt === "string" &&
+    /^[A-Za-z0-9_-]{22}$/.test(backup.salt) &&
+    typeof backup.iv === "string" &&
+    /^[A-Za-z0-9_-]{16}$/.test(backup.iv) &&
+    typeof backup.ciphertext === "string" &&
+    /^[A-Za-z0-9_-]{100,4096}$/.test(backup.ciphertext);
+
 const canAccessMessage = async (message, userId) => {
     if (message.groupId) {
         return Boolean(await GroupConversation.exists({
@@ -99,6 +116,129 @@ const populateMessage = (query) =>
             "reactions.user",
             "name username fullName displayName firstName"
         );
+
+exports.saveEncryptionKeyBackup = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const backup = req.body?.backup;
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        if (!isValidEncryptionKeyBackup(backup)) {
+            return res.status(400).json({
+                success: false,
+                message: "A valid encrypted key backup is required."
+            });
+        }
+
+        const user = await User.findById(userId)
+            .select("+messengerEncryptionPublicKey");
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        if (!user.messengerEncryptionPublicKey) {
+            return res.status(409).json({
+                success: false,
+                message: "Register an encryption key before creating a backup."
+            });
+        }
+
+        await User.findByIdAndUpdate(userId, {
+            $set: {
+                messengerEncryptionKeyBackup: JSON.stringify({
+                    version: backup.version,
+                    kdf: backup.kdf,
+                    iterations: backup.iterations,
+                    salt: backup.salt,
+                    iv: backup.iv,
+                    ciphertext: backup.ciphertext
+                })
+            }
+        });
+
+        return res.json({
+            success: true,
+            message: "Encrypted key backup saved."
+        });
+    } catch (error) {
+        console.error("SAVE ENCRYPTION KEY BACKUP ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to save the encrypted key backup."
+        });
+    }
+};
+
+exports.getEncryptionKeyBackup = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        const user = await User.findById(userId)
+            .select("+messengerEncryptionKeyBackup")
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        if (!user.messengerEncryptionKeyBackup) {
+            return res.status(404).json({
+                success: false,
+                message: "No encrypted key backup is available for this account."
+            });
+        }
+
+        let backup;
+
+        try {
+            backup = JSON.parse(user.messengerEncryptionKeyBackup);
+        } catch (error) {
+            console.error("INVALID SAVED ENCRYPTION KEY BACKUP:", error);
+            return res.status(500).json({
+                success: false,
+                message: "The saved encrypted key backup is invalid."
+            });
+        }
+
+        if (!isValidEncryptionKeyBackup(backup)) {
+            return res.status(500).json({
+                success: false,
+                message: "The saved encrypted key backup is invalid."
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: { backup }
+        });
+    } catch (error) {
+        console.error("GET ENCRYPTION KEY BACKUP ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load the encrypted key backup."
+        });
+    }
+};
 
 exports.saveEncryptionPublicKey = async (req, res) => {
     try {
