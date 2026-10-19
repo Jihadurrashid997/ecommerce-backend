@@ -68,7 +68,10 @@ import {
     isEncryptedMessage,
     isEncryptedGroupMessage,
     decryptGroupMessageRecord,
-    restoreMessengerIdentity
+    restoreMessengerIdentity,
+    encryptMessengerMediaFile,
+    decryptMessengerMediaFile,
+    getEncryptedMediaMetadata
 } from "../services/messengerEncryption";
 import {
     createLocationMessage,
@@ -182,6 +185,34 @@ const getId = (value) => {
     }
 
     return String(value);
+};
+
+const attachDecryptedMediaMetadata = message => {
+    if (!message || typeof message !== "object") {
+        return message;
+    }
+
+    const media = getEncryptedMediaMetadata(message?.message);
+    const nested = {};
+
+    for (const field of ["replyTo", "forwardedFrom"]) {
+        if (message[field] && typeof message[field] === "object") {
+            nested[field] = attachDecryptedMediaMetadata(message[field]);
+        }
+    }
+
+    if (!message?.fileUrl || !message?.isEncrypted || !media) {
+        return { ...message, ...nested };
+    }
+
+    return {
+        ...message,
+        ...nested,
+        message: media.caption,
+        fileName: media.fileName,
+        fileType: media.fileType,
+        encryptedMedia: media
+    };
 };
 
 
@@ -455,6 +486,92 @@ const VoiceMessagePlayer = ({ url, own }) => {
         </div>
     );
 
+};
+
+const EncryptedMediaAttachment = ({ url, media, own }) => {
+    const [objectUrl, setObjectUrl] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => () => {
+        if (objectUrl) {
+            window.URL.revokeObjectURL(objectUrl);
+        }
+    }, [objectUrl]);
+
+    const decryptAttachment = async () => {
+        setLoading(true);
+        setError("");
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error("The encrypted attachment could not be loaded.");
+            }
+            const encryptedBytes = await response.arrayBuffer();
+            const plaintext = await decryptMessengerMediaFile(
+                encryptedBytes,
+                media
+            );
+            const blob = new Blob([plaintext], { type: media.fileType });
+            setObjectUrl(window.URL.createObjectURL(blob));
+        } catch (loadError) {
+            console.error("Encrypted Messenger attachment error:", loadError);
+            setError("Could not decrypt this attachment on this device.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (error) {
+        return <span className="encrypted-media-error" role="status">{error}</span>;
+    }
+
+    if (!objectUrl) {
+        return (
+            <button
+                type="button"
+                className="message-attachment-file encrypted-media-load"
+                disabled={loading}
+                onClick={decryptAttachment}
+            >
+                <FaLock />
+                <span>{loading ? "Decrypting attachment..." : "Decrypt attachment"}</span>
+            </button>
+        );
+    }
+
+    if (media.fileType.startsWith("audio/")) {
+        return <VoiceMessagePlayer url={objectUrl} own={own} />;
+    }
+
+    if (media.fileType.startsWith("image/")) {
+        return (
+            <a
+                href={objectUrl}
+                target="_blank"
+                rel="noreferrer"
+                title="Open decrypted image"
+            >
+                <img
+                    src={objectUrl}
+                    alt={media.fileName}
+                    className="message-attachment-image"
+                />
+            </a>
+        );
+    }
+
+    return (
+        <a
+            href={objectUrl}
+            download={media.fileName}
+            className="message-attachment-file"
+        >
+            <FaPaperclip />
+            <span>{media.fileName}</span>
+        </a>
+    );
 };
 
 
@@ -892,7 +1009,7 @@ const Messenger = ({ isActive = true }) => {
 
                         encryptionIdentityRef.current = identity;
                         setEncryptionIdentity(identity);
-                        return Promise.all(
+                        const decryptedItems = await Promise.all(
                             items.map(item => {
                                 if (
                                     item?.isEncrypted &&
@@ -918,6 +1035,7 @@ const Messenger = ({ isActive = true }) => {
                                     : item
                             })
                         );
+                        return decryptedItems.map(attachDecryptedMediaMetadata);
                     } catch (error) {
                         console.error(
                             "Messenger group message decryption setup error:",
@@ -954,7 +1072,7 @@ const Messenger = ({ isActive = true }) => {
                         getId(target)
                     );
 
-                    return Promise.all(
+                    const decryptedItems = await Promise.all(
                         items.map(item =>
                             decryptMessageRecord(
                                 item,
@@ -963,6 +1081,7 @@ const Messenger = ({ isActive = true }) => {
                             )
                         )
                     );
+                    return decryptedItems.map(attachDecryptedMediaMetadata);
                 } catch (error) {
                     console.error("Messenger message decryption setup error:", error);
                     return items.map(item =>
@@ -6425,202 +6544,140 @@ const onCallMissed =
        FILE
     ===================================================== */
 
-    const handleFile =
-        async event => {
+    const sendAttachmentFile = async file => {
+        if (!selectedUser || !user) {
+            throw new Error("Choose a conversation before sending an attachment.");
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            throw new Error("Files must be 10MB or smaller.");
+        }
 
-            const file =
-                event.target.files?.[0];
+        const target = selectedUser;
+        const recipientId = getId(target);
+        const senderId = getId(user);
+        if (!recipientId || !senderId) {
+            throw new Error("Choose a valid conversation before sending an attachment.");
+        }
 
+        const encryptedChat = target.isGroup
+            ? target.isEncrypted
+            : getChatPreference(target).encrypted;
+        let uploadFile = file;
+        let storedMessage = "";
+        let mediaMetadata = null;
 
-            if (!file) {
-                return;
+        if (encryptedChat) {
+            const encrypted = await encryptMessengerMediaFile(file);
+            mediaMetadata = encrypted.metadata;
+            const metadataText = JSON.stringify(mediaMetadata);
+
+            if (target.isGroup) {
+                const identity =
+                    encryptionIdentityRef.current ||
+                    await ensureMessengerIdentity(api, senderId);
+                encryptionIdentityRef.current = identity;
+                setEncryptionIdentity(identity);
+                storedMessage = await encryptGroupMessageText({
+                    api,
+                    text: metadataText,
+                    groupId: recipientId,
+                    senderId,
+                    identity,
+                    participants: target.participants
+                });
+            } else {
+                const { cipher } = await getConversationCipher(target);
+                storedMessage = await encryptMessageText(
+                    metadataText,
+                    cipher,
+                    getConversationEncryptionId(senderId, recipientId)
+                );
             }
 
-            if (
-                selectedUser &&
-                (
-                    selectedUser.isEncrypted ||
-                    (
-                        !selectedUser.isGroup &&
-                        getChatPreference(selectedUser).encrypted
-                    )
-                )
-            ) {
-                showMessengerToast(
-                    "Attachments are not available in end-to-end encrypted chats yet."
-                );
-                event.target.value = "";
-                return;
-            }
+            uploadFile = new File(
+                [encrypted.ciphertext],
+                "encrypted-media.bin",
+                { type: "application/octet-stream" }
+            );
+        }
 
+        const formData = new FormData();
+        formData.append("file", uploadFile);
+        formData.append(target.isGroup ? "groupId" : "receiver", recipientId);
+        if (encryptedChat) {
+            formData.append("message", storedMessage);
+            formData.append("isEncrypted", "true");
+        }
 
-            if (
-                !selectedUser ||
-                !user
-            ) {
+        const response = await api.post("/messages/send", formData);
+        const saved =
+            response.data?.data ||
+            response.data?.message;
+        if (!saved) {
+            throw new Error("The server did not confirm the attachment.");
+        }
 
-                event.target.value =
-                    "";
+        const visibleMessage = encryptedChat
+            ? {
+                  ...saved,
+                  message: mediaMetadata.caption,
+                  fileName: mediaMetadata.fileName,
+                  fileType: mediaMetadata.fileType,
+                  encryptedMedia: mediaMetadata,
+                  isEncrypted: true
+              }
+            : saved;
+        appendMessage(visibleMessage);
 
-                return;
+        if (target.isGroup) {
+            updateGroupPreview(recipientId, saved);
+        }
 
-            }
+        scrollToBottom();
+        bumpRecent(recipientId);
 
+        const roomId =
+            currentRoomRef.current ||
+            getRoomId(user, target);
+        socket.emit("send-message", {
+            roomId,
+            sender: senderId,
+            ...(target.isGroup
+                ? {
+                      groupId: recipientId,
+                      senderName: getUserName(user)
+                  }
+                : { receiver: recipientId }),
+            message: saved.message || "",
+            fileUrl: saved.fileUrl || "",
+            fileName: saved.fileName || "",
+            fileType: saved.fileType || "",
+            isEncrypted: Boolean(encryptedChat),
+            _id: saved._id || saved.id,
+            id: saved._id || saved.id,
+            createdAt: saved.createdAt || new Date().toISOString()
+        });
+    };
 
-            if (
-                file.size >
-                10 * 1024 * 1024
-            ) {
+    const handleFile = async event => {
+        const file = event.target.files?.[0];
+        if (!file) {
+            return;
+        }
 
-                showMessengerToast("Files must be 10MB or smaller.");
-
-                event.target.value =
-                    "";
-
-                return;
-
-            }
-
-
-            try {
-                const recipientId = getId(selectedUser);
-                if (!recipientId) {
-                    throw new Error("Choose a valid conversation before sending an attachment.");
-                }
-
-                const formData =
-                    new FormData();
-
-
-                formData.append(
-                    "file",
-                    file
-                );
-
-
-                formData.append(
-                    selectedUser.isGroup
-                        ? "groupId"
-                        : "receiver",
-                    recipientId
-                );
-
-
-                const response =
-                    await api.post(
-                        "/messages/send",
-                        formData
-                    );
-
-
-                const saved =
-                    response.data?.data ||
-                    response.data?.message;
-
-                if (!saved) {
-                    throw new Error("The server did not confirm the attachment.");
-                }
-
-                if (saved) {
-
-                    appendMessage(
-                        saved
-                    );
-
-                    if (selectedUser.isGroup) {
-                        updateGroupPreview(
-                            getId(selectedUser),
-                            saved
-                        );
-                    }
-
-                    scrollToBottom();
-
-
-                    bumpRecent(
-                        getId(selectedUser)
-                    );
-
-
-                    /*
-                     * Previously nothing was emitted
-                     * here, so the receiver only ever
-                     * found out about a file/image once
-                     * they manually reopened the chat -
-                     * unlike text messages, which are
-                     * pushed over the socket right after
-                     * saving. Mirror that same flow here.
-                     */
-
-                    const roomId =
-                        currentRoomRef.current ||
-                        getRoomId(
-                            user,
-                            selectedUser
-                        );
-
-                    socket.emit(
-                        "send-message",
-                        {
-                            roomId,
-                            sender:
-                                getId(user),
-                            ...(selectedUser.isGroup
-                                ? {
-                                      groupId: getId(selectedUser),
-                                      senderName: getUserName(user)
-                                  }
-                                : {
-                                      receiver: getId(selectedUser)
-                                  }),
-                            message:
-                                saved.message ||
-                                "",
-                            fileUrl:
-                                saved.fileUrl ||
-                                "",
-                            fileName:
-                                saved.fileName ||
-                                "",
-                            fileType:
-                                saved.fileType ||
-                                "",
-                            _id:
-                                saved._id ||
-                                saved.id,
-                            id:
-                                saved._id ||
-                                saved.id,
-                            createdAt:
-                                saved.createdAt ||
-                                new Date()
-                                    .toISOString()
-                        }
-                    );
-
-                }
-
-            } catch (error) {
-
-                console.error(
-                    "File send error:",
-                    error
-                );
-
-                showMessengerToast(
-                    error.response?.data?.message ||
-                        error.message ||
-                        "Attachment could not be sent."
-                );
-
-            } finally {
-
-                event.target.value =
-                    "";
-
-            }
-
-        };
+        try {
+            await sendAttachmentFile(file);
+        } catch (error) {
+            console.error("File send error:", error);
+            showMessengerToast(
+                error.response?.data?.message ||
+                    error.message ||
+                    "Attachment could not be sent."
+            );
+        } finally {
+            event.target.value = "";
+        }
+    };
 
 
     /* =====================================================
@@ -6634,25 +6691,6 @@ const onCallMissed =
                 !selectedUser ||
                 !user
             ) {
-                return;
-            }
-
-            if (
-                selectedUser.isEncrypted ||
-                (
-                    !selectedUser.isGroup &&
-                    getChatPreference(selectedUser).encrypted
-                )
-            ) {
-                showMessengerToast(
-                    "Voice notes are not available in end-to-end encrypted chats yet."
-                );
-                return;
-            }
-
-            const recipientId = getId(selectedUser);
-            if (!recipientId) {
-                showMessengerToast("Choose a conversation before sending a voice note.");
                 return;
             }
 
@@ -6682,92 +6720,7 @@ const onCallMissed =
                         }
                     );
 
-                const formData =
-                    new FormData();
-
-                formData.append(
-                    "file",
-                    file
-                );
-
-                formData.append(
-                    selectedUser.isGroup
-                        ? "groupId"
-                        : "receiver",
-                    recipientId
-                );
-
-                const response =
-                    await api.post(
-                        "/messages/send",
-                        formData
-                    );
-
-                const saved =
-                    response.data?.data ||
-                    response.data?.message;
-
-                if (!saved) {
-                    throw new Error("The server did not confirm the voice message.");
-                }
-
-                appendMessage(saved);
-
-                if (selectedUser.isGroup) {
-                    updateGroupPreview(
-                        recipientId,
-                        saved
-                    );
-                }
-
-                scrollToBottom();
-
-                bumpRecent(recipientId);
-
-                const roomId =
-                    currentRoomRef.current ||
-                    getRoomId(
-                        user,
-                        selectedUser
-                    );
-
-                socket.emit(
-                    "send-message",
-                    {
-                        roomId,
-                        sender:
-                            getId(user),
-                        ...(selectedUser.isGroup
-                            ? {
-                                  groupId: recipientId,
-                                  senderName: getUserName(user)
-                              }
-                            : {
-                                  receiver: recipientId
-                              }),
-                        message:
-                            saved.message ||
-                            "",
-                        fileUrl:
-                            saved.fileUrl ||
-                            "",
-                        fileName:
-                            saved.fileName ||
-                            "",
-                        fileType:
-                            saved.fileType ||
-                            "",
-                        _id:
-                            saved._id ||
-                            saved.id,
-                        id:
-                            saved._id ||
-                            saved.id,
-                        createdAt:
-                            saved.createdAt ||
-                            new Date().toISOString()
-                    }
-                );
+                await sendAttachmentFile(file);
 
                 showMessengerToast("Voice note sent successfully.", "success");
 
@@ -6824,19 +6777,6 @@ const onCallMissed =
                 !selectedUser ||
                 isConversationBlocked
             ) {
-                return;
-            }
-
-            if (
-                selectedUser.isEncrypted ||
-                (
-                    !selectedUser.isGroup &&
-                    getChatPreference(selectedUser).encrypted
-                )
-            ) {
-                showMessengerToast(
-                    "Voice notes are not available in end-to-end encrypted chats yet."
-                );
                 return;
             }
 
@@ -9605,10 +9545,10 @@ const onCallMissed =
 
 
                                         const fileUrl =
-                                            getUploadUrl(
-                                                item.fileUrl ||
-                                                    ""
-                                            );
+                                            item.encryptedMedia ||
+                                            !item.isEncrypted
+                                                ? getUploadUrl(item.fileUrl || "")
+                                                : "";
 
 
                                         const fileType =
@@ -9780,7 +9720,13 @@ const onCallMissed =
                                                     )}
 
 
-                                                    {fileUrl && (
+                                                    {fileUrl && item.encryptedMedia ? (
+                                                        <EncryptedMediaAttachment
+                                                            url={fileUrl}
+                                                            media={item.encryptedMedia}
+                                                            own={own}
+                                                        />
+                                                    ) : fileUrl && (
 
                                                         isAudioFile ? (
 
@@ -10364,12 +10310,7 @@ const onCallMissed =
                                     aria-label="Attach image, audio, or document"
                                     disabled={
                                         !selectedUser ||
-                                        isConversationBlocked ||
-                                        selectedUser.isEncrypted ||
-                                        (
-                                            !selectedUser.isGroup &&
-                                            getChatPreference(selectedUser).encrypted
-                                        )
+                                        isConversationBlocked
                                     }
                                     onClick={() =>
                                         fileInputRef
@@ -10387,12 +10328,7 @@ const onCallMissed =
                                     aria-label="Attach image"
                                     disabled={
                                         !selectedUser ||
-                                        isConversationBlocked ||
-                                        selectedUser.isEncrypted ||
-                                        (
-                                            !selectedUser.isGroup &&
-                                            getChatPreference(selectedUser).encrypted
-                                        )
+                                        isConversationBlocked
                                     }
                                     onClick={() =>
                                         fileInputRef
@@ -10425,12 +10361,7 @@ const onCallMissed =
                                     hidden
                                     disabled={
                                         !selectedUser ||
-                                        isConversationBlocked ||
-                                        selectedUser.isEncrypted ||
-                                        (
-                                            !selectedUser.isGroup &&
-                                            getChatPreference(selectedUser).encrypted
-                                        )
+                                        isConversationBlocked
                                     }
                                     accept="image/*,audio/*,.pdf,.doc,.docx,.txt,.zip"
                                     aria-label="Attach an image, audio, or document"
@@ -10492,12 +10423,8 @@ const onCallMissed =
                                     title="Record voice message"
                                     disabled={
                                         sendingVoice ||
-                                        selectedUser?.isEncrypted ||
-                                        (
-                                            !selectedUser?.isGroup &&
-                                            selectedUser &&
-                                            getChatPreference(selectedUser).encrypted
-                                        )
+                                        !selectedUser ||
+                                        isConversationBlocked
                                     }
                                     onClick={
                                         startRecording
@@ -10698,8 +10625,8 @@ const onCallMissed =
                                     Messages sent before encryption was enabled remain
                                     unchanged, and new members cannot decrypt older
                                     encrypted messages.
-                                    Attachments and voice notes are unavailable in
-                                    encrypted groups. Voice/video calls are not
+                                    Attachments and voice notes are encrypted
+                                    client-side too. Voice/video calls are not
                                     end-to-end encrypted.
                                 </p>
                                 {selectedUser.isEncrypted && (

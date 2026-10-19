@@ -103,7 +103,7 @@ const populateMessage = (query) =>
         )
         .populate({
             path: "replyTo",
-            select: "message fileUrl fileName fileType sender createdAt",
+            select: "message fileUrl fileName fileType sender createdAt isEncrypted",
             populate: {
                 path: "sender",
                 select: "name username fullName displayName firstName"
@@ -111,7 +111,7 @@ const populateMessage = (query) =>
         })
         .populate({
             path: "forwardedFrom",
-            select: "message fileUrl fileName fileType sender createdAt",
+            select: "message fileUrl fileName fileType sender createdAt isEncrypted",
             populate: {
                 path: "sender",
                 select: "name username fullName displayName firstName"
@@ -425,7 +425,9 @@ exports.sendMessage = async (req, res) => {
         // puts the uploaded file here when the request came
         // from the chat's attach/image buttons.
         const file = req.file;
-        const isEncrypted = req.body?.isEncrypted === true;
+        const isEncrypted =
+            req.body?.isEncrypted === true ||
+            req.body?.isEncrypted === "true";
 
         if (!sender) {
             return res.status(401).json({
@@ -464,9 +466,19 @@ exports.sendMessage = async (req, res) => {
             }
 
             if (group.isEncrypted && file) {
+                if (file.mimetype !== "application/octet-stream") {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Encrypted groups accept only client-encrypted attachments."
+                    });
+                }
+            } else if (
+                file &&
+                file.mimetype === "application/octet-stream"
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: "Attachments are not available in encrypted groups yet."
+                    message: "Opaque attachments require end-to-end encryption."
                 });
             }
 
@@ -538,7 +550,7 @@ exports.sendMessage = async (req, res) => {
                 )
                 .populate({
                     path: "replyTo",
-                    select: "message fileUrl fileName fileType sender createdAt",
+                    select: "message fileUrl fileName fileType sender createdAt isEncrypted",
                     populate: {
                         path: "sender",
                         select: "name username fullName displayName firstName"
@@ -643,7 +655,6 @@ exports.sendMessage = async (req, res) => {
             (
                 !text.startsWith("e2ee:v1:") ||
                 !/^e2ee:v1:[A-Za-z0-9+/]+=*$/.test(text) ||
-                file ||
                 forwardSource?.fileUrl ||
                 !senderDoc?.messengerEncryptionPublicKey ||
                 !receiverDoc?.messengerEncryptionPublicKey
@@ -651,7 +662,21 @@ exports.sendMessage = async (req, res) => {
         ) {
             return res.status(400).json({
                 success: false,
-                message: "Encrypted messages require valid ciphertext, registered keys for both users, and no attachments."
+                message: "Encrypted messages require valid ciphertext and registered keys for both users."
+            });
+        }
+
+        if (
+            file &&
+            (
+                isEncrypted
+                    ? file.mimetype !== "application/octet-stream"
+                    : file.mimetype === "application/octet-stream"
+            )
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "End-to-end encrypted attachments must be uploaded as opaque ciphertext."
             });
         }
 

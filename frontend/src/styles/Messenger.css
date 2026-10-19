@@ -1135,6 +1135,25 @@
     max-width: 220px;
 }
 
+.encrypted-media-load {
+    color: #4338ca;
+    cursor: pointer;
+    font: inherit;
+    border: 0;
+    text-align: left;
+}
+
+.encrypted-media-load:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
+.encrypted-media-error {
+    display: inline-block;
+    color: #b91c1c;
+    font-size: 12px;
+}
+
 
 .message-bubble.own .message-attachment-file {
     background: rgba(255, 255, 255, 0.18);

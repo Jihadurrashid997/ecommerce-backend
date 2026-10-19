@@ -8,6 +8,9 @@ import {
     ensureMessengerIdentity,
     getConversationEncryptionId,
     getGroupSafetyCode,
+    encryptMessengerMediaFile,
+    decryptMessengerMediaFile,
+    getEncryptedMediaMetadata,
     encryptGroupMessageText,
     decryptGroupMessageRecord,
     getSafetyCode,
@@ -50,6 +53,17 @@ test("one-to-one ECDH keys encrypt text that only the matching peer can decrypt"
         aliceCipher,
         getConversationEncryptionId("alice", "bob")
     );
+    const encryptedMedia = await encryptMessengerMediaFile({
+        name: "secret.pdf",
+        type: "application/pdf",
+        size: 4,
+        arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer
+    });
+    const encryptedMediaMetadata = await encryptMessageText(
+        JSON.stringify(encryptedMedia.metadata),
+        aliceCipher,
+        getConversationEncryptionId("alice", "bob")
+    );
 
     const decrypted = await decryptMessageRecord(
         {
@@ -59,10 +73,22 @@ test("one-to-one ECDH keys encrypt text that only the matching peer can decrypt"
         bobCipher,
         getConversationEncryptionId("bob", "alice")
     );
+    const decryptedMediaMetadata = await decryptMessageRecord(
+        {
+            message: encryptedMediaMetadata,
+            isEncrypted: true,
+            fileUrl: "/uploads/secret.bin"
+        },
+        bobCipher,
+        getConversationEncryptionId("bob", "alice")
+    );
 
     expect(decrypted.message).toBe("Secret conversation");
     expect(decrypted.isEncrypted).toBe(true);
     expect(ciphertext).not.toContain("Secret conversation");
+    expect(
+        getEncryptedMediaMetadata(decryptedMediaMetadata.message).fileName
+    ).toBe("secret.pdf");
     expect(api.put).toHaveBeenCalledTimes(2);
 });
 
@@ -306,6 +332,30 @@ test("encrypted group text is readable only by members included in its key envel
         users[3],
         identities[3]
     );
+    const media = await encryptMessengerMediaFile({
+        name: "private-voice.webm",
+        type: "audio/webm",
+        size: 3,
+        arrayBuffer: async () => new Uint8Array([3, 4, 5]).buffer
+    });
+    const encryptedMediaMetadata = await encryptGroupMessageText({
+        api,
+        text: JSON.stringify(media.metadata),
+        groupId,
+        senderId: users[0],
+        identity: identities[0],
+        participants: groupMembers
+    });
+    const decryptedMediaMetadata = await decryptGroupMessageRecord(
+        api,
+        {
+            ...storedMessage,
+            message: encryptedMediaMetadata
+        },
+        groupId,
+        users[1],
+        identities[1]
+    );
     const envelope = JSON.parse(
         Buffer.from(encrypted.slice("e2eg:v1:".length), "base64url").toString()
     );
@@ -331,6 +381,9 @@ test("encrypted group text is readable only by members included in its key envel
     expect(aliceMessage.message).toBe("Private group conversation");
     expect(newMemberMessage.decryptionFailed).toBe(true);
     expect(newMemberMessage.message).toMatch(/before you joined/);
+    expect(
+        getEncryptedMediaMetadata(decryptedMediaMetadata.message).fileType
+    ).toBe("audio/webm");
     expect(tamperedMessage.decryptionFailed).toBe(true);
     expect(tamperedMessage.message).toBe(
         "Unable to decrypt this message on this device."
@@ -358,4 +411,55 @@ test("group verification codes are stable regardless of participant order", asyn
     ).resolves.toBe(
         await getGroupSafetyCode([bobKey, aliceKey])
     );
+});
+
+test("Messenger media encryption hides file bytes and restores metadata and content", async () => {
+    const originalBytes = new TextEncoder().encode("private audio/image bytes");
+    const file = {
+        name: "private-photo.png",
+        type: "image/png",
+        size: originalBytes.byteLength,
+        arrayBuffer: async () =>
+            originalBytes.buffer.slice(
+                originalBytes.byteOffset,
+                originalBytes.byteOffset + originalBytes.byteLength
+            )
+    };
+    const encrypted = await encryptMessengerMediaFile(file);
+
+    expect(encrypted.ciphertext).not.toEqual(originalBytes);
+    expect(encrypted.ciphertext.byteLength).toBe(originalBytes.byteLength + 16);
+    expect(getEncryptedMediaMetadata(JSON.stringify(encrypted.metadata)))
+        .toMatchObject({
+            fileName: "private-photo.png",
+            fileType: "image/png"
+        });
+
+    const decrypted = await decryptMessengerMediaFile(
+        encrypted.ciphertext,
+        encrypted.metadata
+    );
+    expect(Array.from(decrypted)).toEqual(Array.from(originalBytes));
+});
+
+test("tampered Messenger media and malformed metadata are rejected", async () => {
+    const file = {
+        name: "voice-note.webm",
+        type: "audio/webm",
+        size: 7,
+        arrayBuffer: async () => new TextEncoder().encode("voice!!").buffer
+    };
+    const encrypted = await encryptMessengerMediaFile(file);
+    const tampered = new Uint8Array(encrypted.ciphertext);
+    tampered[tampered.length - 1] ^= 1;
+
+    await expect(
+        decryptMessengerMediaFile(tampered, encrypted.metadata)
+    ).rejects.toThrow();
+    expect(
+        getEncryptedMediaMetadata(JSON.stringify({
+            ...encrypted.metadata,
+            key: "invalid"
+        }))
+    ).toBeNull();
 });

@@ -1,5 +1,8 @@
 const ENCRYPTED_MESSAGE_PREFIX = "e2ee:v1:";
 const ENCRYPTED_GROUP_MESSAGE_PREFIX = "e2eg:v1:";
+const ENCRYPTED_MEDIA_MARKER = "jr-messenger-media";
+const ENCRYPTED_MEDIA_VERSION = 1;
+const ENCRYPTED_MEDIA_AD = "jr-messenger-media-bytes-v1";
 const KEY_STORAGE_PREFIX = "jr-messenger-e2ee-v1:";
 const KEY_BACKUP_ITERATIONS = 600000;
 const KEY_BACKUP_VERSION = 1;
@@ -117,6 +120,111 @@ export const isEncryptedMessage = message =>
 export const isEncryptedGroupMessage = message =>
     typeof message === "string" &&
     message.startsWith(ENCRYPTED_GROUP_MESSAGE_PREFIX);
+
+export const getEncryptedMediaMetadata = message => {
+    if (typeof message !== "string" || !message) {
+        return null;
+    }
+
+    try {
+        const metadata = JSON.parse(message);
+        if (
+            metadata?.marker !== ENCRYPTED_MEDIA_MARKER ||
+            metadata.version !== ENCRYPTED_MEDIA_VERSION ||
+            typeof metadata.caption !== "string" ||
+            metadata.caption.length > 5000 ||
+            typeof metadata.fileName !== "string" ||
+            metadata.fileName.length > 255 ||
+            typeof metadata.fileType !== "string" ||
+            metadata.fileType.length > 128 ||
+            typeof metadata.key !== "string" ||
+            !/^[A-Za-z0-9_-]{43}$/.test(metadata.key) ||
+            typeof metadata.iv !== "string" ||
+            !/^[A-Za-z0-9_-]{16}$/.test(metadata.iv)
+        ) {
+            return null;
+        }
+
+        return metadata;
+    } catch {
+        return null;
+    }
+};
+
+export const encryptMessengerMediaFile = async file => {
+    if (
+        !file ||
+        typeof file.arrayBuffer !== "function" ||
+        file.size > 10 * 1024 * 1024
+    ) {
+        throw new Error("Choose a file smaller than 10MB to encrypt.");
+    }
+
+    const subtle = getSubtleCrypto();
+    const contentKey = await subtle.generateKey(
+        { name: "AES-GCM", length: 256 },
+        true,
+        ["encrypt", "decrypt"]
+    );
+    const iv = window.crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await subtle.encrypt(
+        {
+            name: "AES-GCM",
+            iv,
+            additionalData: new TextEncoder().encode(ENCRYPTED_MEDIA_AD)
+        },
+        contentKey,
+        await file.arrayBuffer()
+    );
+    const rawKey = await subtle.exportKey("raw", contentKey);
+
+    return {
+        ciphertext: new Uint8Array(ciphertext),
+        metadata: {
+            marker: ENCRYPTED_MEDIA_MARKER,
+            version: ENCRYPTED_MEDIA_VERSION,
+            caption: "",
+            fileName: String(file.name || "Attachment").slice(0, 255),
+            fileType: String(file.type || "application/octet-stream").slice(0, 128),
+            key: toBase64Url(new Uint8Array(rawKey)),
+            iv: toBase64Url(iv)
+        }
+    };
+};
+
+export const decryptMessengerMediaFile = async (encryptedBytes, metadata) => {
+    if (!getEncryptedMediaMetadata(JSON.stringify(metadata))) {
+        throw new Error("The encrypted attachment information is invalid.");
+    }
+
+    const bytes =
+        encryptedBytes instanceof Uint8Array
+            ? encryptedBytes
+            : new Uint8Array(encryptedBytes);
+    if (bytes.length < 16 || bytes.length > 10 * 1024 * 1024 + 16) {
+        throw new Error("The encrypted attachment size is invalid.");
+    }
+
+    const subtle = getSubtleCrypto();
+    const contentKey = await subtle.importKey(
+        "raw",
+        fromBase64Url(metadata.key),
+        "AES-GCM",
+        false,
+        ["decrypt"]
+    );
+    const plaintext = await subtle.decrypt(
+        {
+            name: "AES-GCM",
+            iv: fromBase64Url(metadata.iv),
+            additionalData: new TextEncoder().encode(ENCRYPTED_MEDIA_AD)
+        },
+        contentKey,
+        bytes
+    );
+
+    return new Uint8Array(plaintext);
+};
 
 export const getConversationEncryptionId = (firstUserId, secondUserId) =>
     [String(firstUserId), String(secondUserId)].sort().join(":");
