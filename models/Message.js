@@ -196,6 +196,11 @@ const MessageSchema =
 
             },
 
+            isForwarded: {
+                type: Boolean,
+                default: false
+            },
+
 
             reactions: [
                 {

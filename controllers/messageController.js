@@ -41,6 +41,34 @@ const canAccessMessage = async (message, userId) => {
     );
 };
 
+const emitMessageUpdate = async (req, eventName, message) => {
+    const io = req.app?.get("io");
+
+    if (!io) {
+        return;
+    }
+
+    const payload = { message };
+
+    if (message.groupId) {
+        const group = await GroupConversation.findById(message.groupId)
+            .select("participants")
+            .lean();
+
+        group?.participants.forEach(memberId => {
+            io.to(`user:${String(memberId)}`).emit(eventName, payload);
+        });
+        return;
+    }
+
+    [message.sender, message.receiver]
+        .map(participant => String(participant?._id || participant || ""))
+        .filter(Boolean)
+        .forEach(userId => {
+            io.to(`user:${userId}`).emit(eventName, payload);
+        });
+};
+
 const populateMessage = (query) =>
     query
         .populate(
@@ -366,11 +394,32 @@ exports.sendMessage = async (req, res) => {
 
         let forwardSource = null;
 
-        if (forwardedFromId && isValidObjectId(forwardedFromId)) {
+        if (forwardedFromId) {
+            if (!isValidObjectId(forwardedFromId)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid forwarded message."
+                });
+            }
 
             forwardSource = await Message.findById(forwardedFromId)
-                .select("message fileUrl fileName fileType");
+                .select(
+                    "sender receiver groupId message fileUrl fileName fileType isDeleted"
+                );
 
+            if (!forwardSource || forwardSource.isDeleted) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Forwarded message not found."
+                });
+            }
+
+            if (!await canAccessMessage(forwardSource, sender)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You don't have access to that message."
+                });
+            }
         }
 
         if (!receiver || (!text && !file && !forwardSource)) {
@@ -429,14 +478,14 @@ exports.sendMessage = async (req, res) => {
                 !text.startsWith("e2ee:v1:") ||
                 !/^e2ee:v1:[A-Za-z0-9+/]+=*$/.test(text) ||
                 file ||
-                forwardSource ||
+                forwardSource?.fileUrl ||
                 !senderDoc?.messengerEncryptionPublicKey ||
                 !receiverDoc?.messengerEncryptionPublicKey
             )
         ) {
             return res.status(400).json({
                 success: false,
-                message: "Encrypted messages require valid ciphertext, registered keys for both users, and no attachment or forwarded content."
+                message: "Encrypted messages require valid ciphertext, registered keys for both users, and no attachments."
             });
         }
 
@@ -452,6 +501,9 @@ exports.sendMessage = async (req, res) => {
             receiver,
             message: text,
             isEncrypted,
+            isForwarded:
+                Boolean(forwardSource) ||
+                req.body?.isForwarded === true,
             isSeen: false
         };
 
@@ -632,12 +684,16 @@ exports.markSeen = async (req, res) => {
             });
         }
 
+        const unseenFilter = {
+            sender: otherUserId,
+            receiver: currentUser,
+            isSeen: false
+        };
+        const unseenMessages = await Message.find(unseenFilter)
+            .select("_id")
+            .lean();
         const result = await Message.updateMany(
-            {
-                sender: otherUserId,
-                receiver: currentUser,
-                isSeen: false
-            },
+            unseenFilter,
             {
                 $set: {
                     isSeen: true,
@@ -645,6 +701,17 @@ exports.markSeen = async (req, res) => {
                 }
             }
         );
+
+        const io = req.app?.get("io");
+        if (io && unseenMessages.length) {
+            io.to(`user:${String(otherUserId)}`).emit("messages-seen", {
+                senderId: String(otherUserId),
+                receiverId: String(currentUser),
+                messageIds: unseenMessages.map(message =>
+                    String(message._id)
+                )
+            });
+        }
 
         return res.status(200).json({
             success: true,
@@ -946,6 +1013,11 @@ exports.editMessage = async (req, res) => {
         await message.save();
 
         const populated = await populateMessage(Message.findById(id));
+        try {
+            await emitMessageUpdate(req, "message-updated", populated);
+        } catch (broadcastError) {
+            console.error("EDIT MESSAGE BROADCAST ERROR:", broadcastError);
+        }
 
         return res.json({ success: true, data: populated });
 
@@ -999,6 +1071,11 @@ exports.deleteMessage = async (req, res) => {
         await message.save();
 
         const populated = await populateMessage(Message.findById(id));
+        try {
+            await emitMessageUpdate(req, "message-updated", populated);
+        } catch (broadcastError) {
+            console.error("DELETE MESSAGE BROADCAST ERROR:", broadcastError);
+        }
 
         return res.json({ success: true, data: populated });
 

@@ -159,6 +159,194 @@ test("direct conversation history rejects invalid pagination", async () => {
     }
 });
 
+test("editing and deleting a direct message broadcasts updates to both participants", async () => {
+    const originalFindById = Message.findById;
+    const message = {
+        _id: OTHER_USER_ID,
+        sender: TEST_USER_ID,
+        receiver: OTHER_USER_ID,
+        message: "before",
+        async save() {}
+    };
+    const events = [];
+    const query = {
+        populate() {
+            return this;
+        },
+        then(resolve, reject) {
+            return Promise.resolve(message).then(resolve, reject);
+        }
+    };
+    let lookups = 0;
+
+    Message.findById = () => {
+        lookups += 1;
+        return lookups % 2 === 1
+            ? Promise.resolve(message)
+            : query;
+    };
+
+    try {
+        await messageController.editMessage(
+            {
+                user: { id: TEST_USER_ID },
+                params: { id: OTHER_USER_ID },
+                body: { message: "after" },
+                app: {
+                    get: () => ({
+                        to(room) {
+                            return {
+                                emit(event, payload) {
+                                    events.push({ room, event, payload });
+                                }
+                            };
+                        }
+                    })
+                }
+            },
+            makeResponse()
+        );
+        await messageController.deleteMessage(
+            {
+                user: { id: TEST_USER_ID },
+                params: { id: OTHER_USER_ID },
+                app: {
+                    get: () => ({
+                        to(room) {
+                            return {
+                                emit(event, payload) {
+                                    events.push({ room, event, payload });
+                                }
+                            };
+                        }
+                    })
+                }
+            },
+            makeResponse()
+        );
+
+        assert.equal(message.message, "");
+        assert.equal(message.isDeleted, true);
+        assert.deepEqual(
+            events.map(({ room, event }) => ({ room, event })),
+            [
+                { room: `user:${TEST_USER_ID}`, event: "message-updated" },
+                { room: `user:${OTHER_USER_ID}`, event: "message-updated" },
+                { room: `user:${TEST_USER_ID}`, event: "message-updated" },
+                { room: `user:${OTHER_USER_ID}`, event: "message-updated" }
+            ]
+        );
+        assert.equal(events[0].payload.message.isEdited, true);
+        assert.equal(events[2].payload.message.isDeleted, true);
+    } finally {
+        Message.findById = originalFindById;
+    }
+});
+
+test("marking a conversation seen notifies the sender for the changed messages", async () => {
+    const originalFind = Message.find;
+    const originalUpdateMany = Message.updateMany;
+    const events = [];
+    const response = makeResponse();
+    const unseenMessages = [
+        { _id: "507f1f77bcf86cd799439014" },
+        { _id: "507f1f77bcf86cd799439015" }
+    ];
+    Message.find = filter => {
+        assert.deepEqual(filter, {
+            sender: OTHER_USER_ID,
+            receiver: TEST_USER_ID,
+            isSeen: false
+        });
+        return {
+            select(fields) {
+                assert.equal(fields, "_id");
+                return this;
+            },
+            lean: async () => unseenMessages
+        };
+    };
+    Message.updateMany = async (filter, update) => {
+        assert.deepEqual(filter, {
+            sender: OTHER_USER_ID,
+            receiver: TEST_USER_ID,
+            isSeen: false
+        });
+        assert.deepEqual(update, {
+            $set: { isSeen: true, isDelivered: true }
+        });
+        return { modifiedCount: unseenMessages.length };
+    };
+
+    try {
+        await messageController.markSeen(
+            {
+                user: { id: TEST_USER_ID },
+                params: { userId: OTHER_USER_ID },
+                app: {
+                    get: () => ({
+                        to(room) {
+                            return {
+                                emit(event, data) {
+                                    events.push({ room, event, data });
+                                }
+                            };
+                        }
+                    })
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(events, [
+            {
+                room: `user:${OTHER_USER_ID}`,
+                event: "messages-seen",
+                data: {
+                    senderId: OTHER_USER_ID,
+                    receiverId: TEST_USER_ID,
+                    messageIds: unseenMessages.map(item => item._id)
+                }
+            }
+        ]);
+    } finally {
+        Message.find = originalFind;
+        Message.updateMany = originalUpdateMany;
+    }
+});
+
+test("users cannot forward messages outside conversations they can access", async () => {
+    const originalFindById = Message.findById;
+    const response = makeResponse();
+    Message.findById = () => ({
+        select: async () => ({
+            sender: OTHER_USER_ID,
+            receiver: "507f1f77bcf86cd799439012",
+            groupId: null,
+            isDeleted: false
+        })
+    });
+
+    try {
+        await messageController.sendMessage(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    receiver: OTHER_USER_ID,
+                    forwardedFrom: "507f1f77bcf86cd799439013"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 403);
+        assert.equal(response.body.success, false);
+    } finally {
+        Message.findById = originalFindById;
+    }
+});
+
 test("Messenger attachment uploads accept common audio formats and reject video files", () => {
     const filterFile = mimetype => {
         let result;

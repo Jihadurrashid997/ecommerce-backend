@@ -3560,6 +3560,14 @@ const onReceiveMessage =
 
         const onSeen =
             data => {
+                const messageIds = new Set(
+                    data?.messageIds ||
+                    (data?.messageId ? [data.messageId] : [])
+                );
+
+                if (!messageIds.size) {
+                    return;
+                }
 
                 setMessages(
                     previous =>
@@ -3567,11 +3575,9 @@ const onReceiveMessage =
                             item => {
 
                                 if (
-                                    data?.messageId &&
-                                    getMessageId(
-                                        item
-                                    ) ===
-                                    data.messageId
+                                    messageIds.has(
+                                        getMessageId(item)
+                                    )
                                 ) {
 
                                     return {
@@ -3635,30 +3641,55 @@ const onReceiveMessage =
             };
 
 
-        const onMessageReaction =
-            data => {
+        const applyIncomingMessageUpdate =
+            async incoming => {
+                const active = selectedUserRef.current;
+                const messageId = getMessageId(incoming);
 
-                const updated =
-                    data?.message;
-
-                if (!updated) {
+                if (!active || !messageId || !incoming) {
                     return;
                 }
 
-                const messageId =
-                    getMessageId(updated);
+                const activeId = getId(active);
+                const groupId = getId(incoming.groupId);
+                const senderId =
+                    getId(incoming.sender) ||
+                    getId(incoming.senderId);
+                const receiverId =
+                    getId(incoming.receiver) ||
+                    getId(incoming.receiverId);
+                const belongsToActiveConversation =
+                    active.isGroup
+                        ? groupId === activeId
+                        : !groupId &&
+                          [senderId, receiverId].includes(currentId) &&
+                          [senderId, receiverId].includes(activeId);
 
-                setMessages(
-                    previous =>
-                        previous.map(
-                            item =>
-                                getMessageId(item) ===
-                                messageId
-                                    ? updated
-                                    : item
-                        )
+                if (!belongsToActiveConversation) {
+                    return;
+                }
+
+                const [updated] = incoming.isDeleted
+                    ? [incoming]
+                    : await decryptMessagesForTarget([incoming], active);
+
+                setMessages(previous =>
+                    previous.map(item =>
+                        getMessageId(item) === messageId
+                            ? updated
+                            : item
+                    )
                 );
+            };
 
+        const onMessageReaction =
+            data => {
+                void applyIncomingMessageUpdate(data?.message);
+            };
+
+        const onMessageUpdated =
+            data => {
+                void applyIncomingMessageUpdate(data?.message);
             };
 
 
@@ -4696,6 +4727,11 @@ const onCallMissed =
         );
 
         socket.on(
+            "message-updated",
+            onMessageUpdated
+        );
+
+        socket.on(
             "incoming-call",
             onIncomingCall
         );
@@ -4816,6 +4852,11 @@ const onCallMissed =
             socket.off(
                 "message-reaction",
                 onMessageReaction
+            );
+
+            socket.off(
+                "message-updated",
+                onMessageUpdated
             );
 
             socket.off(
@@ -5792,99 +5833,75 @@ const onCallMissed =
                     response.data?.message ||
                     null;
 
+                if (!saved) {
+                    throw new Error(
+                        "The server did not confirm that the message was saved."
+                    );
+                }
 
                 /*
                  * Replace optimistic message.
                  */
 
-                if (saved) {
-                    const visibleSaved = encryptedChat
-                        ? {
-                              ...saved,
-                              message: text,
-                              isEncrypted: true
-                          }
-                        : saved;
+                const visibleSaved = encryptedChat
+                    ? {
+                          ...saved,
+                          message: text,
+                          isEncrypted: true
+                      }
+                    : saved;
 
-                    if (selectedUser.isGroup) {
-                        updateGroupPreview(receiver, saved);
-                    }
-
-                    setMessages(
-                        previous =>
-                            previous.map(
-                                item =>
-                                    item._id ===
-                                    temporaryId
-                                        ? visibleSaved
-                                        : item
-                            )
-                    );
-
-
-                    /*
-                     * Send saved message through
-                     * Socket.IO immediately after DB save.
-                     */
-
-                    socket.emit(
-                        "send-message",
-                        {
-                            roomId,
-                            sender,
-                            ...(selectedUser.isGroup
-                                ? {
-                                      groupId: receiver,
-                                      senderName: getUserName(user)
-                                  }
-                                : { receiver }),
-                            message:
-                                saved.message ||
-                                storedText,
-                            isEncrypted: encryptedChat,
-                            replyTo:
-                                saved.replyTo ||
-                                undefined,
-                            _id:
-                                saved._id ||
-                                saved.id,
-                            id:
-                                saved._id ||
-                                saved.id,
-                            createdAt:
-                                saved.createdAt ||
-                                new Date()
-                                    .toISOString()
-                        }
-                    );
-
-                } else {
-
-                    /*
-                     * If API returned no object,
-                     * still notify receiver.
-                     */
-
-                    socket.emit(
-                        "send-message",
-                        {
-                            roomId,
-                            sender,
-                            ...(selectedUser.isGroup
-                                ? {
-                                      groupId: receiver,
-                                      senderName: getUserName(user)
-                                  }
-                                : { receiver }),
-                            message:
-                                text,
-                            createdAt:
-                                new Date()
-                                    .toISOString()
-                        }
-                    );
-
+                if (selectedUser.isGroup) {
+                    updateGroupPreview(receiver, saved);
                 }
+
+                setMessages(
+                    previous =>
+                        previous.map(
+                            item =>
+                                item._id ===
+                                temporaryId
+                                    ? visibleSaved
+                                    : item
+                        )
+                );
+
+
+                /*
+                 * Send saved message through
+                 * Socket.IO immediately after DB save.
+                 */
+
+                socket.emit(
+                    "send-message",
+                    {
+                        roomId,
+                        sender,
+                        ...(selectedUser.isGroup
+                            ? {
+                                  groupId: receiver,
+                                  senderName: getUserName(user)
+                              }
+                            : { receiver }),
+                        message:
+                            saved.message ||
+                            storedText,
+                        isEncrypted: encryptedChat,
+                        replyTo:
+                            saved.replyTo ||
+                            undefined,
+                        _id:
+                            saved._id ||
+                            saved.id,
+                        id:
+                            saved._id ||
+                            saved.id,
+                        createdAt:
+                            saved.createdAt ||
+                            new Date()
+                                .toISOString()
+                    }
+                );
 
             } catch (error) {
 
@@ -6717,21 +6734,71 @@ const onCallMissed =
 
                 setForwardSending(true);
 
+                const encryptedDestination =
+                    getChatPreference(targetUser).encrypted;
+                const sourceMessageId =
+                    getMessageId(forwardingMessage);
+                let forwardPayload = {
+                    receiver: targetId,
+                    forwardedFrom: sourceMessageId
+                };
+
+                if (forwardingMessage.isDeleted) {
+                    throw new Error("Deleted messages cannot be forwarded.");
+                }
+                if (forwardingMessage.decryptionFailed) {
+                    throw new Error(
+                        "This message could not be decrypted, so it cannot be forwarded."
+                    );
+                }
+
+                if (encryptedDestination) {
+                    if (forwardingMessage.fileUrl) {
+                        throw new Error(
+                            "Attachments cannot be forwarded to an encrypted chat."
+                        );
+                    }
+
+                    const { cipher } =
+                        await getConversationCipher(targetUser);
+                    const encryptedText =
+                        await encryptMessageText(
+                            String(forwardingMessage.message || "").trim(),
+                            cipher,
+                            getConversationEncryptionId(
+                                getId(user),
+                                targetId
+                            )
+                        );
+
+                    if (!encryptedText || encryptedText.length > 5000) {
+                        throw new Error(
+                            "This message is too long to forward securely."
+                        );
+                    }
+
+                    forwardPayload = {
+                        receiver: targetId,
+                        message: encryptedText,
+                        isEncrypted: true,
+                        isForwarded: true
+                    };
+                } else if (forwardingMessage.isEncrypted) {
+                    forwardPayload.message =
+                        String(forwardingMessage.message || "").trim();
+                }
+
                 const response =
                     await api.post(
                         "/messages/send",
-                        {
-                            receiver:
-                                targetId,
-                            forwardedFrom:
-                                getMessageId(
-                                    forwardingMessage
-                                )
-                        }
+                        forwardPayload
                     );
 
                 const saved =
                     response.data?.data;
+                const [visibleSaved] = saved && encryptedDestination
+                    ? await decryptMessagesForTarget([saved], targetUser)
+                    : [saved];
 
                 const roomId =
                     getRoomId(
@@ -6749,9 +6816,9 @@ const onCallMissed =
                                 getId(user),
                             receiver:
                                 targetId,
-                            message:
-                                saved.message ||
-                                "",
+                            message: saved.message || "",
+                            isEncrypted: saved.isEncrypted || false,
+                            isForwarded: saved.isForwarded || false,
                             fileUrl:
                                 saved.fileUrl ||
                                 "",
@@ -6783,7 +6850,7 @@ const onCallMissed =
                     ) {
 
                         appendMessage(
-                            saved
+                            visibleSaved
                         );
 
                         scrollToBottom();
@@ -6816,9 +6883,10 @@ const onCallMissed =
                     error
                 );
 
-                alert(
+                showMessengerToast(
                     error.response?.data
                         ?.message ||
+                    error.message ||
                     "Could not forward this message."
                 );
 
@@ -6855,6 +6923,11 @@ const onCallMissed =
                     response.data?.data;
 
                 if (updated) {
+                    const [visibleUpdated] =
+                        await decryptMessagesForTarget(
+                            [updated],
+                            selectedUser
+                        );
 
                     setMessages(
                         previous =>
@@ -6862,7 +6935,7 @@ const onCallMissed =
                                 msg =>
                                     getMessageId(msg) ===
                                     messageId
-                                        ? updated
+                                        ? visibleUpdated
                                         : msg
                             )
                     );
@@ -6888,6 +6961,10 @@ const onCallMissed =
                 console.error(
                     "React error:",
                     error
+                );
+                showMessengerToast(
+                    error.response?.data?.message ||
+                    "Could not update this reaction."
                 );
 
             }
@@ -9141,6 +9218,13 @@ const onCallMissed =
                                                         </strong>
                                                     )}
 
+                                                    {(item.forwardedFrom ||
+                                                        item.isForwarded) && (
+                                                        <span className="forwarded-message-label">
+                                                            <FaShare aria-hidden="true" />
+                                                            Forwarded
+                                                        </span>
+                                                    )}
 
                                                     {item.replyTo && (
 
