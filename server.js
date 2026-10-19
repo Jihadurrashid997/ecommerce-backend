@@ -10,6 +10,9 @@ const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
 const isDatabaseReady = require("./services/databaseHealth");
+const {
+    canJoinDirectConversationRoom
+} = require("./services/socketRoomAccess");
 const Message = require("./models/Message");
 const User = require("./models/User");
 const GroupConversation = require("./models/GroupConversation");
@@ -668,6 +671,13 @@ io.on(
                         console.error("Group room membership check error:", error);
                         return;
                     }
+                } else if (
+                    !canJoinDirectConversationRoom(
+                        roomId,
+                        socket.userId
+                    )
+                ) {
+                    return;
                 }
 
                 socket.join(
