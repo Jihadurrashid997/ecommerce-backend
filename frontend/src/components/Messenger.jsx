@@ -1207,6 +1207,12 @@ const Messenger = ({ isActive = true }) => {
     const [messageDeleteFor, setMessageDeleteFor] =
         useState(null);
 
+    const [deleteConfirmation, setDeleteConfirmation] =
+        useState(null);
+
+    const [deletingMessage, setDeletingMessage] =
+        useState(false);
+
     const [reactionPickerFor, setReactionPickerFor] =
         useState(null);
 
@@ -6967,18 +6973,7 @@ const onCallMissed =
                 return;
             }
 
-            const actionLabel = deleteFor === "me"
-                ? "delete this message only for you"
-                : "delete this message for everyone";
-            const confirmed =
-                window.confirm(
-                    `Are you sure you want to ${actionLabel}?`
-                );
-
-            if (!confirmed) {
-                return;
-            }
-
+            setDeletingMessage(true);
             try {
 
                 const response =
@@ -7012,6 +7007,7 @@ const onCallMissed =
                 }
 
                 setMessageDeleteFor(null);
+                setDeleteConfirmation(null);
 
             } catch (error) {
 
@@ -7020,11 +7016,16 @@ const onCallMissed =
                     error
                 );
 
-                alert(
+                showMessengerToast(
                     error.response?.data
                         ?.message ||
-                    "Unable to delete message."
+                    "Unable to delete message.",
+                    "error"
                 );
+
+            } finally {
+
+                setDeletingMessage(false);
 
             }
 
@@ -9614,9 +9615,13 @@ const onCallMissed =
                                                                 <div className="message-delete-options">
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() =>
-                                                                            handleDeleteMessage(item, "me")
-                                                                        }
+                                                                        onClick={() => {
+                                                                            setMessageDeleteFor(null);
+                                                                            setDeleteConfirmation({
+                                                                                item,
+                                                                                deleteFor: "me"
+                                                                            });
+                                                                        }}
                                                                     >
                                                                         Delete for me
                                                                     </button>
@@ -9629,9 +9634,13 @@ const onCallMissed =
                                                                                     ? "Delete this message for both people"
                                                                                     : "Delete for everyone is only available for 15 minutes"
                                                                             }
-                                                                            onClick={() =>
-                                                                                handleDeleteMessage(item, "everyone")
-                                                                            }
+                                                                            onClick={() => {
+                                                                                setMessageDeleteFor(null);
+                                                                                setDeleteConfirmation({
+                                                                                    item,
+                                                                                    deleteFor: "everyone"
+                                                                                });
+                                                                            }}
                                                                         >
                                                                             Delete for everyone
                                                                         </button>
@@ -10519,6 +10528,78 @@ const onCallMissed =
     }
 />
 
+{deleteConfirmation && (
+    <div
+        className="message-delete-dialog-overlay"
+        onMouseDown={event => {
+            if (event.target === event.currentTarget && !deletingMessage) {
+                setDeleteConfirmation(null);
+            }
+        }}
+        onKeyDown={event => {
+            if (event.key === "Escape" && !deletingMessage) {
+                setDeleteConfirmation(null);
+            }
+        }}
+    >
+        <section
+            className={`message-delete-dialog ${
+                deleteConfirmation.deleteFor === "everyone"
+                    ? "delete-everyone"
+                    : "delete-for-me"
+            }`}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="message-delete-title"
+            aria-describedby="message-delete-description"
+        >
+            <div className="message-delete-dialog-icon" aria-hidden="true">
+                <FaTrash />
+            </div>
+            <span className="message-delete-dialog-eyebrow">
+                Confirm message deletion
+            </span>
+            <h2 id="message-delete-title">
+                {deleteConfirmation.deleteFor === "everyone"
+                    ? "Delete for everyone?"
+                    : "Delete for you?"}
+            </h2>
+            <p id="message-delete-description">
+                {deleteConfirmation.deleteFor === "everyone"
+                    ? "This message will be removed for everyone in this chat. This action cannot be undone."
+                    : "This message will disappear from your chat. Other people in the conversation can still see it."}
+            </p>
+            <div className="message-delete-dialog-actions">
+                <button
+                    type="button"
+                    className="message-delete-cancel"
+                    autoFocus
+                    disabled={deletingMessage}
+                    onClick={() => setDeleteConfirmation(null)}
+                >
+                    Keep message
+                </button>
+                <button
+                    type="button"
+                    className="message-delete-confirm"
+                    disabled={deletingMessage}
+                    onClick={() =>
+                        handleDeleteMessage(
+                            deleteConfirmation.item,
+                            deleteConfirmation.deleteFor
+                        )
+                    }
+                >
+                    {deletingMessage
+                        ? "Deleting…"
+                        : deleteConfirmation.deleteFor === "everyone"
+                            ? "Delete for everyone"
+                            : "Delete for me"}
+                </button>
+            </div>
+        </section>
+    </div>
+)}
 
 {forwardingMessage && (
 
