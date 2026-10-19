@@ -8385,6 +8385,28 @@ const onCallMissed =
                                     aria-label="Back to conversations"
                                     className="mobile-back-btn"
                                     onClick={() => {
+                                        const conversationRoom =
+                                            selectedUser?.isGroup
+                                                ? `group:${getId(selectedUser)}`
+                                                : getRoomId(
+                                                      user,
+                                                      selectedUser
+                                                  );
+
+                                        if (
+                                            !callStateRef.current &&
+                                            !activeGroupCall &&
+                                            conversationRoom &&
+                                            currentRoomRef.current ===
+                                                conversationRoom
+                                        ) {
+                                            socket.emit(
+                                                "leave-room",
+                                                conversationRoom
+                                            );
+                                            currentRoomRef.current =
+                                                null;
+                                        }
 
                                         setMobileChatOpen(
                                             false
@@ -9473,7 +9495,7 @@ const onCallMissed =
                                                             className="message-reply-btn"
                                                             title="Forward"
                                                             disabled={
-                                                                item.isEncrypted ||
+                                                                item.isDeleted ||
                                                                 item.decryptionFailed
                                                             }
                                                             onClick={() => {
