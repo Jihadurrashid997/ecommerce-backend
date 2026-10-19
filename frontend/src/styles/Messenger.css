@@ -1104,6 +1104,69 @@
     color: #7fdbff;
 }
 
+.message-delete-options {
+    position: absolute;
+    z-index: 4;
+    right: 8px;
+    bottom: calc(100% + 6px);
+    display: flex;
+    min-width: 190px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+}
+
+.message-delete-options button {
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #1f2937;
+    cursor: pointer;
+    font-size: 13px;
+    text-align: left;
+}
+
+.message-delete-options button:hover:not(:disabled) {
+    background: #f3f4f6;
+}
+
+.message-delete-options button:disabled {
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.message-delete-options small {
+    padding: 2px 8px;
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.call-log-message {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 11px;
+    border-radius: 12px;
+    background: rgba(108, 92, 231, 0.09);
+    color: #38325f;
+    font-size: 13px;
+}
+
+.call-log-message svg {
+    flex: 0 0 auto;
+    color: #6c5ce7;
+}
+
+.call-log-message small {
+    color: #6b7280;
+    font-variant-numeric: tabular-nums;
+}
+
 
 /* =========================================================
    ATTACHMENTS (images / files sent in chat)

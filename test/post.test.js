@@ -1,5 +1,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const fs = require("node:fs/promises");
+const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 const Post = require("../models/Post");
 const Message = require("../models/Message");
 const messageController = require("../controllers/messageController");
@@ -88,6 +91,18 @@ test("direct messages still require a receiver", () => {
     assert.ok(error.errors.receiver);
 });
 
+test("deleted message tombstones satisfy the persisted message schema", () => {
+    const deletedMessage = new Message({
+        sender: TEST_USER_ID,
+        receiver: OTHER_USER_ID,
+        message: "This message was deleted.",
+        isDeleted: true,
+        fileUrl: ""
+    });
+
+    assert.equal(deletedMessage.validateSync(), undefined);
+});
+
 test("direct conversation history returns the requested page and indicates older messages", async () => {
     const originalFind = Message.find;
     const newest = { _id: "newest" };
@@ -117,6 +132,7 @@ test("direct conversation history returns the requested page and indicates older
 
     Message.find = filter => {
         assert.deepEqual(filter, {
+            deletedFor: { $ne: TEST_USER_ID },
             $or: [
                 { sender: TEST_USER_ID, receiver: OTHER_USER_ID },
                 { sender: OTHER_USER_ID, receiver: TEST_USER_ID }
@@ -176,6 +192,8 @@ test("editing and deleting a direct message broadcasts updates to both participa
         sender: TEST_USER_ID,
         receiver: OTHER_USER_ID,
         message: "before",
+        createdAt: new Date(),
+        deletedFor: [],
         async save() {}
     };
     const events = [];
@@ -220,6 +238,7 @@ test("editing and deleting a direct message broadcasts updates to both participa
             {
                 user: { id: TEST_USER_ID },
                 params: { id: OTHER_USER_ID },
+                body: { deleteFor: "everyone" },
                 app: {
                     get: () => ({
                         to(room) {
@@ -235,7 +254,7 @@ test("editing and deleting a direct message broadcasts updates to both participa
             makeResponse()
         );
 
-        assert.equal(message.message, "");
+        assert.equal(message.message, "This message was deleted.");
         assert.equal(message.isDeleted, true);
         assert.deepEqual(
             events.map(({ room, event }) => ({ room, event })),
@@ -253,6 +272,220 @@ test("editing and deleting a direct message broadcasts updates to both participa
     }
 });
 
+test("delete for me hides only the current member's message copy", async () => {
+    const originalFindById = Message.findById;
+    const events = [];
+    const message = {
+        _id: OTHER_USER_ID,
+        sender: OTHER_USER_ID,
+        receiver: TEST_USER_ID,
+        message: "Keep this for the sender.",
+        fileUrl: "",
+        deletedFor: [],
+        async save() {}
+    };
+    Message.findById = async () => message;
+
+    try {
+        const response = makeResponse();
+        await messageController.deleteMessage(
+            {
+                user: { id: TEST_USER_ID },
+                params: { id: OTHER_USER_ID },
+                body: { deleteFor: "me" },
+                app: {
+                    get: () => ({
+                        to(room) {
+                            return {
+                                emit(event, payload) {
+                                    events.push({ room, event, payload });
+                                }
+                            };
+                        }
+                    })
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(message.message, "Keep this for the sender.");
+        assert.equal(message.isDeleted, undefined);
+        assert.deepEqual(message.deletedFor, [TEST_USER_ID]);
+        assert.deepEqual(events.map(({ room, event }) => ({ room, event })), [
+            {
+                room: `user:${TEST_USER_ID}`,
+                event: "message-updated"
+            }
+        ]);
+    } finally {
+        Message.findById = originalFindById;
+    }
+});
+
+test("delete for everyone is rejected after the 15 minute window", async () => {
+    const originalFindById = Message.findById;
+    let saved = false;
+    Message.findById = async () => ({
+        _id: OTHER_USER_ID,
+        sender: TEST_USER_ID,
+        receiver: OTHER_USER_ID,
+        message: "Too old.",
+        createdAt: new Date(Date.now() - 15 * 60 * 1000 - 1),
+        async save() {
+            saved = true;
+        }
+    });
+
+    try {
+        const response = makeResponse();
+        await messageController.deleteMessage(
+            {
+                user: { id: TEST_USER_ID },
+                params: { id: OTHER_USER_ID },
+                body: { deleteFor: "everyone" }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.equal(response.body.code, "DELETE_FOR_EVERYONE_EXPIRED");
+        assert.equal(saved, false);
+    } finally {
+        Message.findById = originalFindById;
+    }
+});
+
+test("delete for everyone removes an unshared local attachment", async () => {
+    const originalFindById = Message.findById;
+    const originalExists = Message.exists;
+    const filename = `delete-test-${randomUUID()}.txt`;
+    const uploadDirectory = path.resolve(__dirname, "..", "uploads");
+    const uploadPath = path.join(uploadDirectory, filename);
+    const message = {
+        _id: OTHER_USER_ID,
+        sender: TEST_USER_ID,
+        receiver: OTHER_USER_ID,
+        message: "Attachment",
+        fileUrl: `/uploads/${filename}`,
+        createdAt: new Date(),
+        async save() {}
+    };
+    const query = {
+        populate() {
+            return this;
+        },
+        then(resolve, reject) {
+            return Promise.resolve(message).then(resolve, reject);
+        }
+    };
+    let lookups = 0;
+    Message.findById = () => {
+        lookups += 1;
+        return lookups === 1 ? Promise.resolve(message) : query;
+    };
+    Message.exists = async () => null;
+
+    try {
+        await fs.mkdir(uploadDirectory, { recursive: true });
+        await fs.writeFile(uploadPath, "attachment");
+        const response = makeResponse();
+        await messageController.deleteMessage(
+            {
+                user: { id: TEST_USER_ID },
+                params: { id: OTHER_USER_ID },
+                body: { deleteFor: "everyone" }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        await assert.rejects(fs.access(uploadPath), { code: "ENOENT" });
+    } finally {
+        Message.findById = originalFindById;
+        Message.exists = originalExists;
+        await fs.rm(uploadPath, { force: true });
+    }
+});
+
+test("call log endpoint saves a typed call record visible to both participants", async () => {
+    const originalFindById = Message.findById;
+    const originalFindOneAndUpdate = Message.findOneAndUpdate;
+    const originalUserFindById = User.findById;
+    const callId = "ac4c9a16-f2c3-4b45-a7b9-81419fe52266";
+    let savedMessage;
+    User.findById = id => ({
+        select: () => ({
+            lean: async () => ({ _id: id })
+        })
+    });
+    Message.findOneAndUpdate = async (filter, update, options) => {
+        assert.deepEqual(filter, { callId });
+        assert.equal(options.upsert, true);
+        savedMessage = {
+            _id: "507f1f77bcf86cd799439016",
+            createdAt: new Date(),
+            ...update.$setOnInsert,
+            toObject() {
+                return { ...this };
+            }
+        };
+        return savedMessage;
+    };
+    Message.findById = () => makeMessageQuery(savedMessage);
+
+    try {
+        const response = makeResponse();
+        const events = [];
+        await messageController.createCallLog(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    callId,
+                    callerId: TEST_USER_ID,
+                    otherUserId: OTHER_USER_ID,
+                    callType: "video",
+                    status: "ended",
+                    duration: 85
+                },
+                app: {
+                    get: () => ({
+                        to(room) {
+                            return {
+                                emit(event, payload) {
+                                    events.push({ room, event, payload });
+                                }
+                            };
+                        }
+                    })
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(savedMessage.type, "call-log");
+        assert.equal(savedMessage.callType, "video");
+        assert.equal(savedMessage.callStatus, "ended");
+        assert.equal(savedMessage.callDuration, 85);
+        assert.match(savedMessage.message, /Video call ended • 01:25/);
+        assert.deepEqual(events.map(({ room, event }) => ({ room, event })), [
+            {
+                room: [TEST_USER_ID, OTHER_USER_ID].sort().join("_"),
+                event: "receive-message"
+            },
+            {
+                room: `user:${OTHER_USER_ID}`,
+                event: "direct-message"
+            }
+        ]);
+    } finally {
+        Message.findById = originalFindById;
+        Message.findOneAndUpdate = originalFindOneAndUpdate;
+        User.findById = originalUserFindById;
+    }
+});
+
 test("marking a conversation seen notifies the sender for the changed messages", async () => {
     const originalFind = Message.find;
     const originalUpdateMany = Message.updateMany;
@@ -266,7 +499,8 @@ test("marking a conversation seen notifies the sender for the changed messages",
         assert.deepEqual(filter, {
             sender: OTHER_USER_ID,
             receiver: TEST_USER_ID,
-            isSeen: false
+            isSeen: false,
+            deletedFor: { $ne: TEST_USER_ID }
         });
         return {
             select(fields) {
@@ -280,7 +514,8 @@ test("marking a conversation seen notifies the sender for the changed messages",
         assert.deepEqual(filter, {
             sender: OTHER_USER_ID,
             receiver: TEST_USER_ID,
-            isSeen: false
+            isSeen: false,
+            deletedFor: { $ne: TEST_USER_ID }
         });
         assert.deepEqual(update, {
             $set: { isSeen: true, isDelivered: true }
@@ -1059,13 +1294,17 @@ test("group conversation history supports paging and preserves chronological ord
         return Promise.resolve({ _id: OTHER_USER_ID });
     };
     Message.find = filter => {
-        assert.deepEqual(filter, { groupId: OTHER_USER_ID });
+        assert.deepEqual(filter, {
+            groupId: OTHER_USER_ID,
+            deletedFor: { $ne: TEST_USER_ID }
+        });
         return query;
     };
     Message.updateMany = async filter => {
         assert.deepEqual(filter, {
             groupId: OTHER_USER_ID,
-            sender: { $ne: TEST_USER_ID }
+            sender: { $ne: TEST_USER_ID },
+            deletedFor: { $ne: TEST_USER_ID }
         });
     };
 

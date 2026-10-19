@@ -429,7 +429,10 @@ exports.getGroupMessages = async (req, res) => {
             });
         }
 
-        const messages = await Message.find({ groupId })
+        const messages = await Message.find({
+            groupId,
+            deletedFor: { $ne: userId }
+        })
             .sort({ createdAt: -1, _id: -1 })
             .skip(skip)
             .limit(limit + 1)
@@ -453,7 +456,11 @@ exports.getGroupMessages = async (req, res) => {
             .reverse();
 
         await Message.updateMany(
-            { groupId, sender: { $ne: userId } },
+            {
+                groupId,
+                sender: { $ne: userId },
+                deletedFor: { $ne: userId }
+            },
             { $addToSet: { readBy: userId } }
         );
 

@@ -22,7 +22,8 @@ const {
     getUnreadByUser,
     reactToMessage,
     editMessage,
-    deleteMessage
+    deleteMessage,
+    createCallLog
 } = require("../controllers/messageController");
 
 
@@ -202,6 +203,11 @@ router.put(
     editMessage
 );
 
+router.post(
+    "/call-log",
+    auth(),
+    createCallLog
+);
 
 /* =========================================================
    DELETE A MESSAGE

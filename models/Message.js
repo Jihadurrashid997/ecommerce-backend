@@ -105,6 +105,37 @@ const MessageSchema =
 
             },
 
+            type: {
+                type: String,
+                enum: ["message", "call-log"],
+                default: "message"
+            },
+
+            callId: {
+                type: String,
+                default: undefined,
+                unique: true,
+                sparse: true
+            },
+
+            callType: {
+                type: String,
+                enum: ["voice", "video"],
+                default: undefined
+            },
+
+            callStatus: {
+                type: String,
+                enum: ["ended", "missed", "declined", "busy"],
+                default: undefined
+            },
+
+            callDuration: {
+                type: Number,
+                min: 0,
+                default: undefined
+            },
+
             isEncrypted: {
                 type: Boolean,
                 default: false
@@ -239,7 +270,12 @@ const MessageSchema =
                 default:
                     false
 
-            }
+            },
+
+            deletedFor: [{
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User"
+            }],
 
         },
 

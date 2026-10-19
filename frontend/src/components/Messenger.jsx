@@ -36,9 +36,7 @@ import {
     FaVolumeMute,
     FaLock,
     FaMicrophone,
-    FaStop,
     FaTrash,
-    FaReply,
     FaShare,
     FaCheckCircle,
     FaUsers,
@@ -102,6 +100,7 @@ import {
 
 import CallModal from "./CallModal";
 import GroupCallModal from "./GroupCallModal";
+import CallLogMessage from "./CallLogMessage";
 import VerifiedBadge from "./VerifiedBadge";
 import VoiceMessagePlayer, {
     formatDuration
@@ -1130,7 +1129,9 @@ const Messenger = ({ isActive = true }) => {
                                       ...group,
                                       lastMessage: {
                                           message:
-                                              messageItem.isEncrypted
+                                              messageItem.isDeleted
+                                                  ? "Message deleted"
+                                                  : messageItem.isEncrypted
                                                   ? "🔒 Encrypted message"
                                                   : messageItem.message ||
                                                     (messageItem.fileUrl
@@ -1203,7 +1204,7 @@ const Messenger = ({ isActive = true }) => {
     const [forwardSending, setForwardSending] =
         useState(false);
 
-    const [messageMenuFor, setMessageMenuFor] =
+    const [messageDeleteFor, setMessageDeleteFor] =
         useState(null);
 
     const [reactionPickerFor, setReactionPickerFor] =
@@ -3777,13 +3778,21 @@ const onReceiveMessage =
             async incoming => {
                 const active = selectedUserRef.current;
                 const messageId = getMessageId(incoming);
+                const groupId = getId(incoming.groupId);
 
-                if (!active || !messageId || !incoming) {
+                if (!messageId || !incoming) {
+                    return;
+                }
+
+                if (groupId && incoming.isDeleted) {
+                    updateGroupPreview(groupId, incoming);
+                }
+
+                if (!active) {
                     return;
                 }
 
                 const activeId = getId(active);
-                const groupId = getId(incoming.groupId);
                 const senderId =
                     getId(incoming.sender) ||
                     getId(incoming.senderId);
@@ -3804,6 +3813,20 @@ const onReceiveMessage =
                 const [updated] = incoming.isDeleted
                     ? [incoming]
                     : await decryptMessagesForTarget([incoming], active);
+
+                if (
+                    (updated.deletedFor || []).some(
+                        deletedUser => getId(deletedUser) === currentId
+                    )
+                ) {
+                    setMessages(previous =>
+                        previous.filter(
+                            item =>
+                                getMessageId(item) !== messageId
+                        )
+                    );
+                    return;
+                }
 
                 setMessages(previous =>
                     previous.map(item =>
@@ -4367,6 +4390,54 @@ const onIceCandidate =
 
     };
         
+        const persistCallLog = async (call, status, duration = 0) => {
+            const callerId = getId(call?.callerId);
+            const receiverId = getId(call?.receiverId);
+            const otherUserId =
+                callerId === currentUserId ? receiverId : callerId;
+
+            if (
+                !call?.callId ||
+                !callerId ||
+                !receiverId ||
+                !otherUserId
+            ) {
+                console.error("Call log is missing server call details.", call);
+                return;
+            }
+
+            try {
+                const response = await api.post("/messages/call-log", {
+                    callId: call.callId,
+                    callerId,
+                    otherUserId,
+                    callType: call.type === "video" ? "video" : "voice",
+                    status,
+                    duration: Math.max(
+                        0,
+                        Math.floor(Number(duration) || 0)
+                    )
+                });
+                const saved = response.data?.data;
+                if (!saved) {
+                    throw new Error("The server did not save the call details.");
+                }
+
+                if (
+                    getId(selectedUserRef.current) === otherUserId
+                ) {
+                    appendMessage(saved);
+                }
+            } catch (error) {
+                console.error("Save call details error:", error);
+                showMessengerToast(
+                    error.response?.data?.message ||
+                        error.message ||
+                        "Call details could not be saved."
+                );
+            }
+        };
+
         /* -------------------------------------------------
            REJECTED
         ------------------------------------------------- */
@@ -4376,97 +4447,12 @@ const onIceCandidate =
 
                 stopCallRingtone();
 
-                const call =
-                    callRef.current ||
-                    callStateRef.current ||
-                    data;
-
-
-                const callType =
-                    call?.type === "video"
-                        ? "video"
-                        : "voice";
-
-
-                /*
-                ==========================================
-                CALL REJECTED
-                ==========================================
-                */
-
-                console.log(
-                    "Call rejected:",
-                    call
-                );
-
-
-                /*
-                ==========================================
-                ADD CALL EVENT TO CHAT
-                ==========================================
-                */
-
-                const rejectedMessage = {
-
-                    id:
-                        `call-rejected-${Date.now()}`,
-
-                    message:
-                        `📞 ${callType === "video"
-                            ? "Video"
-                            : "Voice"
-                        } call declined`,
-
-                    text:
-                        `📞 ${callType === "video"
-                            ? "Video"
-                            : "Voice"
-                        } call declined`,
-
-                    type:
-                        "call-rejected",
-
-                    callType,
-
-                    senderId:
-                        call?.callerId ||
-                        currentUserId,
-
-                    receiverId:
-                        getId(
-                            selectedUserRef.current
-                        ),
-
-                    createdAt:
-                        new Date().toISOString(),
-
-                    timestamp:
-                        new Date().toISOString(),
-
-                    seen:
-                        true
-
+                const call = {
+                    ...(callRef.current || {}),
+                    ...(callStateRef.current || {}),
+                    ...(data || {})
                 };
-
-
-                const otherPartyId =
-                    call?.callerId ===
-                    currentUserId
-                        ? call?.receiverId
-                        : call?.callerId;
-
-                if (
-                    getId(
-                        selectedUserRef.current
-                    ) === otherPartyId
-                ) {
-
-                    appendMessage(
-                        rejectedMessage
-                    );
-
-                }
-
+                void persistCallLog(call, "declined");
 
                 cleanupCall();
 
@@ -4482,10 +4468,11 @@ const onIceCandidate =
 
                 stopCallRingtone();
 
-                const call =
-                    callRef.current ||
-                    callStateRef.current ||
-                    data;
+                const call = {
+                    ...(callRef.current || {}),
+                    ...(callStateRef.current || {}),
+                    ...(data || {})
+                };
 
 
                 if (!call) {
@@ -4497,116 +4484,9 @@ const onIceCandidate =
                 }
 
 
-                const callType =
-                    call?.type === "video"
-                        ? "video"
-                        : "voice";
-
-
-                /*
-                ==========================================
-                CALL DURATION
-                ==========================================
-                */
-
                 const duration =
-    Number(
-        data?.duration ??
-        call?.duration ??
-        call?.callDuration ??
-        0
-    );
-
-const minutes =
-    Math.floor(
-        duration / 60
-    )
-        .toString()
-        .padStart(2, "0");
-
-const seconds =
-    (
-        duration % 60
-    )
-        .toString()
-        .padStart(2, "0");
-
-const durationText =
-    duration > 0
-        ? ` • ${minutes}:${seconds}`
-        : "";
-
-                /*
-                ==========================================
-                ADD CALL HISTORY TO CHAT
-                ==========================================
-                */
-
-                const endedMessage = {
-
-                    id:
-                        `call-ended-${Date.now()}`,
-
-                    message:
-                        `📞 ${
-                            callType === "video"
-                                ? "Video"
-                                : "Voice"
-                        } call ended${durationText}`,
-
-                    text:
-                        `📞 ${
-                            callType === "video"
-                                ? "Video"
-                                : "Voice"
-                        } call ended${durationText}`,
-
-                    type:
-                        "call-ended",
-
-                    callType,
-
-                    duration,
-
-                    senderId:
-                        call?.callerId ||
-                        currentUserId,
-
-                    receiverId:
-                        getId(
-                            selectedUserRef.current
-                        ),
-
-                    createdAt:
-                        new Date().toISOString(),
-
-                    timestamp:
-                        new Date().toISOString(),
-
-                    seen:
-                        true
-
-                };
-
-
-                const otherPartyId =
-                    call?.callerId ===
-                    currentUserId
-                        ? call?.receiverId
-                        : call?.callerId;
-
-                if (
-                    getId(
-                        selectedUserRef.current
-                    ) === otherPartyId
-                ) {
-
-                    appendMessage(
-                        endedMessage
-                    );
-
-                }
-
+                    Number(data?.duration ?? call?.duration ?? 0);
+                void persistCallLog(call, "ended", duration);
 
                 cleanupCall();
 
@@ -4623,80 +4503,12 @@ const durationText =
                 stopCallRingtone();
 
 
-                const call =
-                    callRef.current ||
-                    callStateRef.current ||
-                    data;
-
-
-                const callType =
-                    call?.type === "video"
-                        ? "video"
-                        : "voice";
-
-
-                const busyMessage = {
-
-                    id:
-                        `call-busy-${Date.now()}`,
-
-                    message:
-                        `📞 ${
-                            callType === "video"
-                                ? "Video"
-                                : "Voice"
-                        } call — User is busy`,
-
-                    text:
-                        `📞 ${
-                            callType === "video"
-                                ? "Video"
-                                : "Voice"
-                        } call — User is busy`,
-
-                    type:
-                        "call-busy",
-
-                    callType,
-
-                    senderId:
-                        currentUserId,
-
-                    receiverId:
-                        getId(
-                            selectedUserRef.current
-                        ),
-
-                    createdAt:
-                        new Date().toISOString(),
-
-                    timestamp:
-                        new Date().toISOString(),
-
-                    seen:
-                        true
-
+                const call = {
+                    ...(callRef.current || {}),
+                    ...(callStateRef.current || {}),
+                    ...(data || {})
                 };
-
-
-                const otherPartyId =
-                    call?.callerId ===
-                    currentUserId
-                        ? call?.receiverId
-                        : call?.callerId;
-
-                if (
-                    getId(
-                        selectedUserRef.current
-                    ) === otherPartyId
-                ) {
-
-                    appendMessage(
-                        busyMessage
-                    );
-
-                }
-
+                void persistCallLog(call, "busy");
 
                 cleanupCall();
 
@@ -4711,71 +4523,12 @@ const durationText =
 const onCallMissed =
     data => {
 
-        const call =
-            callRef.current ||
-            data ||
-            {};
-
-        const callerName =
-            call.callerName ||
-            call.receiverName ||
-            "User";
-
-        const callType =
-            call.type ||
-            "audio";
-
-
-        /*
-        ==========================================
-        SHOW MISSED CALL IN CHAT
-        ==========================================
-        */
-
-        const otherPartyId =
-            call.callerId ===
-            currentUserId
-                ? call.receiverId
-                : call.callerId;
-
-        if (
-            getId(
-                selectedUserRef.current
-            ) === otherPartyId
-        ) {
-
-            appendMessage({
-
-                id:
-                    `missed-call-${Date.now()}`,
-
-                type:
-                    "missed-call",
-
-                message:
-                    `📞 Missed ${
-                        callType === "video"
-                            ? "video"
-                            : "voice"
-                    } call`,
-
-                callType,
-
-                callerName,
-
-                senderId:
-                    call.callerId ||
-                    call.receiverId,
-
-                createdAt:
-                    new Date().toISOString(),
-
-                timestamp:
-                    Date.now()
-
-            });
-
-        }
+        const call = {
+            ...(callRef.current || {}),
+            ...(callStateRef.current || {}),
+            ...(data || {})
+        };
+        void persistCallLog(call, "missed");
 
 
         /*
@@ -5052,7 +4805,8 @@ const onCallMissed =
         cleanupCall,
         createPeer,
         scrollToBottom,
-        currentUserId
+        currentUserId,
+        showMessengerToast
     ]);
 
 
@@ -7204,7 +6958,7 @@ const onCallMissed =
 
 
     const handleDeleteMessage =
-        async item => {
+        async (item, deleteFor) => {
 
             const messageId =
                 getMessageId(item);
@@ -7213,9 +6967,12 @@ const onCallMissed =
                 return;
             }
 
+            const actionLabel = deleteFor === "me"
+                ? "delete this message only for you"
+                : "delete this message for everyone";
             const confirmed =
                 window.confirm(
-                    "Delete this message?"
+                    `Are you sure you want to ${actionLabel}?`
                 );
 
             if (!confirmed) {
@@ -7226,13 +6983,20 @@ const onCallMissed =
 
                 const response =
                     await api.delete(
-                        `/messages/${messageId}`
+                        `/messages/${messageId}`,
+                        { data: { deleteFor } }
                     );
 
                 const updated =
                     response.data?.data;
 
-                if (updated) {
+                if (deleteFor === "me") {
+                    setMessages(previous =>
+                        previous.filter(msg =>
+                            getMessageId(msg) !== messageId
+                        )
+                    );
+                } else if (updated) {
 
                     setMessages(
                         previous =>
@@ -7247,7 +7011,7 @@ const onCallMissed =
 
                 }
 
-                setMessageMenuFor(null);
+                setMessageDeleteFor(null);
 
             } catch (error) {
 
@@ -7259,7 +7023,7 @@ const onCallMissed =
                 alert(
                     error.response?.data
                         ?.message ||
-                    "Could not delete this message."
+                    "Unable to delete message."
                 );
 
             }
@@ -9383,6 +9147,15 @@ const onCallMissed =
                                             item.createdAt ||
                                             item.timestamp;
 
+                                        const messageCreatedAt =
+                                            new Date(time).getTime();
+                                        const canDeleteForEveryone =
+                                            own &&
+                                            Number.isFinite(messageCreatedAt) &&
+                                            Date.now() >= messageCreatedAt &&
+                                            Date.now() - messageCreatedAt <=
+                                                15 * 60 * 1000;
+
 
                                         const seen =
                                             item.seen ||
@@ -9658,7 +9431,13 @@ const onCallMissed =
 
                                                     ) : (
 
-                                                        location ? (
+                                                        item.type === "call-log" ? (
+                                                            <CallLogMessage
+                                                                callType={item.callType}
+                                                                callStatus={item.callStatus}
+                                                                callDuration={item.callDuration}
+                                                            />
+                                                        ) : location ? (
                                                             <div className="message-location-card">
                                                                 <span className="message-location-icon">
                                                                     <FaMapMarkerAlt />
@@ -9784,9 +9563,10 @@ const onCallMissed =
                                                         )}
 
 
-                                                        {own && (
-
-                                                            <>
+                                                        <>
+                                                            {own &&
+                                                                !item.isDeleted &&
+                                                                item.type !== "call-log" && (
 
                                                                 <button
                                                                     type="button"
@@ -9809,23 +9589,61 @@ const onCallMissed =
                                                                     ✎
                                                                 </button>
 
+                                                            )}
 
+                                                            {!item.isDeleted && (
                                                                 <button
                                                                     type="button"
                                                                     className="message-reply-btn"
-                                                                    title="Delete"
+                                                                    title="Delete message"
+                                                                    aria-label="Delete message"
                                                                     onClick={() =>
-                                                                        handleDeleteMessage(
-                                                                            item
+                                                                        setMessageDeleteFor(
+                                                                            messageDeleteFor === getMessageId(item)
+                                                                                ? null
+                                                                                : getMessageId(item)
                                                                         )
                                                                     }
                                                                 >
                                                                     🗑
                                                                 </button>
+                                                            )}
 
-                                                            </>
-
-                                                        )}
+                                                            {!item.isDeleted &&
+                                                                messageDeleteFor === getMessageId(item) && (
+                                                                <div className="message-delete-options">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            handleDeleteMessage(item, "me")
+                                                                        }
+                                                                    >
+                                                                        Delete for me
+                                                                    </button>
+                                                                    {own && (
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled={!canDeleteForEveryone}
+                                                                            title={
+                                                                                canDeleteForEveryone
+                                                                                    ? "Delete this message for both people"
+                                                                                    : "Delete for everyone is only available for 15 minutes"
+                                                                            }
+                                                                            onClick={() =>
+                                                                                handleDeleteMessage(item, "everyone")
+                                                                            }
+                                                                        >
+                                                                            Delete for everyone
+                                                                        </button>
+                                                                    )}
+                                                                    {!canDeleteForEveryone && own && (
+                                                                        <small>
+                                                                            15-minute limit passed
+                                                                        </small>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </>
 
 
                                                         <small>
