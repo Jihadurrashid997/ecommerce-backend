@@ -477,6 +477,7 @@ exports.createGroupCallToken = async (req, res) => {
     try {
         const userId = getUserId(req);
         const { groupId } = req.params;
+        const keyId = req.body?.keyId;
 
         if (!isValidObjectId(groupId)) {
             return res.status(400).json({
@@ -495,6 +496,25 @@ exports.createGroupCallToken = async (req, res) => {
                 success: false,
                 message: "Group not found."
             });
+        }
+
+        if (group.isEncrypted) {
+            const keyRecord = typeof keyId === "string"
+                ? await GroupCallKey.findOne({ groupId, keyId })
+                : null;
+            const keyData = keyRecord &&
+                keyRecord.expiresAt > new Date() &&
+                groupCallKeyHasCurrentMembers(keyRecord, group)
+                ? getGroupCallKeyResponse(keyRecord, userId)
+                : null;
+
+            if (!keyData) {
+                return res.status(409).json({
+                    success: false,
+                    code: "GROUP_CALL_E2EE_KEY_REQUIRED",
+                    message: "Set up end-to-end encryption before joining this group call."
+                });
+            }
         }
 
         const livekitUrl = process.env.LIVEKIT_URL;
