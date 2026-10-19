@@ -59,10 +59,12 @@ import {
     decryptMessageRecord,
     encryptMessageText,
     ensureMessengerIdentity,
+    createMessengerKeyBackup,
     getConversationEncryptionId,
     getPeerEncryptionKey,
     getSafetyCode,
-    isEncryptedMessage
+    isEncryptedMessage,
+    restoreMessengerIdentity
 } from "../services/messengerEncryption";
 import {
     createLocationMessage,
@@ -577,6 +579,21 @@ const Messenger = ({ isActive = true }) => {
     const [encryptionError, setEncryptionError] =
         useState("");
 
+    const [keyBackupPassphrase, setKeyBackupPassphrase] =
+        useState("");
+
+    const [keyBackupConfirmation, setKeyBackupConfirmation] =
+        useState("");
+
+    const [keyRestorePassphrase, setKeyRestorePassphrase] =
+        useState("");
+
+    const [keyBackupBusy, setKeyBackupBusy] =
+        useState(false);
+
+    const [keyBackupMessage, setKeyBackupMessage] =
+        useState("");
+
     const [encryptionSafetyCode, setEncryptionSafetyCode] =
         useState("");
 
@@ -762,8 +779,13 @@ const Messenger = ({ isActive = true }) => {
         if (!userId) {
             setEncryptionIdentity(null);
             encryptionIdentityRef.current = null;
+            setEncryptionError("");
             return undefined;
         }
+
+        setEncryptionIdentity(null);
+        encryptionIdentityRef.current = null;
+        setEncryptionError("");
 
         ensureMessengerIdentity(api, userId)
             .then(identity => {
@@ -5395,6 +5417,96 @@ const onCallMissed =
             }
         };
 
+    const saveEncryptionKeyBackup =
+        async event => {
+            event.preventDefault();
+
+            if (keyBackupPassphrase !== keyBackupConfirmation) {
+                setKeyBackupMessage("The recovery passphrases do not match.");
+                return;
+            }
+
+            setKeyBackupBusy(true);
+            setKeyBackupMessage("");
+
+            try {
+                const userId = getId(user);
+                const identity = await ensureMessengerIdentity(api, userId);
+                const backup = await createMessengerKeyBackup(
+                    identity,
+                    userId,
+                    keyBackupPassphrase
+                );
+
+                await api.put("/messages/encryption-key-backup", { backup });
+                setEncryptionIdentity(identity);
+                encryptionIdentityRef.current = identity;
+                setKeyBackupMessage(
+                    "Encrypted recovery backup saved. Keep the passphrase somewhere safe."
+                );
+                setKeyBackupPassphrase("");
+                setKeyBackupConfirmation("");
+                setKeyRestorePassphrase("");
+            } catch (error) {
+                console.error("Save Messenger key backup error:", error);
+                setKeyBackupMessage(
+                    error?.response?.data?.message ||
+                    error.message ||
+                    "Could not save the encrypted recovery backup."
+                );
+            } finally {
+                setKeyBackupBusy(false);
+            }
+        };
+
+    const restoreEncryptionKeyBackup =
+        async event => {
+            event.preventDefault();
+            setKeyBackupBusy(true);
+            setKeyBackupMessage("");
+
+            try {
+                const identity = await restoreMessengerIdentity(
+                    api,
+                    getId(user),
+                    keyRestorePassphrase
+                );
+
+                encryptionIdentityRef.current = identity;
+                setEncryptionIdentity(identity);
+                setEncryptionError("");
+                setKeyBackupMessage(
+                    "Encryption key restored on this device."
+                );
+                setKeyBackupPassphrase("");
+                setKeyBackupConfirmation("");
+                setKeyRestorePassphrase("");
+
+                if (selectedUserRef.current) {
+                    try {
+                        await selectUser(selectedUserRef.current);
+                    } catch (error) {
+                        console.error(
+                            "Reload Messenger history after key restore error:",
+                            error
+                        );
+                        setKeyBackupMessage(
+                            "The key was restored, but this conversation could not be reloaded."
+                        );
+                    }
+                }
+            } catch (error) {
+                console.error("Restore Messenger key backup error:", error);
+                setKeyBackupMessage(
+                    error?.response?.data?.message ||
+                    error.message ||
+                    "Could not restore the encrypted recovery backup."
+                );
+            } finally {
+                setKeyBackupBusy(false);
+            }
+        };
+
 
     const createGroup =
         async event => {
@@ -8091,10 +8203,93 @@ const onCallMissed =
                         </label>
 
 
-                        <p className="settings-note">
-                            These preferences are saved on
-                            this device only.
-                        </p>
+                        <section className="encryption-backup-settings">
+                            <strong>Encryption key recovery</strong>
+                            <p>
+                                Save a passphrase-protected copy so you can restore
+                                encrypted chats on another device. The server stores
+                                only encrypted backup data; it cannot read your key.
+                            </p>
+                            {encryptionError && (
+                                <p
+                                    className="encryption-backup-error"
+                                    role="alert"
+                                >
+                                    {encryptionError}
+                                </p>
+                            )}
+
+                            <form onSubmit={saveEncryptionKeyBackup}>
+                                <label>
+                                    New recovery passphrase
+                                    <input
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={keyBackupPassphrase}
+                                        onChange={event =>
+                                            setKeyBackupPassphrase(event.target.value)
+                                        }
+                                        minLength={12}
+                                        maxLength={256}
+                                        required
+                                    />
+                                </label>
+                                <label>
+                                    Confirm recovery passphrase
+                                    <input
+                                        type="password"
+                                        autoComplete="new-password"
+                                        value={keyBackupConfirmation}
+                                        onChange={event =>
+                                            setKeyBackupConfirmation(event.target.value)
+                                        }
+                                        minLength={12}
+                                        maxLength={256}
+                                        required
+                                    />
+                                </label>
+                                <button
+                                    type="submit"
+                                    disabled={keyBackupBusy || !encryptionIdentity}
+                                >
+                                    Save encrypted backup
+                                </button>
+                            </form>
+
+                            <form onSubmit={restoreEncryptionKeyBackup}>
+                                <label>
+                                    Restore with recovery passphrase
+                                    <input
+                                        type="password"
+                                        autoComplete="current-password"
+                                        value={keyRestorePassphrase}
+                                        onChange={event =>
+                                            setKeyRestorePassphrase(event.target.value)
+                                        }
+                                        minLength={12}
+                                        maxLength={256}
+                                        required
+                                    />
+                                </label>
+                                <button
+                                    type="submit"
+                                    disabled={keyBackupBusy}
+                                >
+                                    Restore this device
+                                </button>
+                            </form>
+
+                            {keyBackupMessage && (
+                                <p className="encryption-backup-status" role="status">
+                                    {keyBackupMessage}
+                                </p>
+                            )}
+                            <p className="settings-note">
+                                Keep the passphrase safe. If it is lost, no one can
+                                decrypt this backup. These preferences are also saved
+                                on this device only.
+                            </p>
+                        </section>
 
                     </div>
 

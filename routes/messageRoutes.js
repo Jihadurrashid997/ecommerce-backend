@@ -13,6 +13,8 @@ const {
     sendMessage,
     saveEncryptionPublicKey,
     getEncryptionPublicKey,
+    saveEncryptionKeyBackup,
+    getEncryptionKeyBackup,
     getConversation,
     getRecentConversations,
     markSeen,
@@ -99,6 +101,18 @@ router.put(
     "/encryption-key",
     auth(),
     saveEncryptionPublicKey
+);
+
+router.put(
+    "/encryption-key-backup",
+    auth(),
+    saveEncryptionKeyBackup
+);
+
+router.get(
+    "/encryption-key-backup",
+    auth(),
+    getEncryptionKeyBackup
 );
 
 router.get(

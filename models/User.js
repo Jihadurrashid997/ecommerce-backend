@@ -77,6 +77,13 @@ const userSchema = new mongoose.Schema(
             select: false
         },
 
+        messengerEncryptionKeyBackup: {
+            type: String,
+            default: "",
+            maxlength: 8192,
+            select: false
+        },
+
         profileImagePublicId: {
             type: String,
             default: "",

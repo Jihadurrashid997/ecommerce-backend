@@ -4,9 +4,11 @@ import {
     decryptMessageRecord,
     deriveConversationCipher,
     encryptMessageText,
+    createMessengerKeyBackup,
     ensureMessengerIdentity,
     getConversationEncryptionId,
-    getSafetyCode
+    getSafetyCode,
+    restoreMessengerIdentity
 } from "./messengerEncryption";
 
 beforeAll(() => {
@@ -98,4 +100,136 @@ test("a registered account key is not replaced when the device has no local key"
 
     expect(window.localStorage.getItem("jr-messenger-e2ee-v1:alice")).toBeNull();
     expect(api.put).not.toHaveBeenCalled();
+});
+
+test("a passphrase-protected key backup restores the same encrypted identity on another device", async () => {
+    const registrationApi = {
+        get: jest.fn().mockRejectedValue({ response: { status: 404 } }),
+        put: jest.fn().mockResolvedValue({ data: { success: true } })
+    };
+    const originalIdentity = await ensureMessengerIdentity(
+        registrationApi,
+        "alice"
+    );
+    const peerIdentity = await ensureMessengerIdentity(
+        registrationApi,
+        "bob"
+    );
+    const conversationId = getConversationEncryptionId("alice", "bob");
+    const originalCipher = await deriveConversationCipher(
+        originalIdentity.privateKey,
+        peerIdentity.publicKey,
+        conversationId
+    );
+    const encryptedHistory = await encryptMessageText(
+        "Recovered secret",
+        originalCipher,
+        conversationId
+    );
+    const passphrase = "correct horse battery staple";
+    const backup = await createMessengerKeyBackup(
+        originalIdentity,
+        "alice",
+        passphrase
+    );
+
+    expect(backup.ciphertext).not.toContain(originalIdentity.privateKeyJwk.d);
+    window.localStorage.clear();
+
+    const restoreApi = {
+        get: jest.fn(async path => {
+            if (path === "/messages/encryption-key-backup") {
+                return { data: { data: { backup } } };
+            }
+
+            if (path === "/messages/encryption-key/alice") {
+                return {
+                    data: {
+                        data: {
+                            publicKey: originalIdentity.publicKey
+                        }
+                    }
+                };
+            }
+
+            throw new Error(`Unexpected GET ${path}`);
+        })
+    };
+    const restoredIdentity = await restoreMessengerIdentity(
+        restoreApi,
+        "alice",
+        passphrase
+    );
+    const restoredCipher = await deriveConversationCipher(
+        restoredIdentity.privateKey,
+        peerIdentity.publicKey,
+        conversationId
+    );
+    const recoveredMessage = await decryptMessageRecord(
+        {
+            message: encryptedHistory,
+            isEncrypted: true
+        },
+        restoredCipher,
+        conversationId
+    );
+
+    expect(restoredIdentity.publicKey).toEqual(originalIdentity.publicKey);
+    expect(window.localStorage.getItem("jr-messenger-e2ee-v1:alice")).not.toBeNull();
+    expect(recoveredMessage.message).toBe("Recovered secret");
+});
+
+test("an incorrect recovery passphrase cannot restore a device key", async () => {
+    const registrationApi = {
+        get: jest.fn().mockRejectedValue({ response: { status: 404 } }),
+        put: jest.fn().mockResolvedValue({ data: { success: true } })
+    };
+    const identity = await ensureMessengerIdentity(registrationApi, "alice");
+    const backup = await createMessengerKeyBackup(
+        identity,
+        "alice",
+        "correct horse battery staple"
+    );
+    window.localStorage.clear();
+
+    await expect(
+        restoreMessengerIdentity(
+            {
+                get: jest.fn().mockResolvedValue({
+                    data: { data: { backup } }
+                })
+            },
+            "alice",
+            "incorrect recovery phrase"
+        )
+    ).rejects.toThrow("Check the passphrase");
+
+    expect(window.localStorage.getItem("jr-messenger-e2ee-v1:alice")).toBeNull();
+});
+
+test("a key backup cannot be restored into a different account", async () => {
+    const registrationApi = {
+        get: jest.fn().mockRejectedValue({ response: { status: 404 } }),
+        put: jest.fn().mockResolvedValue({ data: { success: true } })
+    };
+    const identity = await ensureMessengerIdentity(registrationApi, "alice");
+    const backup = await createMessengerKeyBackup(
+        identity,
+        "alice",
+        "correct horse battery staple"
+    );
+
+    await expect(
+        restoreMessengerIdentity(
+            {
+                get: jest.fn().mockResolvedValue({
+                    data: { data: { backup } }
+                })
+            },
+            "bob",
+            "correct horse battery staple"
+        )
+    ).rejects.toThrow("Check the passphrase");
+
+    expect(window.localStorage.getItem("jr-messenger-e2ee-v1:bob")).toBeNull();
 });
