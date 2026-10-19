@@ -7,8 +7,12 @@ import {
     createMessengerKeyBackup,
     ensureMessengerIdentity,
     getConversationEncryptionId,
+    getGroupSafetyCode,
+    encryptGroupMessageText,
+    decryptGroupMessageRecord,
     getSafetyCode,
-    restoreMessengerIdentity
+    restoreMessengerIdentity,
+    isEncryptedGroupMessage
 } from "./messengerEncryption";
 
 beforeAll(() => {
@@ -232,4 +236,126 @@ test("a key backup cannot be restored into a different account", async () => {
     ).rejects.toThrow("Check the passphrase");
 
     expect(window.localStorage.getItem("jr-messenger-e2ee-v1:bob")).toBeNull();
+});
+
+test("encrypted group text is readable only by members included in its key envelope", async () => {
+    const users = [
+        "507f1f77bcf86cd799439011",
+        "507f191e810c19729de860ea",
+        "507f191e810c19729de860eb",
+        "507f191e810c19729de860ec"
+    ];
+    const registrationApi = {
+        get: jest.fn().mockRejectedValue({ response: { status: 404 } }),
+        put: jest.fn().mockResolvedValue({ data: { success: true } })
+    };
+    const identities = await Promise.all(
+        users.map(userId =>
+            ensureMessengerIdentity(registrationApi, userId)
+        )
+    );
+    const publicKeys = new Map(
+        users.map((userId, index) => [userId, identities[index].publicKey])
+    );
+    const api = {
+        get: jest.fn(async path => {
+            const userId = path.split("/").pop();
+            return {
+                data: {
+                    data: {
+                        publicKey: publicKeys.get(userId)
+                    }
+                }
+            };
+        })
+    };
+    const groupId = "507f191e810c19729de860ed";
+    const groupMembers = users.slice(0, 3);
+    const encrypted = await encryptGroupMessageText({
+        api,
+        text: "Private group conversation",
+        groupId,
+        senderId: users[0],
+        identity: identities[0],
+        participants: groupMembers
+    });
+    const storedMessage = {
+        sender: users[0],
+        groupId,
+        message: encrypted,
+        isEncrypted: true
+    };
+    const bobMessage = await decryptGroupMessageRecord(
+        api,
+        storedMessage,
+        groupId,
+        users[1],
+        identities[1]
+    );
+    const aliceMessage = await decryptGroupMessageRecord(
+        api,
+        storedMessage,
+        groupId,
+        users[0],
+        identities[0]
+    );
+    const newMemberMessage = await decryptGroupMessageRecord(
+        api,
+        storedMessage,
+        groupId,
+        users[3],
+        identities[3]
+    );
+    const envelope = JSON.parse(
+        Buffer.from(encrypted.slice("e2eg:v1:".length), "base64url").toString()
+    );
+    envelope.ciphertext =
+        `${envelope.ciphertext[0] === "A" ? "B" : "A"}` +
+        envelope.ciphertext.slice(1);
+    const tamperedMessage = await decryptGroupMessageRecord(
+        api,
+        {
+            ...storedMessage,
+            message: `e2eg:v1:${Buffer.from(
+                JSON.stringify(envelope)
+            ).toString("base64url")}`
+        },
+        groupId,
+        users[1],
+        identities[1]
+    );
+
+    expect(isEncryptedGroupMessage(encrypted)).toBe(true);
+    expect(encrypted).not.toContain("Private group conversation");
+    expect(bobMessage.message).toBe("Private group conversation");
+    expect(aliceMessage.message).toBe("Private group conversation");
+    expect(newMemberMessage.decryptionFailed).toBe(true);
+    expect(newMemberMessage.message).toMatch(/before you joined/);
+    expect(tamperedMessage.decryptionFailed).toBe(true);
+    expect(tamperedMessage.message).toBe(
+        "Unable to decrypt this message on this device."
+    );
+});
+
+test("group verification codes are stable regardless of participant order", async () => {
+    const api = {
+        get: jest.fn().mockRejectedValue({ response: { status: 404 } }),
+        put: jest.fn().mockResolvedValue({ data: { success: true } })
+    };
+    const alice = await ensureMessengerIdentity(api, "507f1f77bcf86cd799439011");
+    const bob = await ensureMessengerIdentity(api, "507f191e810c19729de860ea");
+    const aliceKey = {
+        userId: "507f1f77bcf86cd799439011",
+        publicKey: alice.publicKey
+    };
+    const bobKey = {
+        userId: "507f191e810c19729de860ea",
+        publicKey: bob.publicKey
+    };
+
+    await expect(
+        getGroupSafetyCode([aliceKey, bobKey])
+    ).resolves.toBe(
+        await getGroupSafetyCode([bobKey, aliceKey])
+    );
 });

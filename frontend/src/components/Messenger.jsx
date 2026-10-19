@@ -58,12 +58,16 @@ import {
     deriveConversationCipher,
     decryptMessageRecord,
     encryptMessageText,
+    encryptGroupMessageText,
     ensureMessengerIdentity,
     createMessengerKeyBackup,
     getConversationEncryptionId,
+    getGroupSafetyCode,
     getPeerEncryptionKey,
     getSafetyCode,
     isEncryptedMessage,
+    isEncryptedGroupMessage,
+    decryptGroupMessageRecord,
     restoreMessengerIdentity
 } from "../services/messengerEncryption";
 import {
@@ -686,6 +690,18 @@ const Messenger = ({ isActive = true }) => {
     const [groupMemberSelection, setGroupMemberSelection] =
         useState([]);
 
+    const [groupEncryptionBusy, setGroupEncryptionBusy] =
+        useState(false);
+
+    const [groupEncryptionMessage, setGroupEncryptionMessage] =
+        useState("");
+
+    const [groupEncryptionSafetyCode, setGroupEncryptionSafetyCode] =
+        useState("");
+
+    const [groupEncryptionSafetyError, setGroupEncryptionSafetyError] =
+        useState("");
+
     const [typing, setTyping] =
         useState(false);
 
@@ -841,9 +857,87 @@ const Messenger = ({ isActive = true }) => {
     const decryptMessagesForTarget =
         useCallback(
             async (items, target) => {
+                if (!Array.isArray(items)) {
+                    return items;
+                }
+
+                if (target?.isGroup) {
+                    const encryptedGroupMessages = items.filter(item =>
+                        item?.isEncrypted ||
+                        isEncryptedGroupMessage(item?.message)
+                    );
+
+                    if (!encryptedGroupMessages.length) {
+                        return items;
+                    }
+
+                    try {
+                        const userId = getId(user);
+                        const identity =
+                            encryptionIdentityRef.current ||
+                            await ensureMessengerIdentity(api, userId);
+                        const keyPromises = new Map();
+                        const resolvePublicKey = peerId => {
+                            const normalizedId = String(peerId);
+
+                            if (!keyPromises.has(normalizedId)) {
+                                keyPromises.set(
+                                    normalizedId,
+                                    getPeerEncryptionKey(api, normalizedId)
+                                );
+                            }
+
+                            return keyPromises.get(normalizedId);
+                        };
+
+                        encryptionIdentityRef.current = identity;
+                        setEncryptionIdentity(identity);
+                        return Promise.all(
+                            items.map(item => {
+                                if (
+                                    item?.isEncrypted &&
+                                    !isEncryptedGroupMessage(item?.message)
+                                ) {
+                                    return {
+                                        ...item,
+                                        message:
+                                            "Unable to decrypt this message on this device.",
+                                        decryptionFailed: true
+                                    };
+                                }
+
+                                return isEncryptedGroupMessage(item?.message)
+                                    ? decryptGroupMessageRecord(
+                                          api,
+                                          item,
+                                          getId(target),
+                                          userId,
+                                          identity,
+                                          resolvePublicKey
+                                      )
+                                    : item
+                            })
+                        );
+                    } catch (error) {
+                        console.error(
+                            "Messenger group message decryption setup error:",
+                            error
+                        );
+                        return items.map(item =>
+                            isEncryptedGroupMessage(item?.message)
+                                ? {
+                                      ...item,
+                                      message:
+                                          "Unable to decrypt this message on this device.",
+                                      isEncrypted: true,
+                                      decryptionFailed: true
+                                  }
+                                : item
+                        );
+                    }
+                }
+
                 if (
-                    !Array.isArray(items) ||
-                    target?.isGroup ||
                     !items.some(item =>
                         item?.isEncrypted ||
                         isEncryptedMessage(item?.message)
@@ -925,6 +1019,67 @@ const Messenger = ({ isActive = true }) => {
             cancelled = true;
         };
     }, [selectedUser, chatPreferences, user]);
+
+    useEffect(() => {
+        if (
+            !showGroupDetails ||
+            !selectedUser?.isGroup ||
+            !selectedUser.isEncrypted ||
+            !Array.isArray(selectedUser.participants)
+        ) {
+            setGroupEncryptionSafetyCode("");
+            setGroupEncryptionSafetyError("");
+            return undefined;
+        }
+
+        let cancelled = false;
+        setGroupEncryptionSafetyCode("");
+        setGroupEncryptionSafetyError("");
+
+        (async () => {
+            try {
+                const identity =
+                    encryptionIdentityRef.current ||
+                    await ensureMessengerIdentity(api, getId(user));
+                const participants = selectedUser.participants;
+                const memberKeys = [];
+
+                for (let index = 0; index < participants.length; index += 8) {
+                    const batch = participants.slice(index, index + 8);
+                    const batchKeys = await Promise.all(
+                        batch.map(async participant => {
+                            const memberId = getId(participant);
+                            return {
+                                userId: memberId,
+                                publicKey:
+                                    memberId === getId(user)
+                                        ? identity.publicKey
+                                        : await getPeerEncryptionKey(api, memberId)
+                            };
+                        })
+                    );
+                    memberKeys.push(...batchKeys);
+                }
+
+                const safetyCode = await getGroupSafetyCode(memberKeys);
+
+                if (!cancelled) {
+                    setGroupEncryptionSafetyCode(safetyCode);
+                }
+            } catch (error) {
+                console.error("Load group encryption verification code error:", error);
+                if (!cancelled) {
+                    setGroupEncryptionSafetyError(
+                        "Could not verify all group encryption keys."
+                    );
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [showGroupDetails, selectedUser, user]);
 
     useEffect(() => {
         const userId = getId(user);
@@ -1054,10 +1209,12 @@ const Messenger = ({ isActive = true }) => {
                                       ...group,
                                       lastMessage: {
                                           message:
-                                              messageItem.message ||
-                                              (messageItem.fileUrl
-                                                  ? "Attachment"
-                                                  : ""),
+                                              messageItem.isEncrypted
+                                                  ? "🔒 Encrypted message"
+                                                  : messageItem.message ||
+                                                    (messageItem.fileUrl
+                                                        ? "Attachment"
+                                                        : ""),
                                           sender: messageItem.sender,
                                           createdAt: messageItem.createdAt
                                       },
@@ -3138,7 +3295,20 @@ const onReceiveMessage =
 
                 : incoming;
 
-        if (
+        if (isEncryptedGroupMessage(newMessage.message)) {
+            const activeConversation = selectedUserRef.current;
+            const incomingGroupId = getId(newMessage.groupId);
+
+            if (
+                activeConversation?.isGroup &&
+                getId(activeConversation) === incomingGroupId
+            ) {
+                [newMessage] = await decryptMessagesForTarget(
+                    [newMessage],
+                    activeConversation
+                );
+            }
+        } else if (
             newMessage.isEncrypted ||
             isEncryptedMessage(newMessage.message)
         ) {
@@ -3398,7 +3568,7 @@ const onReceiveMessage =
             onReceiveMessage;
 
         const onGroupMessage =
-            incoming => {
+            async incoming => {
                 const active = selectedUserRef.current;
                 const groupId = getId(incoming?.groupId);
 
@@ -3411,12 +3581,16 @@ const onReceiveMessage =
                     return;
                 }
 
-                appendMessage(incoming);
+                const [visibleMessage] = await decryptMessagesForTarget(
+                    [incoming],
+                    active
+                );
+                appendMessage(visibleMessage);
                 scrollToBottom();
             };
 
         const onGroupMessageNotification =
-            incoming => {
+            async incoming => {
                 const active = selectedUserRef.current;
                 const groupId = getId(incoming?.groupId);
                 const senderId = getMessageSenderId(incoming);
@@ -3433,7 +3607,11 @@ const onReceiveMessage =
                 updateGroupPreview(groupId, incoming);
 
                 if (active?.isGroup && getId(active) === groupId) {
-                    appendMessage(incoming);
+                    const [visibleMessage] = await decryptMessagesForTarget(
+                        [incoming],
+                        active
+                    );
+                    appendMessage(visibleMessage);
                     scrollToBottom();
                     if (settingsRef.current.readReceiptsEnabled) {
                         api.put(`/groups/${groupId}/seen`).catch(error => {
@@ -3458,8 +3636,10 @@ const onReceiveMessage =
                             getUserName(incoming.sender) ||
                             "Group message",
                         message:
-                            incoming.message ||
-                            "Shared an attachment"
+                            isEncryptedGroupMessage(incoming.message)
+                                ? "🔒 Encrypted message"
+                                : incoming.message ||
+                                  "Shared an attachment"
                     });
                 }
             };
@@ -5550,6 +5730,69 @@ const onCallMissed =
             }
         };
 
+    const toggleGroupEncryption =
+        async () => {
+            if (!selectedUser?.isGroup || groupEncryptionBusy) {
+                return;
+            }
+
+            const enable = !selectedUser.isEncrypted;
+
+            if (
+                !enable &&
+                !window.confirm(
+                    "Turn off encryption for future group messages? Existing encrypted messages will stay encrypted."
+                )
+            ) {
+                return;
+            }
+
+            setGroupEncryptionBusy(true);
+            setGroupEncryptionMessage("");
+
+            try {
+                if (enable) {
+                    const identity =
+                        encryptionIdentityRef.current ||
+                        await ensureMessengerIdentity(api, getId(user));
+                    encryptionIdentityRef.current = identity;
+                    setEncryptionIdentity(identity);
+                }
+
+                const response = await api.put(
+                    `/groups/${getId(selectedUser)}/encryption`,
+                    { isEncrypted: enable }
+                );
+                const updated = {
+                    ...(response.data?.data || {}),
+                    isGroup: true
+                };
+
+                setGroups(previous =>
+                    previous.map(group =>
+                        getId(group) === getId(updated) ? updated : group
+                    )
+                );
+                setSelectedUser(updated);
+                selectedUserRef.current = updated;
+                setGroupEncryptionMessage(
+                    enable
+                        ? "Group text encryption is enabled."
+                        : "Group text encryption is disabled for new messages."
+                );
+            } catch (error) {
+                console.error("Update group encryption error:", error);
+                setGroupEncryptionMessage(
+                    error.response?.data?.message ||
+                    error.message ||
+                    "Could not update group encryption."
+                );
+            } finally {
+                setGroupEncryptionBusy(false);
+            }
+        };
+
+
     const updateGroupDetails =
         async () => {
             if (!selectedUser?.isGroup || !groupMemberSelection.length) {
@@ -5804,22 +6047,42 @@ const onCallMissed =
             }
 
             const encryptedChat =
-                !selectedUser.isGroup &&
-                getChatPreference(selectedUser).encrypted;
+                selectedUser.isGroup
+                    ? selectedUser.isEncrypted
+                    : getChatPreference(selectedUser).encrypted;
 
             let storedText = text;
 
             if (encryptedChat) {
                 try {
-                    const { cipher } =
-                        await getConversationCipher(selectedUser);
-                    storedText = await encryptMessageText(
-                        text,
-                        cipher,
-                        getConversationEncryptionId(sender, receiver)
-                    );
+                    if (selectedUser.isGroup) {
+                        const identity =
+                            encryptionIdentityRef.current ||
+                            await ensureMessengerIdentity(api, sender);
+                        encryptionIdentityRef.current = identity;
+                        setEncryptionIdentity(identity);
+                        storedText = await encryptGroupMessageText({
+                            api,
+                            text,
+                            groupId: receiver,
+                            senderId: sender,
+                            identity,
+                            participants: selectedUser.participants
+                        });
+                    } else {
+                        const { cipher } =
+                            await getConversationCipher(selectedUser);
+                        storedText = await encryptMessageText(
+                            text,
+                            cipher,
+                            getConversationEncryptionId(sender, receiver)
+                        );
+                    }
 
-                    if (storedText.length > 5000) {
+                    if (
+                        storedText.length >
+                        (selectedUser.isGroup ? 128000 : 5000)
+                    ) {
                         throw new Error(
                             "This message is too long to encrypt. Shorten it and try again."
                         );
@@ -5924,7 +6187,8 @@ const onCallMissed =
                         selectedUser.isGroup
                             ? {
                                   groupId: receiver,
-                                  message: text,
+                                  message: storedText,
+                                  isEncrypted: encryptedChat,
                                   replyTo:
                                       getMessageId(replySnapshot) ||
                                       undefined
@@ -5955,13 +6219,9 @@ const onCallMissed =
                  * Replace optimistic message.
                  */
 
-                const visibleSaved = encryptedChat
-                    ? {
-                          ...saved,
-                          message: text,
-                          isEncrypted: true
-                      }
-                    : saved;
+                const [visibleSaved] = encryptedChat
+                    ? await decryptMessagesForTarget([saved], selectedUser)
+                    : [saved];
 
                 if (selectedUser.isGroup) {
                     updateGroupPreview(receiver, saved);
@@ -6178,10 +6438,17 @@ const onCallMissed =
 
             if (
                 selectedUser &&
-                !selectedUser.isGroup &&
-                getChatPreference(selectedUser).encrypted
+                (
+                    selectedUser.isEncrypted ||
+                    (
+                        !selectedUser.isGroup &&
+                        getChatPreference(selectedUser).encrypted
+                    )
+                )
             ) {
-                showMessengerToast("Attachments are unavailable in encrypted chats for now.");
+                showMessengerToast(
+                    "Attachments are not available in end-to-end encrypted chats yet."
+                );
                 event.target.value = "";
                 return;
             }
@@ -6370,6 +6637,19 @@ const onCallMissed =
                 return;
             }
 
+            if (
+                selectedUser.isEncrypted ||
+                (
+                    !selectedUser.isGroup &&
+                    getChatPreference(selectedUser).encrypted
+                )
+            ) {
+                showMessengerToast(
+                    "Voice notes are not available in end-to-end encrypted chats yet."
+                );
+                return;
+            }
+
             const recipientId = getId(selectedUser);
             if (!recipientId) {
                 showMessengerToast("Choose a conversation before sending a voice note.");
@@ -6548,10 +6828,15 @@ const onCallMissed =
             }
 
             if (
-                !selectedUser.isGroup &&
-                getChatPreference(selectedUser).encrypted
+                selectedUser.isEncrypted ||
+                (
+                    !selectedUser.isGroup &&
+                    getChatPreference(selectedUser).encrypted
+                )
             ) {
-                showMessengerToast("Voice notes are unavailable in encrypted chats for now.");
+                showMessengerToast(
+                    "Voice notes are not available in end-to-end encrypted chats yet."
+                );
                 return;
             }
 
@@ -7103,28 +7388,45 @@ const onCallMissed =
 
             try {
                 const encryptedEdit =
-                    !selectedUser?.isGroup &&
-                    (
-                        editingMessage.isEncrypted ||
-                        getChatPreference(selectedUser).encrypted
-                    );
+                    selectedUser?.isGroup
+                        ? editingMessage.isEncrypted || selectedUser.isEncrypted
+                        : editingMessage.isEncrypted ||
+                          getChatPreference(selectedUser).encrypted;
                 let storedText = text;
-                let cipher = null;
 
                 if (encryptedEdit) {
-                    const encryption =
-                        await getConversationCipher(selectedUser);
-                    cipher = encryption.cipher;
-                    storedText = await encryptMessageText(
-                        text,
-                        cipher,
-                        getConversationEncryptionId(
-                            getId(user),
-                            getId(selectedUser)
-                        )
-                    );
+                    if (selectedUser.isGroup) {
+                        const senderId = getId(user);
+                        const identity =
+                            encryptionIdentityRef.current ||
+                            await ensureMessengerIdentity(api, senderId);
+                        encryptionIdentityRef.current = identity;
+                        setEncryptionIdentity(identity);
+                        storedText = await encryptGroupMessageText({
+                            api,
+                            text,
+                            groupId: getId(selectedUser),
+                            senderId,
+                            identity,
+                            participants: selectedUser.participants
+                        });
+                    } else {
+                        const { cipher } =
+                            await getConversationCipher(selectedUser);
+                        storedText = await encryptMessageText(
+                            text,
+                            cipher,
+                            getConversationEncryptionId(
+                                getId(user),
+                                getId(selectedUser)
+                            )
+                        );
+                    }
 
-                    if (storedText.length > 5000) {
+                    if (
+                        storedText.length >
+                        (selectedUser.isGroup ? 128000 : 5000)
+                    ) {
                         throw new Error(
                             "This message is too long to encrypt. Shorten it and try again."
                         );
@@ -7144,13 +7446,9 @@ const onCallMissed =
                     response.data?.data;
 
                 if (updated && encryptedEdit) {
-                    updated = await decryptMessageRecord(
-                        updated,
-                        cipher,
-                        getConversationEncryptionId(
-                            getId(user),
-                            getId(selectedUser)
-                        )
+                    [updated] = await decryptMessagesForTarget(
+                        [updated],
+                        selectedUser
                     );
                 }
 
@@ -8646,6 +8944,14 @@ const onCallMissed =
                                         {getUserName(
                                             selectedUser
                                         )}
+                                        {selectedUser.isGroup &&
+                                            selectedUser.isEncrypted && (
+                                                <FaLock
+                                                    className="encrypted-chat-lock"
+                                                    title="Group messages are end-to-end encrypted; calls are not"
+                                                    aria-label="Group messages are end-to-end encrypted"
+                                                />
+                                            )}
                                         {!selectedUser.isGroup &&
                                             getChatPreference(selectedUser).encrypted && (
                                                 <FaLock
@@ -8687,6 +8993,7 @@ const onCallMissed =
                                             aria-label="Group members"
                                             onClick={() => {
                                                 setGroupMemberSelection([]);
+                                                setGroupEncryptionMessage("");
                                                 setShowGroupDetails(true);
                                                 setShowMenu(false);
                                             }}
@@ -10058,6 +10365,7 @@ const onCallMissed =
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked ||
+                                        selectedUser.isEncrypted ||
                                         (
                                             !selectedUser.isGroup &&
                                             getChatPreference(selectedUser).encrypted
@@ -10080,6 +10388,7 @@ const onCallMissed =
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked ||
+                                        selectedUser.isEncrypted ||
                                         (
                                             !selectedUser.isGroup &&
                                             getChatPreference(selectedUser).encrypted
@@ -10117,6 +10426,7 @@ const onCallMissed =
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked ||
+                                        selectedUser.isEncrypted ||
                                         (
                                             !selectedUser.isGroup &&
                                             getChatPreference(selectedUser).encrypted
@@ -10180,7 +10490,15 @@ const onCallMissed =
                                     type="button"
                                     className="send-message-btn mic-btn"
                                     title="Record voice message"
-                                    disabled={sendingVoice}
+                                    disabled={
+                                        sendingVoice ||
+                                        selectedUser?.isEncrypted ||
+                                        (
+                                            !selectedUser?.isGroup &&
+                                            selectedUser &&
+                                            getChatPreference(selectedUser).encrypted
+                                        )
+                                    }
                                     onClick={
                                         startRecording
                                     }
@@ -10369,6 +10687,61 @@ const onCallMissed =
                             </button>
                         </div>
                         <div className="group-modal-body">
+                            <section className="group-encryption-panel">
+                                <strong>
+                                    {selectedUser.isEncrypted
+                                        ? "End-to-end encryption is on"
+                                        : "End-to-end encryption is off"}
+                                </strong>
+                                <p>
+                                    Group text is encrypted separately for each member.
+                                    Messages sent before encryption was enabled remain
+                                    unchanged, and new members cannot decrypt older
+                                    encrypted messages.
+                                    Attachments and voice notes are unavailable in
+                                    encrypted groups. Voice/video calls are not
+                                    end-to-end encrypted.
+                                </p>
+                                {selectedUser.isEncrypted && (
+                                    <div className="group-encryption-fingerprint">
+                                        <span>Group verification code</span>
+                                        <code>
+                                            {groupEncryptionSafetyCode ||
+                                                groupEncryptionSafetyError ||
+                                                "Verifying member keys..."}
+                                        </code>
+                                        <small>
+                                            Compare this full code with every member
+                                            through a trusted channel.
+                                        </small>
+                                    </div>
+                                )}
+                                {selectedUser.admins?.some(
+                                    admin => getId(admin) === currentUserId
+                                ) && (
+                                    <button
+                                        type="button"
+                                        className="group-primary-btn"
+                                        disabled={groupEncryptionBusy}
+                                        onClick={toggleGroupEncryption}
+                                    >
+                                        <FaLock />
+                                        {groupEncryptionBusy
+                                            ? "Updating encryption..."
+                                            : selectedUser.isEncrypted
+                                            ? "Turn off for new messages"
+                                            : "Enable group text encryption"}
+                                    </button>
+                                )}
+                                {groupEncryptionMessage && (
+                                    <p
+                                        className="group-encryption-status"
+                                        role="status"
+                                    >
+                                        {groupEncryptionMessage}
+                                    </p>
+                                )}
+                            </section>
                             <div className="group-member-heading">
                                 Members
                                 {selectedUser.admins?.some(

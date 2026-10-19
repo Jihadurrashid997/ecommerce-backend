@@ -2222,6 +2222,61 @@
     overflow-y: auto;
 }
 
+.group-encryption-panel {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 13px;
+    border: 1px solid #ddd6fe;
+    border-radius: 12px;
+    background: #f5f3ff;
+}
+
+.group-encryption-panel > strong {
+    color: #3730a3;
+    font-size: 13px;
+}
+
+.group-encryption-panel > p {
+    margin: 0;
+    color: #5b556d;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.group-encryption-panel .group-encryption-status {
+    color: #4338ca;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.group-encryption-fingerprint {
+    display: grid;
+    gap: 5px;
+    padding: 10px;
+    border: 1px solid #ddd6fe;
+    border-radius: 9px;
+    background: #fff;
+}
+
+.group-encryption-fingerprint span {
+    color: #4b5563;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.group-encryption-fingerprint code {
+    color: #312e81;
+    font-size: 11px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.group-encryption-fingerprint small {
+    color: #6b7280;
+    font-size: 10.5px;
+}
+
 .group-name-field {
     display: grid;
     gap: 8px;

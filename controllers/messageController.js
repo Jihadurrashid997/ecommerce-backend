@@ -43,6 +43,11 @@ const isValidEncryptionKeyBackup = backup =>
     typeof backup.ciphertext === "string" &&
     /^[A-Za-z0-9_-]{100,4096}$/.test(backup.ciphertext);
 
+const isEncryptedGroupPayload = message =>
+    typeof message === "string" &&
+    message.startsWith("e2eg:v1:") &&
+    /^e2eg:v1:[A-Za-z0-9_-]+$/.test(message);
+
 const canAccessMessage = async (message, userId) => {
     if (message.groupId) {
         return Boolean(await GroupConversation.exists({
@@ -430,31 +435,10 @@ exports.sendMessage = async (req, res) => {
         }
 
         if (groupId) {
-            if (isEncrypted) {
-                return res.status(400).json({
-                    success: false,
-                    message: "End-to-end encryption is currently supported for one-to-one text messages only."
-                });
-            }
-
             if (!isValidObjectId(groupId)) {
                 return res.status(400).json({
                     success: false,
                     message: "Invalid group ID"
-                });
-            }
-
-            if (!text && !file) {
-                return res.status(400).json({
-                    success: false,
-                    message: "A message or file is required"
-                });
-            }
-
-            if (text.length > 5000) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Message is too long"
                 });
             }
 
@@ -470,10 +454,50 @@ exports.sendMessage = async (req, res) => {
                 });
             }
 
+            if (group.isEncrypted !== isEncrypted) {
+                return res.status(409).json({
+                    success: false,
+                    message: group.isEncrypted
+                        ? "This group requires end-to-end encrypted messages."
+                        : "End-to-end encryption is not enabled for this group."
+                });
+            }
+
+            if (group.isEncrypted && file) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Attachments are not available in encrypted groups yet."
+                });
+            }
+
+            if (
+                group.isEncrypted
+                    ? !isEncryptedGroupPayload(text)
+                    : !text && !file
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: group.isEncrypted
+                        ? "A valid encrypted group message is required."
+                        : "A message or file is required"
+                });
+            }
+
+            if (
+                text.length >
+                (group.isEncrypted ? 128000 : 5000)
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Message is too long"
+                });
+            }
+
             const messageData = {
                 sender,
                 groupId,
                 message: text,
+                isEncrypted,
                 readBy: [sender]
             };
 
@@ -499,7 +523,9 @@ exports.sendMessage = async (req, res) => {
             const created = await Message.create(messageData);
 
             group.lastMessage = {
-                message: text || (file ? "Attachment" : ""),
+                message: isEncrypted
+                    ? "🔒 Encrypted message"
+                    : text || (file ? "Attachment" : ""),
                 sender,
                 createdAt: created.createdAt
             };
@@ -1135,13 +1161,35 @@ exports.editMessage = async (req, res) => {
             text.startsWith("e2ee:v1:") &&
             /^e2ee:v1:[A-Za-z0-9+/]+=*$/.test(text);
 
+        const isEncryptedGroupEdit =
+            message.groupId &&
+            message.message?.startsWith("e2eg:v1:");
+        const isEncryptedPayloadForConversation =
+            message.groupId
+                ? isEncryptedGroupPayload(text)
+                : isEncryptedPayload;
+
         if (
             (message.isEncrypted || req.body?.isEncrypted === true) &&
-            !isEncryptedPayload
+            !isEncryptedPayloadForConversation
         ) {
             return res.status(400).json({
                 success: false,
                 message: "Encrypted messages must remain encrypted when edited."
+            });
+        }
+
+        if (isEncryptedGroupEdit && !isEncryptedGroupPayload(text)) {
+            return res.status(400).json({
+                success: false,
+                message: "Encrypted group messages must remain encrypted when edited."
+            });
+        }
+
+        if (text.length > (message.groupId ? 128000 : 5000)) {
+            return res.status(400).json({
+                success: false,
+                message: "Message is too long."
             });
         }
 

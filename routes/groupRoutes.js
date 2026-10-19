@@ -3,6 +3,7 @@ const auth = require("../middleware/auth");
 const {
     listGroups,
     createGroup,
+    setGroupEncryption,
     getGroupMessages,
     createGroupCallToken,
     markGroupMessagesSeen,
@@ -15,6 +16,7 @@ const router = express.Router();
 router.use(auth());
 router.get("/", listGroups);
 router.post("/", createGroup);
+router.put("/:groupId/encryption", setGroupEncryption);
 router.post("/:groupId/call-token", createGroupCallToken);
 router.get("/:groupId/messages", getGroupMessages);
 router.put("/:groupId/seen", markGroupMessagesSeen);

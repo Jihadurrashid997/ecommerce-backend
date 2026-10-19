@@ -415,6 +415,172 @@ test("groups validate their name, creator, and participant list", () => {
     assert.equal(group.validateSync(), undefined);
 });
 
+test("new groups keep end-to-end encryption disabled by default", () => {
+    const group = new GroupConversation({
+        name: "Weekend plans",
+        createdBy: TEST_USER_ID,
+        admins: [TEST_USER_ID],
+        participants: [TEST_USER_ID, OTHER_USER_ID]
+    });
+
+    assert.equal(group.isEncrypted, false);
+});
+
+test("only admins can enable group encryption and every member must have a key", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalUserFind = User.find;
+    const group = {
+        _id: "507f191e810c19729de860eb",
+        admins: [TEST_USER_ID],
+        participants: [TEST_USER_ID, OTHER_USER_ID],
+        isEncrypted: false,
+        save: async () => {}
+    };
+    const response = makeResponse();
+
+    GroupConversation.findOne = async () => group;
+    User.find = () => ({
+        select: () => ({
+            lean: async () => [
+                {
+                    _id: TEST_USER_ID,
+                    messengerEncryptionPublicKey: JSON.stringify({
+                        kty: "EC",
+                        crv: "P-256",
+                        x: "A".repeat(43),
+                        y: "B".repeat(43)
+                    })
+                }
+            ]
+        })
+    });
+
+    try {
+        await groupController.setGroupEncryption(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: group._id },
+                body: { isEncrypted: true },
+                app: { get: () => null }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.deepEqual(response.body.membersWithoutKeys, [OTHER_USER_ID]);
+        assert.equal(group.isEncrypted, false);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        User.find = originalUserFind;
+    }
+});
+
+test("non-admin group members cannot change group encryption settings", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const group = {
+        _id: "507f191e810c19729de860eb",
+        admins: [OTHER_USER_ID],
+        participants: [TEST_USER_ID, OTHER_USER_ID],
+        isEncrypted: false,
+        save: async () => {
+            throw new Error("Non-admin must not save group settings.");
+        }
+    };
+    const response = makeResponse();
+
+    GroupConversation.findOne = async () => group;
+
+    try {
+        await groupController.setGroupEncryption(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: group._id },
+                body: { isEncrypted: true },
+                app: { get: () => null }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 403);
+        assert.equal(group.isEncrypted, false);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+    }
+});
+
+test("encrypted groups reject members who have not registered an encryption key", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalCountDocuments = User.countDocuments;
+    const originalUserFind = User.find;
+    const newMemberId = "507f191e810c19729de860ec";
+    const group = {
+        _id: "507f191e810c19729de860eb",
+        admins: [TEST_USER_ID],
+        participants: [TEST_USER_ID, OTHER_USER_ID],
+        isEncrypted: true,
+        save: async () => {
+            throw new Error("Unprepared member must not be added.");
+        }
+    };
+    const response = makeResponse();
+
+    GroupConversation.findOne = async () => group;
+    User.countDocuments = async () => 1;
+    User.find = () => ({
+        select: () => ({
+            lean: async () => []
+        })
+    });
+
+    try {
+        await groupController.addGroupMembers(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: group._id },
+                body: { memberIds: [newMemberId] },
+                app: { get: () => null }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.deepEqual(response.body.membersWithoutKeys, [newMemberId]);
+        assert.deepEqual(group.participants, [TEST_USER_ID, OTHER_USER_ID]);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        User.countDocuments = originalCountDocuments;
+        User.find = originalUserFind;
+    }
+});
+
+test("group messages cannot bypass enabled end-to-end encryption", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const response = makeResponse();
+
+    GroupConversation.findOne = async () => ({
+        isEncrypted: true,
+        participants: [TEST_USER_ID]
+    });
+
+    try {
+        await messageController.sendMessage(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    groupId: "507f191e810c19729de860eb",
+                    message: "must not be stored as plaintext"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.match(response.body.message, /requires end-to-end encrypted/);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+    }
+});
+
 test("encrypted messages are marked without changing legacy message validation", () => {
     const message = new Message({
         sender: TEST_USER_ID,
