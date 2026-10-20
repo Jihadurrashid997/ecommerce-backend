@@ -705,6 +705,16 @@ const Navbar = () => {
 
             {user && (
                 <div className="jr-header-actions">
+                    <Link
+                        to="/profile"
+                        className={`jr-header-action jr-profile-action${isActive("/profile") ? " is-active" : ""}`}
+                        aria-label="Your profile"
+                        title="Profile"
+                        onClick={closeMenu}
+                    >
+                        <FaUserCircle />
+                    </Link>
+
                     <div className="jr-notification-wrap" ref={notificationRef}>
                         <button
                             type="button"

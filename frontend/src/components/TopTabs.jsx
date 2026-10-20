@@ -7,8 +7,7 @@ const TABS = [
     { to: "/reels", label: "REELS" },
     { to: "/communities", label: "COMMUNITIES" },
     { to: "/messenger", label: "MESSENGER" },
-    { to: "/shop", label: "SHOP" },
-    { to: "/profile", label: "PROFILE" }
+    { to: "/shop", label: "SHOP" }
 ];
 
 const TopTabs = () => (
