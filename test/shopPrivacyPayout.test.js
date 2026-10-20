@@ -3,10 +3,19 @@ const test = require("node:test");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const User = require("../models/User");
+const ShopNotification = require("../models/ShopNotification");
 const marketplaceSettings = require("../services/marketplaceSettings");
 const orderController = require("../controllers/orderController");
 const productController = require("../controllers/productController");
 const paymentController = require("../controllers/paymentController");
+
+ShopNotification.bulkWrite = async () => ({});
+User.find = () => ({
+    select() {
+        return this;
+    },
+    lean: async () => []
+});
 
 const makeResponse = () => ({
     statusCode: 200,
@@ -977,6 +986,19 @@ test("customer cannot request a refund for an unpaid order or an invalid reason"
 
 test("admin refund completion requires a pending request and cancels unpaid seller payouts", async () => {
     const originalUpdateOne = Order.updateOne;
+    const originalFindOne = Order.findOne;
+    Order.findOne = () => ({
+        select: async () => ({
+            _id: "507f1f77bcf86cd799439033",
+            user: "507f1f77bcf86cd799439031",
+            sellerSettlements: [{
+                seller: "507f1f77bcf86cd799439032"
+            }],
+            refundRequest: {
+                requestedAt: new Date("2026-06-20T12:00:00.000Z")
+            }
+        })
+    });
     let filter;
     let update;
     let options;
@@ -1017,6 +1039,7 @@ test("admin refund completion requires a pending request and cancels unpaid sell
         assert.equal(response.statusCode, 200);
     } finally {
         Order.updateOne = originalUpdateOne;
+        Order.findOne = originalFindOne;
     }
 });
 
@@ -1025,7 +1048,12 @@ test("admin must provide a note when rejecting a refund request", async () => {
     let update;
     Order.findOneAndUpdate = async (_filter, nextUpdate) => {
         update = nextUpdate;
-        return { _id: "507f1f77bcf86cd799439034" };
+    return {
+        _id: "507f1f77bcf86cd799439034",
+        refundRequest: {
+            requestedAt: new Date("2026-06-20T12:00:00.000Z")
+        }
+    };
     };
 
     try {

@@ -1,6 +1,7 @@
 const Product = require('../models/Product');
 const User = require('../models/User');
 const marketplaceSettings = require('../services/marketplaceSettings');
+const { notifyShopUsers } = require("../services/shopNotifications");
 
 exports.getPayoutDetails = async (req, res) => {
     try {
@@ -123,6 +124,18 @@ exports.uploadProduct = async (req, res) => {
         });
 
         await newProduct.save();
+
+        if (!newProduct.isApproved) {
+            await notifyShopUsers({
+                recipients: [newProduct.seller],
+                eventKey: `${newProduct._id}:product-review`,
+                type: "product_review",
+                title: "Shop product awaiting review",
+                message: `${newProduct.name} was submitted and will appear in the Shop after administrator approval. / ${newProduct.name} জমা হয়েছে; অ্যাডমিন অনুমোদনের পর Shop-এ দেখা যাবে।`,
+                href: "/shop/seller/products",
+                productId: newProduct._id
+            });
+        }
 
         res.status(201).json({
             message: 'Product uploaded successfully with Image! 📸', // মেসেজ আপডেট করে দিলাম
@@ -255,6 +268,19 @@ exports.updateProduct = async (req, res) => {
         }
 
         await product.save();
+
+        if (settings.requireProductApproval && product.isApproved === false) {
+            await notifyShopUsers({
+                recipients: [product.seller],
+                eventKey: `${product._id}:product-review:${product.updatedAt?.getTime?.() || Date.now()}`,
+                type: "product_review",
+                title: "Edited Shop product awaiting review",
+                message: `${product.name} was updated and is hidden until administrator approval. / ${product.name} আপডেট হয়েছে; অ্যাডমিন অনুমোদন না দেওয়া পর্যন্ত Shop-এ দেখা যাবে না।`,
+                href: "/shop/seller/products",
+                productId: product._id
+            });
+        }
+
         res.status(200).json({ message: 'Product updated successfully! 🔄', product });
     } catch (error) {
         res.status(500).json({ message: 'Server Error', error: error.message });

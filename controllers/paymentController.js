@@ -1,5 +1,6 @@
 const SSLCommerzPayment = require("sslcommerz-lts");
 const Order = require("../models/Order");
+const { notifyShopUsers } = require("../services/shopNotifications");
 
 const store_id = process.env.SSLC_STORE_ID;
 const store_passwd = process.env.SSLC_STORE_PASSWORD;
@@ -17,8 +18,10 @@ const setSellerPayoutStatus = (order, payoutStatus) => {
     }
 };
 
-const markPaymentAttemptEnded = (transactionId, paymentStatus) =>
-    Order.updateOne(
+const markPaymentAttemptEnded = async (transactionId, paymentStatus) => {
+    const order = await Order.findOne({ transactionId })
+        .select("_id user");
+    const result = await Order.updateOne(
         {
             transactionId,
             paymentStatus: { $nin: ["paid", "refunded"] },
@@ -38,6 +41,22 @@ const markPaymentAttemptEnded = (transactionId, paymentStatus) =>
         }
     );
 
+    if (result.modifiedCount === 1 && order) {
+        const failed = paymentStatus === "failed";
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:payment-${paymentStatus}:${transactionId}`,
+            type: failed ? "payment_failed" : "payment_cancelled",
+            title: failed ? "Shop payment failed" : "Shop payment cancelled",
+            message: failed
+                ? `Payment for order #${String(order._id).slice(-8)} failed. Review the order and try checkout again. / অর্ডারটির পেমেন্ট ব্যর্থ হয়েছে; অর্ডার দেখে আবার পেমেন্টের চেষ্টা করুন।`
+                : `Payment for order #${String(order._id).slice(-8)} was cancelled. You can retry from your Shop orders. / অর্ডারটির পেমেন্ট বাতিল হয়েছে; Shop orders থেকে আবার চেষ্টা করতে পারেন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+    }
+    return result;
+};
 exports.getPaymentStatus = async (req, res) => {
     try {
         const transactionId = String(req.params.transactionId || "").trim();
@@ -88,6 +107,7 @@ exports.getPaymentStatus = async (req, res) => {
 // ==================================================
 
 exports.initPayment = async (req, res) => {
+    let transactionId;
 
     try {
 
@@ -200,8 +220,7 @@ exports.initPayment = async (req, res) => {
         }
 
 
-        const transactionId =
-            "TXN_" + Date.now();
+        transactionId = "TXN_" + Date.now();
 
 
         // Save transaction information
@@ -312,11 +331,7 @@ exports.initPayment = async (req, res) => {
             !apiResponse ||
             !apiResponse.GatewayPageURL
         ) {
-
-            order.paymentStatus =
-                "failed";
-
-            await order.save();
+            await markPaymentAttemptEnded(transactionId, "failed");
 
 
             return res.status(500).json({
@@ -343,6 +358,13 @@ exports.initPayment = async (req, res) => {
 
 
     } catch (err) {
+        if (transactionId) {
+            try {
+                await markPaymentAttemptEnded(transactionId, "failed");
+            } catch (statusError) {
+                console.error("PAYMENT INITIALIZATION STATUS ERROR:", statusError);
+            }
+        }
 
         console.error(
             "SSLCommerz initialization error:",
@@ -777,6 +799,27 @@ exports.paymentIPN = async (req, res) => {
             });
         }
 
+        const orderNumber = String(order._id).slice(-8);
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:payment-received`,
+            type: "payment_received",
+            title: "Shop payment confirmed",
+            message: `Payment for order #${orderNumber} was confirmed. / অর্ডারটির পেমেন্ট নিশ্চিত হয়েছে।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+        await notifyShopUsers({
+            recipients: (order.sellerSettlements || []).map(
+                settlement => settlement.seller
+            ),
+            eventKey: `${order._id}:new-paid-order`,
+            type: "payment_received",
+            title: "New paid Shop order",
+            message: `Order #${orderNumber} has been paid. Review your seller orders to prepare fulfillment. Buyer identity remains private. / অর্ডারটির পেমেন্ট হয়েছে; পণ্য পাঠানোর প্রস্তুতির জন্য seller orders দেখুন। ক্রেতার পরিচয় গোপন।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
 
         return res.status(200).json({
 
