@@ -65,6 +65,17 @@
     z-index: 5;
 }
 
+.messenger-sidebar-header,
+.messenger-stories,
+.messenger-search,
+.messenger-chat-filters {
+    flex: 0 0 auto;
+}
+
+.user-list {
+    min-height: 0;
+}
+
 .messenger-chat-filters {
     display: flex;
     gap: 8px;
@@ -147,6 +158,11 @@
 
 .messenger-settings-btn:hover {
     background: #e5e7eb;
+}
+
+.messenger-search-toggle.active {
+    background: #e7e4fb !important;
+    color: #5142be !important;
 }
 
 

@@ -617,6 +617,11 @@ const Messenger = ({ isActive = true }) => {
     const [search, setSearch] =
         useState("");
 
+    const [searchOpen, setSearchOpen] =
+        useState(false);
+
+    const searchInputRef = useRef(null);
+
     const [showGroupCreator, setShowGroupCreator] =
         useState(false);
 
@@ -1442,6 +1447,12 @@ const Messenger = ({ isActive = true }) => {
 
     const [showNotifications, setShowNotifications] =
         useState(false);
+
+    useEffect(() => {
+        if (searchOpen) {
+            searchInputRef.current?.focus();
+        }
+    }, [searchOpen]);
 
     /*
      * When settings.autoDownloadMedia is off, images show
@@ -8161,6 +8172,21 @@ const onCallMissed =
 
                     <button
                         type="button"
+                        className={`messenger-settings-btn messenger-search-toggle${searchOpen ? " active" : ""}`}
+                        title="Search people"
+                        aria-label="Search people"
+                        aria-expanded={searchOpen}
+                        onClick={() => {
+                            setShowSettings(false);
+                            setShowNotifications(false);
+                            setSearchOpen(open => !open);
+                        }}
+                    >
+                        <FaSearch />
+                    </button>
+
+                    <button
+                        type="button"
                         className={`messenger-settings-btn messenger-notifications-btn${showNotifications ? " active" : ""}`}
                         title={`${unreadConversationCount} unread Messenger notifications`}
                         aria-label={`Messenger notifications${unreadConversationCount ? `, ${unreadConversationCount} unread` : ""}`}
@@ -8440,34 +8466,27 @@ const onCallMissed =
                 )}
 
 
-                <div className="messenger-search">
-
-                    <FaSearch />
-
-                    <input
-                        value={search}
-                        onChange={
-                            event =>
-                                setSearch(
-                                    event.target.value
-                                )
-                        }
-                        placeholder="Search people..."
-                    />
-
-
-                    {search && (
-                        <button
-                            type="button"
-                            onClick={() =>
-                                setSearch("")
-                            }
-                        >
-                            <FaTimes />
-                        </button>
-                    )}
-
-                </div>
+                {searchOpen && (
+                    <div className="messenger-search">
+                        <FaSearch />
+                        <input
+                            ref={searchInputRef}
+                            value={search}
+                            onChange={event => setSearch(event.target.value)}
+                            placeholder="Search people..."
+                            aria-label="Search people"
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                aria-label="Clear search"
+                                onClick={() => setSearch("")}
+                            >
+                                <FaTimes />
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 <div className="messenger-chat-filters" aria-label="Conversation list">
                     <button
