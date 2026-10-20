@@ -249,8 +249,7 @@ export const showMessageNotification =
             playMessageNotification();
 
 
-        return
-            showBrowserNotification({
+        return showBrowserNotification({
                 title: senderName,
                 body: message,
                 tag: "jr-store-message"
@@ -279,8 +278,7 @@ export const showIncomingCallNotification =
                 : "Voice call";
 
 
-        return
-            showBrowserNotification({
+        return showBrowserNotification({
 
                 title:
                     `📞 ${callerName}`,
@@ -315,8 +313,7 @@ export const showMissedCallNotification =
                 : "voice";
 
 
-        return
-            showBrowserNotification({
+        return showBrowserNotification({
 
                 title:
                     `📞 Missed ${callType} call`,
