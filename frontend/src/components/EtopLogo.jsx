@@ -13,6 +13,8 @@ const EtopLogo = ({
 }) => (
     <div
         className={`etop-logo etop-logo-${size} ${
+            withTagline ? "etop-logo-with-tagline" : ""
+        } ${
             light ? "etop-logo-light" : ""
         }`}
     >
