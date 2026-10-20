@@ -234,6 +234,8 @@ function AppLayout() {
         location.pathname === "/verify-email";
     const messengerPage =
         location.pathname === "/messenger";
+    const reelsPage =
+        location.pathname === "/reels";
 
 
   return (
@@ -244,11 +246,11 @@ function AppLayout() {
             NAVBAR
         ================================================== */}
 
-        {!authPage && (
+        {!authPage && !reelsPage && (
             <Navbar />
         )}
 
-        {!authPage && location.pathname !== "/forgot-password" && (
+        {!authPage && !reelsPage && location.pathname !== "/forgot-password" && (
             <TopTabs />
         )}
 
@@ -661,7 +663,7 @@ function AppLayout() {
                 FOOTER
             ================================================== */}
 
-            {!authPage && !messengerPage && (
+            {!authPage && !messengerPage && !reelsPage && (
                 <Footer />
             )}
 
