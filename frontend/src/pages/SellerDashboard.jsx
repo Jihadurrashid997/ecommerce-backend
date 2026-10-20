@@ -128,7 +128,7 @@ const SellerDashboard = () => {
 
       <section className="dashboard-payout">
         <h2>Private payout details</h2>
-        <p>Only you and Shop administrators can view these details. Payouts are sent after the customer confirms delivery.</p>
+        <p>Only you and Shop administrators can view these details. You will confirm this payout destination for each delivered shipment; payout is processed after both you and the customer confirm.</p>
         {payoutError && <p className="dashboard-feedback error" role="alert">{payoutError}</p>}
         {payoutMessage && <p className="dashboard-feedback" role="status">{payoutMessage}</p>}
         <form className="dashboard-form" onSubmit={savePayoutDetails}>

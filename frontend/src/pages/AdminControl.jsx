@@ -474,7 +474,9 @@ const ShopSettings = () => {
     const [settings, setSettings] = useState(null);
     const [pendingProducts, setPendingProducts] = useState([]);
     const [readyPayouts, setReadyPayouts] = useState([]);
+    const [refundRequests, setRefundRequests] = useState([]);
     const [payoutForms, setPayoutForms] = useState({});
+    const [refundForms, setRefundForms] = useState({});
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState("");
     const [error, setError] = useState("");
@@ -484,14 +486,16 @@ const ShopSettings = () => {
         try {
             setLoading(true);
             setError("");
-            const [settingsResponse, productsResponse, payoutsResponse] = await Promise.all([
+            const [settingsResponse, productsResponse, payoutsResponse, refundsResponse] = await Promise.all([
                 api.get("/admin/settings"),
                 api.get("/admin/products/pending"),
-                api.get("/orders/admin/payouts/ready")
+                api.get("/orders/admin/payouts/ready"),
+                api.get("/orders/admin/refunds/requested")
             ]);
             setSettings(settingsResponse.data.settings);
             setPendingProducts(productsResponse.data.products || []);
             setReadyPayouts(payoutsResponse.data.payouts || []);
+            setRefundRequests(refundsResponse.data.refunds || []);
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not load Shop settings.");
         } finally {
@@ -540,6 +544,74 @@ const ShopSettings = () => {
                 [field]: value
             }
         }));
+    };
+
+    const updateRefundForm = (orderId, field, value) => {
+        setRefundForms(previous => ({
+            ...previous,
+            [orderId]: {
+                refundMethod: "SSLCommerz dashboard",
+                refundReference: "",
+                adminNote: "",
+                ...previous[orderId],
+                [field]: value
+            }
+        }));
+    };
+
+    const rejectRefund = async order => {
+        const form = refundForms[order._id] || {};
+        if ((form.adminNote || "").trim().length < 3) {
+            setError("Add a review note of at least 3 characters before rejecting a refund request.");
+            return;
+        }
+
+        try {
+            setBusy(order._id);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${order._id}/refund/reject`, {
+                adminNote: form.adminNote
+            });
+            setRefundRequests(previous =>
+                previous.filter(request => request._id !== order._id)
+            );
+            setNotice("Refund request rejected and the review note was saved.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not reject refund request.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const recordRefund = async order => {
+        const form = refundForms[order._id] || {};
+        if (!form.refundMethod?.trim() || !form.refundReference?.trim()) {
+            setError("Enter the refund method and actual transfer reference before recording a refund.");
+            return;
+        }
+
+        try {
+            setBusy(order._id);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${order._id}/refund/complete`, {
+                refundMethod: form.refundMethod,
+                refundReference: form.refundReference,
+                adminNote: form.adminNote || ""
+            });
+            setRefundRequests(previous =>
+                previous.filter(request => request._id !== order._id)
+            );
+            setReadyPayouts(previous =>
+                previous.filter(payout => String(payout.orderId) !== String(order._id))
+            );
+            setNotice("Manual refund recorded and unpaid seller payouts cancelled.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not record refund.");
+        } finally {
+            setBusy("");
+        }
     };
 
     const markPayoutPaid = async payout => {
@@ -631,6 +703,80 @@ const ShopSettings = () => {
                             </button>
                         </div>
                     ))}
+                </div>
+            )}
+
+            <h3>Full-order refund requests ({refundRequests.length})</h3>
+            <p className="ac-note">
+                Review requests manually. Process the refund through the payment provider or transfer service first, then record its real reference here. This does not issue an automatic refund.
+            </p>
+            {refundRequests.length === 0 ? (
+                <p className="ac-note">There are no refund requests awaiting review.</p>
+            ) : (
+                <div className="ac-list">
+                    {refundRequests.map(order => {
+                        const form = refundForms[order._id] || {
+                            refundMethod: "SSLCommerz dashboard",
+                            refundReference: "",
+                            adminNote: ""
+                        };
+                        return (
+                            <div className="ac-refund-card" key={order._id}>
+                                <div className="ac-refund-summary">
+                                    <b>Order #{String(order._id).slice(-8)} · Full refund ৳{Number(order.totalPrice || 0).toLocaleString("en-BD")}</b>
+                                    <span>Buyer: {order.user?.name || "Unknown"} · {order.user?.email || "No email"}</span>
+                                    <span>Requested: {order.refundRequest?.requestedAt
+                                        ? new Date(order.refundRequest.requestedAt).toLocaleString()
+                                        : "Date unavailable"}</span>
+                                    <span>Payment transaction: {order.transactionId || "Not available"}</span>
+                                    <span>Reason: {order.refundRequest?.reason || "No reason provided"}</span>
+                                    <span>Items: {(order.items || []).map(item => `${item.name} × ${item.quantity}`).join(", ") || "No items"}</span>
+                                </div>
+                                <div className="ac-refund-actions">
+                                    <input
+                                        aria-label={`Refund method for order ${String(order._id).slice(-8)}`}
+                                        value={form.refundMethod}
+                                        onChange={event => updateRefundForm(order._id, "refundMethod", event.target.value)}
+                                        maxLength={40}
+                                        placeholder="Refund method"
+                                    />
+                                    <input
+                                        aria-label={`Refund reference for order ${String(order._id).slice(-8)}`}
+                                        value={form.refundReference}
+                                        onChange={event => updateRefundForm(order._id, "refundReference", event.target.value)}
+                                        maxLength={120}
+                                        placeholder="Actual refund reference"
+                                    />
+                                    <textarea
+                                        aria-label={`Review note for order ${String(order._id).slice(-8)}`}
+                                        value={form.adminNote}
+                                        onChange={event => updateRefundForm(order._id, "adminNote", event.target.value)}
+                                        maxLength={500}
+                                        placeholder="Buyer-facing review note (required to reject)"
+                                        rows={2}
+                                    />
+                                    <div>
+                                        <button
+                                            type="button"
+                                            className="ac-refund-complete"
+                                            disabled={Boolean(busy)}
+                                            onClick={() => recordRefund(order)}
+                                        >
+                                            {busy === order._id ? "Saving..." : "Record refund completed"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="ac-refund-reject"
+                                            disabled={Boolean(busy)}
+                                            onClick={() => rejectRefund(order)}
+                                        >
+                                            {busy === order._id ? "Saving..." : "Reject request"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

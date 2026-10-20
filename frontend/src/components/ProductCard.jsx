@@ -8,17 +8,22 @@ import "../styles/ProductCard.css";
 
 const ProductCard = ({ product }) => {
 
-  const { addToCart } = useCart();
+  const { cart, addToCart } = useCart();
   const { wishlist, addToWishlist, removeFromWishlist } = useWishlist();
   const productId = String(product._id || product.id || "");
   const isWishlisted = wishlist.some(item => String(item._id || item.id) === productId);
   const inStock = Number(product.stock ?? 1) > 0;
+  const cartQuantity = cart.find(
+    item => String(item._id || item.id) === productId
+  )?.quantity || 0;
+  const cartLimitReached = cartQuantity >= Number(product.stock ?? 1);
   const [added, setAdded] = useState(false);
   const addedTimer = useRef(null);
 
   useEffect(() => () => clearTimeout(addedTimer.current), []);
 
   const handleAddToCart = () => {
+    if (cartLimitReached) return;
     addToCart(product);
     setAdded(true);
     clearTimeout(addedTimer.current);
@@ -89,14 +94,20 @@ const ProductCard = ({ product }) => {
         <button
           className="cart-btn"
           type="button"
-          disabled={!inStock}
+          disabled={!inStock || cartLimitReached}
           onClick={handleAddToCart}
         >
           {added ? <FaCheck /> : <FaShoppingCart />}
           <span>
-            {!inStock ? "Sold out" : added ? "Added to bag" : "Add to bag"}
+            {!inStock
+              ? "Sold out"
+              : cartLimitReached
+                ? "Stock limit reached"
+                : added
+                  ? "Added to bag"
+                  : "Add to bag"}
           </span>
-          {inStock && !added && <FaArrowRight className="shop-cart-arrow" />}
+          {inStock && !cartLimitReached && !added && <FaArrowRight className="shop-cart-arrow" />}
         </button>
 
       </div>

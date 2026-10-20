@@ -72,16 +72,43 @@ exports.uploadProduct = async (req, res) => {
             });
         }
 
-        const { name, description, price, category, stock } = req.body;
+        const name = String(req.body.name || "").trim();
+        const description = String(req.body.description || "").trim();
+        const category = String(req.body.category || "").trim();
+        const price = Number(req.body.price);
+        const stock = req.body.stock === undefined
+            ? 1
+            : Number(req.body.stock);
+
+        if (
+            !name ||
+            !description ||
+            !category ||
+            !Number.isFinite(price) ||
+            price <= 0 ||
+            !Number.isSafeInteger(stock) ||
+            stock < 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a product name, description, category, positive price, and whole-number stock of zero or more."
+            });
+        }
 
         // মাল্টার থেকে আসা ছবিগুলো ধরার লজিক
         let imagePaths = [];
         
         // যদি ছবি রিকোয়েস্টে থাকে, তবে সেগুলোর পাথ বা নাম বের করে অ্যারেতে রাখবো
         if (req.files && req.files.length > 0) {
-            imagePaths = req.files.map(file => file.filename || file.path); 
+            imagePaths = req.files.map(file =>
+                file.filename ? `/uploads/${file.filename}` : file.path
+            );
         } else if (req.file) {
-            imagePaths.push(req.file.filename || req.file.path);
+            imagePaths.push(
+                req.file.filename
+                    ? `/uploads/${req.file.filename}`
+                    : req.file.path
+            );
         }
 
         const newProduct = new Product({
@@ -90,7 +117,7 @@ exports.uploadProduct = async (req, res) => {
             price,
             category,
             stock,
-            images: imagePaths, // এখন আর ফাঁকা নেই, আসল ছবির নাম/পাথ বসবে!
+            image: imagePaths[0] || req.body.image || "",
             seller: req.user.id,
             isApproved: !settings.requireProductApproval
         });
@@ -170,22 +197,61 @@ exports.updateProduct = async (req, res) => {
         }
 
         // সেফ চেক: যদি প্রোডাক্টে সেলার আইডি থাকে এবং সেটি যদি বর্তমান ইউজারের সাথে না মিলে
-        if (product.seller && product.seller.toString() !== req.user.id) {
+        if (!product.seller || product.seller.toString() !== req.user.id) {
             return res.status(401).json({ message: 'Not authorized to update this product' });
         }
 
-        // ডাটা আপডেট
-        product.name = name || product.name;
-        product.description = description || product.description;
-        product.price = price || product.price;
-        product.category = category || product.category;
-        product.stock = stock || product.stock;
         if (settings.requireProductApproval) {
             product.isApproved = false;
         }
 
+        if (name !== undefined) {
+            if (!String(name).trim()) {
+                return res.status(400).json({
+                    message: "Product name cannot be empty."
+                });
+            }
+            product.name = String(name).trim();
+        }
+        if (description !== undefined) {
+            if (!String(description).trim()) {
+                return res.status(400).json({
+                    message: "Product description cannot be empty."
+                });
+            }
+            product.description = String(description).trim();
+        }
+        if (category !== undefined) {
+            if (!String(category).trim()) {
+                return res.status(400).json({
+                    message: "Product category cannot be empty."
+                });
+            }
+            product.category = String(category).trim();
+        }
+        if (price !== undefined) {
+            const parsedPrice = Number(price);
+            if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+                return res.status(400).json({
+                    message: "Product price must be greater than zero."
+                });
+            }
+            product.price = parsedPrice;
+        }
+        if (stock !== undefined) {
+            const parsedStock = Number(stock);
+            if (!Number.isSafeInteger(parsedStock) || parsedStock < 0) {
+                return res.status(400).json({
+                    message: "Product stock must be a whole number of zero or more."
+                });
+            }
+            product.stock = parsedStock;
+        }
+
         if (req.files && req.files.length > 0) {
-            product.images = req.files.map(file => file.filename || file.path);
+            product.image = req.files[0].filename
+                ? `/uploads/${req.files[0].filename}`
+                : req.files[0].path;
         }
 
         await product.save();

@@ -49,4 +49,18 @@ describe("ProductCard marketplace actions", () => {
 
         expect(screen.getByRole("button", { name: /Sold out/ })).toBeDisabled();
     });
+
+    test("does not add more than the available stock", () => {
+        renderProduct({
+            _id: "product-3",
+            name: "Limited scarf",
+            price: 600,
+            stock: 1
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: /Add to bag/ }));
+
+        expect(screen.getByRole("button", { name: /Stock limit reached/ }))
+            .toBeDisabled();
+    });
 });

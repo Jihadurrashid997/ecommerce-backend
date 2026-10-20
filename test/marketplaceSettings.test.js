@@ -138,6 +138,90 @@ test("new products start pending when admin approval is enabled", async () => {
     }
 });
 
+test("product creation rejects invalid prices and fractional stock", async () => {
+    const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
+    const originalCreate = Product.create;
+    let createCalled = false;
+    marketplaceSettings.getMarketplaceSettings = async () => ({
+        marketplaceEnabled: true,
+        requireProductApproval: false
+    });
+    Product.create = async data => {
+        createCalled = true;
+        return data;
+    };
+
+    try {
+        const response = makeResponse();
+        await productController.createProduct(
+            {
+                body: {
+                    name: "Mug",
+                    description: "Handmade",
+                    price: 200,
+                    category: "Home",
+                    stock: 1.5
+                },
+                user: { id: "507f1f77bcf86cd799439011" }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 400);
+        assert.equal(createCalled, false);
+    } finally {
+        marketplaceSettings.getMarketplaceSettings = originalGetSettings;
+        Product.create = originalCreate;
+    }
+});
+
+test("seller product updates cannot change ownership or approval and can set stock to zero", async () => {
+    const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
+    const originalFindById = Product.findById;
+    let saved = false;
+    const product = {
+        seller: "507f1f77bcf86cd799439011",
+        isApproved: true,
+        stock: 5,
+        price: 200,
+        save: async () => {
+            saved = true;
+        }
+    };
+    marketplaceSettings.getMarketplaceSettings = async () => ({
+        marketplaceEnabled: true,
+        requireProductApproval: false
+    });
+    Product.findById = async () => product;
+
+    try {
+        const response = makeResponse();
+        await productController.updateProduct(
+            {
+                params: { id: "507f1f77bcf86cd799439012" },
+                body: {
+                    stock: "0",
+                    seller: "507f1f77bcf86cd799439013",
+                    isApproved: false
+                },
+                user: {
+                    id: "507f1f77bcf86cd799439011",
+                    role: "seller"
+                }
+            },
+            response
+        );
+
+        assert.equal(saved, true);
+        assert.equal(product.stock, 0);
+        assert.equal(product.seller, "507f1f77bcf86cd799439011");
+        assert.equal(product.isApproved, true);
+    } finally {
+        marketplaceSettings.getMarketplaceSettings = originalGetSettings;
+        Product.findById = originalFindById;
+    }
+});
+
 test("disabled Shop blocks product browsing and new orders", async () => {
     const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
     const originalFind = Product.find;
