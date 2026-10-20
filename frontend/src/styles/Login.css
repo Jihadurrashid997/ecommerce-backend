@@ -230,6 +230,12 @@
     }
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .jr-login-box:hover {
+        transform: none;
+    }
+}
+
 
 /* TOP LIGHT */
 

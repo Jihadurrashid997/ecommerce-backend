@@ -5,6 +5,7 @@
 .edit-profile-page {
     min-height: 100vh;
     padding: 50px 20px 80px;
+    animation: jrPageEnter 0.65s cubic-bezier(.22, 1, .36, 1) both;
 
     background:
         radial-gradient(
@@ -17,6 +18,12 @@
             rgba(168, 85, 247, 0.10),
             transparent 35%
         );
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .edit-profile-page {
+        animation: none;
+    }
 }
 
 
