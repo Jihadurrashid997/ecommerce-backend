@@ -1,6 +1,13 @@
 const nodemailer = require("nodemailer");
+const fs = require("fs");
+const path = require("path");
 
 let transporter = null;
+const EMAIL_LOGO_CID = "etop-logo";
+const localLogoPath = path.resolve(
+    __dirname,
+    "../frontend/public/brand/etop-loading-logo.png"
+);
 
 const isEmailConfigured = () =>
     Boolean(
@@ -43,6 +50,9 @@ const getLogoUrl = () => {
     if (process.env.EMAIL_LOGO_URL) {
         return process.env.EMAIL_LOGO_URL;
     }
+    if (fs.existsSync(localLogoPath)) {
+        return `cid:${EMAIL_LOGO_CID}`;
+    }
 
     const frontendUrl =
         process.env.FRONTEND_URL || process.env.CLIENT_URL || "";
@@ -56,9 +66,9 @@ const createEmailHtml = ({
     code,
     title,
     description,
-    warning
+    warning,
+    logoUrl = getLogoUrl()
 }) => {
-    const logoUrl = getLogoUrl();
     const brand = logoUrl
         ? `<img src="${escapeHtml(logoUrl)}" alt="E Top" width="150" style="display:block;max-width:150px;height:auto;margin:0 auto 24px;">`
         : `<div style="margin-bottom:24px;color:#2563eb;font-size:30px;font-weight:800;">E Top</div>`;
@@ -117,6 +127,7 @@ async function sendCodeEmail({
     }
 
     try {
+        const logoUrl = getLogoUrl();
         const info = await transport.sendMail({
             from: {
                 name: "E Top",
@@ -129,8 +140,17 @@ async function sendCodeEmail({
                 code,
                 title,
                 description,
-                warning
+                warning,
+                logoUrl
             }),
+            attachments: logoUrl === `cid:${EMAIL_LOGO_CID}`
+                ? [{
+                    filename: "etop-loading-logo.png",
+                    path: localLogoPath,
+                    cid: EMAIL_LOGO_CID,
+                    contentDisposition: "inline"
+                }]
+                : [],
             text: `E Top\n\nHi ${name || "there"},\n${description}\nYour code: ${code}\nThis code expires in 10 minutes. ${warning}`
         });
 
