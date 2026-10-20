@@ -222,6 +222,7 @@ const OrderSchema = new mongoose.Schema(
             enum: [
                 "pending",
                 "paid",
+                "refunded",
                 "failed",
                 "cancelled"
             ],

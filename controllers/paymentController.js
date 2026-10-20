@@ -21,7 +21,8 @@ const markPaymentAttemptEnded = (transactionId, paymentStatus) =>
     Order.updateOne(
         {
             transactionId,
-            paymentStatus: { $ne: "paid" },
+            paymentStatus: { $nin: ["paid", "refunded"] },
+            "refundRequest.status": { $ne: "refunded" },
             status: { $ne: "Cancelled" }
         },
         {
@@ -168,6 +169,12 @@ exports.initPayment = async (req, res) => {
         if (order.status === "Cancelled") {
             return res.status(409).json({
                 message: "Cancelled orders cannot be paid."
+            });
+        }
+
+        if (order.paymentStatus === "refunded") {
+            return res.status(409).json({
+                message: "This order has already been refunded and cannot be paid again."
             });
         }
 
@@ -574,6 +581,13 @@ exports.paymentIPN = async (req, res) => {
             });
         }
 
+        if (order.paymentStatus === "refunded") {
+            return res.status(409).json({
+                success: false,
+                message: "This order has already been refunded and cannot be paid again."
+            });
+        }
+
         if (order.status === "Cancelled") {
             return res.status(409).json({
                 success: false,
@@ -727,7 +741,8 @@ exports.paymentIPN = async (req, res) => {
             {
                 _id: order._id,
                 transactionId: tran_id,
-                paymentStatus: { $ne: "paid" },
+                paymentStatus: { $nin: ["paid", "refunded"] },
+                "refundRequest.status": { $ne: "refunded" },
                 status: { $ne: "Cancelled" }
             },
             {
@@ -747,7 +762,7 @@ exports.paymentIPN = async (req, res) => {
 
         if (paymentUpdate.modifiedCount !== 1) {
             const currentOrder = await Order.findById(order._id)
-                .select("paymentStatus status");
+                .select("paymentStatus status refundRequest.status");
 
             if (currentOrder?.paymentStatus === "paid") {
                 return res.status(200).json({

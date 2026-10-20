@@ -160,6 +160,9 @@ const OrderHistory = () => {
                 case "paid":
                     return "status-paid";
 
+                case "refunded":
+                    return "status-refunded";
+
                 case "failed":
                     return "status-failed";
 
@@ -587,12 +590,18 @@ const OrderHistory = () => {
 
                             </div>
 
-                            {order.paymentStatus === "paid" && (
+                            {["paid", "refunded"].includes(order.paymentStatus) && (
                                 <section className="order-refund">
-                                    <h3>Full-order refund request</h3>
-                                    <p>
-                                        Refund requests are reviewed by Shop administrators. Submitting a request does not automatically cancel the order or refund your payment.
-                                    </p>
+                                    <h3>
+                                        {order.paymentStatus === "refunded"
+                                            ? "Refund status"
+                                            : "Full-order refund request"}
+                                    </h3>
+                                    {order.paymentStatus === "paid" && (
+                                        <p>
+                                            Refund requests are reviewed by Shop administrators. Submitting a request does not automatically cancel the order or refund your payment.
+                                        </p>
+                                    )}
                                     {order.refundRequest?.status === "requested" && (
                                         <p role="status">
                                             Your request is under review. Shipment updates and seller payouts are paused while it is pending.

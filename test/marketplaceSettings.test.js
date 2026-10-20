@@ -2,6 +2,8 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const MarketplaceSettings = require("../models/MarketplaceSettings");
 const Product = require("../models/Product");
+const Order = require("../models/Order");
+const User = require("../models/User");
 const marketplaceSettings = require("../services/marketplaceSettings");
 const adminController = require("../controllers/adminController");
 const productController = require("../controllers/productController");
@@ -71,6 +73,54 @@ test("admin settings reject non-boolean values", async () => {
 
     assert.equal(response.statusCode, 400);
     assert.match(response.body.message, /true or false/);
+});
+
+test("admin analytics separates refunds from paid revenue", async () => {
+    const originalUserCountDocuments = User.countDocuments;
+    const originalProductCountDocuments = Product.countDocuments;
+    const originalOrderCountDocuments = Order.countDocuments;
+    const originalOrderAggregate = Order.aggregate;
+    const paymentCounts = {};
+    let revenuePipeline;
+    User.countDocuments = async () => 4;
+    Product.countDocuments = async () => 8;
+    Order.countDocuments = async filter => {
+        filter = filter || {};
+        if (filter.paymentStatus) {
+            paymentCounts[filter.paymentStatus] =
+                (paymentCounts[filter.paymentStatus] || 0) + 1;
+            return filter.paymentStatus === "refunded" ? 2 : 1;
+        }
+        return 3;
+    };
+    Order.aggregate = async pipeline => {
+        revenuePipeline = pipeline;
+        return [{ total: 125 }];
+    };
+
+    try {
+        const response = makeResponse();
+        await adminController.getAnalytics({}, response);
+
+        assert.equal(response.body.analytics.payments.paid, 1);
+        assert.equal(response.body.analytics.payments.refunded, 2);
+        assert.equal(response.body.analytics.totalRevenue, 125);
+        assert.deepEqual(revenuePipeline[0].$match, {
+            paymentStatus: "paid"
+        });
+        assert.deepEqual(paymentCounts, {
+            paid: 1,
+            refunded: 1,
+            pending: 1,
+            failed: 1,
+            cancelled: 1
+        });
+    } finally {
+        User.countDocuments = originalUserCountDocuments;
+        Product.countDocuments = originalProductCountDocuments;
+        Order.countDocuments = originalOrderCountDocuments;
+        Order.aggregate = originalOrderAggregate;
+    }
 });
 
 test("product browse filters pending listings when approval is required", async () => {

@@ -37,6 +37,7 @@ exports.getAnalytics =
                 cancelledOrders,
 
                 paidPayments,
+                refundedPayments,
                 pendingPayments,
                 failedPayments,
                 cancelledPayments
@@ -83,6 +84,10 @@ exports.getAnalytics =
 
                 Order.countDocuments({
                     paymentStatus: "paid"
+                }),
+
+                Order.countDocuments({
+                    paymentStatus: "refunded"
                 }),
 
                 Order.countDocuments({
@@ -203,6 +208,9 @@ exports.getAnalytics =
 
                         paid:
                             paidPayments,
+
+                        refunded:
+                            refundedPayments,
 
                         pending:
                             pendingPayments,
