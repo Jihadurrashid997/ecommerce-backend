@@ -436,6 +436,29 @@ const AdminDashboard = () => {
 
                         </div>
 
+                        <div className="stat-box payment-cancelled">
+
+                            <span>
+                                ↩️
+                            </span>
+
+                            <div>
+
+                                <p>
+                                    Refunded
+                                </p>
+
+                                <strong>
+                                    {
+                                        analytics.payments
+                                            ?.refunded || 0
+                                    }
+                                </strong>
+
+                            </div>
+
+                        </div>
+
 
                         <div className="stat-box payment-pending">
 

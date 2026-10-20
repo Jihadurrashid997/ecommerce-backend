@@ -6,6 +6,7 @@ const User = require("../models/User");
 const marketplaceSettings = require("../services/marketplaceSettings");
 const orderController = require("../controllers/orderController");
 const productController = require("../controllers/productController");
+const paymentController = require("../controllers/paymentController");
 
 const makeResponse = () => ({
     statusCode: 200,
@@ -1006,6 +1007,7 @@ test("admin refund completion requires a pending request and cancels unpaid sell
         assert.deepEqual(filter.sellerSettlements.$not.$elemMatch, {
             payoutStatus: "paid"
         });
+        assert.equal(update.$set.paymentStatus, "refunded");
         assert.equal(update.$set["refundRequest.status"], "refunded");
         assert.equal(update.$set["refundRequest.refundReference"], "REF-1098");
         assert.equal(update.$set["sellerSettlements.$[settlement].payoutStatus"], "cancelled");
@@ -1062,4 +1064,58 @@ test("orders initialize the refund request workflow as inactive", () => {
 
     assert.equal(order.refundRequest.status, "none");
     assert.equal(order.refundRequest.refundedAt, null);
+});
+
+test("orders accept refunded payment status", () => {
+    const order = new Order({
+        user: "507f1f77bcf86cd799439011",
+        items: [{
+            product: "507f1f77bcf86cd799439012",
+            name: "Product",
+            price: 40,
+            quantity: 1
+        }],
+        totalPrice: 40,
+        paymentStatus: "refunded"
+    });
+
+    assert.equal(order.validateSync(), undefined);
+});
+
+test("a stale payment IPN cannot restore an order after a refund", async () => {
+    const originalFindOne = Order.findOne;
+    let updateCalled = false;
+    Order.findOne = async () => ({
+        paymentStatus: "refunded",
+        refundRequest: { status: "refunded" },
+        status: "Delivered"
+    });
+    const originalUpdateOne = Order.updateOne;
+    Order.updateOne = async () => {
+        updateCalled = true;
+        return { modifiedCount: 1 };
+    };
+
+    try {
+        const response = makeResponse();
+        await paymentController.paymentIPN(
+            {
+                body: {
+                    tran_id: "TXN-OLD",
+                    status: "VALID",
+                    amount: "40",
+                    currency: "BDT",
+                    val_id: "VALIDATION-ID"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.equal(updateCalled, false);
+        assert.match(response.body.message, /already been refunded/i);
+    } finally {
+        Order.findOne = originalFindOne;
+        Order.updateOne = originalUpdateOne;
+    }
 });

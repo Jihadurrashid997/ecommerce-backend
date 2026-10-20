@@ -1217,6 +1217,7 @@ exports.recordOrderRefund = async (req, res) => {
             },
             {
                 $set: {
+                    paymentStatus: "refunded",
                     "refundRequest.status": "refunded",
                     "refundRequest.adminNote": adminNote,
                     "refundRequest.reviewedAt": refundedAt,
