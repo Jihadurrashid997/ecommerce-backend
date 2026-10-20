@@ -254,6 +254,8 @@
 
     align-items: center;
 
+    justify-content: center;
+
     gap: 14px;
 
     margin-bottom: 30px;
@@ -1102,4 +1104,107 @@
 
 .link-button:hover {
     color: #ffffff;
+}
+
+.login-submit-btn {
+    width: 100%;
+    min-height: 56px;
+    margin-top: 4px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 0;
+    border-radius: 15px;
+    color: #fff;
+    background: linear-gradient(120deg, #4f46e5, #7c3aed 58%, #2563eb);
+    box-shadow:
+        0 14px 34px rgba(79, 70, 229, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.24);
+    font-size: 14px;
+    font-weight: 750;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.forgot-password-brand {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 20px;
+}
+
+.login-submit-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow:
+        0 18px 40px rgba(99, 102, 241, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.login-submit-btn:focus-visible,
+.link-button:focus-visible,
+.login-register a:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 3px;
+}
+
+.login-submit-btn:disabled {
+    opacity: 0.62;
+    cursor: not-allowed;
+}
+
+.login-register {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 22px;
+    color: #929db3;
+    font-size: 13px;
+    text-align: center;
+}
+
+.login-register a {
+    display: inline-flex;
+    align-items: center;
+    color: #c4b5fd;
+    font-weight: 700;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.login-register a:hover {
+    color: #fff;
+}
+
+.login-register .link-button {
+    min-height: 32px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    color: #c4b5fd;
+    text-decoration: none;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.login-register .link-button:hover:not(:disabled) {
+    color: #fff;
+    background: rgba(167, 139, 250, 0.1);
+}
+
+.login-register .link-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.login-input-wrapper input:-webkit-autofill,
+.login-input-wrapper input:-webkit-autofill:hover,
+.login-input-wrapper input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #111522 inset;
+    -webkit-text-fill-color: #fff;
+    caret-color: #fff;
+    transition: background-color 9999s ease-out 0s;
 }

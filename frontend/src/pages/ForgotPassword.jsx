@@ -100,7 +100,13 @@ const ForgotPassword = () => {
 
                 setError(
                     err.response?.data?.message ||
-                    "Something went wrong. Please try again."
+                    (
+                        err.code === "ECONNABORTED"
+                            ? "The server took too long to respond. Please try again."
+                            : !err.response
+                                ? "Cannot connect to E Top server. Please try again."
+                                : "Something went wrong. Please try again."
+                    )
                 );
 
             } finally {
@@ -293,13 +299,7 @@ const ForgotPassword = () => {
                 transition={{ duration: 0.4 }}
             >
 
-                <div
-                    style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        marginBottom: 20
-                    }}
-                >
+                <div className="forgot-password-brand">
 
                     <EtopLogo size="md" light />
 

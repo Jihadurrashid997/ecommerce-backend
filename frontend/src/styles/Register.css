@@ -162,6 +162,8 @@
 
     align-items: center;
 
+    justify-content: center;
+
     gap: 14px;
 
     margin-bottom: 28px;
@@ -373,6 +375,15 @@
 
     color: rgba(255,255,255,.32);
 
+}
+
+.register-input input:-webkit-autofill,
+.register-input input:-webkit-autofill:hover,
+.register-input input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #11131d inset;
+    -webkit-text-fill-color: #fff;
+    caret-color: #fff;
+    transition: background-color 9999s ease-out 0s;
 }
 
 
