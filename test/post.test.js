@@ -930,9 +930,9 @@ test("encrypted group attachments store only opaque ciphertext metadata", async 
                     isEncrypted: "true"
                 },
                 file: {
-                    filename: "stored-ciphertext.bin",
                     originalname: "encrypted-media.bin",
-                    mimetype: "application/octet-stream"
+                    mimetype: "application/octet-stream",
+                    buffer: Buffer.from("ciphertext")
                 },
                 app: { get: () => null }
             },
@@ -943,9 +943,19 @@ test("encrypted group attachments store only opaque ciphertext metadata", async 
         assert.equal(storedMessage.isEncrypted, true);
         assert.equal(storedMessage.fileType, "application/octet-stream");
         assert.equal(storedMessage.fileName, "encrypted-media.bin");
-        assert.equal(storedMessage.fileUrl, "/uploads/stored-ciphertext.bin");
+        assert.match(storedMessage.fileUrl, /^\/uploads\/.+\.bin$/);
+        assert.equal(storedMessage.fileStorageType, "raw");
         assert.equal(group.lastMessage.message, "🔒 Encrypted message");
     } finally {
+        if (storedMessage?.fileUrl?.startsWith("/uploads/")) {
+            await fs.unlink(
+                path.join(
+                    process.cwd(),
+                    "uploads",
+                    path.basename(storedMessage.fileUrl)
+                )
+            );
+        }
         GroupConversation.findOne = originalGroupFindOne;
         Message.create = originalMessageCreate;
         Message.findById = originalMessageFindById;
@@ -1034,9 +1044,9 @@ test("encrypted direct messages accept client-encrypted opaque files", async () 
                     isEncrypted: "true"
                 },
                 file: {
-                    filename: "stored-ciphertext.bin",
                     originalname: "encrypted-media.bin",
-                    mimetype: "application/octet-stream"
+                    mimetype: "application/octet-stream",
+                    buffer: Buffer.from("ciphertext")
                 }
             },
             response
@@ -1047,6 +1057,15 @@ test("encrypted direct messages accept client-encrypted opaque files", async () 
         assert.equal(storedMessage.fileType, "application/octet-stream");
         assert.equal(storedMessage.fileName, "encrypted-media.bin");
     } finally {
+        if (storedMessage?.fileUrl?.startsWith("/uploads/")) {
+            await fs.unlink(
+                path.join(
+                    process.cwd(),
+                    "uploads",
+                    path.basename(storedMessage.fileUrl)
+                )
+            );
+        }
         User.findById = originalUserFindById;
         Message.create = originalMessageCreate;
         Message.findById = originalMessageFindById;

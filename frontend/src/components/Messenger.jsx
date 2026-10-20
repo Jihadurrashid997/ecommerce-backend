@@ -1248,7 +1248,9 @@ const Messenger = ({ isActive = true }) => {
         if (
             event.button !== 0 ||
             item.isDeleted ||
-            event.target.closest("button, a, input, textarea, [role='button']")
+            event.target.closest(
+                "button, a, input, textarea, [role='button'], [role='slider']"
+            )
         ) {
             return;
         }
@@ -9851,51 +9853,6 @@ const onCallMissed =
 
 
                                                         <>
-                                                            {own &&
-                                                                !item.isDeleted &&
-                                                                item.type !== "call-log" && (
-
-                                                                <button
-                                                                    type="button"
-                                                                    className="message-reply-btn"
-                                                                    title="Edit"
-                                                                    onClick={() => {
-
-                                                                        setEditingMessage(
-                                                                            item
-                                                                        );
-
-                                                                        setEditText(
-                                                                            getMessageText(
-                                                                                item
-                                                                            )
-                                                                        );
-
-                                                                    }}
-                                                                >
-                                                                    ✎
-                                                                </button>
-
-                                                            )}
-
-                                                            {!item.isDeleted && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="message-reply-btn"
-                                                                    title="Delete message"
-                                                                    aria-label="Delete message"
-                                                                    onClick={() =>
-                                                                        setMessageDeleteFor(
-                                                                            messageDeleteFor === getMessageId(item)
-                                                                                ? null
-                                                                                : getMessageId(item)
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    🗑
-                                                                </button>
-                                                            )}
-
                                                             {!item.isDeleted &&
                                                                 messageDeleteFor === getMessageId(item) && (
                                                                 <div className="message-delete-options">

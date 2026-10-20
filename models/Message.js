@@ -180,6 +180,34 @@ const MessageSchema =
 
             },
 
+            filePublicId: {
+
+                type:
+                    String,
+
+                default:
+                    ""
+
+            },
+
+            fileStorageType: {
+
+                type:
+                    String,
+
+                enum: [
+                    "",
+                    "image",
+                    "video",
+                    "audio",
+                    "raw"
+                ],
+
+                default:
+                    ""
+
+            },
+
 
             isSeen: {
 

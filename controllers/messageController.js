@@ -4,6 +4,7 @@ const path = require("node:path");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const GroupConversation = require("../models/GroupConversation");
+const { saveFile, deleteFile } = require("../services/mediaStorage");
 
 const getUserId = (req) => {
     return (
@@ -518,9 +519,12 @@ exports.sendMessage = async (req, res) => {
             };
 
             if (file) {
-                messageData.fileUrl = `/uploads/${file.filename}`;
+                const media = await saveFile(file, "etop/messenger");
+                messageData.fileUrl = media.url;
                 messageData.fileName = file.originalname;
                 messageData.fileType = file.mimetype;
+                messageData.filePublicId = media.publicId;
+                messageData.fileStorageType = media.type;
             }
 
             const replyTo = req.body?.replyTo;
@@ -586,7 +590,7 @@ exports.sendMessage = async (req, res) => {
 
             forwardSource = await Message.findById(forwardedFromId)
                 .select(
-                    "sender receiver groupId message fileUrl fileName fileType isDeleted"
+                    "sender receiver groupId message fileUrl fileName fileType filePublicId fileStorageType isDeleted"
                 );
 
             if (!forwardSource || forwardSource.isDeleted) {
@@ -704,9 +708,12 @@ exports.sendMessage = async (req, res) => {
 
         if (file) {
 
-            messageData.fileUrl = `/uploads/${file.filename}`;
+            const media = await saveFile(file, "etop/messenger");
+            messageData.fileUrl = media.url;
             messageData.fileName = file.originalname;
             messageData.fileType = file.mimetype;
+            messageData.filePublicId = media.publicId;
+            messageData.fileStorageType = media.type;
 
         }
 
@@ -744,6 +751,10 @@ exports.sendMessage = async (req, res) => {
                 messageData.fileUrl = forwardSource.fileUrl;
                 messageData.fileName = forwardSource.fileName;
                 messageData.fileType = forwardSource.fileType;
+                messageData.filePublicId =
+                    forwardSource.filePublicId || "";
+                messageData.fileStorageType =
+                    forwardSource.fileStorageType || "";
             }
 
         }
@@ -1338,11 +1349,15 @@ exports.deleteMessage = async (req, res) => {
         }
 
         const deletedFileUrl = message.fileUrl;
+        const deletedFilePublicId = message.filePublicId;
+        const deletedFileStorageType = message.fileStorageType;
         message.isDeleted = true;
         message.message = "This message was deleted.";
         message.fileUrl = "";
         message.fileName = "";
         message.fileType = "";
+        message.filePublicId = "";
+        message.fileStorageType = "";
         message.reactions = [];
 
         await message.save();
@@ -1369,6 +1384,26 @@ exports.deleteMessage = async (req, res) => {
                         fileError
                     );
                 }
+            }
+        }
+
+        if (deletedFilePublicId) {
+            try {
+                const sharedReference = await Message.exists({
+                    _id: { $ne: message._id },
+                    filePublicId: deletedFilePublicId
+                });
+                if (!sharedReference) {
+                    await deleteFile({
+                        publicId: deletedFilePublicId,
+                        type: deletedFileStorageType
+                    });
+                }
+            } catch (fileError) {
+                console.error(
+                    "DELETE MESSAGE CLOUD ATTACHMENT ERROR:",
+                    fileError
+                );
             }
         }
 

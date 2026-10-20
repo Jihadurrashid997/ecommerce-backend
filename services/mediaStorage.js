@@ -59,22 +59,36 @@ const uploadDir = path.join(__dirname, "..", "uploads");
  * Returns { url, type, publicId, duration }
  */
 const saveFile = async (file, folder = "etop") => {
-
-    const type =
-        file.mimetype.startsWith("video/")
+    const mimeType = String(file.mimetype || "").toLowerCase();
+    const type = mimeType.startsWith("image/")
+        ? "image"
+        : mimeType.startsWith("video/")
             ? "video"
-            : "image";
+            : mimeType.startsWith("audio/")
+                ? "audio"
+                : "raw";
+    const resourceType =
+        type === "audio" ? "video" : type;
+    const originalExtension = path.extname(
+        path.basename(file.originalname || "")
+    ).toLowerCase();
+    const safeExtension = /^\.[a-z0-9]{1,10}$/.test(originalExtension)
+        ? originalExtension
+        : "";
 
     const cld = getCloudinary();
 
     if (cld) {
+        const publicId =
+            crypto.randomUUID() + (type === "raw" ? safeExtension || ".bin" : "");
 
         const result = await new Promise((resolve, reject) => {
 
             const stream = cld.uploader.upload_stream(
                 {
                     folder,
-                    resource_type: type === "video" ? "video" : "image"
+                    public_id: publicId,
+                    resource_type: resourceType
                 },
                 (error, uploaded) =>
                     error ? reject(error) : resolve(uploaded)
@@ -99,8 +113,16 @@ const saveFile = async (file, folder = "etop") => {
     }
 
     const ext =
-        path.extname(file.originalname) ||
-        (type === "video" ? ".mp4" : ".jpg");
+        safeExtension ||
+        (
+            type === "video"
+                ? ".mp4"
+                : type === "audio"
+                    ? ".webm"
+                    : type === "raw"
+                        ? ".bin"
+                        : ".jpg"
+        );
 
     const filename =
         `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${ext}`;
@@ -129,7 +151,14 @@ const deleteFile = async media => {
 
             await cld.uploader.destroy(
                 media.publicId,
-                { resource_type: media.type === "video" ? "video" : "image" }
+                {
+                    resource_type:
+                        media.type === "video" || media.type === "audio"
+                            ? "video"
+                            : media.type === "raw"
+                                ? "raw"
+                                : "image"
+                }
             );
 
             return;
