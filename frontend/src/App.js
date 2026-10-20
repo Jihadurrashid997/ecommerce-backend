@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { FaBell, FaCog } from "react-icons/fa";
 
 import {
     BrowserRouter,
@@ -64,6 +65,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Checkout from "./pages/Checkout";
 import OrderHistory from "./pages/OrderHistory";
 import ShopNotifications from "./pages/ShopNotifications";
+import ShopSettings from "./pages/ShopSettings";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailed from "./pages/PaymentFailed";
 import EditProfile from "./pages/EditProfile";
@@ -171,15 +173,17 @@ function ShopSectionNavigation({ user }) {
 
     return (
         <nav className="shop-section-nav" aria-label="Shop">
-            <Link to="/shop">Browse</Link>
-            <Link to="/shop/cart">Cart</Link>
-            <Link to="/shop/wishlist">Wishlist</Link>
-            <Link to="/shop/orders">Orders</Link>
+            <Link to="/shop" aria-current={location.pathname === "/shop" ? "page" : undefined}>Browse</Link>
+            <Link to="/shop/cart" aria-current={location.pathname === "/shop/cart" ? "page" : undefined}>Cart</Link>
+            <Link to="/shop/wishlist" aria-current={location.pathname === "/shop/wishlist" ? "page" : undefined}>Wishlist</Link>
+            <Link to="/shop/orders" aria-current={location.pathname === "/shop/orders" ? "page" : undefined}>Orders</Link>
             <Link
                 to="/shop/notifications"
                 className="shop-notifications-nav-link"
+                aria-current={location.pathname === "/shop/notifications" ? "page" : undefined}
                 aria-label={`Shop notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
             >
+                <FaBell aria-hidden="true" />
                 Notifications
                 {unreadCount > 0 && (
                     <span className="shop-notifications-badge">
@@ -187,12 +191,15 @@ function ShopSectionNavigation({ user }) {
                     </span>
                 )}
             </Link>
+            <Link to="/shop/settings" aria-current={location.pathname === "/shop/settings" ? "page" : undefined}>
+                <FaCog aria-hidden="true" /> Settings
+            </Link>
             {user?.role === "seller" && (
                 <>
-                    <Link to="/shop/dashboard">Dashboard</Link>
-                    <Link to="/shop/seller">Add product</Link>
-                    <Link to="/shop/seller/products">My products</Link>
-                    <Link to="/shop/seller/orders">Seller orders</Link>
+                    <Link to="/shop/dashboard" aria-current={location.pathname === "/shop/dashboard" ? "page" : undefined}>Dashboard</Link>
+                    <Link to="/shop/seller" aria-current={location.pathname === "/shop/seller" ? "page" : undefined}>Add product</Link>
+                    <Link to="/shop/seller/products" aria-current={location.pathname === "/shop/seller/products" ? "page" : undefined}>My products</Link>
+                    <Link to="/shop/seller/orders" aria-current={location.pathname === "/shop/seller/orders" ? "page" : undefined}>Seller orders</Link>
                 </>
             )}
         </nav>
@@ -396,6 +403,7 @@ function AppLayout() {
                 <Route path="/shop/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
                 <Route path="/shop/orders" element={<PrivateRoute><OrderHistory /></PrivateRoute>} />
                 <Route path="/shop/notifications" element={<PrivateRoute><ShopNotifications /></PrivateRoute>} />
+                <Route path="/shop/settings" element={<PrivateRoute><ShopSettings /></PrivateRoute>} />
                 <Route path="/shop/seller" element={<PrivateRoute allowedRoles={["seller"]}><SellerDashboard /></PrivateRoute>} />
                 <Route path="/shop/seller/products" element={<PrivateRoute allowedRoles={["seller"]}><SellerProducts /></PrivateRoute>} />
                 <Route path="/shop/seller/orders" element={<PrivateRoute allowedRoles={["seller"]}><SellerOrders /></PrivateRoute>} />

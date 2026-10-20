@@ -79,6 +79,12 @@ const userSchema = new mongoose.Schema(
             announcements: { type: Boolean, default: true }
         },
 
+        shopNotificationPreferences: {
+            orders: { type: Boolean, default: true },
+            refundsAndPayouts: { type: Boolean, default: true },
+            products: { type: Boolean, default: true }
+        },
+
         location: {
             type: String,
             default: "",

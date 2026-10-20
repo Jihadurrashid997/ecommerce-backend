@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const ShopNotification = require("../models/ShopNotification");
 const Order = require("../models/Order");
+const User = require("../models/User");
 const notificationController = require("../controllers/shopNotificationController");
 const paymentController = require("../controllers/paymentController");
 const { notifyShopUsers } = require("../services/shopNotifications");
@@ -22,12 +23,19 @@ const makeResponse = () => ({
 
 test("Shop notification writes deduplicate recipients and insert each event once", async () => {
     const originalBulkWrite = ShopNotification.bulkWrite;
+    const originalUserFind = User.find;
     let operations;
     let options;
     ShopNotification.bulkWrite = async (nextOperations, nextOptions) => {
         operations = nextOperations;
         options = nextOptions;
     };
+    User.find = filter => ({
+        select() {
+            return this;
+        },
+        lean: async () => filter._id.$in.map(_id => ({ _id }))
+    });
 
     try {
         await notifyShopUsers({
@@ -61,6 +69,131 @@ test("Shop notification writes deduplicate recipients and insert each event once
         assert.equal(operations[0].updateOne.upsert, true);
     } finally {
         ShopNotification.bulkWrite = originalBulkWrite;
+        User.find = originalUserFind;
+    }
+});
+
+test("Shop notification writes apply category preferences per recipient", async () => {
+    const originalBulkWrite = ShopNotification.bulkWrite;
+    const originalUserFind = User.find;
+    let filter;
+    let operations = [];
+    User.find = nextFilter => {
+        filter = nextFilter;
+        return {
+            select() {
+                return this;
+            },
+            lean: async () => [{ _id: "507f1f77bcf86cd799439011" }]
+        };
+    };
+    ShopNotification.bulkWrite = async nextOperations => {
+        operations = nextOperations;
+    };
+
+    try {
+        await notifyShopUsers({
+            recipients: [
+                "507f1f77bcf86cd799439011",
+                "507f1f77bcf86cd799439012"
+            ],
+            eventKey: "order:shipment-update",
+            type: "shipment_update",
+            title: "Shipment update",
+            message: "Your order shipped.",
+            href: "/shop/orders"
+        });
+
+        assert.deepEqual(filter, {
+            _id: {
+                $in: [
+                    "507f1f77bcf86cd799439011",
+                    "507f1f77bcf86cd799439012"
+                ]
+            },
+            "shopNotificationPreferences.orders": { $ne: false }
+        });
+        assert.equal(operations.length, 1);
+        assert.equal(
+            operations[0].updateOne.filter.recipient,
+            "507f1f77bcf86cd799439011"
+        );
+    } finally {
+        ShopNotification.bulkWrite = originalBulkWrite;
+        User.find = originalUserFind;
+    }
+});
+
+test("Shop notification preferences validate, persist, and default to enabled", async () => {
+    const originalFindById = User.findById;
+    const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+    const recipientId = "507f1f77bcf86cd799439011";
+    let update;
+    User.findById = id => {
+        assert.equal(id, recipientId);
+        return {
+        select() {
+            return this;
+        },
+        lean: async () => ({
+            shopNotificationPreferences: { orders: false }
+        })
+        };
+    };
+    User.findByIdAndUpdate = (id, changes) => {
+        assert.equal(id, recipientId);
+        update = changes;
+        return {
+            select() {
+                return this;
+            },
+            lean: async () => ({
+                shopNotificationPreferences: {
+                    orders: false,
+                    refundsAndPayouts: true,
+                    products: false
+                }
+            })
+        };
+    };
+
+    try {
+        const getResponse = makeResponse();
+        await notificationController.getShopNotificationPreferences(
+            { user: { id: recipientId } },
+            getResponse
+        );
+        assert.deepEqual(getResponse.body.preferences, {
+            orders: false,
+            refundsAndPayouts: true,
+            products: true
+        });
+
+        const updateResponse = makeResponse();
+        await notificationController.updateShopNotificationPreferences(
+            {
+                user: { id: recipientId },
+                body: { preferences: { products: false } }
+            },
+            updateResponse
+        );
+        assert.deepEqual(update.$set, {
+            "shopNotificationPreferences.products": false
+        });
+        assert.equal(updateResponse.body.preferences.products, false);
+
+        const invalidResponse = makeResponse();
+        await notificationController.updateShopNotificationPreferences(
+            {
+                user: { id: recipientId },
+                body: { preferences: { messenger: false } }
+            },
+            invalidResponse
+        );
+        assert.equal(invalidResponse.statusCode, 400);
+    } finally {
+        User.findById = originalFindById;
+        User.findByIdAndUpdate = originalFindByIdAndUpdate;
     }
 });
 
@@ -195,6 +328,7 @@ test("verified Shop payment notifies buyer and sellers without sharing buyer ide
     const originalFindOne = Order.findOne;
     const originalUpdateOne = Order.updateOne;
     const originalBulkWrite = ShopNotification.bulkWrite;
+    const originalUserFind = User.find;
     const originalValidate = SSLCommerzPayment.prototype.validate;
     const buyerId = "507f1f77bcf86cd799439011";
     const sellerId = "507f1f77bcf86cd799439012";
@@ -210,6 +344,12 @@ test("verified Shop payment notifies buyer and sellers without sharing buyer ide
     ShopNotification.bulkWrite = async nextOperations => {
         operations = [...operations, ...nextOperations];
     };
+    User.find = filter => ({
+        select() {
+            return this;
+        },
+        lean: async () => filter._id.$in.map(_id => ({ _id }))
+    });
     SSLCommerzPayment.prototype.validate = async () => ({
         status: "VALID"
     });
@@ -249,6 +389,7 @@ test("verified Shop payment notifies buyer and sellers without sharing buyer ide
         Order.findOne = originalFindOne;
         Order.updateOne = originalUpdateOne;
         ShopNotification.bulkWrite = originalBulkWrite;
+        User.find = originalUserFind;
         SSLCommerzPayment.prototype.validate = originalValidate;
     }
 });
