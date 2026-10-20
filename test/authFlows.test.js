@@ -15,6 +15,7 @@ const ORIGINALS = {
     updateOne: User.updateOne,
     create: User.create,
     findById: User.findById,
+    findOneAndUpdateSession: DeviceSession.findOneAndUpdate,
     deleteMany: DeviceSession.deleteMany,
     isEmailConfigured: emailService.isEmailConfigured,
     sendVerificationEmail: emailService.sendVerificationEmail,
@@ -54,6 +55,7 @@ test.afterEach(() => {
         findById: ORIGINALS.findById
     });
     DeviceSession.deleteMany = ORIGINALS.deleteMany;
+    DeviceSession.findOneAndUpdate = ORIGINALS.findOneAndUpdateSession;
     emailService.isEmailConfigured = ORIGINALS.isEmailConfigured;
     emailService.sendVerificationEmail = ORIGINALS.sendVerificationEmail;
     emailService.sendPasswordResetEmail = ORIGINALS.sendPasswordResetEmail;
@@ -142,6 +144,31 @@ test("login refuses a valid password until the mailbox is verified", async () =>
     assert.equal(response.body.token, undefined);
 });
 
+test("legacy accounts without verification state can still log in", async () => {
+    User.findOne = () => queryResult({
+        _id: USER_ID,
+        email: "user@example.com",
+        password: awaitHash,
+        isSuspended: false
+    });
+    DeviceSession.findOneAndUpdate = async () => ({});
+
+    const response = makeResponse();
+    await authController.login(
+        {
+            body: {
+                email: "user@example.com",
+                password: "correct horse battery"
+            }
+        },
+        response
+    );
+
+    assert.equal(response.statusCode, 200);
+    assert.ok(response.body.token);
+    assert.equal(response.body.user.emailVerified, false);
+});
+
 const awaitHash = bcrypt.hashSync("correct horse battery", 4);
 
 test("email verification consumes the code and marks the account verified", async () => {
@@ -198,14 +225,14 @@ test("invalid email verification codes consume a bounded attempt", async () => {
     assert.equal(increments, 1);
 });
 
-test("legacy unverified accounts can be directed to email verification", async () => {
+test("legacy accounts without verification state retain protected access", async () => {
     auth.invalidate(USER_ID);
     User.findById = () => ({
         select: () => ({
             lean: async () => ({
                 role: "customer",
                 isSuspended: false,
-                emailVerified: false
+                emailVerified: undefined
             })
         })
     });
@@ -220,9 +247,9 @@ test("legacy unverified accounts can be directed to email verification", async (
         nextCalled = true;
     });
 
-    assert.equal(response.statusCode, 403);
-    assert.equal(response.body.code, "EMAIL_VERIFICATION_REQUIRED");
-    assert.equal(nextCalled, false);
+    assert.equal(response.statusCode, 200);
+    assert.equal(nextCalled, true);
+    assert.equal(request.user.role, "customer");
 });
 
 test("password reset emails a code and exchanges it for a one-time token", async () => {
