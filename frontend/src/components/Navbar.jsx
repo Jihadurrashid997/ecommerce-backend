@@ -12,6 +12,7 @@ import {
     FaUserShield,
     FaBell,
     FaCog,
+    FaEllipsisH,
     FaCheck,
     FaTrash
 } from "react-icons/fa";
@@ -30,7 +31,9 @@ const Navbar = () => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [searchText, setSearchText] = useState("");
     const [notificationsOpen, setNotificationsOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const notificationRef = useRef(null);
+    const settingsRef = useRef(null);
 
     const {
         user,
@@ -49,11 +52,15 @@ const Navbar = () => {
             if (!notificationRef.current?.contains(event.target)) {
                 setNotificationsOpen(false);
             }
+            if (!settingsRef.current?.contains(event.target)) {
+                setSettingsOpen(false);
+            }
         };
 
         const closeOnEscape = event => {
             if (event.key === "Escape") {
                 setNotificationsOpen(false);
+                setSettingsOpen(false);
             }
         };
 
@@ -724,15 +731,37 @@ const Navbar = () => {
                         )}
                     </div>
 
-                    <Link
-                        to="/edit-profile"
-                        className="jr-header-action jr-settings-action"
-                        aria-label="Settings"
-                        title="Settings"
-                        onClick={closeMenu}
-                    >
-                        <FaCog />
-                    </Link>
+                    <div className="jr-settings-wrap" ref={settingsRef}>
+                        <button
+                            type="button"
+                            className={`jr-header-action jr-settings-action${settingsOpen ? " is-active" : ""}`}
+                            aria-label="Open settings menu"
+                            aria-expanded={settingsOpen}
+                            aria-controls="jr-settings-menu"
+                            title="More options"
+                            onClick={() => {
+                                setSettingsOpen(open => !open);
+                                setNotificationsOpen(false);
+                            }}
+                        >
+                            <FaEllipsisH />
+                        </button>
+
+                        {settingsOpen && (
+                            <div className="jr-settings-menu" id="jr-settings-menu">
+                                <Link
+                                    to="/edit-profile"
+                                    onClick={() => {
+                                        setSettingsOpen(false);
+                                        closeMenu();
+                                    }}
+                                >
+                                    <FaCog />
+                                    <span>Settings</span>
+                                </Link>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
