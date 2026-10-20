@@ -14,6 +14,11 @@ const isDatabaseReady = require("./services/databaseHealth");
 const {
     canJoinDirectConversationRoom
 } = require("./services/socketRoomAccess");
+const {
+    canHandleDirectCall,
+    canStartDirectCall,
+    hasBlockedUser
+} = require("./services/directCallAccess");
 const Message = require("./models/Message");
 const User = require("./models/User");
 const GroupConversation = require("./models/GroupConversation");
@@ -1261,44 +1266,95 @@ io.on(
 
 socket.on(
     "call-user",
-    payload => {
+    async payload => {
 
         if (!payload) {
             return;
         }
 
-        const callerId =
-            normalizeId(
-                payload.callerId
-            ) || socket.userId;
+        const callerId = normalizeId(socket.userId)?.toLowerCase();
+        const requestedCallerId =
+            normalizeId(payload.callerId)?.toLowerCase();
 
         const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
+            normalizeId(payload.receiverId)?.toLowerCase();
 
         const roomId =
             payload.roomId
-                ? String(payload.roomId)
+                ? String(payload.roomId).toLowerCase()
                 : null;
 
         const callType =
             payload.type === "video"
                 ? "video"
                 : "audio";
-        const callId = crypto.randomUUID();
 
         if (
             !callerId ||
             !receiverId ||
-            !roomId
+            !roomId ||
+            (requestedCallerId && requestedCallerId !== callerId) ||
+            !canStartDirectCall({
+                socketUserId: callerId,
+                callerId,
+                receiverId,
+                roomId
+            })
         ) {
             return;
         }
 
-        if (
-            callerId === receiverId
-        ) {
+        const callId = crypto.randomUUID();
+        let caller;
+        let receiver;
+        try {
+            [caller, receiver] = await Promise.all([
+                User.findById(callerId)
+                    .select("blockedUsers")
+                    .lean(),
+                User.findById(receiverId)
+                    .select("blockedUsers")
+                    .lean()
+            ]);
+        } catch (error) {
+            console.error("Direct call participant lookup error:", error);
+            sendToUser(callerId, "call-rejected", {
+                callId,
+                roomId,
+                callerId,
+                receiverId,
+                type: callType,
+                status: "rejected",
+                reason: "unavailable"
+            });
+            return;
+        }
+
+        if (!caller || !receiver) {
+            sendToUser(callerId, "call-rejected", {
+                callId,
+                roomId,
+                callerId,
+                receiverId,
+                type: callType,
+                status: "rejected",
+                reason: "unavailable"
+            });
+            return;
+        }
+
+        const blockedByCaller = hasBlockedUser(caller, receiverId);
+        const blockedByReceiver = hasBlockedUser(receiver, callerId);
+        if (blockedByCaller || blockedByReceiver) {
+            sendToUser(callerId, "call-rejected", {
+                callId,
+                roomId,
+                callerId,
+                receiverId,
+                type: callType,
+                status: "rejected",
+                reason: "blocked"
+            });
             return;
         }
 
@@ -1511,25 +1567,18 @@ socket.on(
 
         const roomId =
             payload.roomId
-                ? String(payload.roomId)
+                ? String(payload.roomId).toLowerCase()
                 : null;
 
         const callerId =
-            normalizeId(
-                payload.callerId
-            );
+            normalizeId(payload.callerId)?.toLowerCase();
 
         const receiverId =
-            normalizeId(
-                payload.receiverId
-            ) || socket.userId;
+            normalizeId(payload.receiverId)?.toLowerCase() ||
+            normalizeId(socket.userId)?.toLowerCase();
 
 
-        if (
-            !roomId ||
-            !callerId ||
-            !receiverId
-        ) {
+        if (!roomId || !callerId || !receiverId) {
             return;
         }
 
@@ -1538,18 +1587,16 @@ socket.on(
             getCall(roomId);
 
 
-        if (!call) {
-            return;
-        }
-
-
-        /* -----------------------------------------
-           SECURITY CHECK
-        ----------------------------------------- */
-
         if (
-            call.callerId !== callerId ||
-            call.receiverId !== receiverId
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: socket.userId,
+                callerId,
+                receiverId,
+                role: "receiver"
+            }) ||
+            call.status !== "ringing"
         ) {
             return;
         }
@@ -1618,18 +1665,15 @@ socket.on(
 
         const roomId =
             payload.roomId
-                ? String(payload.roomId)
+                ? String(payload.roomId).toLowerCase()
                 : null;
 
         const callerId =
-            normalizeId(
-                payload.callerId
-            );
+            normalizeId(payload.callerId)?.toLowerCase();
 
         const receiverId =
-            normalizeId(
-                payload.receiverId
-            ) || socket.userId;
+            normalizeId(payload.receiverId)?.toLowerCase() ||
+            normalizeId(socket.userId)?.toLowerCase();
 
 
         if (
@@ -1645,7 +1689,17 @@ socket.on(
             getCall(roomId);
 
 
-        if (!call) {
+        if (
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: socket.userId,
+                callerId,
+                receiverId,
+                role: "receiver"
+            }) ||
+            call.status !== "ringing"
+        ) {
             return;
         }
 
@@ -1689,22 +1743,28 @@ socket.on(
         }
 
         const callerId =
-            normalizeId(
-                payload.callerId
-            );
+            normalizeId(payload.callerId)?.toLowerCase();
 
         const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
+            normalizeId(payload.receiverId)?.toLowerCase();
 
         const roomId =
             payload.roomId
-                ? String(payload.roomId)
+                ? String(payload.roomId).toLowerCase()
                 : null;
 
-
-        if (!callerId) {
+        const call = getCall(roomId);
+        if (
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: socket.userId,
+                callerId,
+                receiverId,
+                role: "receiver"
+            }) ||
+            call.status !== "ringing"
+        ) {
             return;
         }
 
@@ -1725,11 +1785,7 @@ socket.on(
         );
 
 
-        if (roomId) {
-            clearCall(
-                roomId
-            );
-        }
+        clearCall(roomId);
 
     }
 );
@@ -1749,7 +1805,7 @@ socket.on(
 
         const roomId =
             payload.roomId
-                ? String(payload.roomId)
+                ? String(payload.roomId).toLowerCase()
                 : null;
 
         if (!roomId) {
@@ -1766,16 +1822,25 @@ socket.on(
         }
 
 
-        const senderId =
-            normalizeId(
-                payload.userId
-            ) || socket.userId;
-
-
+        const senderId = normalizeId(socket.userId)?.toLowerCase();
         const otherUserId =
             senderId === call.callerId
                 ? call.receiverId
                 : call.callerId;
+
+        if (
+            !senderId ||
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: senderId,
+                callerId: senderId,
+                receiverId: otherUserId,
+                role: "participant"
+            })
+        ) {
+            return;
+        }
 
 
         /* -----------------------------------------
@@ -1875,18 +1940,15 @@ socket.on(
         }
 
         const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
+            normalizeId(payload.receiverId)?.toLowerCase();
 
         const callerId =
-            normalizeId(
-                payload.callerId
-            ) || socket.userId;
+            normalizeId(payload.callerId)?.toLowerCase() ||
+            normalizeId(socket.userId)?.toLowerCase();
 
         const roomId =
             payload.roomId
-                ? String(payload.roomId)
+                ? String(payload.roomId).toLowerCase()
                 : null;
 
 
@@ -1914,8 +1976,15 @@ socket.on(
         ----------------------------------------- */
 
         if (
-            call.callerId !==
-            callerId
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: socket.userId,
+                callerId,
+                receiverId,
+                role: "caller"
+            }) ||
+            call.status !== "accepted"
         ) {
             return;
         }
@@ -1953,18 +2022,14 @@ socket.on(
         }
 
         const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
+            normalizeId(payload.receiverId)?.toLowerCase();
 
         const callerId =
-            normalizeId(
-                payload.callerId
-            );
+            normalizeId(payload.callerId)?.toLowerCase();
 
         const roomId =
             payload.roomId
-                ? String(payload.roomId)
+                ? String(payload.roomId).toLowerCase()
                 : null;
 
 
@@ -1992,8 +2057,15 @@ socket.on(
         ----------------------------------------- */
 
         if (
-            call.receiverId !==
-            receiverId
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: socket.userId,
+                callerId,
+                receiverId,
+                role: "receiver"
+            }) ||
+            call.status !== "accepted"
         ) {
             return;
         }
@@ -2031,18 +2103,15 @@ socket.on(
         }
 
         const receiverId =
-            normalizeId(
-                payload.receiverId
-            );
+            normalizeId(payload.receiverId)?.toLowerCase();
 
         const callerId =
-            normalizeId(
-                payload.callerId
-            ) || socket.userId;
+            normalizeId(payload.callerId)?.toLowerCase() ||
+            normalizeId(socket.userId)?.toLowerCase();
 
         const roomId =
             payload.roomId
-                ? String(payload.roomId)
+                ? String(payload.roomId).toLowerCase()
                 : null;
 
 
@@ -2070,20 +2139,15 @@ socket.on(
         ----------------------------------------- */
 
         if (
-            !(
-                (
-                    callerId ===
-                        call.callerId &&
-                    receiverId ===
-                        call.receiverId
-                ) ||
-                (
-                    callerId ===
-                        call.receiverId &&
-                    receiverId ===
-                        call.callerId
-                )
-            )
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: socket.userId,
+                callerId,
+                receiverId,
+                role: "participant"
+            }) ||
+            call.status !== "accepted"
         ) {
             return;
         }
