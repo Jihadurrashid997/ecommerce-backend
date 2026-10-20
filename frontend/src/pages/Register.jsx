@@ -9,9 +9,7 @@ import {
     FaEye,
     FaEyeSlash,
     FaUserPlus,
-    FaArrowRight,
-    FaKey,
-    FaCheckCircle
+    FaArrowRight
 } from "react-icons/fa";
 
 import api from "../services/api";
@@ -41,8 +39,7 @@ const Register = () => {
     const [loading, setLoading] =
         useState(false);
 
-    const [phase, setPhase] = useState("form");
-    const [verificationCode, setVerificationCode] = useState("");
+    const [registrationComplete, setRegistrationComplete] = useState(false);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
 
@@ -57,60 +54,6 @@ const Register = () => {
             [e.target.name]: e.target.value
         });
 
-    };
-
-    const handleVerifyEmail = async event => {
-        event.preventDefault();
-        setError("");
-
-        if (!/^\d{6}$/.test(verificationCode)) {
-            setError("Enter the 6-digit code sent to your email.");
-            return;
-        }
-
-        setLoading(true);
-        try {
-            await api.post("/auth/verify-email", {
-                email: form.email.trim(),
-                code: verificationCode
-            });
-            setPhase("success");
-            setNotice("Registration successful. Your email is verified.");
-            setForm(previous => ({
-                ...previous,
-                password: "",
-                confirmPassword: ""
-            }));
-        } catch (verifyError) {
-            setError(
-                verifyError.response?.data?.message ||
-                "The code could not be verified. Check it and try again."
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleResendCode = async () => {
-        setError("");
-        setNotice("");
-        setLoading(true);
-        try {
-            const response = await api.post("/auth/resend-verification", {
-                email: form.email.trim()
-            });
-            setNotice(
-                response.data?.message ||
-                "If the account needs verification, a new code will be sent."
-            );
-        } catch (resendError) {
-            setError(
-                resendError.response?.data?.message ||
-                "A new code could not be sent. Please try again later."
-            );
-        } finally {
-            setLoading(false);
-        }
     };
 
     // ==========================
@@ -187,12 +130,16 @@ const Register = () => {
                 );
 
 
+            setRegistrationComplete(true);
+            setNotice(
+                response.data?.message ||
+                "Registration successful. You can now sign in."
+            );
             setForm(previous => ({
                 ...previous,
-                email: response.data?.email || previous.email.trim().toLowerCase()
+                password: "",
+                confirmPassword: ""
             }));
-            setPhase("verification");
-            setNotice("We sent a 6-digit code to your email. Enter it below to finish registration.");
 
         } catch (error) {
 
@@ -202,19 +149,10 @@ const Register = () => {
             );
 
 
-            if (error.response?.data?.accountCreated) {
-                setForm(previous => ({
-                    ...previous,
-                    email: error.response.data.email || previous.email.trim().toLowerCase()
-                }));
-                setPhase("verification");
-                setError(error.response.data.message);
-            } else {
-                setError(
-                    error.response?.data?.message ||
-                    "Registration failed. Please try again."
-                );
-            }
+            setError(
+                error.response?.data?.message ||
+                "Registration failed. Please try again."
+            );
 
         } finally {
 
@@ -320,19 +258,15 @@ const Register = () => {
                 <div className="register-heading">
 
                     <h2>
-                        {phase === "success"
+                        {registrationComplete
                             ? "Registration complete"
-                            : phase === "verification"
-                                ? "Verify your email"
-                                : "Create Your Account"}
+                            : "Create Your Account"}
                     </h2>
 
                     <p>
-                        {phase === "success"
+                        {registrationComplete
                             ? "Your E Top account is ready. You can now sign in."
-                            : phase === "verification"
-                                ? `Enter the 6-digit code sent to ${form.email}.`
-                                : "One account for E Top social and Shop."}
+                            : "One account for E Top social and Shop."}
                     </p>
 
                 </div>
@@ -345,7 +279,7 @@ const Register = () => {
                 {error && <div className="register-message register-message-error" role="alert">{error}</div>}
                 {notice && <div className="register-message register-message-success" role="status">{notice}</div>}
 
-                {phase === "form" && (
+                {!registrationComplete && (
                     <form
                         className="register-form"
                         onSubmit={handleSubmit}
@@ -609,52 +543,8 @@ const Register = () => {
                     </form>
                 )}
 
-                {phase === "verification" && (
-                    <form className="register-form" onSubmit={handleVerifyEmail}>
-                        <div className="register-field">
-                            <label htmlFor="register-verification-code">6-digit verification code</label>
-                            <div className="register-input">
-                                <FaKey />
-                                <input
-                                    id="register-verification-code"
-                                    type="text"
-                                    inputMode="numeric"
-                                    autoComplete="one-time-code"
-                                    maxLength={6}
-                                    placeholder="123456"
-                                    value={verificationCode}
-                                    onChange={event =>
-                                        setVerificationCode(
-                                            event.target.value.replace(/\D/g, "").slice(0, 6)
-                                        )
-                                    }
-                                    disabled={loading}
-                                    required
-                                />
-                            </div>
-                        </div>
-                        <motion.button
-                            type="submit"
-                            className="register-submit"
-                            disabled={loading}
-                            whileTap={{ scale: 0.97 }}
-                        >
-                            {loading ? "Verifying..." : <>Verify and finish registration <FaArrowRight /></>}
-                        </motion.button>
-                        <button
-                            type="button"
-                            className="register-resend"
-                            onClick={handleResendCode}
-                            disabled={loading}
-                        >
-                            Resend code
-                        </button>
-                    </form>
-                )}
-
-                {phase === "success" && (
+                {registrationComplete && (
                     <div className="register-complete" role="status">
-                        <FaCheckCircle aria-hidden="true" />
                         <Link to="/login">Continue to login <FaArrowRight /></Link>
                     </div>
                 )}
@@ -664,7 +554,7 @@ const Register = () => {
                     LOGIN
                 =========================== */}
 
-                {phase !== "success" && <div className="register-login">
+                {!registrationComplete && <div className="register-login">
 
                     <span>
                         Already have an account?

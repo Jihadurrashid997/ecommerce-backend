@@ -35,7 +35,7 @@ const getAccountState = async id => {
 
     const found =
         await User.findById(key)
-            .select("role isSuspended suspendedReason emailVerified")
+            .select("role isSuspended suspendedReason")
             .lean();
 
     const state =
@@ -44,8 +44,6 @@ const getAccountState = async id => {
                 exists: true,
                 role: found.role,
                 isSuspended: Boolean(found.isSuspended),
-                emailVerified: found.emailVerified === true,
-                emailVerificationRequired: found.emailVerified === false,
                 reason: found.suspendedReason || ""
             }
             : { exists: false };
@@ -158,14 +156,6 @@ const auth = (roles = []) => {
                         (state.reason ? ` Reason: ${state.reason}` : "")
                 });
 
-            }
-
-            if (state.emailVerificationRequired) {
-                return res.status(403).json({
-                    success: false,
-                    code: "EMAIL_VERIFICATION_REQUIRED",
-                    message: "Verify your email address to continue."
-                });
             }
 
             req.user.role = state.role;

@@ -475,32 +475,6 @@
 
 }
 
-.register-resend {
-
-    align-self: center;
-
-    padding: 8px 12px;
-
-    border: 0;
-
-    background: transparent;
-
-    color: #c4b5fd;
-
-    cursor: pointer;
-
-    font: inherit;
-
-}
-
-.register-resend:disabled {
-
-    cursor: wait;
-
-    opacity: .6;
-
-}
-
 .register-complete {
 
     display: flex;
@@ -512,14 +486,6 @@
     gap: 22px;
 
     padding: 24px 0;
-
-}
-
-.register-complete > svg {
-
-    color: #4ade80;
-
-    font-size: 48px;
 
 }
 
