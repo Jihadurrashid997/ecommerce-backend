@@ -18,6 +18,13 @@ const {
 
 const auth =
     require("../middleware/auth");
+const {
+    listDevices,
+    revokeDevice,
+    savePushSubscription,
+    removePushSubscription,
+    logoutDevice
+} = require("../controllers/deviceController");
 
 
 /*
@@ -62,6 +69,12 @@ router.get(
     auth(),
     me
 );
+
+router.get("/devices", auth(), listDevices);
+router.delete("/devices/:deviceId", auth(), revokeDevice);
+router.put("/devices/push-subscription", auth(), savePushSubscription);
+router.delete("/devices/push-subscription", auth(), removePushSubscription);
+router.post("/logout", auth(), logoutDevice);
 
 
 /*

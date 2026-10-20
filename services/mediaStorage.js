@@ -149,7 +149,7 @@ const deleteFile = async media => {
 
         if (cld && media?.publicId) {
 
-            await cld.uploader.destroy(
+            const result = await cld.uploader.destroy(
                 media.publicId,
                 {
                     resource_type:
@@ -161,21 +161,32 @@ const deleteFile = async media => {
                 }
             );
 
-            return;
+            return result?.result === "ok" || result?.result === "not found";
 
         }
 
         if (media?.url?.startsWith("/uploads/")) {
 
-            await fs.promises.unlink(
-                path.join(uploadDir, path.basename(media.url))
-            );
+            try {
+                await fs.promises.unlink(
+                    path.join(uploadDir, path.basename(media.url))
+                );
+            } catch (error) {
+                if (error.code !== "ENOENT") {
+                    throw error;
+                }
+            }
+
+            return true;
 
         }
+
+        return !media?.publicId;
 
     } catch (error) {
 
         console.error("DELETE MEDIA ERROR:", error.message);
+        return false;
 
     }
 

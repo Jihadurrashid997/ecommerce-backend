@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 
 const User = require("../models/User");
+const DeviceSession = require("../models/DeviceSession");
 
 /*
 =========================================================
@@ -100,6 +101,35 @@ const auth = (roles = []) => {
         }
 
         req.user = decoded;
+
+        if (decoded.sid) {
+            try {
+                const activeSession = await DeviceSession.findOne({
+                    user: decoded.id,
+                    sessionId: decoded.sid,
+                    deviceId: decoded.deviceId
+                }).select("_id lastActiveAt");
+
+                if (!activeSession) {
+                    return res.status(401).json({
+                        message: "This device session has been revoked. Log in again."
+                    });
+                }
+
+                if (
+                    !activeSession.lastActiveAt ||
+                    Date.now() - activeSession.lastActiveAt.getTime() > 5 * 60 * 1000
+                ) {
+                    activeSession.lastActiveAt = new Date();
+                    await activeSession.save();
+                }
+            } catch (error) {
+                console.error("Auth device session check failed:", error);
+                return res.status(503).json({
+                    message: "Could not verify this device session. Try again shortly."
+                });
+            }
+        }
 
         // ==========================
         // ACCOUNT STATE (suspension / live role)

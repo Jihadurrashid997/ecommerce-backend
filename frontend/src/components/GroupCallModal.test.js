@@ -74,6 +74,7 @@ const createRoom = () => ({
 
 beforeEach(() => {
     jest.clearAllMocks();
+    member.getTrackPublication.mockReturnValue(null);
     api.post.mockResolvedValue({
         data: {
             data: {
@@ -153,6 +154,37 @@ test("unencrypted groups retain the existing LiveKit call flow", async () => {
             name: "Group call is not end-to-end encrypted"
         })
     ).toHaveTextContent("Not end-to-end encrypted");
+});
+
+test("video group calls start on the front camera and can switch to the rear camera", async () => {
+    const cameraTrack = {
+        restartTrack: jest.fn().mockResolvedValue(undefined)
+    };
+    member.getTrackPublication.mockReturnValue({
+        track: cameraTrack
+    });
+
+    render(
+        <GroupCallModal
+            group={{ _id: "507f191e810cdeadbeef0001", name: "Friends" }}
+            currentUser={member}
+            type="video"
+        />
+    );
+
+    await screen.findByRole("status", {
+        name: "Group call is not end-to-end encrypted"
+    });
+    expect(createLocalTracks).toHaveBeenCalledWith({
+        audio: true,
+        video: { facingMode: "user" }
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch camera" }));
+    await waitFor(() => {
+        expect(cameraTrack.restartTrack)
+            .toHaveBeenCalledWith({ facingMode: "environment" });
+    });
 });
 
 test("encrypted group calls enable E2EE before connecting or publishing media", async () => {

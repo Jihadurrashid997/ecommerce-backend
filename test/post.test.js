@@ -120,6 +120,61 @@ test("group call logs satisfy the persisted message schema", () => {
     assert.equal(callLog.validateSync(), undefined);
 });
 
+test("message client IDs make offline retries idempotent", async () => {
+    const originals = {
+        groupFindOne: GroupConversation.findOne,
+        messageFindOne: Message.findOne,
+        messageFindById: Message.findById,
+        messageCreate: Message.create
+    };
+    const clientMessageId = "550e8400-e29b-41d4-a716-446655440000";
+    const existing = {
+        _id: "507f1f77bcf86cd799439012",
+        sender: TEST_USER_ID,
+        groupId: OTHER_USER_ID,
+        clientMessageId,
+        message: "Already saved."
+    };
+
+    GroupConversation.findOne = async () => ({
+        isEncrypted: false
+    });
+    Message.findOne = async filter => {
+        assert.deepEqual(filter, {
+            sender: TEST_USER_ID,
+            clientMessageId
+        });
+        return existing;
+    };
+    Message.findById = () => makeMessageQuery(existing);
+    Message.create = async () => {
+        throw new Error("A retry must not create a second message.");
+    };
+
+    try {
+        const response = makeResponse();
+        await messageController.sendMessage(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    groupId: OTHER_USER_ID,
+                    message: "Already saved.",
+                    clientMessageId
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.data, existing);
+    } finally {
+        GroupConversation.findOne = originals.groupFindOne;
+        Message.findOne = originals.messageFindOne;
+        Message.findById = originals.messageFindById;
+        Message.create = originals.messageCreate;
+    }
+});
+
 test("direct conversation history returns the requested page and indicates older messages", async () => {
     const originalFind = Message.find;
     const newest = { _id: "newest" };

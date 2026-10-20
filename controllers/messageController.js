@@ -437,6 +437,20 @@ exports.sendMessage = async (req, res) => {
         const isEncrypted =
             req.body?.isEncrypted === true ||
             req.body?.isEncrypted === "true";
+        const clientMessageId =
+            req.body?.clientMessageId === undefined
+                ? undefined
+                : String(req.body.clientMessageId);
+
+        if (
+            clientMessageId !== undefined &&
+            !/^[a-f\d-]{16,80}$/i.test(clientMessageId)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid client message ID."
+            });
+        }
 
         if (!sender) {
             return res.status(401).json({
@@ -514,12 +528,50 @@ exports.sendMessage = async (req, res) => {
                 });
             }
 
+            if (clientMessageId) {
+                const existing = await Message.findOne({
+                    sender,
+                    clientMessageId
+                });
+                if (existing) {
+                    if (String(existing.groupId) !== String(groupId)) {
+                        return res.status(409).json({
+                            success: false,
+                            message: "This client message ID belongs to another conversation."
+                        });
+                    }
+                    const populated = await Message.findById(existing._id)
+                        .populate(
+                            "sender",
+                            "name email role profileImage avatar username fullName displayName firstName"
+                        )
+                        .populate({
+                            path: "replyTo",
+                            select: "message fileUrl fileName fileType sender createdAt isEncrypted",
+                            populate: {
+                                path: "sender",
+                                select: "name username fullName displayName firstName"
+                            }
+                        })
+                        .populate(
+                            "reactions.user",
+                            "name username fullName displayName firstName"
+                        );
+                    return res.status(200).json({
+                        success: true,
+                        message: "Message was already saved.",
+                        data: populated
+                    });
+                }
+            }
+
             const messageData = {
                 sender,
                 groupId,
                 message: text,
                 isEncrypted,
-                readBy: [sender]
+                readBy: [sender],
+                ...(clientMessageId ? { clientMessageId } : {})
             };
 
             if (file) {
@@ -699,6 +751,32 @@ exports.sendMessage = async (req, res) => {
             });
         }
 
+        if (clientMessageId) {
+            const existing = await Message.findOne({
+                sender,
+                clientMessageId
+            });
+            if (existing) {
+                if (
+                    String(existing.receiver) !== String(receiver) ||
+                    existing.groupId
+                ) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "This client message ID belongs to another conversation."
+                    });
+                }
+                const populated = await populateMessage(
+                    Message.findById(existing._id)
+                );
+                return res.status(200).json({
+                    success: true,
+                    message: "Message was already saved.",
+                    data: populated
+                });
+            }
+        }
+
         const messageData = {
             sender,
             receiver,
@@ -707,7 +785,8 @@ exports.sendMessage = async (req, res) => {
             isForwarded:
                 Boolean(forwardSource) ||
                 req.body?.isForwarded === true,
-            isSeen: false
+            isSeen: false,
+            ...(clientMessageId ? { clientMessageId } : {})
         };
 
         if (file) {

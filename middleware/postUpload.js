@@ -22,6 +22,7 @@ const VIDEO_TYPES = [
     "video/x-matroska",
     "video/3gpp"
 ];
+const STORY_TYPES = [...IMAGE_TYPES, ...VIDEO_TYPES];
 
 const makeUploader = ({ allowed, maxSize, maxFiles }) =>
     multer({
@@ -59,6 +60,12 @@ exports.profileUpload = makeUploader({
     maxFiles: 1
 });
 
+exports.storyUpload = makeUploader({
+    allowed: STORY_TYPES,
+    maxSize: 20 * 1024 * 1024,
+    maxFiles: 1
+});
+
 // Wraps an uploader so ANY multer error becomes a clean JSON 400
 exports.handle = (uploader, field) => (req, res, next) => {
 
@@ -80,4 +87,19 @@ exports.handle = (uploader, field) => (req, res, next) => {
 
     });
 
+};
+
+exports.handleSingle = (uploader, field) => (req, res, next) => {
+    uploader.single(field)(req, res, error => {
+        if (!error) {
+            return next();
+        }
+
+        const message =
+            error.code === "LIMIT_FILE_SIZE"
+                ? "File is too large."
+                : error.message || "Upload failed.";
+
+        return res.status(400).json({ success: false, message });
+    });
 };

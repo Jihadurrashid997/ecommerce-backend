@@ -22,6 +22,9 @@ const {
 const Message = require("./models/Message");
 const User = require("./models/User");
 const GroupConversation = require("./models/GroupConversation");
+const DeviceSession = require("./models/DeviceSession");
+const { sendPushToUsers } = require("./services/pushNotifications");
+const { purgeExpiredStories } = require("./services/storyCleanup");
 
 dotenv.config();
 
@@ -210,6 +213,10 @@ app.use(
 app.use(
     "/api/posts",
     require("./routes/postRoutes")
+);
+app.use(
+    "/api/stories",
+    require("./routes/storyRoutes")
 );
 app.use(
     "/api/communities",
@@ -436,7 +443,7 @@ const getOnlineUsers =
 
     };
 
-io.use((socket, next) => {
+io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
 
     if (!token) {
@@ -449,6 +456,18 @@ io.use((socket, next) => {
 
         if (!userId) {
             return next(new Error("Invalid socket identity"));
+        }
+
+        if (decoded.sid) {
+            const session = await DeviceSession.findOne({
+                user: userId,
+                sessionId: decoded.sid,
+                deviceId: decoded.deviceId
+            }).select("_id");
+            if (!session) {
+                return next(new Error("This device session has been revoked"));
+            }
+            socket.data.sessionId = decoded.sid;
         }
 
         socket.userId = userId;
@@ -606,6 +625,9 @@ io.on(
             "Socket connected:",
             socket.id
         );
+        if (socket.data.sessionId) {
+            socket.join(`device:${socket.data.sessionId}`);
+        }
 
         /* =================================================
            USER ONLINE
@@ -855,6 +877,16 @@ io.on(
                                 message
                             );
                         });
+                        void sendPushToUsers({
+                            userIds: group.participants
+                                .filter(memberId =>
+                                    String(memberId) !== String(senderId)
+                                ),
+                            title: "New group message",
+                            tag: `messenger-group-${groupId}`
+                        }).catch(error => {
+                            console.error("Group message push error:", error);
+                        });
                     } catch (error) {
                         console.error("Group message socket error:", error);
                     }
@@ -950,6 +982,13 @@ io.on(
                         "direct-message",
                         message
                     );
+                void sendPushToUsers({
+                    userIds: [receiverId],
+                    title: "New message",
+                    tag: `messenger-message-${messageId}`
+                }).catch(error => {
+                    console.error("Direct message push error:", error);
+                });
 
                 /*
                  * DELIVERED STATUS:
@@ -2313,6 +2352,13 @@ const startServer =
         try {
 
             await connectDB();
+
+            const storyCleanupTimer = setInterval(() => {
+                void purgeExpiredStories().catch(error => {
+                    console.error("Scheduled story cleanup error:", error);
+                });
+            }, 60 * 60 * 1000);
+            storyCleanupTimer.unref();
 
             server.listen(
                 PORT,

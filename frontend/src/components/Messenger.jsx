@@ -42,7 +42,8 @@ import {
     FaUsers,
     FaPlus,
     FaUserPlus,
-    FaMapMarkerAlt
+    FaMapMarkerAlt,
+    FaClock
 } from "react-icons/fa";
 
 import api, {
@@ -89,6 +90,13 @@ import {
     closePeerConnection,
     stopMediaStream
 } from "../services/webrtc";
+import { switchCameraStream } from "../services/cameraSwitch";
+import {
+    createClientMessageId,
+    getQueuedMessages,
+    queueMessage,
+    removeQueuedMessage
+} from "../services/messageOutbox";
 
 import {
     requestNotificationPermission,
@@ -100,6 +108,8 @@ import {
 
 import CallModal from "./CallModal";
 import GroupCallModal from "./GroupCallModal";
+import MessengerStories from "./MessengerStories";
+import MessengerDeviceSettings from "./MessengerDeviceSettings";
 import CallLogMessage from "./CallLogMessage";
 import VerifiedBadge from "./VerifiedBadge";
 import VoiceMessagePlayer, {
@@ -430,6 +440,9 @@ const Messenger = ({ isActive = true }) => {
 
     const conversationLoadRef =
         useRef(0);
+
+    const outboxFlushRef =
+        useRef(false);
 
     const pendingHistoryScrollRef =
         useRef(null);
@@ -2335,6 +2348,7 @@ useEffect(() => {
                 setRemoteStream(null);
 
                 setCallState(null);
+                setCameraFacing("user");
 
                 callRef.current =
                     null;
@@ -2816,215 +2830,38 @@ const switchCamera =
     useCallback(
         async () => {
 
+            const currentStream = localStreamRef.current;
+            if (!currentStream) {
+                return;
+            }
+
             try {
-
-                const currentStream =
-                    localStreamRef.current;
-
-                if (!currentStream) {
-                    console.warn(
-                        "No local stream available"
-                    );
-                    return;
-                }
-
-                const currentVideoTrack =
-                    currentStream
-                        .getVideoTracks()[0];
-
-                if (!currentVideoTrack) {
-                    console.warn(
-                        "No video track available"
-                    );
-                    return;
-                }
-
-                const nextFacing =
-                    cameraFacing === "user"
-                        ? "environment"
-                        : "user";
-
-                console.log(
-                    "📷 Switching camera:",
-                    cameraFacing,
-                    "→",
-                    nextFacing
-                );
-
-                /*
-                 * Stop the CURRENT camera first. Many
-                 * mobile browsers (especially Android)
-                 * cannot have two camera streams open at
-                 * once, so requesting the new facing mode
-                 * while the old track is still live can
-                 * silently fail or just hand back the same
-                 * (front) camera again - which looks
-                 * exactly like "the back camera never
-                 * opens".
-                 */
-
-                currentVideoTrack.stop();
-
-                /*
-                 * Get new camera
-                 */
-
-                let newStream;
-
-                try {
-
-                    newStream =
-                        await navigator.mediaDevices.getUserMedia({
-
-                            audio: false,
-
-                            video: {
-                                facingMode: {
-                                    exact:
-                                        nextFacing
-                                }
-                            }
-
-                        });
-
-                } catch (exactError) {
-
-                    console.warn(
-                        "Exact facingMode failed, falling back to ideal:",
-                        exactError
-                    );
-
-                    // Some devices/browsers reject an
-                    // "exact" constraint they can't fully
-                    // guarantee even when the camera does
-                    // exist - retry with "ideal" as a
-                    // best-effort fallback instead of
-                    // giving up entirely.
-                    newStream =
-                        await navigator.mediaDevices.getUserMedia({
-
-                            audio: false,
-
-                            video: {
-                                facingMode: {
-                                    ideal:
-                                        nextFacing
-                                }
-                            }
-
-                        });
-
-                }
-
-                const newVideoTrack =
-                    newStream
-                        .getVideoTracks()[0];
-
-                if (!newVideoTrack) {
-
-                    console.error(
-                        "❌ New camera track not found"
-                    );
-
-                    newStream
-                        .getTracks()
-                        .forEach(
-                            track =>
-                                track.stop()
-                        );
-
-                    return;
-                }
-
-                /*
-                 * Replace WebRTC video track
-                 */
-
-                const peer =
-                    peerRef.current;
-
-                if (peer) {
-
-                    const sender =
-                        peer
-                            .getSenders()
-                            .find(
-                                item =>
-                                    item.track &&
-                                    item.track.kind ===
-                                    "video"
-                            );
-
-                    if (sender) {
-
-                        await sender.replaceTrack(
-                            newVideoTrack
-                        );
-
-                        console.log(
-                            "✅ WebRTC video track replaced"
-                        );
-
-                    } else {
-
-                        console.warn(
-                            "⚠️ Video sender not found"
-                        );
-
-                    }
-
-                }
-
-                /*
-                 * Keep existing audio track
-                 */
-
-                const audioTracks =
-                    currentStream
-                        .getAudioTracks();
-
-                const updatedStream =
-                    new MediaStream([
-                        ...audioTracks,
-                        newVideoTrack
-                    ]);
-
-                /*
-                 * Update refs + React state
-                 */
-
-                localStreamRef.current =
-                    updatedStream;
-
-                setLocalStream(
-                    updatedStream
-                );
-
-                setCameraFacing(
-                    nextFacing
-                );
-
-                console.log(
-                    "📷 Camera switched successfully:",
-                    nextFacing
-                );
-
+                const result = await switchCameraStream({
+                    stream: currentStream,
+                    peer: peerRef.current,
+                    facingMode: cameraFacing
+                });
+                localStreamRef.current = result.stream;
+                setLocalStream(result.stream);
+                setCameraFacing(result.facingMode);
             } catch (error) {
+                if (error.restoredStream) {
+                    localStreamRef.current = error.restoredStream;
+                    setLocalStream(error.restoredStream);
+                } else if (error.restoreError) {
+                    console.error(
+                        "Could not restore the previous camera:",
+                        error.restoreError
+                    );
+                }
 
-                console.error(
-                    "❌ Camera switch error:",
-                    error
+                console.error("Camera switch error:", error);
+                window.alert(
+                    error.restoreError
+                        ? "The camera could not be switched or restored. Please rejoin the call."
+                        : error.message ||
+                          "The other camera could not be opened. Check its permission and availability."
                 );
-
-                /*
-                 * Some devices/browsers don't support
-                 * facingMode switching.
-                 */
-
-                alert(
-                    "Back camera could not be opened. Please check camera permission or device camera support."
-                );
-
             }
 
         },
@@ -5119,6 +4956,44 @@ const onCallMissed =
                             target
                         );
 
+                    let queuedMessages = [];
+                    try {
+                        const queuedEntries = getQueuedMessages(getId(user))
+                            .filter(entry =>
+                                String(entry.targetId) === String(targetId) &&
+                                Boolean(entry.isGroup) === Boolean(target.isGroup)
+                            );
+                        const queuedRecords = queuedEntries.map(entry => ({
+                            _id: entry.temporaryId,
+                            id: entry.temporaryId,
+                            clientMessageId: entry.clientMessageId,
+                            sender: user,
+                            receiver: target.isGroup ? null : target,
+                            groupId: target.isGroup ? targetId : undefined,
+                            message: entry.text,
+                            isEncrypted: entry.isEncrypted,
+                            createdAt: entry.createdAt,
+                            seen: false,
+                            isOutboxQueued: true,
+                            optimistic: true,
+                            replyTo: entry.replyTo || undefined
+                        }));
+                        queuedMessages = await decryptMessagesForTarget(
+                            queuedRecords,
+                            target
+                        );
+                        queuedMessages = queuedMessages.map(item => ({
+                            ...item,
+                            isOutboxQueued: true,
+                            optimistic: true
+                        }));
+                    } catch (outboxError) {
+                        console.error("Load queued Messenger messages error:", outboxError);
+                        showMessengerToast(
+                            "Saved offline messages could not be restored on this device."
+                        );
+                    }
+
                     if (
                         loadId !== conversationLoadRef.current ||
                         String(getId(selectedUserRef.current)) !==
@@ -5132,7 +5007,13 @@ const onCallMissed =
                             ? response.data.hasMore
                             : data.length >= 50;
 
-                    setMessages(visibleMessages);
+                    setMessages(
+                        [...visibleMessages, ...queuedMessages].sort(
+                            (left, right) =>
+                                new Date(left.createdAt || 0).getTime() -
+                                new Date(right.createdAt || 0).getTime()
+                        )
+                    );
                     setHasMoreMessages(hasMore);
                     messageHistoryRef.current = {
                         page: 1,
@@ -5186,6 +5067,7 @@ const onCallMissed =
                 decryptMessagesForTarget,
                 getRoomId,
                 scrollToBottom,
+                showMessengerToast,
                 user
             ]
         );
@@ -6004,6 +5886,8 @@ const onCallMissed =
                 `temp-${Date.now()}-${Math.random()
                     .toString(36)
                     .slice(2)}`;
+            const clientMessageId = createClientMessageId();
+            const createdAt = new Date().toISOString();
 
 
             const optimisticMessage = {
@@ -6011,6 +5895,7 @@ const onCallMissed =
                     temporaryId,
                 id:
                     temporaryId,
+                clientMessageId,
                 sender:
                     user,
                 receiver:
@@ -6025,7 +5910,7 @@ const onCallMissed =
                     text,
                 isEncrypted: encryptedChat,
                 createdAt:
-                    new Date().toISOString(),
+                    createdAt,
                 seen:
                     false,
                 optimistic:
@@ -6076,6 +5961,7 @@ const onCallMissed =
                                   groupId: receiver,
                                   message: storedText,
                                   isEncrypted: encryptedChat,
+                                  clientMessageId,
                                   replyTo:
                                       getMessageId(replySnapshot) ||
                                       undefined
@@ -6084,6 +5970,7 @@ const onCallMissed =
                                   receiver,
                                   message: storedText,
                                   isEncrypted: encryptedChat,
+                                  clientMessageId,
                                   replyTo:
                                       getMessageId(replySnapshot) ||
                                       undefined
@@ -6168,7 +6055,48 @@ const onCallMissed =
                     "Send message error:",
                     error
                 );
+                let sendError = error;
 
+                const retryable =
+                    !error.response || error.response.status >= 500;
+                if (retryable) {
+                    try {
+                        queueMessage(sender, {
+                            clientMessageId,
+                            temporaryId,
+                            targetId: receiver,
+                            isGroup: Boolean(selectedUser.isGroup),
+                            roomId,
+                            senderId: sender,
+                            text: storedText,
+                            isEncrypted: encryptedChat,
+                            replyTo:
+                                getMessageId(replySnapshot) || undefined,
+                            createdAt
+                        });
+                        setMessages(previous =>
+                            previous.map(item =>
+                                item._id === temporaryId
+                                    ? {
+                                          ...item,
+                                          isOutboxQueued: true,
+                                          optimistic: true
+                                      }
+                                    : item
+                            )
+                        );
+                        showMessengerToast(
+                            "No connection. This text message is saved and will send when you’re back online."
+                        );
+                        return;
+                    } catch (queueError) {
+                        console.error(
+                            "Queue offline Messenger message error:",
+                            queueError
+                        );
+                        sendError = queueError;
+                    }
+                }
 
                 /*
                  * Remove failed optimistic message.
@@ -6185,14 +6113,160 @@ const onCallMissed =
 
 
                 alert(
-                    error.response?.data
+                    sendError.response?.data
                         ?.message ||
+                    sendError.message ||
                     "Message could not be sent."
                 );
 
             }
 
         };
+
+    const flushMessageOutbox = useCallback(async () => {
+        const senderId = getId(user);
+        if (
+            !senderId ||
+            navigator.onLine === false ||
+            outboxFlushRef.current
+        ) {
+            return;
+        }
+
+        outboxFlushRef.current = true;
+        try {
+            const queuedMessages = getQueuedMessages(senderId);
+            for (const queued of queuedMessages) {
+                try {
+                    const response = await api.post("/messages/send", {
+                        ...(queued.isGroup
+                            ? { groupId: queued.targetId }
+                            : { receiver: queued.targetId }),
+                        message: queued.text,
+                        isEncrypted: queued.isEncrypted,
+                        clientMessageId: queued.clientMessageId,
+                        replyTo: queued.replyTo
+                    });
+                    const saved =
+                        response.data?.data ||
+                        response.data?.message ||
+                        null;
+                    if (!saved) {
+                        throw new Error(
+                            "The server did not confirm that the queued message was saved."
+                        );
+                    }
+
+                    const activeTarget = selectedUserRef.current;
+                    const isOpenConversation =
+                        String(getId(activeTarget)) ===
+                            String(queued.targetId) &&
+                        Boolean(activeTarget?.isGroup) ===
+                            Boolean(queued.isGroup);
+                    if (isOpenConversation) {
+                        const [visibleSaved] = queued.isEncrypted
+                            ? await decryptMessagesForTarget(
+                                  [saved],
+                                  activeTarget
+                              )
+                            : [saved];
+                        setMessages(previous =>
+                            previous.map(item =>
+                                item._id === queued.temporaryId
+                                    ? visibleSaved
+                                    : item
+                            )
+                        );
+                        if (queued.isGroup) {
+                            updateGroupPreview(queued.targetId, saved);
+                        }
+                    }
+
+                    socket.emit("send-message", {
+                        roomId: queued.roomId,
+                        sender: queued.senderId,
+                        ...(queued.isGroup
+                            ? {
+                                  groupId: queued.targetId,
+                                  senderName: getUserName(user)
+                              }
+                            : { receiver: queued.targetId }),
+                        message: saved.message || queued.text,
+                        isEncrypted: queued.isEncrypted,
+                        replyTo: saved.replyTo || undefined,
+                        _id: saved._id || saved.id,
+                        id: saved._id || saved.id,
+                        createdAt: saved.createdAt || queued.createdAt
+                    });
+                    removeQueuedMessage(senderId, queued.clientMessageId);
+                    showMessengerToast("Offline message sent.", "success");
+                } catch (sendError) {
+                    console.error("Retry queued Messenger message error:", sendError);
+                    if (
+                        sendError.response &&
+                        sendError.response.status >= 400 &&
+                        sendError.response.status < 500 &&
+                        sendError.response.status !== 401
+                    ) {
+                        removeQueuedMessage(
+                            senderId,
+                            queued.clientMessageId
+                        );
+                        const activeTarget = selectedUserRef.current;
+                        if (
+                            String(getId(activeTarget)) ===
+                                String(queued.targetId) &&
+                            Boolean(activeTarget?.isGroup) ===
+                                Boolean(queued.isGroup)
+                        ) {
+                            setMessages(previous =>
+                                previous.filter(
+                                    item => item._id !== queued.temporaryId
+                                )
+                            );
+                        }
+                        showMessengerToast(
+                            sendError.response.data?.message ||
+                                "An offline message could not be sent."
+                        );
+                        continue;
+                    }
+                    showMessengerToast(
+                        sendError.response?.data?.message ||
+                            "Offline messages are waiting for a connection."
+                    );
+                    break;
+                }
+            }
+        } catch (outboxError) {
+            console.error("Read Messenger outbox error:", outboxError);
+            showMessengerToast(
+                "Saved offline messages could not be read on this device."
+            );
+        } finally {
+            outboxFlushRef.current = false;
+        }
+    }, [
+        decryptMessagesForTarget,
+        showMessengerToast,
+        updateGroupPreview,
+        user
+    ]);
+
+    useEffect(() => {
+        if (navigator.onLine !== false) {
+            void flushMessageOutbox();
+        }
+        const handleOnline = () => {
+            void flushMessageOutbox();
+        };
+        window.addEventListener("online", handleOnline);
+        socket.on("connect", handleOnline);
+        return () => {
+            window.removeEventListener("online", handleOnline);
+            socket.off("connect", handleOnline);
+        };
+    }, [flushMessageOutbox]);
 
     const shareCurrentLocation =
         async () => {
@@ -8083,6 +8157,10 @@ const onCallMissed =
 
                 </div>
 
+                <MessengerStories
+                    active={isActive}
+                    currentUser={user}
+                />
 
                 {showSettings && (
 
@@ -8287,6 +8365,8 @@ const onCallMissed =
                                 on this device only.
                             </p>
                         </section>
+
+                        <MessengerDeviceSettings />
 
                     </div>
 
@@ -9452,6 +9532,7 @@ const onCallMissed =
                                                             : undefined
                                                     }
                                                     onPointerDown={event =>
+                                                        !item.isOutboxQueued &&
                                                         startMessageGesture(
                                                             event,
                                                             item
@@ -9468,7 +9549,10 @@ const onCallMissed =
                                                     }
                                                     onContextMenu={event => {
                                                         event.preventDefault();
-                                                        if (!item.isDeleted) {
+                                                        if (
+                                                            !item.isDeleted &&
+                                                            !item.isOutboxQueued
+                                                        ) {
                                                             setReactionPickerFor(
                                                                 getMessageId(item)
                                                             );
@@ -9747,30 +9831,32 @@ const onCallMissed =
 
                                                     <div className="message-meta">
 
-                                                        <button
-                                                            type="button"
-                                                            className="message-reply-btn"
-                                                            title="More message options"
-                                                            aria-label="More message options"
-                                                            aria-haspopup="menu"
-                                                            aria-expanded={
-                                                                messageMenuFor ===
-                                                                getMessageId(item)
-                                                            }
-                                                            onClick={() => {
-                                                                const messageId =
-                                                                    getMessageId(item);
-                                                                setMessageMenuFor(
+                                                        {!item.isOutboxQueued && (
+                                                            <button
+                                                                type="button"
+                                                                className="message-reply-btn"
+                                                                title="More message options"
+                                                                aria-label="More message options"
+                                                                aria-haspopup="menu"
+                                                                aria-expanded={
                                                                     messageMenuFor ===
-                                                                        messageId
-                                                                        ? null
-                                                                        : messageId
-                                                                );
-                                                                setMessageDeleteFor(null);
-                                                            }}
-                                                        >
-                                                            <FaEllipsisH />
-                                                        </button>
+                                                                    getMessageId(item)
+                                                                }
+                                                                onClick={() => {
+                                                                    const messageId =
+                                                                        getMessageId(item);
+                                                                    setMessageMenuFor(
+                                                                        messageMenuFor ===
+                                                                            messageId
+                                                                            ? null
+                                                                            : messageId
+                                                                    );
+                                                                    setMessageDeleteFor(null);
+                                                                }}
+                                                            >
+                                                                <FaEllipsisH />
+                                                            </button>
+                                                        )}
 
                                                         {messageMenuFor ===
                                                             getMessageId(item) && (
@@ -9944,7 +10030,9 @@ const onCallMissed =
                                                             <span
                                                                 className={
                                                                     `message-status ${
-                                                                        seen
+                                                                        item.isOutboxQueued
+                                                                            ? "status-queued"
+                                                                            : seen
                                                                             ? "status-seen"
                                                                             : delivered
                                                                             ? "status-delivered"
@@ -9952,7 +10040,9 @@ const onCallMissed =
                                                                     }`
                                                                 }
                                                                 title={
-                                                                    seen
+                                                                    item.isOutboxQueued
+                                                                        ? "Queued until you’re online"
+                                                                        : seen
                                                                         ? "Seen"
                                                                         : delivered
                                                                         ? "Delivered"
@@ -9960,7 +10050,9 @@ const onCallMissed =
                                                                 }
                                                             >
 
-                                                                {(
+                                                                {item.isOutboxQueued ? (
+                                                                    <FaClock />
+                                                                ) : (
                                                                     seen ||
                                                                     delivered
                                                                 ) ? (
@@ -10780,6 +10872,10 @@ const onCallMissed =
 
     localStream={
         localStream
+    }
+
+    cameraFacing={
+        cameraFacing
     }
 
     remoteStream={

@@ -14,6 +14,51 @@ import api from "./api";
 
 const TOKEN_KEY = "token";
 const USER_KEY = "user";
+const DEVICE_ID_KEY = "jr-messenger-device-id";
+
+export const getOrCreateDeviceId = () => {
+    const current = localStorage.getItem(DEVICE_ID_KEY);
+    if (current && /^[a-f\d-]{16,80}$/i.test(current)) {
+        return current;
+    }
+
+    const deviceId = window.crypto?.randomUUID
+        ? window.crypto.randomUUID()
+        : Array.from(window.crypto.getRandomValues(new Uint8Array(24)))
+            .map(value => value.toString(16).padStart(2, "0"))
+            .join("");
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    return deviceId;
+};
+
+const getDeviceName = () => {
+    const userAgent = navigator.userAgent || "";
+    const browser = /Edg\//.test(userAgent)
+        ? "Edge"
+        : /Firefox\//.test(userAgent)
+            ? "Firefox"
+            : /Chrome\//.test(userAgent)
+                ? "Chrome"
+                : /Safari\//.test(userAgent)
+                    ? "Safari"
+                    : "Browser";
+    const platform = /iPhone|iPad|iPod/.test(userAgent)
+        ? "iPhone/iPad"
+        : /Android/.test(userAgent)
+            ? "Android"
+            : /Windows/.test(userAgent)
+                ? "Windows"
+                : /Mac OS/.test(userAgent)
+                    ? "Mac"
+                    : "Device";
+    return `${browser} on ${platform}`;
+};
+
+const getDeviceLoginPayload = data => ({
+    ...data,
+    deviceId: getOrCreateDeviceId(),
+    deviceName: getDeviceName()
+});
 
 
 /* =========================================================
@@ -186,7 +231,7 @@ export const loginUser = async (
     const response =
         await api.post(
             "/auth/login",
-            credentials
+            getDeviceLoginPayload(credentials)
         );
 
     const data =
@@ -227,7 +272,7 @@ export const registerUser = async (
     const response =
         await api.post(
             "/auth/register",
-            userData
+            getDeviceLoginPayload(userData)
         );
 
     const data =

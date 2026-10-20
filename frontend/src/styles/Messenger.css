@@ -1108,6 +1108,10 @@
     color: #7fdbff;
 }
 
+.message-status.status-queued {
+    color: rgba(255, 255, 255, 0.7);
+}
+
 .message-delete-options {
     position: absolute;
     z-index: 4;

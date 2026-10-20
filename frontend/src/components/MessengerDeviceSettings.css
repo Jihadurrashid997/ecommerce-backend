@@ -1,0 +1,65 @@
+.messenger-device-settings {
+    display: grid;
+    gap: 9px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #e4e7ec;
+    color: #344054;
+    font-size: 13px;
+}
+
+.messenger-device-settings > p {
+    margin: 0;
+    color: #667085;
+    line-height: 1.5;
+}
+
+.messenger-device-list {
+    display: grid;
+    gap: 7px;
+}
+
+.messenger-device-list > article {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px;
+    border: 1px solid #eaecf0;
+    border-radius: 10px;
+}
+
+.messenger-device-list article > div {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+}
+
+.messenger-device-list small {
+    color: #667085;
+}
+
+.messenger-device-list button,
+.messenger-device-settings > button {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: #edf4ff;
+    color: #0866ff;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.messenger-device-settings button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.messenger-device-settings .device-settings-error {
+    color: #b42318;
+}
+
+.messenger-device-settings .device-settings-message {
+    color: #067647;
+}
