@@ -32,7 +32,18 @@ export const CartProvider = ({ children }) => {
 
     const addToCart = useCallback((product) => {
         setCart(previous => {
+            const parsedStock = Number(product.stock ?? 1);
+            const stockLimit = Number.isSafeInteger(parsedStock) && parsedStock >= 0
+                ? parsedStock
+                : 0;
             const exists = previous.some(item => item._id === product._id);
+            const currentQuantity = previous.find(
+                item => item._id === product._id
+            )?.quantity || 0;
+
+            if (currentQuantity >= stockLimit) {
+                return previous;
+            }
 
             return exists
                 ? previous.map(item =>

@@ -183,7 +183,7 @@ const Shop = () => {
                 <div className="shop-hero-copy">
                     <span className="shop-kicker"><FaStore /> THE E TOP MARKET</span>
                     <h1>Find things<br />with <em>a little more soul.</em></h1>
-                    <p>Independent finds, thoughtful makers, and pieces worth keeping. All in one place.</p>
+                    <p>Independent finds, thoughtful goods, and pieces worth keeping. All in one place.</p>
                     <a className="shop-hero-link" href="#shop-collection">Explore the collection <FaArrowRight /></a>
                 </div>
                 <div className="shop-hero-art" aria-hidden="true">
@@ -204,7 +204,7 @@ const Shop = () => {
             </section>
 
             <section className="shop-assurance" aria-label="Marketplace values">
-                <div><span className="shop-assurance-icon"><FaStore /></span><span><b>Meet the makers</b><small>Discover independent sellers</small></span></div>
+                <div><span className="shop-assurance-icon"><FaStore /></span><span><b>Shop independent goods</b><small>Seller profiles stay private</small></span></div>
                 <div><span className="shop-assurance-icon"><FaShieldAlt /></span><span><b>Shop with confidence</b><small>Secure checkout, clear orders</small></span></div>
                 <div><span className="shop-assurance-icon"><FaHeart /></span><span><b>Find your next favorite</b><small>Thoughtful picks from the community</small></span></div>
             </section>

@@ -18,6 +18,15 @@ const OrderHistory = () => {
     const [confirmingFulfillment, setConfirmingFulfillment] =
         useState("");
 
+    const [cancellingOrder, setCancellingOrder] =
+        useState("");
+
+    const [refundReasons, setRefundReasons] = useState({});
+
+    const [refundingOrder, setRefundingOrder] = useState("");
+
+    const [notice, setNotice] = useState("");
+
 
     const fetchOrders = async () => {
 
@@ -84,6 +93,61 @@ const OrderHistory = () => {
             );
         } finally {
             setConfirmingFulfillment("");
+        }
+    };
+
+    const cancelOrder = async order => {
+        if (!window.confirm(
+            `Cancel unpaid order #${order._id.slice(-8)}? This releases the reserved stock.`
+        )) {
+            return;
+        }
+
+        setCancellingOrder(order._id);
+        setError("");
+
+        try {
+            await api.put(`/orders/${order._id}/cancel`);
+            await fetchOrders();
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                "Could not cancel this order."
+            );
+        } finally {
+            setCancellingOrder("");
+        }
+    };
+
+    const requestRefund = async order => {
+        const reason = String(refundReasons[order._id] || "").trim();
+        if (reason.length < 10 || reason.length > 1000) {
+            setError("Explain your full-order refund request in 10 to 1000 characters.");
+            return;
+        }
+
+        setRefundingOrder(order._id);
+        setError("");
+        setNotice("");
+
+        try {
+            const response = await api.post(
+                `/orders/${order._id}/refund-request`,
+                { reason }
+            );
+            setRefundReasons(previous => ({
+                ...previous,
+                [order._id]: ""
+            }));
+            setNotice(response.data?.message || "Refund request sent for review.");
+            await fetchOrders();
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                "Could not submit your refund request."
+            );
+        } finally {
+            setRefundingOrder("");
         }
     };
 
@@ -181,6 +245,12 @@ const OrderHistory = () => {
 
                 )}
 
+                {notice && (
+                    <div className="order-notice" role="status">
+                        {notice}
+                    </div>
+                )}
+
 
                 {!error &&
                     orders.length === 0 && (
@@ -276,6 +346,21 @@ const OrderHistory = () => {
 
                                 </div>
 
+                                {order.paymentStatus !== "paid" &&
+                                    (order.paymentStatus !== "pending" || !order.transactionId) &&
+                                    !["Cancelled", "Shipped", "Delivered"].includes(order.status) && (
+                                        <button
+                                            type="button"
+                                            className="cancel-unpaid-order-btn"
+                                            disabled={cancellingOrder === order._id}
+                                            onClick={() => cancelOrder(order)}
+                                        >
+                                            {cancellingOrder === order._id
+                                                ? "Cancelling..."
+                                                : "Cancel unpaid order"}
+                                        </button>
+                                    )}
+
                             </div>
 
 
@@ -361,7 +446,7 @@ const OrderHistory = () => {
                             {order.sellerSettlements?.length > 0 && (
                                 <div className="order-shipping">
                                     <h3>Private delivery and payout</h3>
-                                    <p>Seller profiles and contact details stay private. Confirm each delivered shipment to make its seller payout eligible for manual processing.</p>
+                                    <p>Seller profiles and contact details stay private. You and the seller must both confirm each delivered shipment and its amount before an administrator can process the manual payout.</p>
                                     {order.sellerSettlements.map((settlement, index) => (
                                         <div className="order-settlement" key={settlement._id}>
                                             <p>
@@ -501,6 +586,74 @@ const OrderHistory = () => {
                                 )}
 
                             </div>
+
+                            {order.paymentStatus === "paid" && (
+                                <section className="order-refund">
+                                    <h3>Full-order refund request</h3>
+                                    <p>
+                                        Refund requests are reviewed by Shop administrators. Submitting a request does not automatically cancel the order or refund your payment.
+                                    </p>
+                                    {order.refundRequest?.status === "requested" && (
+                                        <p role="status">
+                                            Your request is under review. Shipment updates and seller payouts are paused while it is pending.
+                                        </p>
+                                    )}
+                                    {order.refundRequest?.status === "rejected" && (
+                                        <p>
+                                            Previous request reviewed: {order.refundRequest.adminNote || "No additional note."} You may submit a new request if you still need help.
+                                        </p>
+                                    )}
+                                    {order.refundRequest?.status === "refunded" && (
+                                        <p role="status">
+                                            Refund recorded by the Shop administrator via {order.refundRequest.refundMethod || "manual transfer"}
+                                            {order.refundRequest.refundReference
+                                                ? ` (reference: ${order.refundRequest.refundReference})`
+                                                : ""}.
+                                        </p>
+                                    )}
+                                    {order.refundRequest?.status !== "requested" &&
+                                        order.refundRequest?.status !== "refunded" &&
+                                        order.status !== "Cancelled" &&
+                                        order.sellerSettlements?.some(
+                                            settlement => settlement.payoutStatus === "paid"
+                                        ) && (
+                                            <p>
+                                                In-app refund requests are unavailable because a seller payout has already been sent.
+                                            </p>
+                                        )}
+                                    {order.refundRequest?.status !== "requested" &&
+                                        order.refundRequest?.status !== "refunded" &&
+                                        order.status !== "Cancelled" &&
+                                        !order.sellerSettlements?.some(
+                                            settlement => settlement.payoutStatus === "paid"
+                                        ) && (
+                                            <div className="order-refund-form">
+                                                <textarea
+                                                    value={refundReasons[order._id] || ""}
+                                                    onChange={event => setRefundReasons(previous => ({
+                                                        ...previous,
+                                                        [order._id]: event.target.value
+                                                    }))}
+                                                    rows={3}
+                                                    minLength={10}
+                                                    maxLength={1000}
+                                                    placeholder="Tell us why you are requesting a full refund (10-1000 characters)."
+                                                    aria-label={`Refund reason for order ${order._id.slice(-8)}`}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="request-refund-btn"
+                                                    disabled={refundingOrder === order._id}
+                                                    onClick={() => requestRefund(order)}
+                                                >
+                                                    {refundingOrder === order._id
+                                                        ? "Submitting..."
+                                                        : "Request full refund"}
+                                                </button>
+                                            </div>
+                                        )}
+                                </section>
+                            )}
 
 
                             {/* =========================

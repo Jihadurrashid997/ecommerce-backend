@@ -13,6 +13,10 @@ const {
     confirmOrderReceipt,
     getReadySellerPayouts,
     markSellerPayoutPaid,
+    requestOrderRefund,
+    getRequestedOrderRefunds,
+    rejectOrderRefund,
+    recordOrderRefund,
     getAllOrders,
     updateOrderStatus
 } = require("../controllers/orderController");
@@ -46,6 +50,12 @@ router.put(
     "/:id/cancel",
     auth(),
     cancelOrder
+);
+
+router.post(
+    "/:id/refund-request",
+    auth(),
+    requestOrderRefund
 );
 
 router.put(
@@ -82,10 +92,28 @@ router.get(
     getReadySellerPayouts
 );
 
+router.get(
+    "/admin/refunds/requested",
+    auth(["admin"]),
+    getRequestedOrderRefunds
+);
+
 router.put(
     "/admin/:id/payout",
     auth(["admin"]),
     markSellerPayoutPaid
+);
+
+router.put(
+    "/admin/:id/refund/reject",
+    auth(["admin"]),
+    rejectOrderRefund
+);
+
+router.put(
+    "/admin/:id/refund/complete",
+    auth(["admin"]),
+    recordOrderRefund
 );
 
 

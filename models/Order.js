@@ -115,6 +115,60 @@ const SellerSettlementSchema = new mongoose.Schema(
     }
 );
 
+const RefundRequestSchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: ["none", "requested", "rejected", "refunded"],
+            default: "none"
+        },
+        reason: {
+            type: String,
+            trim: true,
+            maxlength: 1000,
+            default: ""
+        },
+        requestedAt: {
+            type: Date,
+            default: null
+        },
+        adminNote: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        reviewedAt: {
+            type: Date,
+            default: null
+        },
+        reviewedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        refundMethod: {
+            type: String,
+            trim: true,
+            maxlength: 40,
+            default: ""
+        },
+        refundReference: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            default: ""
+        },
+        refundedAt: {
+            type: Date,
+            default: null
+        }
+    },
+    {
+        _id: false
+    }
+);
+
 const OrderSchema = new mongoose.Schema(
     {
         user: {
@@ -131,6 +185,11 @@ const OrderSchema = new mongoose.Schema(
         sellerSettlements: {
             type: [SellerSettlementSchema],
             default: []
+        },
+
+        refundRequest: {
+            type: RefundRequestSchema,
+            default: () => ({})
         },
 
         totalPrice: {

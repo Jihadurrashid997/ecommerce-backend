@@ -136,6 +136,11 @@ background:#1d4ed8;
 
 }
 
+.quantity-box button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
 .quantity-box span{
 
 font-size:20px;
@@ -244,6 +249,16 @@ text-align:center;
 
 padding:80px 20px;
 
+}
+
+.cart-stock-warning {
+    color: #fca5a5;
+    font-weight: 600;
+}
+
+.checkout-btn[aria-disabled="true"] {
+    opacity: .5;
+    cursor: not-allowed;
 }
 
 .empty-cart h2{

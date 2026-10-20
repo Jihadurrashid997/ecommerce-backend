@@ -93,3 +93,9 @@ background:#e11d48;
 color:white;
 
 }
+
+.buy-btn:disabled,
+.cart-btn:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}

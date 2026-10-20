@@ -17,6 +17,26 @@ const setSellerPayoutStatus = (order, payoutStatus) => {
     }
 };
 
+const markPaymentAttemptEnded = (transactionId, paymentStatus) =>
+    Order.updateOne(
+        {
+            transactionId,
+            paymentStatus: { $ne: "paid" },
+            status: { $ne: "Cancelled" }
+        },
+        {
+            $set: {
+                paymentStatus,
+                "sellerSettlements.$[settlement].payoutStatus": "cancelled"
+            }
+        },
+        {
+            arrayFilters: [{
+                "settlement.payoutStatus": "awaiting_payment"
+            }]
+        }
+    );
+
 exports.getPaymentStatus = async (req, res) => {
     try {
         const transactionId = String(req.params.transactionId || "").trim();
@@ -421,21 +441,7 @@ exports.paymentFail = async (req, res) => {
 
         if (transactionId) {
 
-            const order =
-                await Order.findOne({
-                    transactionId
-                });
-
-
-            if (order && order.paymentStatus !== "paid") {
-
-                order.paymentStatus =
-                    "failed";
-
-                setSellerPayoutStatus(order, "cancelled");
-                await order.save();
-
-            }
+            await markPaymentAttemptEnded(transactionId, "failed");
 
         }
 
@@ -480,21 +486,7 @@ exports.paymentCancel = async (req, res) => {
 
         if (transactionId) {
 
-            const order =
-                await Order.findOne({
-                    transactionId
-                });
-
-
-            if (order && order.paymentStatus !== "paid") {
-
-                order.paymentStatus =
-                    "cancelled";
-
-                setSellerPayoutStatus(order, "cancelled");
-                await order.save();
-
-            }
+            await markPaymentAttemptEnded(transactionId, "cancelled");
 
         }
 
@@ -582,6 +574,12 @@ exports.paymentIPN = async (req, res) => {
             });
         }
 
+        if (order.status === "Cancelled") {
+            return res.status(409).json({
+                success: false,
+                message: "A cancelled order cannot be paid."
+            });
+        }
 
         /*
         Failed payment
@@ -591,11 +589,7 @@ exports.paymentIPN = async (req, res) => {
             status === "FAILED"
         ) {
 
-            order.paymentStatus =
-                "failed";
-
-            setSellerPayoutStatus(order, "cancelled");
-            await order.save();
+            await markPaymentAttemptEnded(tran_id, "failed");
 
             return res.status(200).json({
                 message:
@@ -613,11 +607,7 @@ exports.paymentIPN = async (req, res) => {
             status === "CANCELLED"
         ) {
 
-            order.paymentStatus =
-                "cancelled";
-
-            setSellerPayoutStatus(order, "cancelled");
-            await order.save();
+            await markPaymentAttemptEnded(tran_id, "cancelled");
 
             return res.status(200).json({
                 message:
@@ -719,11 +709,7 @@ exports.paymentIPN = async (req, res) => {
             validationStatus !== "VALIDATED"
         ) {
 
-            order.paymentStatus =
-                "failed";
-
-            setSellerPayoutStatus(order, "cancelled");
-            await order.save();
+            await markPaymentAttemptEnded(tran_id, "failed");
 
             return res.status(400).json({
                 message:
@@ -737,12 +723,44 @@ exports.paymentIPN = async (req, res) => {
         Final successful payment
         */
 
-        order.paymentStatus =
-            "paid";
+        const paymentUpdate = await Order.updateOne(
+            {
+                _id: order._id,
+                transactionId: tran_id,
+                paymentStatus: { $ne: "paid" },
+                status: { $ne: "Cancelled" }
+            },
+            {
+                $set: {
+                    paymentStatus: "paid",
+                    "sellerSettlements.$[settlement].payoutStatus": "held"
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement.payoutStatus": {
+                        $in: ["awaiting_payment", "cancelled"]
+                    }
+                }]
+            }
+        );
 
-        setSellerPayoutStatus(order, "held");
+        if (paymentUpdate.modifiedCount !== 1) {
+            const currentOrder = await Order.findById(order._id)
+                .select("paymentStatus status");
 
-        await order.save();
+            if (currentOrder?.paymentStatus === "paid") {
+                return res.status(200).json({
+                    success: true,
+                    message: "Payment was already verified."
+                });
+            }
+
+            return res.status(409).json({
+                success: false,
+                message: "Order changed while payment was being confirmed. Please contact Shop support."
+            });
+        }
 
 
         return res.status(200).json({

@@ -14,7 +14,8 @@ const productSchema = new mongoose.Schema(
 
     price:{
         type:Number,
-        required:true
+        required:true,
+        min:0
     },
 
     category:{
@@ -29,7 +30,12 @@ const productSchema = new mongoose.Schema(
 
     stock:{
         type:Number,
-        default:1
+        default:1,
+        min:0,
+        validate: {
+            validator: Number.isInteger,
+            message: "Stock must be a whole number."
+        }
     },
 
     isApproved:{
