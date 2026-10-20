@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 const Post = require("../models/Post");
-const User = require("../models/User");
 const Community = require("../models/Community");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
+const { notifyUser, notifyFollowers } = require("../services/platformNotifications");
 
 const AUTHOR_FIELDS = "name username profileImage avatar role";
 
@@ -155,6 +155,15 @@ exports.createPost = async (req, res) => {
             media
         });
 
+        if (!communityId) {
+            await notifyFollowers(req.user.id, {
+                type: "post",
+                title: "New post",
+                message: "Someone you follow shared a new post.",
+                link: `/user/${req.user.id}`
+            });
+        }
+
         const populated = await Post.findById(post._id)
             .populate("author", AUTHOR_FIELDS)
             .lean();
@@ -224,6 +233,13 @@ exports.createReel = async (req, res) => {
             kind: "reel",
             caption: String(req.body?.caption || "").slice(0, 2200),
             media: [saved]
+        });
+
+        await notifyFollowers(req.user.id, {
+            type: "post",
+            title: "New reel",
+            message: "Someone you follow shared a new reel.",
+            link: `/user/${req.user.id}`
         });
 
         const populated = await Post.findById(reel._id)
@@ -353,7 +369,7 @@ exports.toggleLike = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid post." });
         }
 
-        const post = await Post.findById(req.params.id).select("likes community");
+        const post = await Post.findById(req.params.id).select("likes community author kind");
 
         if (!post) {
             return res.status(404).json({ success: false, message: "Post not found." });
@@ -373,6 +389,16 @@ exports.toggleLike = async (req, res) => {
                 ? { $pull: { likes: req.user.id } }
                 : { $addToSet: { likes: req.user.id } }
         );
+
+        if (!already) {
+            await notifyUser(post.author, {
+                actor: req.user.id,
+                type: "post_like",
+                title: "New like",
+                message: `Someone liked your ${post.kind === "reel" ? "reel" : "post"}.`,
+                link: `/user/${post.author}`
+            });
+        }
 
         return res.json({
             success: true,
@@ -436,7 +462,7 @@ exports.addComment = async (req, res) => {
             return res.status(400).json({ success: false, message: "Comment can't be empty." });
         }
 
-        const post = await Post.findById(req.params.id).select("comments community");
+        const post = await Post.findById(req.params.id).select("comments community author kind");
 
         if (!post) {
             return res.status(404).json({ success: false, message: "Post not found." });
@@ -450,6 +476,14 @@ exports.addComment = async (req, res) => {
 
         // comments are sub-documents: validate only them, not the whole post
         await post.save({ validateModifiedOnly: true });
+
+        await notifyUser(post.author, {
+            actor: req.user.id,
+            type: "post_comment",
+            title: "New comment",
+            message: `Someone commented on your ${post.kind === "reel" ? "reel" : "post"}.`,
+            link: `/user/${post.author}`
+        });
 
         const saved = post.comments[post.comments.length - 1];
 

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Community = require("../models/Community");
+const { notifyUser, notifyUsers } = require("../services/platformNotifications");
 
 const USER_FIELDS = "name username profileImage avatar isVerified";
 const isId = value => mongoose.Types.ObjectId.isValid(value);
@@ -185,6 +186,13 @@ exports.joinCommunity = async (req, res) => {
             if (!community.pendingRequests.some(id => sameId(id, req.user.id))) {
                 community.pendingRequests.push(req.user.id);
                 await community.save();
+                await notifyUsers(community.admins, {
+                    actor: req.user.id,
+                    type: "community",
+                    title: "Community join request",
+                    message: `Someone requested to join ${community.name}.`,
+                    link: `/communities/${community._id}`
+                });
             }
 
             return res.json({
@@ -196,6 +204,13 @@ exports.joinCommunity = async (req, res) => {
 
         community.members.addToSet(req.user.id);
         await community.save();
+        await notifyUser(community.createdBy, {
+            actor: req.user.id,
+            type: "community",
+            title: "New community member",
+            message: `Someone joined ${community.name}.`,
+            link: `/communities/${community._id}`
+        });
 
         return res.json({
             success: true,
@@ -400,6 +415,13 @@ exports.approveJoinRequest = async (req, res) => {
         community.pendingRequests.pull(req.params.userId);
         community.members.addToSet(req.params.userId);
         await community.save();
+        await notifyUser(req.params.userId, {
+            actor: req.user.id,
+            type: "community",
+            title: "Join request approved",
+            message: `Your request to join ${community.name} was approved.`,
+            link: `/communities/${community._id}`
+        });
 
         return res.json({ success: true, membershipStatus: "member" });
     } catch (error) {

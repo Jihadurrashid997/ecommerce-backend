@@ -1108,9 +1108,22 @@
     line-height: 1.4;
 }
 
+.jr-notification-content strong {
+    color: #20283b;
+    font-size: 12px;
+}
+
 .jr-notification-content time {
     color: #8a91a3;
     font-size: 11px;
+}
+
+.jr-notifications-error {
+    margin: 0;
+    padding: 9px 14px;
+    color: #b42318;
+    background: #fff4f2;
+    font-size: 12px;
 }
 
 .jr-notifications-empty {

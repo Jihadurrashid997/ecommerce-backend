@@ -1,7 +1,9 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Post = require("../models/Post");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
+const { notifyUser } = require("../services/platformNotifications");
 
 // ======================================================
 // HELPERS
@@ -385,6 +387,189 @@ exports.unblockUser = async (req, res) => {
 
     }
 
+};
+
+exports.getBlockedUsers = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .select("blockedUsers")
+            .populate("blockedUsers", "name profileImage")
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        return res.json({
+            success: true,
+            users: user.blockedUsers || []
+        });
+    } catch (error) {
+        console.error("GET BLOCKED USERS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load blocked users."
+        });
+    }
+};
+
+exports.getSettings = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .select("theme notificationPreferences")
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        return res.json({
+            success: true,
+            settings: {
+                theme: user.theme || "dark",
+                notifications: {
+                    follows: user.notificationPreferences?.follows !== false,
+                    posts: user.notificationPreferences?.posts !== false,
+                    communities: user.notificationPreferences?.communities !== false,
+                    announcements: user.notificationPreferences?.announcements !== false
+                }
+            }
+        });
+    } catch (error) {
+        console.error("GET USER SETTINGS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load your settings."
+        });
+    }
+};
+
+exports.updateSettings = async (req, res) => {
+    try {
+        const { theme, notifications } = req.body || {};
+
+        if (theme !== undefined && !["dark", "light"].includes(theme)) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose a valid theme."
+            });
+        }
+
+        const allowedPreferences = [
+            "follows",
+            "posts",
+            "communities",
+            "announcements"
+        ];
+        if (
+            notifications !== undefined &&
+            (!notifications || typeof notifications !== "object" || Array.isArray(notifications) ||
+                Object.keys(notifications).some(key =>
+                    !allowedPreferences.includes(key) ||
+                    typeof notifications[key] !== "boolean"
+                ))
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Notification preferences are invalid."
+            });
+        }
+
+        const updates = {};
+        if (theme !== undefined) updates.theme = theme;
+        for (const [key, value] of Object.entries(notifications || {})) {
+            updates[`notificationPreferences.${key}`] = value;
+        }
+
+        if (!Object.keys(updates).length) {
+            return res.status(400).json({
+                success: false,
+                message: "No settings were provided."
+            });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: updates },
+            { new: true, runValidators: true }
+        ).select("theme notificationPreferences").lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        return res.json({
+            success: true,
+            settings: {
+                theme: user.theme || "dark",
+                notifications: {
+                    follows: user.notificationPreferences?.follows !== false,
+                    posts: user.notificationPreferences?.posts !== false,
+                    communities: user.notificationPreferences?.communities !== false,
+                    announcements: user.notificationPreferences?.announcements !== false
+                }
+            }
+        });
+    } catch (error) {
+        console.error("UPDATE USER SETTINGS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not save your settings."
+        });
+    }
+};
+
+exports.changePassword = async (req, res) => {
+    try {
+        const currentPassword = String(req.body?.currentPassword || "");
+        const newPassword = String(req.body?.newPassword || "");
+
+        if (newPassword.length < 8 || newPassword.length > 72) {
+            return res.status(400).json({
+                success: false,
+                message: "Your new password must be between 8 and 72 characters."
+            });
+        }
+
+        const user = await User.findById(req.user.id).select("+password");
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const matches = await bcrypt.compare(currentPassword, user.password);
+        if (!matches) {
+            return res.status(400).json({
+                success: false,
+                message: "Your current password is incorrect."
+            });
+        }
+
+        user.password = await bcrypt.hash(newPassword, 12);
+        await user.save();
+
+        return res.json({
+            success: true,
+            message: "Password updated successfully."
+        });
+    } catch (error) {
+        console.error("CHANGE PASSWORD ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not update your password."
+        });
+    }
 };
 
 
@@ -968,6 +1153,16 @@ exports.toggleFollow = async (req, res) => {
                 ? { $pull: { following: targetId } }
                 : { $addToSet: { following: targetId } }
         );
+
+        if (!already) {
+            await notifyUser(targetId, {
+                actor: req.user.id,
+                type: "follow",
+                title: "New follower",
+                message: "Someone started following you.",
+                link: `/user/${req.user.id}`
+            });
+        }
 
         const followersCount = await User.countDocuments({ following: targetId });
 
