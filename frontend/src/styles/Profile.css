@@ -152,6 +152,18 @@
             0,
             0.25
         );
+
+    transform-style: preserve-3d;
+    transition:
+        transform 0.45s cubic-bezier(.22, 1, .36, 1),
+        box-shadow 0.45s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .profile-header:hover {
+        transform: perspective(1500px) rotateX(1deg) translateY(-3px);
+        box-shadow: 0 32px 85px rgba(0, 0, 0, 0.32);
+    }
 }
 
 
@@ -194,6 +206,18 @@
             0,
             0.3
         );
+
+    transform-style: preserve-3d;
+    transition:
+        transform 0.45s cubic-bezier(.22, 1, .36, 1),
+        box-shadow 0.45s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .profile-avatar:hover {
+        transform: perspective(700px) rotateY(-8deg) rotateX(5deg) scale(1.04);
+        box-shadow: 0 22px 48px rgba(0, 0, 0, 0.38);
+    }
 }
 
 
@@ -431,6 +455,20 @@
             0,
             0.15
         );
+
+    transform-style: preserve-3d;
+    transition:
+        transform 0.4s cubic-bezier(.22, 1, .36, 1),
+        box-shadow 0.4s ease,
+        border-color 0.4s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .profile-card:hover {
+        transform: perspective(1200px) rotateX(1deg) translateY(-4px);
+        border-color: rgba(129, 140, 248, 0.24);
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.24);
+    }
 }
 
 
@@ -545,13 +583,15 @@
     );
 
     transition:
-        transform 0.25s ease,
+        transform 0.35s cubic-bezier(.22, 1, .36, 1),
         background 0.25s ease;
+
+    transform-style: preserve-3d;
 }
 
 
 .profile-action-card:hover {
-    transform: translateY(-3px);
+    transform: perspective(900px) translateY(-3px) rotateX(1deg) rotateY(-1deg) translateZ(4px);
 
     background: rgba(
         99,
