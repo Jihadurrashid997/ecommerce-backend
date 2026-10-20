@@ -3,6 +3,10 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const User = require("../models/User");
 const marketplaceSettings = require("../services/marketplaceSettings");
+const {
+    notifyShopUsers,
+    notifyShopAdmins
+} = require("../services/shopNotifications");
 
 const getCustomerOrder = order => {
     const result = typeof order.toObject === "function"
@@ -271,6 +275,16 @@ exports.createOrder = async (req, res) => {
         });
         orderCreated = true;
 
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:order-placed`,
+            type: "order_placed",
+            title: "Shop order placed",
+            message: `Order #${String(order._id).slice(-8)} is created and waiting for SSLCommerz payment. / আপনার অর্ডারটি তৈরি হয়েছে, পেমেন্টের অপেক্ষায় আছে।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+
         res.status(201).json({
             message: "Order created successfully",
             order: getCustomerOrder(order)
@@ -415,6 +429,16 @@ exports.cancelOrder = async (req, res) => {
             );
 
         }
+
+        await notifyShopUsers({
+            recipients: [req.user.id],
+            eventKey: `${order._id}:order-cancelled`,
+            type: "order_cancelled",
+            title: "Unpaid Shop order cancelled",
+            message: `Order #${String(order._id).slice(-8)} was cancelled and reserved stock was released. / অর্ডারটি বাতিল হয়েছে এবং পণ্যের স্টক ফেরত যোগ হয়েছে।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
 
         res.json({
             message: "Order cancelled successfully",
@@ -612,6 +636,7 @@ exports.updateSellerOrderStatus = async (
             });
         }
 
+        const previousStatus = settlement?.deliveryStatus || order.status;
         if (settlement) {
             if (
                 (settlement.receiptConfirmedAt || settlement.sellerConfirmedAt) &&
@@ -629,6 +654,18 @@ exports.updateSellerOrderStatus = async (
         }
 
         await order.save();
+
+        if (previousStatus !== status) {
+            await notifyShopUsers({
+                recipients: [order.user],
+                eventKey: `${order._id}:shipment:${settlement?._id || req.user.id}:${status}:${order.updatedAt?.getTime() || Date.now()}`,
+                type: "shipment_update",
+                title: "Shop delivery update",
+                message: `Shipment for order #${String(order._id).slice(-8)} is now ${status}. / আপনার অর্ডারের শিপমেন্টের অবস্থা এখন ${status}।`,
+                href: "/shop/orders",
+                orderId: order._id
+            });
+        }
 
         res.json({
             message:
@@ -714,10 +751,33 @@ exports.confirmOrderReceipt = async (req, res) => {
             });
         }
 
-        await markSettlementReadyForPayout(
+        const readiness = await markSettlementReadyForPayout(
             req.params.id,
             req.params.fulfillmentId
         );
+
+        const settlement = (order.sellerSettlements || []).find(
+            item => String(item._id) === String(req.params.fulfillmentId)
+        );
+        await notifyShopUsers({
+            recipients: [settlement?.seller],
+            eventKey: `${order._id}:buyer-confirmed:${req.params.fulfillmentId}`,
+            type: "buyer_confirmation",
+            title: "Customer confirmed delivery",
+            message: `The customer confirmed receipt for order #${String(order._id).slice(-8)}. / ক্রেতা অর্ডারটির পণ্য পাওয়া নিশ্চিত করেছেন।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
+        if (readiness.modifiedCount === 1) {
+            await notifyShopAdmins({
+                eventKey: `${order._id}:payout-ready:${req.params.fulfillmentId}`,
+                type: "payout_ready",
+                title: "Shop payout ready for review",
+                message: `Both parties confirmed shipment and payout for order #${String(order._id).slice(-8)}. / দুই পক্ষই শিপমেন্ট ও পেআউট নিশ্চিত করেছেন; অ্যাডমিন পর্যালোচনা প্রয়োজন।`,
+                href: "/admin/control",
+                orderId: order._id
+            });
+        }
 
         return res.json({
             success: true,
@@ -805,10 +865,30 @@ exports.confirmSellerPayout = async (req, res) => {
             });
         }
 
-        await markSettlementReadyForPayout(
+        const readiness = await markSettlementReadyForPayout(
             req.params.id,
             req.params.fulfillmentId
         );
+
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:seller-confirmed:${req.params.fulfillmentId}`,
+            type: "seller_confirmation",
+            title: "Seller confirmed delivery and payout",
+            message: `The seller confirmed delivery and payout details for order #${String(order._id).slice(-8)}. / বিক্রেতা অর্ডারটির ডেলিভারি ও পেআউটের তথ্য নিশ্চিত করেছেন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+        if (readiness.modifiedCount === 1) {
+            await notifyShopAdmins({
+                eventKey: `${order._id}:payout-ready:${req.params.fulfillmentId}`,
+                type: "payout_ready",
+                title: "Shop payout ready for review",
+                message: `Both parties confirmed shipment and payout for order #${String(order._id).slice(-8)}. / দুই পক্ষই শিপমেন্ট ও পেআউট নিশ্চিত করেছেন; অ্যাডমিন পর্যালোচনা প্রয়োজন।`,
+                href: "/admin/control",
+                orderId: order._id
+            });
+        }
 
         return res.json({
             success: true,
@@ -994,6 +1074,25 @@ exports.markSellerPayoutPaid = async (req, res) => {
             });
         }
 
+        await notifyShopUsers({
+            recipients: [settlement.seller?._id],
+            eventKey: `${order._id}:payout-paid:${req.body.fulfillmentId}`,
+            type: "payout_processed",
+            title: "Shop payout recorded",
+            message: `The Shop administrator recorded the payout for order #${String(order._id).slice(-8)}. / Shop অ্যাডমিন এই অর্ডারের পেআউট সম্পন্ন হিসেবে রেকর্ড করেছেন।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:payout-paid:${req.body.fulfillmentId}`,
+            type: "payout_processed",
+            title: "Shop seller payout sent",
+            message: `The Shop administrator recorded the seller payout for order #${String(order._id).slice(-8)}. / Shop অ্যাডমিন বিক্রেতার পেআউট সম্পন্ন হিসেবে রেকর্ড করেছেন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+
         return res.json({
             success: true,
             message: "Seller payout recorded as paid."
@@ -1065,6 +1164,35 @@ exports.requestOrderRefund = async (req, res) => {
                 message: "This paid order cannot be refunded in the Shop: it may be cancelled, already under review/refunded, unpaid, or its seller payout has already been sent."
             });
         }
+
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:refund-submitted:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_submitted",
+            title: "Shop refund request submitted",
+            message: `Your refund request for order #${String(order._id).slice(-8)} is awaiting review. / আপনার রিফান্ড অনুরোধটি পর্যালোচনার অপেক্ষায় আছে।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+        await notifyShopAdmins({
+            eventKey: `${order._id}:refund-review:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_submitted",
+            title: "Shop refund request needs review",
+            message: `A full-order refund was requested for order #${String(order._id).slice(-8)}. / একটি অর্ডারের পূর্ণ রিফান্ড অনুরোধ এসেছে; পর্যালোচনা করুন।`,
+            href: "/admin/control",
+            orderId: order._id
+        });
+        await notifyShopUsers({
+            recipients: (order.sellerSettlements || []).map(
+                settlement => settlement.seller
+            ),
+            eventKey: `${order._id}:refund-pending:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_submitted",
+            title: "Shop refund under review",
+            message: `A refund request is under review for order #${String(order._id).slice(-8)}. Pause shipment updates and payout confirmation until the Shop administrator decides. / রিফান্ড পর্যালোচনাধীন; অ্যাডমিনের সিদ্ধান্ত না আসা পর্যন্ত শিপমেন্ট ও পেআউটের কাজ স্থগিত রাখুন।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
 
         return res.json({
             success: true,
@@ -1159,6 +1287,16 @@ exports.rejectOrderRefund = async (req, res) => {
             });
         }
 
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:refund-rejected:${order.refundRequest?.requestedAt?.getTime?.() || order.updatedAt?.getTime?.() || Date.now()}`,
+            type: "refund_decision",
+            title: "Shop refund request reviewed",
+            message: `The refund request for order #${String(order._id).slice(-8)} was declined. Review the note in Shop orders. / রিফান্ড অনুরোধটি গ্রহণ করা হয়নি; Shop orders-এ অ্যাডমিনের নোট দেখুন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+
         return res.json({
             success: true,
             message: "Refund request rejected with a review note."
@@ -1204,6 +1342,24 @@ exports.recordOrderRefund = async (req, res) => {
 
     try {
         const refundedAt = new Date();
+        const order = await Order.findOne({
+            _id: req.params.id,
+            paymentStatus: "paid",
+            "refundRequest.status": "requested",
+            sellerSettlements: {
+                $not: {
+                    $elemMatch: { payoutStatus: "paid" }
+                }
+            }
+        }).select("user sellerSettlements.seller refundRequest.requestedAt");
+
+        if (!order) {
+            return res.status(409).json({
+                success: false,
+                message: "This refund is no longer pending or a seller payout has already been sent."
+            });
+        }
+
         const result = await Order.updateOne(
             {
                 _id: req.params.id,
@@ -1241,6 +1397,27 @@ exports.recordOrderRefund = async (req, res) => {
                 message: "This refund is no longer pending or a seller payout has already been sent."
             });
         }
+
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:refund-completed:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_completed",
+            title: "Shop refund recorded",
+            message: `The Shop administrator recorded the refund for order #${String(order._id).slice(-8)}. / Shop অ্যাডমিন অর্ডারটির রিফান্ড সম্পন্ন হিসেবে রেকর্ড করেছেন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+        await notifyShopUsers({
+            recipients: (order.sellerSettlements || []).map(
+                settlement => settlement.seller
+            ),
+            eventKey: `${order._id}:refund-completed:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_completed",
+            title: "Shop refund completed",
+            message: `The refund for order #${String(order._id).slice(-8)} was recorded. Its unpaid seller payout was cancelled. / অর্ডারটির রিফান্ড রেকর্ড হয়েছে; বাকি থাকা বিক্রেতার পেআউট বাতিল করা হয়েছে।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
 
         return res.json({
             success: true,

@@ -4,10 +4,13 @@ const MarketplaceSettings = require("../models/MarketplaceSettings");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const User = require("../models/User");
+const ShopNotification = require("../models/ShopNotification");
 const marketplaceSettings = require("../services/marketplaceSettings");
 const adminController = require("../controllers/adminController");
 const productController = require("../controllers/productController");
 const orderController = require("../controllers/orderController");
+
+ShopNotification.bulkWrite = async () => ({});
 
 const makeResponse = () => ({
     statusCode: 200,

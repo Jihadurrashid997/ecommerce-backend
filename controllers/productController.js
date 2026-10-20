@@ -1,5 +1,6 @@
 const Product = require("../models/Product");
 const marketplaceSettings = require("../services/marketplaceSettings");
+const { notifyShopUsers } = require("../services/shopNotifications");
 
 // ==============================
 // Get All Products
@@ -176,6 +177,18 @@ exports.createProduct = async (req, res) => {
 
         });
 
+        if (!product.isApproved) {
+            await notifyShopUsers({
+                recipients: [product.seller],
+                eventKey: `${product._id}:product-review`,
+                type: "product_review",
+                title: "Shop product awaiting review",
+                message: `${product.name} was submitted and will appear in the Shop after administrator approval. / ${product.name} জমা হয়েছে; অ্যাডমিন অনুমোদনের পর Shop-এ দেখা যাবে।`,
+                href: "/shop/seller/products",
+                productId: product._id
+            });
+        }
+
         res.status(201).json(product);
 
     } catch (err) {
@@ -290,6 +303,22 @@ exports.updateProduct = async (req, res) => {
         Object.assign(product, updatedData);
 
         await product.save();
+
+        if (
+            req.user.role !== "admin" &&
+            settings.requireProductApproval &&
+            product.isApproved === false
+        ) {
+            await notifyShopUsers({
+                recipients: [product.seller],
+                eventKey: `${product._id}:product-review:${product.updatedAt?.getTime?.() || Date.now()}`,
+                type: "product_review",
+                title: "Edited Shop product awaiting review",
+                message: `${product.name} was updated and is hidden until administrator approval. / ${product.name} আপডেট হয়েছে; অ্যাডমিন অনুমোদন না দেওয়া পর্যন্ত Shop-এ দেখা যাবে না।`,
+                href: "/shop/seller/products",
+                productId: product._id
+            });
+        }
 
         res.json(product);
 
