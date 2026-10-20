@@ -16,6 +16,123 @@
     object-fit: contain;
 }
 
+.media-viewer-header {
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+    background: linear-gradient(rgba(0, 0, 0, 0.72), transparent);
+}
+
+.media-viewer-author {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    text-decoration: none;
+}
+
+.media-viewer-author > img,
+.media-viewer-author > span:first-child {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 50%;
+    background: #5142be;
+    color: #fff;
+    object-fit: cover;
+}
+
+.media-viewer-author-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.media-viewer-author-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.media-viewer-author-copy time {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 12px;
+}
+
+.media-viewer-post-footer {
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 2;
+    padding: 36px 20px max(18px, env(safe-area-inset-bottom));
+    color: #fff;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.82));
+}
+
+.media-viewer-caption {
+    max-height: 20vh;
+    margin: 0 0 12px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.media-viewer-actions {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.media-viewer-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    border: 0;
+    color: #fff;
+    background: transparent;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.media-viewer-actions button.liked {
+    color: #ff5268;
+}
+
+.media-viewer-actions button span,
+.media-viewer-count {
+    font-size: 14px;
+}
+
+.media-viewer-count {
+    margin-left: auto;
+    color: rgba(255, 255, 255, 0.76);
+}
+
+.media-viewer-comments {
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 3;
+    max-height: 52dvh;
+    overflow-y: auto;
+    border-radius: 18px 18px 0 0;
+    color: #111827;
+    background: #fff;
+}
+
+.media-viewer-comments .comments-list {
+    max-height: 30dvh;
+}
+
 .media-viewer-close,
 .media-viewer-nav {
     position: absolute;
