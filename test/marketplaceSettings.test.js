@@ -161,11 +161,18 @@ test("product browse filters pending listings when approval is required", async 
 test("new products start pending when admin approval is enabled", async () => {
     const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
     const originalCreate = Product.create;
+    const originalUserFind = User.find;
     marketplaceSettings.getMarketplaceSettings = async () => ({
         marketplaceEnabled: true,
         requireProductApproval: true
     });
     Product.create = async product => product;
+    User.find = filter => ({
+        select() {
+            return this;
+        },
+        lean: async () => filter._id.$in.map(_id => ({ _id }))
+    });
 
     try {
         const response = makeResponse();
@@ -188,6 +195,7 @@ test("new products start pending when admin approval is enabled", async () => {
     } finally {
         marketplaceSettings.getMarketplaceSettings = originalGetSettings;
         Product.create = originalCreate;
+        User.find = originalUserFind;
     }
 });
 

@@ -1,5 +1,100 @@
 const mongoose = require("mongoose");
 const ShopNotification = require("../models/ShopNotification");
+const User = require("../models/User");
+
+const SHOP_NOTIFICATION_PREFERENCES = [
+    "orders",
+    "refundsAndPayouts",
+    "products"
+];
+
+exports.getShopNotificationPreferences = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .select("shopNotificationPreferences")
+            .lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const preferences = user.shopNotificationPreferences || {};
+        return res.json({
+            success: true,
+            preferences: {
+                orders: preferences.orders !== false,
+                refundsAndPayouts: preferences.refundsAndPayouts !== false,
+                products: preferences.products !== false
+            }
+        });
+    } catch (error) {
+        console.error("GET SHOP NOTIFICATION PREFERENCES ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load Shop notification settings."
+        });
+    }
+};
+
+exports.updateShopNotificationPreferences = async (req, res) => {
+    const preferences = req.body?.preferences;
+
+    if (
+        !preferences ||
+        typeof preferences !== "object" ||
+        Array.isArray(preferences) ||
+        Object.keys(preferences).length === 0 ||
+        Object.keys(preferences).some(key =>
+            !SHOP_NOTIFICATION_PREFERENCES.includes(key) ||
+            typeof preferences[key] !== "boolean"
+        )
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Choose valid Shop notification preferences."
+        });
+    }
+
+    try {
+        const updates = Object.fromEntries(
+            Object.entries(preferences).map(([key, value]) => [
+                `shopNotificationPreferences.${key}`,
+                value
+            ])
+        );
+        const user = await User.findByIdAndUpdate(
+            req.user.id,
+            { $set: updates },
+            { new: true, runValidators: true }
+        ).select("shopNotificationPreferences").lean();
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const saved = user.shopNotificationPreferences || {};
+        return res.json({
+            success: true,
+            preferences: {
+                orders: saved.orders !== false,
+                refundsAndPayouts: saved.refundsAndPayouts !== false,
+                products: saved.products !== false
+            }
+        });
+    } catch (error) {
+        console.error("UPDATE SHOP NOTIFICATION PREFERENCES ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not save Shop notification settings."
+        });
+    }
+};
 
 exports.getShopNotificationUnreadCount = async (req, res) => {
     try {

@@ -1440,6 +1440,9 @@ const Messenger = ({ isActive = true }) => {
     const [showSettings, setShowSettings] =
         useState(false);
 
+    const [showNotifications, setShowNotifications] =
+        useState(false);
+
     /*
      * When settings.autoDownloadMedia is off, images show
      * a "Tap to load" placeholder first (saves data on a
@@ -8033,7 +8036,6 @@ const onCallMissed =
     ===================================================== */
 
     useEffect(() => {
-
         return () => {
 
             clearTimeout(
@@ -8045,6 +8047,15 @@ const onCallMissed =
         };
 
     }, [cleanupCall]);
+
+    const unreadConversationCount = Object.values(unreadUsers)
+        .reduce((total, count) => total + (Number(count) || 0), 0);
+
+    const unreadConversations = [...groups, ...users]
+        .filter(conversation =>
+            (unreadUsers[getId(conversation)] || 0) > 0 &&
+            !getChatPreference(conversation).archived
+        );
 
 
     /* =====================================================
@@ -8136,11 +8147,13 @@ const onCallMissed =
                         type="button"
                         className="messenger-settings-btn"
                         title="Messenger settings"
+                        aria-label="Messenger settings"
+                        aria-expanded={showSettings}
                         onClick={() =>
-                            setShowSettings(
-                                value =>
-                                    !value
-                            )
+                            {
+                                setShowNotifications(false);
+                                setShowSettings(value => !value);
+                            }
                         }
                     >
                         <FaCog />
@@ -8148,14 +8161,68 @@ const onCallMissed =
 
                     <button
                         type="button"
+                        className={`messenger-settings-btn messenger-notifications-btn${showNotifications ? " active" : ""}`}
+                        title={`${unreadConversationCount} unread Messenger notifications`}
+                        aria-label={`Messenger notifications${unreadConversationCount ? `, ${unreadConversationCount} unread` : ""}`}
+                        aria-expanded={showNotifications}
+                        onClick={() => {
+                            setShowSettings(false);
+                            setShowNotifications(value => !value);
+                        }}
+                    >
+                        <FaBell />
+                        {unreadConversationCount > 0 && (
+                            <span className="messenger-notification-badge">
+                                {unreadConversationCount > 99 ? "99+" : unreadConversationCount}
+                            </span>
+                        )}
+                    </button>
+
+                    <button
+                        type="button"
                         className="messenger-settings-btn"
                         title="Create a group"
+                        aria-label="Create a group"
                         onClick={() => setShowGroupCreator(true)}
                     >
                         <FaPlus />
                     </button>
 
                 </div>
+
+                {showNotifications && (
+                    <section className="messenger-notification-panel" aria-label="Unread Messenger conversations">
+                        <div className="messenger-notification-heading">
+                            <strong>Messenger notifications</strong>
+                            <button
+                                type="button"
+                                aria-label="Close Messenger notifications"
+                                onClick={() => setShowNotifications(false)}
+                            >
+                                <FaTimes />
+                            </button>
+                        </div>
+                        {unreadConversations.length ? unreadConversations.map(conversation => {
+                            const unread = unreadUsers[getId(conversation)] || 0;
+                            return (
+                                <button
+                                    type="button"
+                                    className="messenger-notification-conversation"
+                                    key={getId(conversation)}
+                                    onClick={() => {
+                                        setShowNotifications(false);
+                                        selectUser(conversation);
+                                    }}
+                                >
+                                    <span>{getUserName(conversation)}</span>
+                                    <b>{unread > 99 ? "99+" : unread}</b>
+                                </button>
+                            );
+                        }) : (
+                            <p className="messenger-notification-empty">No unread messages.</p>
+                        )}
+                    </section>
+                )}
 
                 <MessengerStories
                     active={isActive}
@@ -8881,32 +8948,22 @@ const onCallMissed =
 
                                 <button
                                     type="button"
-                                    disabled={notificationPermission === "unsupported"}
-                                    className={`chat-notifications-button ${
-                                        notificationPermission === "granted"
-                                            ? "notification-enabled"
-                                            : notificationPermission === "denied"
-                                                ? "notification-denied"
-                                                : ""
-                                    }`}
-                                    aria-label={
-                                        notificationPermission === "granted"
-                                            ? "Notifications are enabled"
-                                            : "Enable message and call notifications"
-                                    }
-                                    aria-pressed={notificationPermission === "granted"}
-                                    title={
-                                        notificationPermission === "unsupported"
-                                            ? "Notifications are not supported in this browser"
-                                            : notificationPermission === "granted"
-                                                ? "Notifications are enabled"
-                                                : notificationPermission === "denied"
-                                                    ? "Allow notifications in your browser settings"
-                                                    : "Enable message and call notifications"
-                                    }
-                                    onClick={enableNotifications}
+                                    className="chat-notifications-button"
+                                    aria-label={`Messenger notifications${unreadConversationCount ? `, ${unreadConversationCount} unread` : ""}`}
+                                    title="Unread Messenger notifications"
+                                    onClick={() => {
+                                        setShowSettings(false);
+                                        setShowNotifications(true);
+                                        setShowMenu(false);
+                                        setMobileChatOpen(false);
+                                    }}
                                 >
                                     <FaBell />
+                                    {unreadConversationCount > 0 && (
+                                        <span className="messenger-notification-badge">
+                                            {unreadConversationCount > 99 ? "99+" : unreadConversationCount}
+                                        </span>
+                                    )}
                                 </button>
 
 
@@ -8936,6 +8993,19 @@ const onCallMissed =
 
                             {showMenu && (
                                 <div className="chat-options-menu">
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowSettings(true);
+                                            setShowNotifications(false);
+                                            setMobileChatOpen(false);
+                                            setShowMenu(false);
+                                        }}
+                                    >
+                                        <FaCog />
+                                        Messenger settings
+                                    </button>
 
                                     <button
                                         type="button"
@@ -9074,7 +9144,9 @@ const onCallMissed =
                                         onClick={enableNotifications}
                                     >
                                         <FaBell />
-                                        Notifications
+                                        {notificationPermission === "granted"
+                                            ? "Browser notifications enabled"
+                                            : "Enable browser notifications"}
                                     </button>
 
 
