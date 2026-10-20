@@ -62,17 +62,16 @@ test.afterEach(() => {
     auth.invalidate(USER_ID);
 });
 
-test("registration creates a social account and requires email verification", async () => {
+test("registration creates a social account without requiring email verification", async () => {
     let created;
-    let sent;
+    emailService.isEmailConfigured = () => false;
     User.findOne = async () => null;
     User.create = async fields => {
         created = fields;
         return { ...fields, _id: USER_ID };
     };
-    emailService.sendVerificationEmail = async email => {
-        sent = email;
-        return { sent: true };
+    emailService.sendVerificationEmail = async () => {
+        assert.fail("Registration must not send or require a verification email.");
     };
 
     const response = makeResponse();
@@ -89,38 +88,14 @@ test("registration creates a social account and requires email verification", as
     );
 
     assert.equal(response.statusCode, 201);
-    assert.equal(response.body.verificationRequired, true);
+    assert.equal(response.body.verificationRequired, false);
     assert.equal(response.body.token, undefined);
     assert.equal(created.email, "user@example.com");
-    assert.equal(created.emailVerified, false);
+    assert.equal("emailVerified" in created, false);
     assert.equal(created.role, "customer");
-    assert.match(sent.code, /^\d{6}$/);
-    assert.notEqual(created.emailVerificationCodeHash, sent.code);
 });
 
-test("registration fails explicitly when email delivery is not configured", async () => {
-    emailService.isEmailConfigured = () => false;
-    User.create = async () => {
-        throw new Error("No account should be created.");
-    };
-
-    const response = makeResponse();
-    await authController.register(
-        {
-            body: {
-                name: "User",
-                email: "user@example.com",
-                password: "correct horse battery"
-            }
-        },
-        response
-    );
-
-    assert.equal(response.statusCode, 503);
-    assert.equal(response.body.code, "EMAIL_NOT_CONFIGURED");
-});
-
-test("login refuses a valid password until the mailbox is verified", async () => {
+test("login permits accounts that have not verified their email", async () => {
     User.findOne = () => queryResult({
         _id: USER_ID,
         email: "user@example.com",
@@ -128,6 +103,7 @@ test("login refuses a valid password until the mailbox is verified", async () =>
         emailVerified: false,
         isSuspended: false
     });
+    DeviceSession.findOneAndUpdate = async () => ({});
     const response = makeResponse();
     await authController.login(
         {
@@ -139,9 +115,8 @@ test("login refuses a valid password until the mailbox is verified", async () =>
         response
     );
 
-    assert.equal(response.statusCode, 403);
-    assert.equal(response.body.code, "EMAIL_VERIFICATION_REQUIRED");
-    assert.equal(response.body.token, undefined);
+    assert.equal(response.statusCode, 200);
+    assert.ok(response.body.token);
 });
 
 test("legacy accounts without verification state can still log in", async () => {
@@ -225,14 +200,14 @@ test("invalid email verification codes consume a bounded attempt", async () => {
     assert.equal(increments, 1);
 });
 
-test("legacy accounts without verification state retain protected access", async () => {
+test("accounts without email verification retain protected access", async () => {
     auth.invalidate(USER_ID);
     User.findById = () => ({
         select: () => ({
             lean: async () => ({
                 role: "customer",
                 isSuspended: false,
-                emailVerified: undefined
+                emailVerified: false
             })
         })
     });

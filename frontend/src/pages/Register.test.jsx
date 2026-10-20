@@ -1,6 +1,6 @@
 import React from "react";
 import { TextEncoder } from "util";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import api from "../services/api";
 import Register from "./Register";
 
@@ -13,7 +13,7 @@ jest.mock("../services/api", () => ({
     default: { post: jest.fn() }
 }));
 
-describe("Register email verification", () => {
+describe("Register", () => {
     beforeAll(() => {
         global.TextEncoder = TextEncoder;
     });
@@ -22,18 +22,15 @@ describe("Register email verification", () => {
         api.post.mockReset();
     });
 
-    test("verifies the emailed code on the registration page before showing success", async () => {
-        api.post
-            .mockResolvedValueOnce({
-                data: {
-                    success: true,
-                    verificationRequired: true,
-                    email: "user@example.com"
-                }
-            })
-            .mockResolvedValueOnce({
-                data: { success: true }
-            });
+    test("completes registration without requiring an email verification code", async () => {
+        api.post.mockResolvedValueOnce({
+            data: {
+                success: true,
+                verificationRequired: false,
+                message: "Registration successful. You can now sign in.",
+                email: "user@example.com"
+            }
+        });
 
         render(<Register />);
 
@@ -51,24 +48,16 @@ describe("Register email verification", () => {
         });
         fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
-        expect(await screen.findByLabelText("6-digit verification code")).toBeInTheDocument();
-        expect(api.post).toHaveBeenNthCalledWith(1, "/auth/register", {
+        expect(await screen.findByText("Registration successful. You can now sign in.")).toBeInTheDocument();
+        expect(api.post).toHaveBeenCalledTimes(1);
+        expect(api.post).toHaveBeenCalledWith("/auth/register", {
             name: "E Top User",
             email: "user@example.com",
             password: "correct horse battery"
         });
-
-        fireEvent.change(screen.getByLabelText("6-digit verification code"), {
-            target: { value: "123456" }
-        });
-        fireEvent.click(screen.getByRole("button", { name: /verify and finish registration/i }));
-
-        await waitFor(() => {
-            expect(api.post).toHaveBeenNthCalledWith(2, "/auth/verify-email", {
-                email: "user@example.com",
-                code: "123456"
-            });
-        });
-        expect(await screen.findByText("Registration successful. Your email is verified.")).toBeInTheDocument();
+        expect(screen.getByText(/continue to login/i).closest("a")).toHaveAttribute(
+            "to",
+            "/login"
+        );
     });
 });

@@ -243,15 +243,6 @@ exports.register = async (
 
         }
 
-        if (!emailService.isEmailConfigured()) {
-            return res.status(503).json({
-                success: false,
-                code: "EMAIL_NOT_CONFIGURED",
-                message: "Email verification is not configured. Please contact support."
-            });
-        }
-
-
         /*
         CHECK EXISTING USER
         */
@@ -294,8 +285,6 @@ exports.register = async (
         CREATE USER
         */
 
-        const verificationCode = createVerificationCode();
-        const now = new Date();
         const user =
             await User.create({
 
@@ -309,51 +298,17 @@ exports.register = async (
                     hashedPassword,
 
                 role:
-                    "customer",
-
-                emailVerified:
-                    false,
-
-                emailVerificationCodeHash:
-                    hashCode(verificationCode),
-
-                emailVerificationExpires:
-                    new Date(now.getTime() + CODE_TTL_MS),
-
-                emailVerificationAttempts:
-                    0,
-
-                emailVerificationLastSentAt:
-                    now
+                    "customer"
 
             });
-
-        const emailResult = await emailService.sendVerificationEmail({
-            to: normalizedEmail,
-            name: cleanName,
-            code: verificationCode
-        });
-        if (!emailResult.sent) {
-            await User.updateOne(
-                { _id: user._id },
-                { $unset: { emailVerificationLastSentAt: "" } }
-            );
-            return res.status(503).json({
-                success: false,
-                code: "VERIFICATION_EMAIL_UNAVAILABLE",
-                accountCreated: true,
-                email: normalizedEmail,
-                message: "Your account was created, but the verification email could not be sent. Please try sending the code again."
-            });
-        }
 
         return res.status(201).json({
 
             success: true,
 
             message:
-                "A verification code was sent to your email.",
-            verificationRequired: true,
+                "Registration successful. You can now sign in.",
+            verificationRequired: false,
             email: normalizedEmail
 
         });
@@ -717,15 +672,6 @@ exports.login = async (
             });
 
         }
-
-        if (user.emailVerified === false) {
-            return res.status(403).json({
-                success: false,
-                code: "EMAIL_VERIFICATION_REQUIRED",
-                message: "Verify your email address before signing in."
-            });
-        }
-
 
         /*
         AUTO-MIGRATE LEGACY PASSWORD

@@ -84,12 +84,6 @@ const Login = () => {
         setError
     ] = useState("");
 
-    const [
-        verificationRequired,
-        setVerificationRequired
-    ] = useState(false);
-
-
     /*
     =====================================================
     REDIRECT IF ALREADY LOGGED IN
@@ -181,8 +175,6 @@ const Login = () => {
             setError("");
 
         }
-        setVerificationRequired(false);
-
     };
 
 
@@ -232,9 +224,6 @@ const Login = () => {
 
             setLoading(true);
             setError("");
-            setVerificationRequired(false);
-
-
             try {
 
                 /*
@@ -385,18 +374,6 @@ const Login = () => {
 
                 const serverMessage =
                     err.response?.data?.message;
-
-                if (
-                    err.response?.data?.code ===
-                    "EMAIL_VERIFICATION_REQUIRED"
-                ) {
-                    setVerificationRequired(true);
-                    setError(
-                        serverMessage ||
-                        "Verify your email address before signing in."
-                    );
-                    return;
-                }
 
                 if (
                     serverMessage
@@ -624,19 +601,6 @@ const Login = () => {
                     </motion.div>
 
                 )}
-
-                {verificationRequired && (
-                    <div className="login-register" style={{ marginTop: -8, marginBottom: 16 }}>
-                        <Link
-                            to={`/verify-email?email=${encodeURIComponent(
-                                form.email.trim().toLowerCase()
-                            )}`}
-                        >
-                            Verify this email address
-                        </Link>
-                    </div>
-                )}
-
 
                 {/* FORM */}
 
