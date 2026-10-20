@@ -1,7 +1,5 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs/promises");
 const http = require("node:http");
-const path = require("node:path");
 const express = require("express");
 const test = require("node:test");
 const messageUpload = require("../middleware/messageUpload");
@@ -14,13 +12,12 @@ test("multipart audio requests preserve the receiver and uploaded voice file", a
             fileName: req.file?.originalname,
             fileType: req.file?.mimetype,
             fileSize: req.file?.size,
-            storedName: req.file?.filename
+            fileContents: req.file?.buffer?.toString()
         });
     });
 
     const server = http.createServer(app);
     await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-    let storedPath;
 
     try {
         const form = new FormData();
@@ -40,22 +37,16 @@ test("multipart audio requests preserve the receiver and uploaded voice file", a
             }
         );
         const result = await response.json();
-        storedPath = result.storedName
-            ? path.join(process.cwd(), "uploads", result.storedName)
-            : null;
 
         assert.equal(response.status, 200);
         assert.equal(result.receiver, "507f1f77bcf86cd799439011");
         assert.equal(result.fileName, "voice-note.webm");
         assert.equal(result.fileType, "audio/webm");
         assert.equal(result.fileSize, 13);
-        assert.ok(result.storedName);
+        assert.equal(result.fileContents, "voice-message");
     } finally {
         await new Promise((resolve, reject) =>
             server.close(error => error ? reject(error) : resolve())
         );
-        if (storedPath) {
-            await fs.unlink(storedPath);
-        }
     }
 });

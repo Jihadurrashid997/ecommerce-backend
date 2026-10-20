@@ -125,6 +125,16 @@ const VoiceMessagePlayer = ({ url, own }) => {
         }
     };
 
+    const retryLoad = () => {
+        const audio = audioRef.current;
+        if (!audio) {
+            return;
+        }
+
+        setError("");
+        audio.load();
+    };
+
     const progressPercent =
         duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -170,9 +180,12 @@ const VoiceMessagePlayer = ({ url, own }) => {
                 )}
             </span>
             {error && (
-                <span className="voice-playback-error" role="status">
-                    {error}
-                </span>
+                <div className="voice-playback-error">
+                    <span role="status">{error}</span>
+                    <button type="button" onClick={retryLoad}>
+                        Retry
+                    </button>
+                </div>
             )}
         </div>
     );

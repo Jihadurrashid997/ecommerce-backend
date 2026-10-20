@@ -1280,9 +1280,24 @@
 }
 
 .voice-playback-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     flex-basis: 100%;
     color: #b91c1c;
     font-size: 12px;
+}
+
+.voice-playback-error button {
+    flex: 0 0 auto;
+    padding: 3px 9px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font-size: 11px;
+    cursor: pointer;
 }
 
 .message-location-card {
@@ -3206,6 +3221,12 @@
 .message-actions-menu button:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+}
+
+.message-actions-menu button > :first-child {
+    flex: 0 0 16px;
+    width: 16px;
+    text-align: center;
 }
 
 .message-meta > .message-reply-btn[aria-haspopup="menu"] {

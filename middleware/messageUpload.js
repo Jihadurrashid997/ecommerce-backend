@@ -1,6 +1,4 @@
 const multer = require("multer");
-const path = require("path");
-
 /*
 =========================================================
 CHAT ATTACHMENT UPLOAD
@@ -12,25 +10,6 @@ attachments need to accept documents too, not just
 images.
 =========================================================
 */
-
-const storage = multer.diskStorage({
-
-    destination: (req, file, cb) => {
-
-        cb(null, "uploads/");
-
-    },
-
-    filename: (req, file, cb) => {
-
-        cb(
-            null,
-            `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`
-        );
-
-    }
-
-});
 
 const ALLOWED_MIME_TYPES = [
 
@@ -102,7 +81,7 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({
 
-    storage,
+    storage: multer.memoryStorage(),
 
     fileFilter,
 

@@ -12,6 +12,8 @@ beforeEach(() => {
         .mockResolvedValue(undefined);
     jest.spyOn(HTMLMediaElement.prototype, "pause")
         .mockImplementation(() => {});
+    jest.spyOn(HTMLMediaElement.prototype, "load")
+        .mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -95,6 +97,17 @@ test("shows a playback error when the browser rejects audio playback", async () 
 
     expect(await screen.findByRole("status"))
         .toHaveTextContent("Tap play again or check this device's audio settings.");
+});
+
+test("lets the user retry loading a voice message after a media error", () => {
+    render(<VoiceMessagePlayer url="/uploads/voice-note.webm" />);
+    const audio = screen.getByLabelText("Voice message");
+    fireEvent.error(audio);
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(HTMLMediaElement.prototype.load).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
 });
 
 test("resets playback state when a different voice message is loaded", async () => {
