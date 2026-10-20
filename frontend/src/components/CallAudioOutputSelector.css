@@ -1,0 +1,50 @@
+.call-audio-output-control,
+.call-audio-output-hint {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    min-height: 40px;
+    padding: 7px 11px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 12px;
+}
+
+.call-audio-output-control select {
+    max-width: min(180px, 40vw);
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 8px;
+    background: #fff;
+    color: #182230;
+    font: inherit;
+}
+
+.call-audio-output-label {
+    white-space: nowrap;
+}
+
+.call-audio-output-error {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    width: max-content;
+    max-width: min(320px, calc(100vw - 32px));
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #7f1d1d;
+    color: #fff;
+    transform: translateX(-50%);
+}
+
+.messenger-call-modal .call-audio-output-control,
+.messenger-call-modal .call-audio-output-hint {
+    position: absolute;
+    z-index: 4;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+}

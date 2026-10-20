@@ -13,6 +13,7 @@ import {
     FaMicrophone,
     FaMicrophoneSlash,
     FaPhoneSlash,
+    FaSyncAlt,
     FaVideo,
     FaVideoSlash
 } from "react-icons/fa";
@@ -23,6 +24,7 @@ import {
     unwrapGroupCallKey
 } from "../services/messengerEncryption";
 import { createLiveKitE2EEWorker } from "../services/livekitE2EEWorker";
+import CallAudioOutputSelector from "./CallAudioOutputSelector";
 import "../styles/GroupCallModal.css";
 
 const GroupCallModal = ({
@@ -47,6 +49,7 @@ const GroupCallModal = ({
     const [callEncrypted, setCallEncrypted] = useState(false);
     const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
     const [cameraEnabled, setCameraEnabled] = useState(type === "video");
+    const [cameraFacing, setCameraFacing] = useState("user");
 
     const groupId = String(group?._id || group?.id || "");
     const groupName = group?.name || "Group call";
@@ -305,6 +308,8 @@ const GroupCallModal = ({
                 const localTracks = await createLocalTracks({
                     audio: true,
                     video: type === "video"
+                        ? { facingMode: "user" }
+                        : false
                 });
 
                 if (cancelled) {
@@ -403,6 +408,76 @@ const GroupCallModal = ({
         }
     };
 
+    const switchCamera = async () => {
+        const publication = roomRef.current?.localParticipant
+            .getTrackPublication(Track.Source.Camera);
+        const cameraTrack = publication?.track;
+        if (typeof cameraTrack?.restartTrack !== "function") {
+            setError("This device cannot switch cameras during the call.");
+            return;
+        }
+
+        const nextFacing = cameraFacing === "user" ? "environment" : "user";
+        const currentDeviceId =
+            cameraTrack.mediaStreamTrack?.getSettings?.().deviceId;
+        try {
+            const cameras =
+                await navigator.mediaDevices?.enumerateDevices?.() || [];
+            const facingLabel =
+                nextFacing === "environment"
+                    ? /(back|rear|environment)/
+                    : /(front|user|facetime)/;
+            const targetCamera = cameras.find(device =>
+                device.kind === "videoinput" &&
+                device.deviceId !== currentDeviceId &&
+                facingLabel.test(device.label.toLowerCase())
+            );
+
+            await cameraTrack.restartTrack(
+                targetCamera
+                    ? { deviceId: { exact: targetCamera.deviceId } }
+                    : { facingMode: nextFacing }
+            );
+            const actualSettings =
+                cameraTrack.mediaStreamTrack?.getSettings?.();
+            if (
+                actualSettings?.facingMode &&
+                actualSettings.facingMode !== nextFacing
+            ) {
+                throw new Error("The device opened the wrong camera.");
+            }
+            if (
+                targetCamera &&
+                actualSettings?.deviceId &&
+                actualSettings.deviceId !== targetCamera.deviceId
+            ) {
+                throw new Error("The device opened the wrong camera.");
+            }
+            setCameraFacing(nextFacing);
+            setRevision(value => value + 1);
+            setError("");
+        } catch (switchError) {
+            console.error("Group call camera switch error:", switchError);
+            try {
+                await cameraTrack.restartTrack(
+                    currentDeviceId
+                        ? { deviceId: { exact: currentDeviceId } }
+                        : { facingMode: cameraFacing }
+                );
+                setCameraFacing(cameraFacing);
+                setRevision(value => value + 1);
+                setError(
+                    `${switchError?.message || "Could not switch cameras."} Previous camera restored.`
+                );
+            } catch (restoreError) {
+                console.error("Could not restore group call camera:", restoreError);
+                setError(
+                    "The camera could not be switched or restored. Please rejoin the call."
+                );
+            }
+        }
+    };
+
     return (
         <div className="group-call-backdrop" role="dialog" aria-modal="true" aria-label={groupName}>
             <section className="group-call-window">
@@ -448,6 +523,7 @@ const GroupCallModal = ({
                                 key={participant.identity}
                                 participant={participant}
                                 isLocal={participant === room?.localParticipant}
+                                cameraFacing={cameraFacing}
                                 revision={revision}
                             />
                         ))}
@@ -471,16 +547,31 @@ const GroupCallModal = ({
                         {microphoneEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
                     </button>
                     {type === "video" && (
-                        <button
-                            type="button"
-                            className={!cameraEnabled ? "is-off" : ""}
-                            onClick={toggleCamera}
-                            disabled={!room}
-                            aria-label={cameraEnabled ? "Turn camera off" : "Turn camera on"}
-                        >
-                            {cameraEnabled ? <FaVideo /> : <FaVideoSlash />}
-                        </button>
+                        <>
+                            <button
+                                type="button"
+                                className={!cameraEnabled ? "is-off" : ""}
+                                onClick={toggleCamera}
+                                disabled={!room}
+                                aria-label={cameraEnabled ? "Turn camera off" : "Turn camera on"}
+                            >
+                                {cameraEnabled ? <FaVideo /> : <FaVideoSlash />}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={switchCamera}
+                                disabled={!room || !cameraEnabled}
+                                aria-label="Switch camera"
+                                title="Switch camera"
+                            >
+                                <FaSyncAlt />
+                            </button>
+                        </>
                     )}
+                    <CallAudioOutputSelector
+                        active={Boolean(room)}
+                        room={room}
+                    />
                     <button
                         type="button"
                         className="group-call-hangup"
@@ -495,7 +586,12 @@ const GroupCallModal = ({
     );
 };
 
-const ParticipantTile = ({ participant, isLocal, revision }) => {
+const ParticipantTile = ({
+    participant,
+    isLocal,
+    cameraFacing = "user",
+    revision
+}) => {
     const mediaRef = useRef(null);
     const cameraPublication =
         participant.getTrackPublication(Track.Source.Camera);
@@ -525,6 +621,10 @@ const ParticipantTile = ({ participant, isLocal, revision }) => {
                 element.autoplay = true;
                 element.playsInline = true;
                 element.muted = isLocal;
+                element.style.transform =
+                    isLocal && cameraFacing === "user"
+                        ? "scaleX(-1)"
+                        : "none";
             } else {
                 element.className = "group-call-audio";
                 element.autoplay = true;
@@ -538,7 +638,7 @@ const ParticipantTile = ({ participant, isLocal, revision }) => {
                 publication.track?.detach().forEach(element => element.remove());
             });
         };
-    }, [participant, isLocal, revision]);
+    }, [participant, isLocal, cameraFacing, revision]);
 
     return (
         <article className="group-call-tile">

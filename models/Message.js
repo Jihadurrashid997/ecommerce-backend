@@ -147,6 +147,12 @@ const MessageSchema =
                 default: false
             },
 
+            clientMessageId: {
+                type: String,
+                maxlength: 80,
+                default: undefined
+            },
+
 
             fileUrl: {
 
@@ -340,6 +346,16 @@ MessageSchema.index({
     groupId: 1,
     createdAt: 1
 });
+
+MessageSchema.index(
+    { sender: 1, clientMessageId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            clientMessageId: { $type: "string" }
+        }
+    }
+);
 
 module.exports =
     mongoose.model(

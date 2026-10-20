@@ -9,6 +9,8 @@ const jwt =
 
 const crypto =
     require("crypto");
+const DeviceSession =
+    require("../models/DeviceSession");
 
 const {
     sendPasswordResetEmail,
@@ -22,7 +24,7 @@ HELPERS
 =========================================================
 */
 
-const createToken = (user) => {
+const createToken = (user, sessionId, deviceId) => {
 
     if (!process.env.JWT_SECRET) {
 
@@ -36,7 +38,9 @@ const createToken = (user) => {
 
         {
             id: user._id.toString(),
-            role: user.role || "customer"
+            role: user.role || "customer",
+            sid: sessionId,
+            deviceId
         },
 
         process.env.JWT_SECRET,
@@ -47,6 +51,36 @@ const createToken = (user) => {
 
     );
 
+};
+
+const createDeviceToken = async (user, req) => {
+    const requestedDeviceId = String(req.body?.deviceId || "");
+    const deviceId = /^[a-f\d-]{16,80}$/i.test(requestedDeviceId)
+        ? requestedDeviceId
+        : crypto.randomUUID();
+    const requestedName = String(req.body?.deviceName || "").trim();
+    const name = requestedName
+        .replace(/[<>]/g, "")
+        .slice(0, 100) || "Browser device";
+    const sessionId = crypto.randomUUID();
+
+    await DeviceSession.findOneAndUpdate(
+        { user: user._id, deviceId },
+        {
+            $set: {
+                sessionId,
+                name,
+                lastActiveAt: new Date()
+            },
+            $setOnInsert: { user: user._id }
+        },
+        { upsert: true, new: true, runValidators: true }
+    );
+
+    return {
+        token: createToken(user, sessionId, deviceId),
+        deviceId
+    };
 };
 
 
@@ -240,8 +274,8 @@ exports.register = async (
         CREATE TOKEN
         */
 
-        const token =
-            createToken(user);
+        const { token, deviceId } =
+            await createDeviceToken(user, req);
 
 
         return res.status(201).json({
@@ -252,6 +286,7 @@ exports.register = async (
                 "Registration successful",
 
             token,
+            deviceId,
 
             user:
                 safeUser(user)
@@ -491,8 +526,8 @@ exports.login = async (
         CREATE JWT
         */
 
-        const token =
-            createToken(user);
+        const { token, deviceId } =
+            await createDeviceToken(user, req);
 
 
         /*
@@ -507,6 +542,7 @@ exports.login = async (
                 "Login successful",
 
             token,
+            deviceId,
 
             user:
                 safeUser(user)

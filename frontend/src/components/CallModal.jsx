@@ -15,6 +15,7 @@ import {
     FiVolume2,
     FiRefreshCw
 } from "react-icons/fi";
+import CallAudioOutputSelector from "./CallAudioOutputSelector";
 
 
 const CallModal = ({
@@ -27,6 +28,7 @@ const CallModal = ({
     localStream = null,
     remoteStream = null,
     callDuration = 0,
+    cameraFacing = "user",
     onAccept,
     onReject,
     onEnd,
@@ -748,7 +750,11 @@ const CallModal = ({
                             borderRadius: 16,
                             background: "#000",
                             border:
-                                "2px solid rgba(255,255,255,.35)"
+                                "2px solid rgba(255,255,255,.35)",
+                            transform:
+                                cameraFacing === "user"
+                                    ? "scaleX(-1)"
+                                    : "none"
                         }}
                     />
 
@@ -1059,6 +1065,11 @@ const CallModal = ({
                     )}
 
                 </div>
+
+                <CallAudioOutputSelector
+                    active={isActiveCall}
+                    audioElementRef={remoteAudioRef}
+                />
 
             </div>
 
