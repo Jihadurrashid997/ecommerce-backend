@@ -81,10 +81,13 @@ const Register = () => {
         }
 
 
-        if (form.password.length < 8) {
+        if (
+            form.password.length < 8 ||
+            new TextEncoder().encode(form.password).length > 72
+        ) {
 
             alert(
-                "Password must be at least 8 characters."
+                "Password must be 8 to 72 bytes long."
             );
 
             return;
@@ -127,26 +130,12 @@ const Register = () => {
                 );
 
 
-            alert(
-                response.data?.message ||
-                "Registration successful!"
+            navigate(
+                `/verify-email?email=${encodeURIComponent(
+                    response.data?.email || form.email.trim().toLowerCase()
+                )}`,
+                { replace: true }
             );
-
-
-            // Reset form
-
-            setForm({
-                name: "",
-                email: "",
-                password: "",
-                confirmPassword: ""
-            });
-
-
-            // Go to login
-
-            navigate("/login");
-
 
         } catch (error) {
 
@@ -156,11 +145,25 @@ const Register = () => {
             );
 
 
-            alert(
-                error.response?.data?.message ||
-                "Registration failed. Please try again."
-            );
-
+            if (error.response?.data?.accountCreated) {
+                navigate(
+                    `/verify-email?email=${encodeURIComponent(
+                        error.response.data.email || form.email.trim().toLowerCase()
+                    )}`,
+                    {
+                        replace: true,
+                        state: {
+                            notice: error.response.data.message,
+                            noticeIsError: true
+                        }
+                    }
+                );
+            } else {
+                alert(
+                    error.response?.data?.message ||
+                    "Registration failed. Please try again."
+                );
+            }
 
         } finally {
 
@@ -270,8 +273,7 @@ const Register = () => {
                     </h2>
 
                     <p>
-                        Join E Top and start your
-                        shopping journey.
+                        One account for E Top social and Shop.
                     </p>
 
                 </div>
@@ -360,7 +362,7 @@ const Register = () => {
                                         : "password"
                                 }
                                 name="password"
-                                placeholder="Minimum 8 characters"
+                                placeholder="8 to 72 bytes"
                                 value={form.password}
                                 onChange={handleChange}
                                 autoComplete="new-password"

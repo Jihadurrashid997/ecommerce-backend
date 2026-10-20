@@ -102,6 +102,38 @@ const userSchema = new mongoose.Schema(
             index: true
         },
 
+        emailVerified: {
+            type: Boolean,
+            default: undefined,
+            index: true
+        },
+
+        emailVerifiedAt: {
+            type: Date,
+            default: null
+        },
+
+        emailVerificationCodeHash: {
+            type: String,
+            select: false
+        },
+
+        emailVerificationExpires: {
+            type: Date,
+            select: false
+        },
+
+        emailVerificationAttempts: {
+            type: Number,
+            default: 0,
+            select: false
+        },
+
+        emailVerificationLastSentAt: {
+            type: Date,
+            select: false
+        },
+
         verifiedAt: {
             type: Date,
             default: null
@@ -132,6 +164,27 @@ const userSchema = new mongoose.Schema(
         },
 
         resetPasswordExpires: {
+            type: Date,
+            select: false
+        },
+
+        resetPasswordAttempts: {
+            type: Number,
+            default: 0,
+            select: false
+        },
+
+        resetPasswordLastSentAt: {
+            type: Date,
+            select: false
+        },
+
+        resetSessionTokenHash: {
+            type: String,
+            select: false
+        },
+
+        resetSessionExpires: {
             type: Date,
             select: false
         },

@@ -7,6 +7,8 @@ const router =
 
 const {
     register,
+    verifyEmail,
+    resendVerification,
     login,
     me,
     forgotPassword,
@@ -43,6 +45,9 @@ router.post(
     "/register",
     register
 );
+
+router.post("/verify-email", verifyEmail);
+router.post("/resend-verification", resendVerification);
 
 
 /*

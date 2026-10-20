@@ -45,6 +45,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import Reels from "./pages/Reels";
 import Shop from "./pages/Shop";
 import AdminControl from "./pages/AdminControl";
@@ -178,7 +179,8 @@ function AppLayout() {
 
     const authPage =
         location.pathname === "/login" ||
-        location.pathname === "/register";
+        location.pathname === "/register" ||
+        location.pathname === "/verify-email";
     const messengerPage =
         location.pathname === "/messenger";
 
@@ -250,6 +252,11 @@ function AppLayout() {
                     element={
                         <Register />
                     }
+                />
+
+                <Route
+                    path="/verify-email"
+                    element={<VerifyEmail />}
                 />
 
 
