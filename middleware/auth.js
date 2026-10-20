@@ -45,6 +45,7 @@ const getAccountState = async id => {
                 role: found.role,
                 isSuspended: Boolean(found.isSuspended),
                 emailVerified: found.emailVerified === true,
+                emailVerificationRequired: found.emailVerified === false,
                 reason: found.suspendedReason || ""
             }
             : { exists: false };
@@ -159,7 +160,7 @@ const auth = (roles = []) => {
 
             }
 
-            if (!state.emailVerified) {
+            if (state.emailVerificationRequired) {
                 return res.status(403).json({
                     success: false,
                     code: "EMAIL_VERIFICATION_REQUIRED",

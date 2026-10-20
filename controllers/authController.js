@@ -718,7 +718,7 @@ exports.login = async (
 
         }
 
-        if (user.emailVerified !== true) {
+        if (user.emailVerified === false) {
             return res.status(403).json({
                 success: false,
                 code: "EMAIL_VERIFICATION_REQUIRED",
