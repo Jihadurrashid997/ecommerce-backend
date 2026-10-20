@@ -28,6 +28,12 @@
 
 .top-tab {
     flex: 1 0 auto;
+    min-width: 82px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     text-align: center;
     padding: 10px 16px;
     border-radius: 12px;
@@ -38,6 +44,18 @@
     background: rgba(0, 0, 0, 0.88);
     text-decoration: none;
     transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.top-tab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.top-tab-label {
+    line-height: 1.2;
 }
 
 .top-tab:active { transform: scale(0.96); }
@@ -438,7 +456,8 @@
 
 @media (max-width: 640px) {
     .top-tabs { top: 64px; }
-    .top-tab { padding: 9px 12px; font-size: 12px; }
+    .top-tab { min-width: 78px; padding: 9px 12px; font-size: 12px; }
+    .top-tab-icon { font-size: 17px; }
 }
 
 /* ---------- profile social ---------- */
