@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 
 import {
@@ -13,15 +13,21 @@ import {
 } from "react-icons/fa";
 
 import api from "../services/api";
+import { googleAuthUser } from "../services/auth";
+import GoogleAuthButton from "../components/GoogleAuthButton";
+import { useApp } from "../context/AppContext";
 
 import EtopLogo from "../components/EtopLogo";
 
 import "../styles/EtopLogo.css";
 
 import "../styles/Register.css";
+import "../styles/GoogleAuthButton.css";
 
 
 const Register = () => {
+    const navigate = useNavigate();
+    const { setUser } = useApp();
     const [form, setForm] = useState({
         name: "",
         email: "",
@@ -38,10 +44,13 @@ const Register = () => {
 
     const [loading, setLoading] =
         useState(false);
+    const [googleLoading, setGoogleLoading] =
+        useState(false);
 
     const [registrationComplete, setRegistrationComplete] = useState(false);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const authBusy = loading || googleLoading;
 
     // ==========================
     // HANDLE CHANGE
@@ -66,6 +75,9 @@ const Register = () => {
         setError("");
         setNotice("");
 
+        if (authBusy) {
+            return;
+        }
 
         if (
             !form.name.trim() ||
@@ -160,6 +172,29 @@ const Register = () => {
 
         }
 
+    };
+
+    const handleGoogleCredential = async credential => {
+        if (authBusy) {
+            return;
+        }
+
+        setError("");
+        setNotice("");
+        setGoogleLoading(true);
+        try {
+            const response = await googleAuthUser(credential);
+            setUser(response.data.user);
+            navigate("/", { replace: true });
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                err.message ||
+                "Google registration failed. Please try again."
+            );
+        } finally {
+            setGoogleLoading(false);
+        }
     };
 
 
@@ -280,6 +315,22 @@ const Register = () => {
                 {notice && <div className="register-message register-message-success" role="status">{notice}</div>}
 
                 {!registrationComplete && (
+                    <>
+                        <GoogleAuthButton
+                            onCredential={handleGoogleCredential}
+                            disabled={authBusy}
+                            text="signup_with"
+                        />
+                        {googleLoading && (
+                            <div className="register-message" role="status">
+                                Creating your account with Google...
+                            </div>
+                        )}
+                        <div className="auth-divider"><span>OR SIGN UP WITH EMAIL</span></div>
+                    </>
+                )}
+
+                {!registrationComplete && (
                     <form
                         className="register-form"
                         onSubmit={handleSubmit}
@@ -305,7 +356,7 @@ const Register = () => {
                                 value={form.name}
                                 onChange={handleChange}
                                 autoComplete="name"
-                                disabled={loading}
+                                disabled={authBusy}
                             />
 
                         </div>
@@ -333,7 +384,7 @@ const Register = () => {
                                 value={form.email}
                                 onChange={handleChange}
                                 autoComplete="email"
-                                disabled={loading}
+                                disabled={authBusy}
                             />
 
                         </div>
@@ -365,7 +416,7 @@ const Register = () => {
                                 value={form.password}
                                 onChange={handleChange}
                                 autoComplete="new-password"
-                                disabled={loading}
+                                disabled={authBusy}
                             />
 
                             <button
@@ -419,7 +470,7 @@ const Register = () => {
                                     handleChange
                                 }
                                 autoComplete="new-password"
-                                disabled={loading}
+                                disabled={authBusy}
                             />
 
                             <button
@@ -492,10 +543,10 @@ const Register = () => {
 
                         className="register-submit"
 
-                        disabled={loading}
+                        disabled={authBusy}
 
                         whileHover={
-                            !loading
+                            !authBusy
                                 ? {
                                     y: -3,
                                     scale: 1.01
@@ -504,7 +555,7 @@ const Register = () => {
                         }
 
                         whileTap={
-                            !loading
+                            !authBusy
                                 ? {
                                     scale: 0.97
                                 }
@@ -513,7 +564,7 @@ const Register = () => {
 
                     >
 
-                        {loading ? (
+                        {authBusy ? (
 
                             <>
 
