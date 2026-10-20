@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
 import {
@@ -9,7 +9,9 @@ import {
     FaEye,
     FaEyeSlash,
     FaUserPlus,
-    FaArrowRight
+    FaArrowRight,
+    FaKey,
+    FaCheckCircle
 } from "react-icons/fa";
 
 import api from "../services/api";
@@ -22,10 +24,6 @@ import "../styles/Register.css";
 
 
 const Register = () => {
-
-    const navigate = useNavigate();
-
-
     const [form, setForm] = useState({
         name: "",
         email: "",
@@ -43,6 +41,10 @@ const Register = () => {
     const [loading, setLoading] =
         useState(false);
 
+    const [phase, setPhase] = useState("form");
+    const [verificationCode, setVerificationCode] = useState("");
+    const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
 
     // ==========================
     // HANDLE CHANGE
@@ -57,6 +59,59 @@ const Register = () => {
 
     };
 
+    const handleVerifyEmail = async event => {
+        event.preventDefault();
+        setError("");
+
+        if (!/^\d{6}$/.test(verificationCode)) {
+            setError("Enter the 6-digit code sent to your email.");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            await api.post("/auth/verify-email", {
+                email: form.email.trim(),
+                code: verificationCode
+            });
+            setPhase("success");
+            setNotice("Registration successful. Your email is verified.");
+            setForm(previous => ({
+                ...previous,
+                password: "",
+                confirmPassword: ""
+            }));
+        } catch (verifyError) {
+            setError(
+                verifyError.response?.data?.message ||
+                "The code could not be verified. Check it and try again."
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResendCode = async () => {
+        setError("");
+        setNotice("");
+        setLoading(true);
+        try {
+            const response = await api.post("/auth/resend-verification", {
+                email: form.email.trim()
+            });
+            setNotice(
+                response.data?.message ||
+                "If the account needs verification, a new code will be sent."
+            );
+        } catch (resendError) {
+            setError(
+                resendError.response?.data?.message ||
+                "A new code could not be sent. Please try again later."
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // ==========================
     // REGISTER
@@ -65,6 +120,8 @@ const Register = () => {
     const handleSubmit = async (e) => {
 
         e.preventDefault();
+        setError("");
+        setNotice("");
 
 
         if (
@@ -74,7 +131,7 @@ const Register = () => {
             !form.confirmPassword
         ) {
 
-            alert("Please fill all fields.");
+            setError("Please fill all fields.");
 
             return;
 
@@ -86,7 +143,7 @@ const Register = () => {
             new TextEncoder().encode(form.password).length > 72
         ) {
 
-            alert(
+            setError(
                 "Password must be 8 to 72 bytes long."
             );
 
@@ -100,7 +157,7 @@ const Register = () => {
             form.confirmPassword
         ) {
 
-            alert(
+            setError(
                 "Passwords do not match."
             );
 
@@ -130,12 +187,12 @@ const Register = () => {
                 );
 
 
-            navigate(
-                `/verify-email?email=${encodeURIComponent(
-                    response.data?.email || form.email.trim().toLowerCase()
-                )}`,
-                { replace: true }
-            );
+            setForm(previous => ({
+                ...previous,
+                email: response.data?.email || previous.email.trim().toLowerCase()
+            }));
+            setPhase("verification");
+            setNotice("We sent a 6-digit code to your email. Enter it below to finish registration.");
 
         } catch (error) {
 
@@ -146,20 +203,14 @@ const Register = () => {
 
 
             if (error.response?.data?.accountCreated) {
-                navigate(
-                    `/verify-email?email=${encodeURIComponent(
-                        error.response.data.email || form.email.trim().toLowerCase()
-                    )}`,
-                    {
-                        replace: true,
-                        state: {
-                            notice: error.response.data.message,
-                            noticeIsError: true
-                        }
-                    }
-                );
+                setForm(previous => ({
+                    ...previous,
+                    email: error.response.data.email || previous.email.trim().toLowerCase()
+                }));
+                setPhase("verification");
+                setError(error.response.data.message);
             } else {
-                alert(
+                setError(
                     error.response?.data?.message ||
                     "Registration failed. Please try again."
                 );
@@ -269,11 +320,19 @@ const Register = () => {
                 <div className="register-heading">
 
                     <h2>
-                        Create Your Account
+                        {phase === "success"
+                            ? "Registration complete"
+                            : phase === "verification"
+                                ? "Verify your email"
+                                : "Create Your Account"}
                     </h2>
 
                     <p>
-                        One account for E Top social and Shop.
+                        {phase === "success"
+                            ? "Your E Top account is ready. You can now sign in."
+                            : phase === "verification"
+                                ? `Enter the 6-digit code sent to ${form.email}.`
+                                : "One account for E Top social and Shop."}
                     </p>
 
                 </div>
@@ -283,17 +342,20 @@ const Register = () => {
                     FORM
                 =========================== */}
 
-                <form
-                    className="register-form"
-                    onSubmit={handleSubmit}
-                >
+                {error && <div className="register-message register-message-error" role="alert">{error}</div>}
+                {notice && <div className="register-message register-message-success" role="status">{notice}</div>}
 
+                {phase === "form" && (
+                    <form
+                        className="register-form"
+                        onSubmit={handleSubmit}
+                    >
 
                     {/* NAME */}
 
                     <div className="register-field">
 
-                        <label>
+                        <label htmlFor="register-name">
                             Full Name
                         </label>
 
@@ -302,6 +364,7 @@ const Register = () => {
                             <FaUser />
 
                             <input
+                                id="register-name"
                                 type="text"
                                 name="name"
                                 placeholder="Enter your full name"
@@ -320,7 +383,7 @@ const Register = () => {
 
                     <div className="register-field">
 
-                        <label>
+                        <label htmlFor="register-email">
                             Email Address
                         </label>
 
@@ -329,6 +392,7 @@ const Register = () => {
                             <FaEnvelope />
 
                             <input
+                                id="register-email"
                                 type="email"
                                 name="email"
                                 placeholder="Enter your email"
@@ -347,7 +411,7 @@ const Register = () => {
 
                     <div className="register-field">
 
-                        <label>
+                        <label htmlFor="register-password">
                             Password
                         </label>
 
@@ -356,6 +420,7 @@ const Register = () => {
                             <FaLock />
 
                             <input
+                                id="register-password"
                                 type={
                                     showPassword
                                         ? "text"
@@ -396,7 +461,7 @@ const Register = () => {
 
                     <div className="register-field">
 
-                        <label>
+                        <label htmlFor="register-confirm-password">
                             Confirm Password
                         </label>
 
@@ -405,6 +470,7 @@ const Register = () => {
                             <FaLock />
 
                             <input
+                                id="register-confirm-password"
                                 type={
                                     showConfirmPassword
                                         ? "text"
@@ -540,14 +606,65 @@ const Register = () => {
                     </motion.button>
 
 
-                </form>
+                    </form>
+                )}
+
+                {phase === "verification" && (
+                    <form className="register-form" onSubmit={handleVerifyEmail}>
+                        <div className="register-field">
+                            <label htmlFor="register-verification-code">6-digit verification code</label>
+                            <div className="register-input">
+                                <FaKey />
+                                <input
+                                    id="register-verification-code"
+                                    type="text"
+                                    inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    maxLength={6}
+                                    placeholder="123456"
+                                    value={verificationCode}
+                                    onChange={event =>
+                                        setVerificationCode(
+                                            event.target.value.replace(/\D/g, "").slice(0, 6)
+                                        )
+                                    }
+                                    disabled={loading}
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <motion.button
+                            type="submit"
+                            className="register-submit"
+                            disabled={loading}
+                            whileTap={{ scale: 0.97 }}
+                        >
+                            {loading ? "Verifying..." : <>Verify and finish registration <FaArrowRight /></>}
+                        </motion.button>
+                        <button
+                            type="button"
+                            className="register-resend"
+                            onClick={handleResendCode}
+                            disabled={loading}
+                        >
+                            Resend code
+                        </button>
+                    </form>
+                )}
+
+                {phase === "success" && (
+                    <div className="register-complete" role="status">
+                        <FaCheckCircle aria-hidden="true" />
+                        <Link to="/login">Continue to login <FaArrowRight /></Link>
+                    </div>
+                )}
 
 
                 {/* ==========================
                     LOGIN
                 =========================== */}
 
-                <div className="register-login">
+                {phase !== "success" && <div className="register-login">
 
                     <span>
                         Already have an account?
@@ -559,7 +676,7 @@ const Register = () => {
 
                     </Link>
 
-                </div>
+                </div>}
 
 
                 {/* ==========================
