@@ -13,7 +13,7 @@
     display: inline-flex;
     flex: 0 1 auto;
     align-items: center;
-    overflow: hidden;
+    overflow: visible;
     width: min(var(--etop-logo-width), 100%);
     max-width: 100%;
     line-height: 0;
@@ -42,7 +42,9 @@
     width: 100%;
     height: auto;
     object-fit: contain;
-    filter: drop-shadow(0 0 10px rgba(21, 162, 255, 0.26));
+    filter:
+        drop-shadow(0 0 10px rgba(21, 162, 255, 0.35))
+        drop-shadow(0 0 22px rgba(40, 150, 255, 0.14));
     animation: etop-logo-glow 3.8s ease-in-out infinite;
 }
 
@@ -77,32 +79,18 @@
     flex-direction: column;
     flex: 0 0 auto;
     align-items: center;
-    gap: 3px;
-    line-height: 1.1;
+    width: min(170px, 100%);
+    line-height: 0;
     text-align: center;
 }
 
-.etop-logo-company {
-    color: #dbeafe;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 1.8px;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.etop-logo-company b {
-    color: #ffffff;
-    font-weight: 800;
-}
-
-.etop-logo-company-sub {
-    color: rgba(219, 234, 254, 0.62);
-    font-size: 9px;
-    font-weight: 600;
-    letter-spacing: 2.4px;
-    text-transform: uppercase;
-    white-space: nowrap;
+.etop-logo-company-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 0 9px rgba(21, 162, 255, 0.32));
+    animation: etop-logo-glow 3.8s ease-in-out infinite;
 }
 
 @keyframes etop-logo-halo {
@@ -131,7 +119,8 @@
 
 @media (prefers-reduced-motion: reduce) {
     .etop-logo-mark::before,
-    .etop-logo-image {
+    .etop-logo-image,
+    .etop-logo-company-image {
         animation: none;
     }
 }
