@@ -59,10 +59,13 @@ const ResetPassword = () => {
 
             setError("");
 
-            if (password.length < 8) {
+            if (
+                password.length < 8 ||
+                new TextEncoder().encode(password).length > 72
+            ) {
 
                 setError(
-                    "Password must be at least 8 characters."
+                    "Password must be 8 to 72 bytes long."
                 );
 
                 return;
@@ -84,8 +87,8 @@ const ResetPassword = () => {
                 setLoading(true);
 
                 await api.post(
-                    `/auth/reset-password/${token}`,
-                    { password }
+                    "/auth/reset-password",
+                    { resetToken: token, password }
                 );
 
                 setSuccess(true);

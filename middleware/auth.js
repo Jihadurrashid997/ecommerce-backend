@@ -35,7 +35,7 @@ const getAccountState = async id => {
 
     const found =
         await User.findById(key)
-            .select("role isSuspended suspendedReason")
+            .select("role isSuspended suspendedReason emailVerified")
             .lean();
 
     const state =
@@ -44,6 +44,7 @@ const getAccountState = async id => {
                 exists: true,
                 role: found.role,
                 isSuspended: Boolean(found.isSuspended),
+                emailVerified: found.emailVerified === true,
                 reason: found.suspendedReason || ""
             }
             : { exists: false };
@@ -158,14 +159,22 @@ const auth = (roles = []) => {
 
             }
 
+            if (!state.emailVerified) {
+                return res.status(403).json({
+                    success: false,
+                    code: "EMAIL_VERIFICATION_REQUIRED",
+                    message: "Verify your email address to continue."
+                });
+            }
+
             req.user.role = state.role;
 
         } catch (err) {
-
-            // Database hiccup: fall back to the token's own
-            // data instead of locking everybody out.
-            console.error("Auth account lookup failed:", err.message);
-
+            console.error("Auth account lookup failed:", err);
+            return res.status(503).json({
+                success: false,
+                message: "Could not verify account status. Please try again shortly."
+            });
         }
 
         // ==========================
