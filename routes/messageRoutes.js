@@ -23,6 +23,7 @@ const {
     reactToMessage,
     editMessage,
     deleteMessage,
+    migrateMessageAttachment,
     createCallLog
 } = require("../controllers/messageController");
 
@@ -207,6 +208,12 @@ router.post(
     "/call-log",
     auth(),
     createCallLog
+);
+
+router.post(
+    "/:id/migrate-attachment",
+    auth(),
+    migrateMessageAttachment
 );
 
 /* =========================================================

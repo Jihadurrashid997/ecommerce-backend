@@ -881,12 +881,17 @@
     display: flex;
     justify-content: flex-end;
     align-items: center;
+    flex-wrap: nowrap;
+    width: max-content;
+    max-width: 100%;
     gap: 5px;
     margin-top: 3px;
+    margin-left: auto;
 }
 
 
 .message-meta small {
+    flex: 0 0 auto;
     font-size: 10px;
     opacity: 0.68;
 }
@@ -2740,6 +2745,8 @@
 
 .reaction-picker {
     position: absolute;
+    right: 0;
+    left: auto;
     bottom: 100%;
     margin-bottom: 6px;
     display: flex;
@@ -3231,10 +3238,12 @@
 
 .message-meta > .message-reply-btn[aria-haspopup="menu"] {
     display: inline-flex;
+    flex: 0 0 24px;
     align-items: center;
     justify-content: center;
     min-width: 24px;
     min-height: 24px;
+    padding: 0;
 }
 
 .message-bubble p {

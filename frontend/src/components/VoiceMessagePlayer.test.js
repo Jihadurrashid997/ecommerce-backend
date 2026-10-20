@@ -26,6 +26,15 @@ test("formats voice message durations", () => {
     expect(formatDuration(-2)).toBe("0:00");
 });
 
+test("does not preload voice clips while rendering message history", () => {
+    render(<VoiceMessagePlayer url="/uploads/voice-note.webm" />);
+
+    expect(screen.getByLabelText("Voice message")).toHaveAttribute(
+        "preload",
+        "none"
+    );
+});
+
 test("plays, pauses, tracks playback progress, and resets when audio ends", async () => {
     render(<VoiceMessagePlayer url="/uploads/voice-note.webm" />);
     const audio = screen.getByLabelText("Voice message");
@@ -108,6 +117,30 @@ test("lets the user retry loading a voice message after a media error", () => {
 
     expect(HTMLMediaElement.prototype.load).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+
+test("restores a legacy voice upload and switches to its durable URL", async () => {
+    const onRecover = jest.fn().mockResolvedValue(
+        "https://media.example/restored.webm"
+    );
+    render(
+        <VoiceMessagePlayer
+            url="https://api.example/uploads/old-voice.webm"
+            canRecoverLegacy
+            onRecover={onRecover}
+        />
+    );
+    const audio = screen.getByLabelText("Voice message");
+    fireEvent.error(audio);
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => {
+        expect(onRecover).toHaveBeenCalledTimes(1);
+        expect(audio).toHaveAttribute(
+            "src",
+            "https://media.example/restored.webm"
+        );
+    });
 });
 
 test("resets playback state when a different voice message is loaded", async () => {
