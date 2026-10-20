@@ -84,7 +84,6 @@ const userSchema = new mongoose.Schema(
             refundsAndPayouts: { type: Boolean, default: true },
             products: { type: Boolean, default: true }
         },
-
         location: {
             type: String,
             default: "",
