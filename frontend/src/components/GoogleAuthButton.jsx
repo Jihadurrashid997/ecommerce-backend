@@ -71,7 +71,10 @@ const GoogleAuthButton = ({
                     size: "large",
                     text,
                     shape: "rectangular",
-                    width: 300
+                    width: Math.min(
+                        300,
+                        Math.floor(buttonContainer.clientWidth || 300)
+                    )
                 });
             })
             .catch(() => {
