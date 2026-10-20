@@ -214,6 +214,20 @@
         inset 0 1px 0
         rgba(255,255,255,0.08);
 
+    transform-style: preserve-3d;
+    transition:
+        transform 0.45s cubic-bezier(.22, 1, .36, 1),
+        box-shadow 0.45s ease;
+
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .jr-login-box:hover {
+        transform: perspective(1400px) rotateX(1deg) rotateY(-1deg) translateY(-3px);
+        box-shadow:
+            0 42px 100px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
 }
 
 

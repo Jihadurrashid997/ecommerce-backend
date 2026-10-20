@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import {
     BrowserRouter,
@@ -206,6 +207,8 @@ function AppLayout() {
 
     const location =
         useLocation();
+    const prefersReducedMotion =
+        useReducedMotion();
     const { user } = useApp();
     const shopSection =
         location.pathname === "/shop" ||
@@ -250,7 +253,30 @@ function AppLayout() {
             ROUTES
         ================================================== */}
 
-        <Routes>
+        <AnimatePresence mode="wait">
+        <motion.div
+            key={location.pathname}
+            className="route-3d-stage"
+            initial={prefersReducedMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: 18, rotateX: 3, rotateY: -1, scale: 0.99 }
+            }
+            animate={{ opacity: 1, y: 0, rotateX: 0, rotateY: 0, scale: 1 }}
+            exit={prefersReducedMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: -12, rotateX: -2, rotateY: 1, scale: 0.995 }
+            }
+            transition={prefersReducedMotion
+                ? { duration: 0.12 }
+                : { duration: 0.38, ease: [0.22, 1, 0.36, 1] }
+            }
+            style={{
+                transformPerspective: 1400,
+                transformOrigin: "top center",
+                backfaceVisibility: "hidden"
+            }}
+        >
+        <Routes location={location}>
 
 
                 {/* =================================================
@@ -606,6 +632,8 @@ function AppLayout() {
                 />
 
             </Routes>
+        </motion.div>
+        </AnimatePresence>
 
             {user && (
                 <Messenger isActive={location.pathname === "/messenger"} />
