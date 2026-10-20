@@ -6447,6 +6447,31 @@ const onCallMissed =
         }
     };
 
+    const recoverLegacyVoiceMessage = async messageId => {
+        const response = await api.post(
+            `/messages/${messageId}/migrate-attachment`
+        );
+        const attachment = response.data?.data;
+        if (!attachment?.fileUrl) {
+            throw new Error("The restored voice message has no playback URL.");
+        }
+
+        const resolvedUrl = getUploadUrl(attachment.fileUrl);
+        setMessages(previous =>
+            previous.map(item =>
+                getMessageId(item) === messageId
+                    ? {
+                        ...item,
+                        fileUrl: attachment.fileUrl,
+                        filePublicId: attachment.filePublicId || "",
+                        fileStorageType: attachment.fileStorageType || ""
+                    }
+                    : item
+            )
+        );
+        return resolvedUrl;
+    };
+
 
     /* =====================================================
        VOICE MESSAGE
@@ -9513,6 +9538,16 @@ const onCallMissed =
                                                             <VoiceMessagePlayer
                                                                 url={fileUrl}
                                                                 own={own}
+                                                                canRecoverLegacy={
+                                                                    !item.filePublicId &&
+                                                                    String(item.fileUrl || "")
+                                                                        .startsWith("/uploads/")
+                                                                }
+                                                                onRecover={() =>
+                                                                    recoverLegacyVoiceMessage(
+                                                                        getMessageId(item)
+                                                                    )
+                                                                }
                                                             />
 
                                                         ) : isImageFile ? (

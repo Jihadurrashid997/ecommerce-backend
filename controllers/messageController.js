@@ -4,7 +4,11 @@ const path = require("node:path");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const GroupConversation = require("../models/GroupConversation");
-const { saveFile, deleteFile } = require("../services/mediaStorage");
+const {
+    isCloudinaryConfigured,
+    saveFile,
+    deleteFile
+} = require("../services/mediaStorage");
 
 const getUserId = (req) => {
     return (
@@ -1436,6 +1440,164 @@ exports.deleteMessage = async (req, res) => {
     } catch (error) {
         console.error("DELETE MESSAGE ERROR:", error);
         return res.status(500).json({ success: false, message: "Unable to delete message." });
+    }
+};
+
+exports.migrateMessageAttachment = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required."
+            });
+        }
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid message ID."
+            });
+        }
+
+        const message = await Message.findById(id);
+        if (!message || !await canAccessMessage(message, userId)) {
+            return res.status(404).json({
+                success: false,
+                message: "Voice message not found."
+            });
+        }
+
+        if (
+            message.isDeleted ||
+            !message.fileUrl ||
+            !String(message.fileType || "").toLowerCase().startsWith("audio/")
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "This message is not an available voice attachment."
+            });
+        }
+
+        if (message.filePublicId) {
+            return res.json({
+                success: true,
+                data: {
+                    fileUrl: message.fileUrl,
+                    filePublicId: message.filePublicId,
+                    fileStorageType: message.fileStorageType
+                }
+            });
+        }
+
+        if (!isCloudinaryConfigured()) {
+            return res.status(503).json({
+                success: false,
+                message: "Persistent voice storage is not configured."
+            });
+        }
+
+        if (!/^\/uploads\/[^/\\]+$/.test(message.fileUrl)) {
+            return res.status(400).json({
+                success: false,
+                message: "This voice attachment cannot be restored from local storage."
+            });
+        }
+
+        const legacyPath = path.resolve(
+            UPLOADS_DIRECTORY,
+            path.basename(message.fileUrl)
+        );
+        if (path.dirname(legacyPath) !== UPLOADS_DIRECTORY) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid voice attachment path."
+            });
+        }
+
+        let buffer;
+        try {
+            buffer = await fs.readFile(legacyPath);
+        } catch (error) {
+            if (error.code === "ENOENT") {
+                return res.status(404).json({
+                    success: false,
+                    message: "This older voice message is no longer available on server storage."
+                });
+            }
+            throw error;
+        }
+
+        const media = await saveFile({
+            buffer,
+            mimetype: message.fileType,
+            originalname: message.fileName || path.basename(legacyPath)
+        }, "etop/messenger");
+
+        try {
+            const updateResult = await Message.updateMany(
+                {
+                    fileUrl: message.fileUrl,
+                    isDeleted: { $ne: true }
+                },
+                {
+                    $set: {
+                        fileUrl: media.url,
+                        filePublicId: media.publicId,
+                        fileStorageType: media.type
+                    }
+                }
+            );
+            if (
+                Number.isInteger(updateResult.matchedCount) &&
+                updateResult.matchedCount === 0
+            ) {
+                await deleteFile(media);
+                const latestMessage = await Message.findById(id);
+                if (latestMessage?.filePublicId) {
+                    return res.json({
+                        success: true,
+                        data: {
+                            fileUrl: latestMessage.fileUrl,
+                            filePublicId: latestMessage.filePublicId,
+                            fileStorageType: latestMessage.fileStorageType
+                        }
+                    });
+                }
+                return res.status(409).json({
+                    success: false,
+                    message: "This voice message changed before it could be restored."
+                });
+            }
+        } catch (error) {
+            await deleteFile(media);
+            throw error;
+        }
+
+        try {
+            await fs.unlink(legacyPath);
+        } catch (error) {
+            if (error.code !== "ENOENT") {
+                console.error("REMOVE MIGRATED VOICE ERROR:", error);
+            }
+        }
+
+        return res.json({
+            success: true,
+            data: {
+                fileUrl: media.url,
+                filePublicId: media.publicId,
+                fileStorageType: media.type
+            }
+        });
+    } catch (error) {
+        console.error("MIGRATE VOICE MESSAGE ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to restore this voice message."
+        });
     }
 };
 

@@ -3,6 +3,7 @@ const test = require("node:test");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
+const cloudinary = require("cloudinary").v2;
 const Post = require("../models/Post");
 const Message = require("../models/Message");
 const messageController = require("../controllers/messageController");
@@ -1069,6 +1070,145 @@ test("encrypted direct messages accept client-encrypted opaque files", async () 
         User.findById = originalUserFindById;
         Message.create = originalMessageCreate;
         Message.findById = originalMessageFindById;
+    }
+});
+
+test("authorized users can restore legacy local voice messages to Cloudinary", async () => {
+    const originalFindById = Message.findById;
+    const originalUpdateMany = Message.updateMany;
+    const originalUploadStream = cloudinary.uploader.upload_stream;
+    const previousEnvironment = {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        apiSecret: process.env.CLOUDINARY_API_SECRET
+    };
+    const filename = `voice-migration-${randomUUID()}.webm`;
+    const filePath = path.join(process.cwd(), "uploads", filename);
+    const message = {
+        _id: "507f191e810c19729de860ec",
+        sender: TEST_USER_ID,
+        receiver: OTHER_USER_ID,
+        fileUrl: `/uploads/${filename}`,
+        fileName: filename,
+        fileType: "audio/webm",
+        filePublicId: "",
+        fileStorageType: "",
+        isDeleted: false
+    };
+    const response = makeResponse();
+    let updatedFields;
+
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, "legacy-voice-data");
+    process.env.CLOUDINARY_CLOUD_NAME = "test-cloud";
+    process.env.CLOUDINARY_API_KEY = "test-key";
+    process.env.CLOUDINARY_API_SECRET = "test-secret";
+    cloudinary.uploader.upload_stream = (options, callback) => ({
+        end: buffer => {
+            assert.equal(buffer.toString(), "legacy-voice-data");
+            assert.equal(options.resource_type, "video");
+            callback(null, {
+                secure_url: "https://media.example/restored.webm",
+                public_id: "etop/messenger/restored"
+            });
+        }
+    });
+    Message.findById = async () => message;
+    Message.updateMany = async (filter, update) => {
+        assert.equal(filter.fileUrl, `/uploads/${filename}`);
+        updatedFields = update.$set;
+        return { matchedCount: 1, modifiedCount: 1 };
+    };
+
+    try {
+        await messageController.migrateMessageAttachment(
+            {
+                user: { id: OTHER_USER_ID },
+                params: { id: message._id }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.data.fileUrl, "https://media.example/restored.webm");
+        assert.equal(updatedFields.filePublicId, "etop/messenger/restored");
+        assert.equal(updatedFields.fileStorageType, "audio");
+        await assert.rejects(fs.access(filePath), { code: "ENOENT" });
+    } finally {
+        Message.findById = originalFindById;
+        Message.updateMany = originalUpdateMany;
+        cloudinary.uploader.upload_stream = originalUploadStream;
+        if (previousEnvironment.cloudName === undefined) {
+            delete process.env.CLOUDINARY_CLOUD_NAME;
+        } else {
+            process.env.CLOUDINARY_CLOUD_NAME = previousEnvironment.cloudName;
+        }
+        if (previousEnvironment.apiKey === undefined) {
+            delete process.env.CLOUDINARY_API_KEY;
+        } else {
+            process.env.CLOUDINARY_API_KEY = previousEnvironment.apiKey;
+        }
+        if (previousEnvironment.apiSecret === undefined) {
+            delete process.env.CLOUDINARY_API_SECRET;
+        } else {
+            process.env.CLOUDINARY_API_SECRET = previousEnvironment.apiSecret;
+        }
+        await fs.rm(filePath, { force: true });
+    }
+});
+
+test("legacy voice recovery reports when the old local file is gone", async () => {
+    const originalFindById = Message.findById;
+    const previousEnvironment = {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        apiSecret: process.env.CLOUDINARY_API_SECRET
+    };
+    const message = {
+        _id: "507f191e810c19729de860ec",
+        sender: TEST_USER_ID,
+        receiver: OTHER_USER_ID,
+        fileUrl: `/uploads/missing-${randomUUID()}.webm`,
+        fileName: "old-voice.webm",
+        fileType: "audio/webm",
+        filePublicId: "",
+        isDeleted: false
+    };
+    const response = makeResponse();
+
+    process.env.CLOUDINARY_CLOUD_NAME = "test-cloud";
+    process.env.CLOUDINARY_API_KEY = "test-key";
+    process.env.CLOUDINARY_API_SECRET = "test-secret";
+    Message.findById = async () => message;
+
+    try {
+        await messageController.migrateMessageAttachment(
+            {
+                user: { id: OTHER_USER_ID },
+                params: { id: message._id }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 404);
+        assert.match(response.body.message, /no longer available/i);
+    } finally {
+        Message.findById = originalFindById;
+        if (previousEnvironment.cloudName === undefined) {
+            delete process.env.CLOUDINARY_CLOUD_NAME;
+        } else {
+            process.env.CLOUDINARY_CLOUD_NAME = previousEnvironment.cloudName;
+        }
+        if (previousEnvironment.apiKey === undefined) {
+            delete process.env.CLOUDINARY_API_KEY;
+        } else {
+            process.env.CLOUDINARY_API_KEY = previousEnvironment.apiKey;
+        }
+        if (previousEnvironment.apiSecret === undefined) {
+            delete process.env.CLOUDINARY_API_SECRET;
+        } else {
+            process.env.CLOUDINARY_API_SECRET = previousEnvironment.apiSecret;
+        }
     }
 });
 

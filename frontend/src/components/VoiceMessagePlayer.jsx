@@ -9,12 +9,23 @@ export const formatDuration = seconds => {
     return `${mins}:${String(secs).padStart(2, "0")}`;
 };
 
-const VoiceMessagePlayer = ({ url, own }) => {
+const VoiceMessagePlayer = ({
+    url,
+    own,
+    canRecoverLegacy = false,
+    onRecover
+}) => {
     const audioRef = useRef(null);
     const [playing, setPlaying] = useState(false);
     const [duration, setDuration] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [error, setError] = useState("");
+    const [retrying, setRetrying] = useState(false);
+    const [playbackUrl, setPlaybackUrl] = useState(url);
+
+    useEffect(() => {
+        setPlaybackUrl(url);
+    }, [url]);
 
     useEffect(() => {
         const audio = audioRef.current;
@@ -64,7 +75,7 @@ const VoiceMessagePlayer = ({ url, own }) => {
             audio.removeEventListener("ended", onEnded);
             audio.removeEventListener("error", onError);
         };
-    }, [url]);
+    }, [playbackUrl]);
 
     const togglePlay = async () => {
         const audio = audioRef.current;
@@ -125,10 +136,32 @@ const VoiceMessagePlayer = ({ url, own }) => {
         }
     };
 
-    const retryLoad = () => {
+    const retryLoad = async () => {
         const audio = audioRef.current;
         if (!audio) {
             return;
+        }
+
+        if (canRecoverLegacy && onRecover) {
+            setRetrying(true);
+            setError("Restoring this voice message...");
+            try {
+                const restoredUrl = await onRecover();
+                if (restoredUrl) {
+                    setPlaybackUrl(restoredUrl);
+                    setError("");
+                    return;
+                }
+            } catch (recoverError) {
+                setError(
+                    recoverError.response?.data?.message ||
+                        recoverError.message ||
+                        "This older voice message could not be restored."
+                );
+                return;
+            } finally {
+                setRetrying(false);
+            }
         }
 
         setError("");
@@ -142,8 +175,8 @@ const VoiceMessagePlayer = ({ url, own }) => {
         <div className={`voice-message-player ${own ? "own" : ""}`}>
             <audio
                 ref={audioRef}
-                src={url}
-                preload="metadata"
+                src={playbackUrl}
+                preload="none"
                 aria-label="Voice message"
             />
             <button
@@ -182,8 +215,12 @@ const VoiceMessagePlayer = ({ url, own }) => {
             {error && (
                 <div className="voice-playback-error">
                     <span role="status">{error}</span>
-                    <button type="button" onClick={retryLoad}>
-                        Retry
+                    <button
+                        type="button"
+                        onClick={retryLoad}
+                        disabled={retrying}
+                    >
+                        {retrying ? "Restoring..." : "Retry"}
                     </button>
                 </div>
             )}
