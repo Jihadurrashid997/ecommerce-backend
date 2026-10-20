@@ -32,7 +32,13 @@ const PostCard = ({ post, onDeleted }) => {
     const [slide, setSlide] = useState(0);
     const [viewerSlide, setViewerSlide] = useState(null);
     const photoUrls = (post.media || []).map(media => getUploadUrl(media.url));
-    const closeMediaViewer = useCallback(() => setViewerSlide(null), []);
+    const closeMediaViewer = useCallback(() => {
+        setViewerSlide(null);
+        setShowComments(false);
+    }, []);
+    const toggleViewerComments = useCallback(() => {
+        setShowComments(open => !open);
+    }, []);
 
     const author = post.author || {};
 
@@ -136,7 +142,7 @@ const PostCard = ({ post, onDeleted }) => {
 
             </div>
 
-            {showComments && (
+            {showComments && viewerSlide === null && (
                 <CommentsPanel
                     postId={post._id}
                     onCount={setCommentCount}
@@ -150,6 +156,28 @@ const PostCard = ({ post, onDeleted }) => {
                     index={viewerSlide}
                     onChange={setViewerSlide}
                     onClose={closeMediaViewer}
+                    author={{
+                        ...author,
+                        profileImage: author.profileImage || author.avatar
+                            ? getUploadUrl(author.profileImage || author.avatar)
+                            : null
+                    }}
+                    myId={myId}
+                    createdAt={post.createdAt}
+                    caption={post.caption}
+                    liked={liked}
+                    likeCount={likeCount}
+                    commentCount={commentCount}
+                    onLike={toggleLike}
+                    onToggleComments={toggleViewerComments}
+                    commentsOpen={showComments}
+                    comments={(
+                        <CommentsPanel
+                            postId={post._id}
+                            onCount={setCommentCount}
+                            onClose={toggleViewerComments}
+                        />
+                    )}
                 />
             )}
 

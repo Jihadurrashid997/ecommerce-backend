@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import api from "../services/api";
 import PostCard from "./PostCard";
 
@@ -26,7 +26,11 @@ jest.mock("../context/AppContext", () => ({
     useApp: () => ({ user: { _id: "viewer" } })
 }));
 
-jest.mock("./CommentsPanel", () => () => null);
+jest.mock("./CommentsPanel", () => ({ onClose }) => (
+    <section aria-label="Post comments">
+        <button type="button" onClick={onClose}>Close comments</button>
+    </section>
+));
 
 const post = {
     _id: "post-1",
@@ -42,20 +46,31 @@ test("opens post photos in a full-screen viewer with navigation and close", () =
     render(<PostCard post={post} />);
 
     fireEvent.click(screen.getByRole("button", { name: "View photo full screen" }));
-    expect(screen.getByRole("dialog", { name: "Photo 1 of 2" })).toBeVisible();
+    const viewer = screen.getByRole("dialog", { name: "Post photo 1 of 2" });
+    expect(viewer).toBeVisible();
+    expect(within(viewer).getByRole("link", { name: /Author/ })).toHaveAttribute("href", "/user/author-1");
+    expect(within(viewer).getByText("A shared moment")).toBeVisible();
     expect(screen.getByRole("img", { name: "Post media 1" })).toHaveAttribute("src", "/photo-one.jpg");
+    expect(within(viewer).getByRole("button", { name: "Like post" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(viewer).getByRole("button", { name: "Comments, 1" })).toBeVisible();
+
+    fireEvent.click(within(viewer).getByRole("button", { name: "Like post" }));
+    expect(within(viewer).getByRole("button", { name: "Unlike post" })).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(within(viewer).getByRole("button", { name: "Comments, 1" }));
+    expect(screen.getByRole("region", { name: "Post comments" })).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
-    expect(screen.getByRole("dialog", { name: "Photo 2 of 2" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Post photo 2 of 2" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Post media 2" })).toHaveAttribute("src", "/photo-two.jpg");
 
     fireEvent.click(screen.getByRole("button", { name: "Close photo" }));
-    expect(screen.queryByRole("dialog", { name: "Photo 2 of 2" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Post photo 2 of 2" })).not.toBeInTheDocument();
 });
 
 test("closes the full-screen photo viewer with Escape", () => {
     render(<PostCard post={post} />);
     fireEvent.click(screen.getByRole("button", { name: "View photo full screen" }));
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(screen.queryByRole("dialog", { name: "Photo 1 of 2" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Post photo 1 of 2" })).not.toBeInTheDocument();
 });
