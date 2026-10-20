@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { FaHeart, FaRegHeart, FaRegComment, FaTrash } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import CommentsPanel from "./CommentsPanel";
+import MediaViewer from "./MediaViewer";
 
 const timeAgo = value => {
 
@@ -29,6 +30,9 @@ const PostCard = ({ post, onDeleted }) => {
     const [commentCount, setCommentCount] = useState(post.commentCount);
     const [showComments, setShowComments] = useState(false);
     const [slide, setSlide] = useState(0);
+    const [viewerSlide, setViewerSlide] = useState(null);
+    const photoUrls = (post.media || []).map(media => getUploadUrl(media.url));
+    const closeMediaViewer = useCallback(() => setViewerSlide(null), []);
 
     const author = post.author || {};
 
@@ -94,7 +98,14 @@ const PostCard = ({ post, onDeleted }) => {
             {post.media?.length > 0 && (
             <div className="post-media">
 
-                <img src={getUploadUrl(post.media[slide]?.url)} alt="" loading="lazy" />
+                <button
+                    type="button"
+                    className="post-media-image-button"
+                    aria-label="View photo full screen"
+                    onClick={() => setViewerSlide(slide)}
+                >
+                    <img src={photoUrls[slide]} alt="" loading="lazy" />
+                </button>
 
                 {post.media.length > 1 && (
                     <div className="post-dots">
@@ -130,6 +141,15 @@ const PostCard = ({ post, onDeleted }) => {
                     postId={post._id}
                     onCount={setCommentCount}
                     onClose={() => setShowComments(false)}
+                />
+            )}
+
+            {viewerSlide !== null && (
+                <MediaViewer
+                    items={photoUrls}
+                    index={viewerSlide}
+                    onChange={setViewerSlide}
+                    onClose={closeMediaViewer}
                 />
             )}
 

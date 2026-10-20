@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
-    FaHeart, FaRegHeart, FaRegComment, FaPlus, FaTimes,
+    FaArrowLeft, FaHeart, FaRegHeart, FaRegComment, FaPlus, FaTimes,
     FaVolumeMute, FaVolumeUp, FaTrash
 } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
@@ -310,6 +310,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 const Reels = () => {
 
     const { user } = useApp();
+    const navigate = useNavigate();
 
     const myId = String(user?._id || user?.id || "");
 
@@ -343,6 +344,16 @@ const Reels = () => {
 
     return (
         <div className="reels-page">
+
+            <button
+                type="button"
+                className="reels-back"
+                onClick={() => navigate("/")}
+                aria-label="Back to home"
+            >
+                <FaArrowLeft />
+                <span>Reels</span>
+            </button>
 
             <button type="button" className="reel-add" onClick={() => setShowUpload(true)}>
                 <FaPlus /> Reel
