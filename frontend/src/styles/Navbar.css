@@ -1214,9 +1214,19 @@
 
         padding: 10px 14px;
 
-        gap: 10px;
+        gap: 8px;
 
         flex-wrap: nowrap;
+        box-sizing: border-box;
+    }
+
+    .jr-logo {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+
+    .jr-logo .etop-logo-sm {
+        --etop-logo-width: clamp(60px, 22vw, 112px);
     }
 
 
@@ -1242,10 +1252,12 @@
 
 
     .jr-menu-btn {
-
         display: flex;
         order: 3;
         margin-left: 0;
+        flex: 0 0 40px;
+        width: 40px;
+        height: 40px;
     }
 
     .jr-logo {
@@ -1257,7 +1269,8 @@
         position: relative;
         z-index: 5;
         margin-left: auto;
-        gap: 7px;
+        gap: 5px;
+        flex: 0 0 auto;
     }
 
     .jr-notification-wrap,
@@ -1267,9 +1280,9 @@
     }
 
     .jr-header-action {
-        width: 42px;
-        height: 42px;
-        border-radius: 13px;
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
     }
 
     .jr-notifications-panel {
@@ -1414,6 +1427,32 @@
         display: inline;
     }
 
+}
+
+@media (max-width: 360px) {
+    .jr-navbar {
+        gap: 5px;
+        padding: 8px;
+    }
+
+    .jr-logo .etop-logo-sm {
+        --etop-logo-width: clamp(42px, 24vw, 68px);
+    }
+
+    .jr-header-actions {
+        gap: 3px;
+    }
+
+    .jr-header-action,
+    .jr-menu-btn {
+        width: 34px;
+        height: 34px;
+    }
+
+    .jr-menu-btn {
+        flex-basis: 34px;
+        font-size: 17px;
+    }
 }
 
 
