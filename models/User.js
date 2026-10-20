@@ -66,6 +66,19 @@ const userSchema = new mongoose.Schema(
             maxlength: 500
         },
 
+        theme: {
+            type: String,
+            enum: ["dark", "light"],
+            default: "dark"
+        },
+
+        notificationPreferences: {
+            follows: { type: Boolean, default: true },
+            posts: { type: Boolean, default: true },
+            communities: { type: Boolean, default: true },
+            announcements: { type: Boolean, default: true }
+        },
+
         location: {
             type: String,
             default: "",

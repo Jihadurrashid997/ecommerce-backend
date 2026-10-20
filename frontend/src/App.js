@@ -70,6 +70,7 @@ import EditProfile from "./pages/EditProfile";
 import SearchResults from "./pages/SearchResults";
 import UserProfile from "./pages/UserProfile";
 import Communities from "./pages/Communities";
+import Settings from "./pages/Settings";
 
 
 // ======================================================
@@ -516,6 +517,15 @@ function AppLayout() {
 
                         </PrivateRoute>
 
+                    }
+                />
+
+                <Route
+                    path="/settings"
+                    element={
+                        <PrivateRoute>
+                            <Settings />
+                        </PrivateRoute>
                     }
                 />
 

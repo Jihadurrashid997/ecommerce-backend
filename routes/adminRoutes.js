@@ -98,6 +98,11 @@ router.patch("/control/users/:id/verification", auth(["admin"]), control.setVeri
 router.post("/control/users/:id/reset-password", auth(["admin"]), control.resetPassword);
 router.delete("/control/users/:id", auth(["admin"]), control.deleteUser);
 router.get("/control/content", auth(["admin"]), control.listContent);
+router.post(
+    "/control/announcements",
+    auth(["admin"]),
+    require("../controllers/adminAnnouncementController").sendAnnouncement
+);
 
 
 module.exports =

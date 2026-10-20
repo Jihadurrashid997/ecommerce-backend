@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 
 import {
@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useApp } from "../context/AppContext";
+import api from "../services/api";
 import EtopLogo from "./EtopLogo";
 import "../styles/EtopLogo.css";
 
@@ -32,20 +33,44 @@ const Navbar = () => {
     const [searchText, setSearchText] = useState("");
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+    const [notificationError, setNotificationError] = useState("");
     const notificationRef = useRef(null);
     const settingsRef = useRef(null);
 
-    const {
-        user,
-        logout,
-        notifications,
-        setNotifications,
-        markNotificationRead,
-        clearNotifications,
-        unreadNotificationCount
-    } = useApp();
+    const { user, logout } = useApp();
     const navigate = useNavigate();
     const location = useLocation();
+
+    const loadNotifications = useCallback(async () => {
+        if (!user) {
+            setNotifications([]);
+            setUnreadNotificationCount(0);
+            return;
+        }
+        try {
+            const response = await api.get("/notifications", { params: { limit: 20 } });
+            setNotifications(response.data.notifications || []);
+            setUnreadNotificationCount(response.data.unreadCount || 0);
+            setNotificationError("");
+        } catch (error) {
+            console.error("LOAD PLATFORM NOTIFICATIONS ERROR:", error);
+            setNotificationError(error.response?.data?.message || "Could not load notifications.");
+        }
+    }, [user]);
+
+    useEffect(() => {
+        loadNotifications();
+        if (!user) return undefined;
+        const refresh = () => loadNotifications();
+        const interval = window.setInterval(refresh, 30000);
+        window.addEventListener("focus", refresh);
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener("focus", refresh);
+        };
+    }, [loadNotifications, user]);
 
     useEffect(() => {
         const closeNotifications = event => {
@@ -133,6 +158,50 @@ const Navbar = () => {
         closeMenu();
 
         navigate("/login");
+    };
+
+    const markAllNotificationsRead = async () => {
+        try {
+            await api.patch("/notifications/read-all");
+            const readAt = new Date().toISOString();
+            setNotifications(previous => previous.map(item => ({ ...item, readAt })));
+            setUnreadNotificationCount(0);
+        } catch (error) {
+            console.error("MARK ALL PLATFORM NOTIFICATIONS READ ERROR:", error);
+            setNotificationError(error.response?.data?.message || "Could not update notifications.");
+        }
+    };
+
+    const clearAllNotifications = async () => {
+        try {
+            await api.delete("/notifications");
+            setNotifications([]);
+            setUnreadNotificationCount(0);
+            setNotificationError("");
+        } catch (error) {
+            console.error("CLEAR PLATFORM NOTIFICATIONS ERROR:", error);
+            setNotificationError(error.response?.data?.message || "Could not clear notifications.");
+        }
+    };
+
+    const openNotification = async notification => {
+        if (!notification.readAt) {
+            try {
+                await api.patch(`/notifications/${notification._id}/read`);
+                setNotifications(previous => previous.map(item =>
+                    item._id === notification._id
+                        ? { ...item, readAt: new Date().toISOString() }
+                        : item
+                ));
+                setUnreadNotificationCount(count => Math.max(0, count - 1));
+            } catch (error) {
+                console.error("MARK PLATFORM NOTIFICATION READ ERROR:", error);
+                setNotificationError(error.response?.data?.message || "Could not update this notification.");
+                return;
+            }
+        }
+        setNotificationsOpen(false);
+        if (notification.link) navigate(notification.link);
     };
 
 
@@ -676,12 +745,7 @@ const Navbar = () => {
                                                 title="Mark all as read"
                                                 aria-label="Mark all notifications as read"
                                                 onClick={() =>
-                                                    setNotifications(previous =>
-                                                        previous.map(notification => ({
-                                                            ...notification,
-                                                            read: true
-                                                        }))
-                                                    )
+                                                    markAllNotificationsRead()
                                                 }
                                             >
                                                 <FaCheck />
@@ -692,7 +756,7 @@ const Navbar = () => {
                                                 type="button"
                                                 title="Clear notifications"
                                                 aria-label="Clear all notifications"
-                                                onClick={clearNotifications}
+                                                onClick={clearAllNotifications}
                                             >
                                                 <FaTrash />
                                             </button>
@@ -700,18 +764,24 @@ const Navbar = () => {
                                     </div>
                                 </div>
 
+                                {notificationError && (
+                                    <p className="jr-notifications-error" role="alert">{notificationError}</p>
+                                )}
                                 {notifications.length ? (
                                     <div className="jr-notification-list">
                                         {notifications.slice(0, 8).map(notification => (
                                             <button
                                                 type="button"
-                                                key={notification.id}
-                                                className={`jr-notification-item${notification.read ? "" : " is-unread"}`}
-                                                onClick={() => markNotificationRead(notification.id)}
+                                                key={notification._id}
+                                                className={`jr-notification-item${notification.readAt ? "" : " is-unread"}`}
+                                                onClick={() => openNotification(notification)}
                                             >
                                                 <span className={`jr-notification-dot type-${notification.type || "info"}`} />
                                                 <span className="jr-notification-content">
-                                                    <span>{notification.message}</span>
+                                                    <strong>{notification.title}</strong>
+                                                    <span>{notification.actor?.name
+                                                        ? `${notification.actor.name}: ${notification.message}`
+                                                        : notification.message}</span>
                                                     <time dateTime={notification.createdAt}>
                                                         {notification.createdAt
                                                             ? new Date(notification.createdAt).toLocaleString()
@@ -750,7 +820,7 @@ const Navbar = () => {
                         {settingsOpen && (
                             <div className="jr-settings-menu" id="jr-settings-menu">
                                 <Link
-                                    to="/edit-profile"
+                                    to="/settings"
                                     onClick={() => {
                                         setSettingsOpen(false);
                                         closeMenu();
