@@ -480,6 +480,150 @@ exports.getGroupMessages = async (req, res) => {
     }
 };
 
+exports.createGroupCallLog = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { groupId } = req.params;
+        const {
+            callId,
+            callType,
+            duration,
+            participantCount
+        } = req.body || {};
+
+        if (!isValidObjectId(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID."
+            });
+        }
+
+        if (
+            typeof callId !== "string" ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(callId) ||
+            !["voice", "video"].includes(callType) ||
+            !Number.isSafeInteger(duration) ||
+            duration < 0 ||
+            duration > 24 * 60 * 60 ||
+            !Number.isSafeInteger(participantCount) ||
+            participantCount < 1 ||
+            participantCount > 100
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group call details."
+            });
+        }
+
+        const group = await findMemberGroup(groupId, userId);
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found."
+            });
+        }
+
+        const durationText = duration > 0
+            ? ` • ${String(Math.floor(duration / 60)).padStart(2, "0")}:${String(duration % 60).padStart(2, "0")}`
+            : "";
+        const callLabel = callType === "video" ? "video" : "voice";
+        const message = `📞 Group ${callLabel} call ended${durationText}`;
+        const logData = {
+            sender: userId,
+            groupId,
+            message,
+            type: "call-log",
+            callId,
+            callType,
+            callStatus: "ended",
+            callDuration: duration,
+            callParticipantCount: participantCount,
+            readBy: [userId]
+        };
+
+        let callMessage;
+        try {
+            callMessage = await Message.findOneAndUpdate(
+                { callId, groupId },
+                { $setOnInsert: logData },
+                {
+                    new: true,
+                    upsert: true,
+                    setDefaultsOnInsert: true
+                }
+            );
+        } catch (error) {
+            if (error.code !== 11000) {
+                throw error;
+            }
+            callMessage = await Message.findOne({ callId });
+        }
+
+        if (!callMessage) {
+            throw new Error("The group call log could not be created.");
+        }
+
+        if (String(callMessage.groupId) !== String(groupId)) {
+            return res.status(409).json({
+                success: false,
+                message: "This call ID belongs to a different conversation."
+            });
+        }
+
+        group.lastMessage = {
+            message: callMessage.message,
+            sender: callMessage.sender,
+            createdAt: callMessage.createdAt
+        };
+        await group.save();
+
+        const populated = await Message.findById(callMessage._id)
+            .populate(
+                "sender",
+                "name username fullName displayName profileImage avatar isVerified"
+            );
+        const io = req.app?.get("io");
+
+        if (io && populated) {
+            const serialized = {
+                ...populated.toObject(),
+                _id: String(populated._id),
+                id: String(populated._id),
+                groupId: String(groupId),
+                roomId: `group:${String(groupId)}`,
+                senderId: String(userId),
+                senderName:
+                    populated.sender?.name ||
+                    populated.sender?.username ||
+                    populated.sender?.fullName ||
+                    populated.sender?.displayName ||
+                    "Group member",
+                receiver: null,
+                receiverId: null,
+                timestamp: new Date(populated.createdAt).getTime()
+            };
+            io.to(serialized.roomId).emit("group-message", serialized);
+            group.participants.forEach(memberId => {
+                io.to(`user:${String(memberId)}`).emit(
+                    "group-message-notification",
+                    serialized
+                );
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: populated
+        });
+    } catch (error) {
+        console.error("CREATE GROUP CALL LOG ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to save group call details."
+        });
+    }
+};
+
 exports.createGroupCallToken = async (req, res) => {
     try {
         const userId = getUserId(req);

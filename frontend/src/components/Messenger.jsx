@@ -391,6 +391,17 @@ const ConversationStateIcons = ({ preference = {} }) => (
     </span>
 );
 
+const createCallId = () => {
+    const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, byte =>
+        byte.toString(16).padStart(2, "0")
+    ).join("");
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
 const Messenger = ({ isActive = true }) => {
 
     /*
@@ -5187,7 +5198,9 @@ const onCallMissed =
             setActiveGroupCall({
                 group: selectedUser,
                 type,
-                inviteOthers: true
+                inviteOthers: true,
+                callId: createCallId(),
+                isInitiator: true
             });
         };
 
@@ -5218,7 +5231,9 @@ const onCallMissed =
             setActiveGroupCall({
                 group: target,
                 type: invitation.type === "video" ? "video" : "audio",
-                inviteOthers: false
+                inviteOthers: false,
+                callId: invitation.callId,
+                isInitiator: false
             });
         };
 
@@ -5230,7 +5245,8 @@ const onCallMissed =
 
             socket.emit("group-call-invite", {
                 groupId: getId(activeGroupCall.group),
-                type: activeGroupCall.type
+                type: activeGroupCall.type,
+                callId: activeGroupCall.callId
             });
 
             setActiveGroupCall(current =>
@@ -5241,6 +5257,53 @@ const onCallMissed =
                       }
                     : current
             );
+        };
+
+    const closeGroupCall =
+        callSummary => {
+            const closingCall = activeGroupCall;
+            setActiveGroupCall(null);
+
+            if (
+                !closingCall?.isInitiator ||
+                !callSummary?.callId ||
+                callSummary.callId !== closingCall.callId
+            ) {
+                return;
+            }
+
+            const groupId = getId(closingCall.group);
+            void api.post(`/groups/${groupId}/call-log`, {
+                callId: closingCall.callId,
+                callType:
+                    closingCall.type === "video" ? "video" : "voice",
+                duration: callSummary.duration,
+                participantCount: callSummary.participantCount
+            }).then(response => {
+                const saved = response.data?.data;
+                if (!saved) {
+                    throw new Error("The server did not save the group call details.");
+                }
+
+                updateGroupPreview(groupId, saved);
+                bumpRecent(
+                    groupId,
+                    saved.createdAt || saved.timestamp
+                );
+                if (
+                    selectedUserRef.current?.isGroup &&
+                    getId(selectedUserRef.current) === groupId
+                ) {
+                    appendMessage(saved);
+                }
+            }).catch(error => {
+                console.error("Save group call details error:", error);
+                showMessengerToast(
+                    error.response?.data?.message ||
+                        error.message ||
+                        "Group call details could not be saved."
+                );
+            });
         };
 
     const toggleEncryptedChat =
@@ -9437,6 +9500,8 @@ const onCallMissed =
                                                                 callType={item.callType}
                                                                 callStatus={item.callStatus}
                                                                 callDuration={item.callDuration}
+                                                                isGroup={Boolean(item.groupId)}
+                                                                participantCount={item.callParticipantCount}
                                                             />
                                                         ) : location ? (
                                                             <div className="message-location-card">
@@ -10421,8 +10486,9 @@ const onCallMissed =
                     group={activeGroupCall.group}
                     currentUser={user}
                     type={activeGroupCall.type}
+                    callId={activeGroupCall.callId}
                     onConnected={announceGroupCall}
-                    onClose={() => setActiveGroupCall(null)}
+                    onClose={closeGroupCall}
                 />
             )}
 

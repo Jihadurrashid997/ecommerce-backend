@@ -12,18 +12,24 @@ const CALL_STATUS_LABELS = {
 const CallLogMessage = ({
     callType,
     callStatus,
-    callDuration = 0
+    callDuration = 0,
+    isGroup = false,
+    participantCount
 }) => (
     <div className="call-log-message" aria-label="Call details">
         {callType === "video"
             ? <FaVideo aria-hidden="true" />
             : <FaPhone aria-hidden="true" />}
         <span>
+            {isGroup ? "Group " : ""}
             {callType === "video" ? "Video" : "Voice"}{" "}
             {CALL_STATUS_LABELS[callStatus] || "call"}
         </span>
         {callStatus === "ended" && callDuration > 0 && (
             <small>{formatDuration(callDuration)}</small>
+        )}
+        {isGroup && participantCount > 0 && (
+            <small>{participantCount} joined</small>
         )}
     </div>
 );

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
     createLocalTracks,
     ExternalE2EEKeyProvider,
@@ -224,6 +224,31 @@ test("encrypted group calls enable E2EE before connecting or publishing media", 
             groupId: "507f191e810c19729de860ec",
             userId: member._id,
             keyId: "key-id"
+        })
+    );
+});
+
+test("leaving a connected group call reports its duration and participant count", async () => {
+    const onClose = jest.fn();
+    render(
+        <GroupCallModal
+            group={{ _id: "507f191e810c19729de860ec", name: "Friends" }}
+            currentUser={member}
+            callId="ac4c9a16-f2c3-4b45-a7b9-81419fe52266"
+            onClose={onClose}
+        />
+    );
+
+    await screen.findByRole("status", {
+        name: "Group call is not end-to-end encrypted"
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Leave group call" }));
+
+    expect(onClose).toHaveBeenCalledWith(
+        expect.objectContaining({
+            callId: "ac4c9a16-f2c3-4b45-a7b9-81419fe52266",
+            duration: expect.any(Number),
+            participantCount: 1
         })
     );
 });

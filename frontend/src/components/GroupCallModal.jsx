@@ -29,12 +29,16 @@ const GroupCallModal = ({
     group,
     currentUser,
     type = "audio",
+    callId,
     onClose,
     onConnected
 }) => {
     const roomRef = useRef(null);
     const workerRef = useRef(null);
     const onConnectedRef = useRef(onConnected);
+    const connectedAtRef = useRef(null);
+    const closeHandledRef = useRef(false);
+    const joinedParticipantIdsRef = useRef(new Set());
     const [room, setRoom] = useState(null);
     const [participants, setParticipants] = useState([]);
     const [revision, setRevision] = useState(0);
@@ -59,6 +63,30 @@ const GroupCallModal = ({
     useEffect(() => {
         onConnectedRef.current = onConnected;
     }, [onConnected]);
+
+    const leaveCall = () => {
+        if (closeHandledRef.current) {
+            return;
+        }
+        closeHandledRef.current = true;
+
+        const connectedAt = connectedAtRef.current;
+        onClose?.(
+            connectedAt
+                ? {
+                      callId,
+                      duration: Math.max(
+                          0,
+                          Math.floor((Date.now() - connectedAt) / 1000)
+                      ),
+                      participantCount: Math.max(
+                          1,
+                          joinedParticipantIdsRef.current.size
+                      )
+                  }
+                : null
+        );
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -214,6 +242,14 @@ const GroupCallModal = ({
                         callRoom.localParticipant,
                         ...callRoom.remoteParticipants.values()
                     ]);
+                    joinedParticipantIdsRef.current.add(
+                        callRoom.localParticipant.identity
+                    );
+                    callRoom.remoteParticipants.forEach(participant => {
+                        joinedParticipantIdsRef.current.add(
+                            participant.identity
+                        );
+                    });
                     setRevision(value => value + 1);
                 };
 
@@ -284,6 +320,7 @@ const GroupCallModal = ({
                 );
 
                 if (!cancelled) {
+                    connectedAtRef.current = Date.now();
                     setStatus("Connected");
                     setCallEncrypted(encryptedCall);
                     refreshParticipants();
@@ -394,7 +431,7 @@ const GroupCallModal = ({
                             </span>
                         )}
                     </div>
-                    <button type="button" className="group-call-close" onClick={onClose} aria-label="Leave call">
+                    <button type="button" className="group-call-close" onClick={leaveCall} aria-label="Leave call">
                         <FaPhoneSlash />
                     </button>
                 </header>
@@ -447,7 +484,7 @@ const GroupCallModal = ({
                     <button
                         type="button"
                         className="group-call-hangup"
-                        onClick={onClose}
+                        onClick={leaveCall}
                         aria-label="Leave group call"
                     >
                         <FaPhoneSlash />
