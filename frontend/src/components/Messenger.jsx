@@ -1218,6 +1218,14 @@ const Messenger = ({ isActive = true }) => {
     const [messageDeleteFor, setMessageDeleteFor] =
         useState(null);
 
+    const [messageMenuFor, setMessageMenuFor] =
+        useState(null);
+
+    const [swipeReplyProgress, setSwipeReplyProgress] =
+        useState(null);
+
+    const messageGestureRef = useRef(null);
+
     const [deleteConfirmation, setDeleteConfirmation] =
         useState(null);
 
@@ -1235,6 +1243,130 @@ const Messenger = ({ isActive = true }) => {
 
     const REACTION_EMOJIS =
         ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+    const startMessageGesture = (event, item) => {
+        if (
+            event.button !== 0 ||
+            item.isDeleted ||
+            event.target.closest("button, a, input, textarea, [role='button']")
+        ) {
+            return;
+        }
+
+        const messageId = getMessageId(item);
+        if (!messageId) {
+            return;
+        }
+
+        if (messageGestureRef.current?.timer) {
+            clearTimeout(messageGestureRef.current.timer);
+        }
+
+        const gesture = {
+            item,
+            messageId,
+            startX: event.clientX,
+            startY: event.clientY,
+            moved: false,
+            longPressed: false,
+            timer: null
+        };
+        gesture.timer = setTimeout(() => {
+            if (messageGestureRef.current === gesture && !gesture.moved) {
+                gesture.longPressed = true;
+                setMessageMenuFor(null);
+                setMessageDeleteFor(null);
+                setReactionPickerFor(messageId);
+            }
+        }, 500);
+        messageGestureRef.current = gesture;
+
+        if (event.currentTarget.setPointerCapture) {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        }
+    };
+
+    const moveMessageGesture = event => {
+        const gesture = messageGestureRef.current;
+        if (!gesture || gesture.longPressed) {
+            return;
+        }
+
+        const offsetX = event.clientX - gesture.startX;
+        const offsetY = event.clientY - gesture.startY;
+        if (Math.abs(offsetY) > Math.abs(offsetX) + 8) {
+            clearTimeout(gesture.timer);
+            messageGestureRef.current = null;
+            setSwipeReplyProgress(null);
+            return;
+        }
+
+        if (Math.abs(offsetX) > 10) {
+            gesture.moved = true;
+            clearTimeout(gesture.timer);
+        }
+
+        if (offsetX > 0) {
+            setSwipeReplyProgress({
+                messageId: gesture.messageId,
+                offset: Math.min(64, offsetX * 0.55)
+            });
+        }
+    };
+
+    const finishMessageGesture = event => {
+        const gesture = messageGestureRef.current;
+        if (!gesture) {
+            return;
+        }
+
+        clearTimeout(gesture.timer);
+        const offsetX = event.clientX - gesture.startX;
+        const offsetY = event.clientY - gesture.startY;
+        if (
+            !gesture.longPressed &&
+            offsetX >= 60 &&
+            Math.abs(offsetX) > Math.abs(offsetY)
+        ) {
+            setReplyingTo(gesture.item);
+            setMessageMenuFor(null);
+            setReactionPickerFor(null);
+        }
+
+        messageGestureRef.current = null;
+        setSwipeReplyProgress(null);
+    };
+
+    const cancelMessageGesture = () => {
+        if (messageGestureRef.current?.timer) {
+            clearTimeout(messageGestureRef.current.timer);
+        }
+        messageGestureRef.current = null;
+        setSwipeReplyProgress(null);
+    };
+
+    useEffect(() => {
+        const closeMessageActions = event => {
+            if (!event.target.closest(".message-meta")) {
+                setMessageMenuFor(null);
+                setMessageDeleteFor(null);
+                setReactionPickerFor(null);
+            }
+        };
+
+        document.addEventListener("pointerdown", closeMessageActions);
+        return () =>
+            document.removeEventListener("pointerdown", closeMessageActions);
+    }, []);
+
+    useEffect(
+        () => () => {
+            if (messageGestureRef.current?.timer) {
+                clearTimeout(messageGestureRef.current.timer);
+            }
+        },
+        []
+    );
 
     const [background, setBackground] =
         useState(
@@ -9277,8 +9409,45 @@ const onCallMissed =
                                                             isActiveMatch
                                                                 ? "search-match"
                                                                 : ""
+                                                        } ${
+                                                            swipeReplyProgress?.messageId ===
+                                                            getMessageId(item)
+                                                                ? "swipe-replying"
+                                                                : ""
                                                         }`
                                                     }
+                                                    style={
+                                                        swipeReplyProgress?.messageId ===
+                                                        getMessageId(item)
+                                                            ? {
+                                                                transform: `translateX(${swipeReplyProgress.offset}px)`
+                                                            }
+                                                            : undefined
+                                                    }
+                                                    onPointerDown={event =>
+                                                        startMessageGesture(
+                                                            event,
+                                                            item
+                                                        )
+                                                    }
+                                                    onPointerMove={
+                                                        moveMessageGesture
+                                                    }
+                                                    onPointerUp={
+                                                        finishMessageGesture
+                                                    }
+                                                    onPointerCancel={
+                                                        cancelMessageGesture
+                                                    }
+                                                    onContextMenu={event => {
+                                                        event.preventDefault();
+                                                        if (!item.isDeleted) {
+                                                            setReactionPickerFor(
+                                                                getMessageId(item)
+                                                            );
+                                                            setMessageMenuFor(null);
+                                                        }
+                                                    }}
                                                 >
 
                                                     {selectedUser.isGroup && !own && (
@@ -9544,60 +9713,112 @@ const onCallMissed =
                                                         <button
                                                             type="button"
                                                             className="message-reply-btn"
-                                                            title="Reply"
-                                                            onClick={() =>
-                                                                setReplyingTo(
-                                                                    item
-                                                                )
-                                                            }
-                                                        >
-                                                            ↩
-                                                        </button>
-
-
-                                                        <button
-                                                            type="button"
-                                                            className="message-reply-btn"
-                                                            title="Forward"
-                                                            disabled={
-                                                                item.isDeleted ||
-                                                                item.decryptionFailed
+                                                            title="More message options"
+                                                            aria-label="More message options"
+                                                            aria-haspopup="menu"
+                                                            aria-expanded={
+                                                                messageMenuFor ===
+                                                                getMessageId(item)
                                                             }
                                                             onClick={() => {
-
-                                                                setForwardingMessage(
-                                                                    item
+                                                                const messageId =
+                                                                    getMessageId(item);
+                                                                setMessageMenuFor(
+                                                                    messageMenuFor ===
+                                                                        messageId
+                                                                        ? null
+                                                                        : messageId
                                                                 );
-
-                                                                setForwardSearch(
-                                                                    ""
-                                                                );
-
-                                                                setForwardSentTo(
-                                                                    new Set()
-                                                                );
-
+                                                                setMessageDeleteFor(null);
                                                             }}
                                                         >
-                                                            ➦
+                                                            <FaEllipsisH />
                                                         </button>
 
-
-                                                        <button
-                                                            type="button"
-                                                            className="message-reply-btn"
-                                                            title="React"
-                                                            onClick={() =>
-                                                                setReactionPickerFor(
-                                                                    reactionPickerFor ===
-                                                                        getMessageId(item)
-                                                                        ? null
-                                                                        : getMessageId(item)
-                                                                )
-                                                            }
-                                                        >
-                                                            😊
-                                                        </button>
+                                                        {messageMenuFor ===
+                                                            getMessageId(item) && (
+                                                            <div
+                                                                className="message-actions-menu"
+                                                                role="menu"
+                                                                aria-label="Message actions"
+                                                            >
+                                                                <button
+                                                                    type="button"
+                                                                    role="menuitem"
+                                                                    onClick={() => {
+                                                                        setReplyingTo(item);
+                                                                        setMessageMenuFor(null);
+                                                                    }}
+                                                                >
+                                                                    <span aria-hidden="true">↩</span>
+                                                                    Reply
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    role="menuitem"
+                                                                    disabled={
+                                                                        item.isDeleted ||
+                                                                        item.decryptionFailed
+                                                                    }
+                                                                    onClick={() => {
+                                                                        setForwardingMessage(item);
+                                                                        setForwardSearch("");
+                                                                        setForwardSentTo(new Set());
+                                                                        setMessageMenuFor(null);
+                                                                    }}
+                                                                >
+                                                                    <FaShare aria-hidden="true" />
+                                                                    Forward
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    role="menuitem"
+                                                                    disabled={item.isDeleted}
+                                                                    onClick={() => {
+                                                                        setReactionPickerFor(
+                                                                            getMessageId(item)
+                                                                        );
+                                                                        setMessageMenuFor(null);
+                                                                    }}
+                                                                >
+                                                                    <span aria-hidden="true">😊</span>
+                                                                    React
+                                                                </button>
+                                                                {own &&
+                                                                    !item.isDeleted &&
+                                                                    item.type !== "call-log" && (
+                                                                        <button
+                                                                            type="button"
+                                                                            role="menuitem"
+                                                                            onClick={() => {
+                                                                                setEditingMessage(item);
+                                                                                setEditText(
+                                                                                    getMessageText(item)
+                                                                                );
+                                                                                setMessageMenuFor(null);
+                                                                            }}
+                                                                        >
+                                                                            <span aria-hidden="true">✎</span>
+                                                                            Edit
+                                                                        </button>
+                                                                    )}
+                                                                {!item.isDeleted && (
+                                                                    <button
+                                                                        type="button"
+                                                                        role="menuitem"
+                                                                        onClick={() => {
+                                                                            setMessageDeleteFor(
+                                                                                getMessageId(item)
+                                                                            );
+                                                                            setMessageMenuFor(null);
+                                                                        }}
+                                                                    >
+                                                                        <FaTrash aria-hidden="true" />
+                                                                        Delete
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
 
 
                                                         {reactionPickerFor ===

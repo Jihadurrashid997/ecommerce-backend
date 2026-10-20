@@ -3156,6 +3156,66 @@
     border-bottom-left-radius: 6px !important;
 }
 
+.message-bubble {
+    touch-action: pan-y;
+}
+
+.message-bubble.swipe-replying {
+    transition: none;
+}
+
+.message-actions-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    min-width: 168px;
+    padding: 6px;
+    border: 1px solid rgba(83, 75, 139, 0.12);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 14px 36px rgba(43, 37, 91, 0.2);
+    color: #39384d;
+    animation: jrPop 0.16s ease;
+}
+
+.message-actions-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.message-actions-menu button:hover:not(:disabled),
+.message-actions-menu button:focus-visible {
+    background: #f3f1fc;
+    color: #5545c4;
+    outline: none;
+}
+
+.message-actions-menu button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.message-meta > .message-reply-btn[aria-haspopup="menu"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    min-height: 24px;
+}
+
 .message-bubble p {
     font-size: 14px;
     line-height: 1.55;
