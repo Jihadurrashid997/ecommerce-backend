@@ -21,7 +21,7 @@ const EtopLogo = ({
         <span className="etop-logo-mark">
             <img
                 className="etop-logo-image"
-                src={`${process.env.PUBLIC_URL}/brand/etop-loading-logo.png`}
+                src={`${process.env.PUBLIC_URL}/brand/etop-logo-hd.png`}
                 alt="E Top"
                 width={SIZE_MAP[size] || SIZE_MAP.md}
             />
@@ -29,12 +29,11 @@ const EtopLogo = ({
 
         {withTagline && (
             <span className="etop-logo-tagline">
-                <span className="etop-logo-company">
-                    JR <b>Group</b>
-                </span>
-                <span className="etop-logo-company-sub">
-                    of Company
-                </span>
+                <img
+                    className="etop-logo-company-image"
+                    src={`${process.env.PUBLIC_URL}/brand/jr-group-logo-hd.png`}
+                    alt="JR Group of Company"
+                />
             </span>
         )}
     </div>
