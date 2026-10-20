@@ -154,9 +154,22 @@
         );
 
     transform-style: preserve-3d;
+    animation: profile-header-enter 0.7s cubic-bezier(.22, 1, .36, 1) both;
     transition:
         transform 0.45s cubic-bezier(.22, 1, .36, 1),
         box-shadow 0.45s ease;
+}
+
+@keyframes profile-header-enter {
+    from {
+        opacity: 0;
+        transform: perspective(1500px) translateY(24px) rotateX(4deg);
+    }
+
+    to {
+        opacity: 1;
+        transform: perspective(1500px) translateY(0) rotateX(0);
+    }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -457,10 +470,31 @@
         );
 
     transform-style: preserve-3d;
+    animation: profile-card-enter 0.65s cubic-bezier(.22, 1, .36, 1) both;
     transition:
         transform 0.4s cubic-bezier(.22, 1, .36, 1),
         box-shadow 0.4s ease,
         border-color 0.4s ease;
+}
+
+.profile-content > .profile-card:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.profile-content > .profile-card:nth-child(3) {
+    animation-delay: 0.2s;
+}
+
+@keyframes profile-card-enter {
+    from {
+        opacity: 0;
+        transform: perspective(1200px) translateY(20px) rotateX(3deg);
+    }
+
+    to {
+        opacity: 1;
+        transform: perspective(1200px) translateY(0) rotateX(0);
+    }
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -711,6 +745,23 @@
             38,
             0.3
         );
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .profile-header,
+    .profile-card {
+        animation: none;
+    }
+
+    .profile-header:hover,
+    .profile-avatar:hover,
+    .profile-card:hover,
+    .profile-action-card:hover,
+    .logout-button:hover,
+    .edit-profile-btn:hover,
+    .settings-btn:hover {
+        transform: none;
+    }
 }
 
 
