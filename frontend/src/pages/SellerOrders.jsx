@@ -226,9 +226,35 @@ const SellerOrders = () => {
 
                             </p>
 
+                            {order.refundStatus === "requested" && (
+                                <div className="seller-refund-notice" role="status">
+                                    <p>
+                                        <strong>English:</strong> A full-order refund request is under Shop review. Shipment updates and payout confirmation are paused; please wait for the Shop administrator's decision.
+                                    </p>
+                                    <p lang="bn">
+                                        <strong>বাংলা:</strong> পুরো অর্ডারের রিফান্ড অনুরোধ Shop পর্যালোচনা করছে। শিপমেন্ট আপডেট ও পেআউট নিশ্চিতকরণ সাময়িকভাবে বন্ধ; Shop administrator-এর সিদ্ধান্তের জন্য অপেক্ষা করুন।
+                                    </p>
+                                </div>
+                            )}
+
+                            {order.refundStatus === "refunded" && (
+                                <div className="seller-refund-notice" role="status">
+                                    <p>
+                                        <strong>English:</strong> The Shop administrator recorded a refund for this order. Any unpaid seller payout was cancelled.
+                                    </p>
+                                    <p lang="bn">
+                                        <strong>বাংলা:</strong> Shop administrator এই অর্ডারের রিফান্ড রেকর্ড করেছেন। বাকি থাকা পেআউট বাতিল করা হয়েছে।
+                                    </p>
+                                </div>
+                            )}
+
                             <p>
                                 <strong>Seller payout:</strong>{" "}
-                                {order.payout?.status === "held"
+                                {order.refundStatus === "requested"
+                                    ? "Paused during refund review"
+                                    : order.refundStatus === "refunded"
+                                        ? "Cancelled after refund"
+                                        : order.payout?.status === "held"
                                     ? "Held until both you and the customer confirm"
                                     : order.payout?.status === "ready"
                                         ? "Both confirmations received; awaiting admin payout"
@@ -241,7 +267,8 @@ const SellerOrders = () => {
 
                             {order.paymentStatus === "paid" &&
                                 order.status === "Delivered" &&
-                                order.payout?.status === "held" && (
+                                order.payout?.status === "held" &&
+                                !["requested", "refunded"].includes(order.refundStatus) && (
                                     <>
                                         <p>
                                             <strong>Customer receipt:</strong>{" "}
@@ -284,7 +311,26 @@ const SellerOrders = () => {
                             {order.payout?.receiptConfirmedAt &&
                                 order.payout?.sellerConfirmedAt && (
                                     <div className="seller-payout-instruction">
-                                        {order.payout.status === "paid" ? (
+                                        {order.refundStatus === "requested" ? (
+                                            <>
+                                                <p>
+                                                    <strong>English:</strong> Payout instructions are paused during refund review. Do not send or confirm any payout transfer.
+                                                </p>
+                                                <p lang="bn">
+                                                    <strong>বাংলা:</strong> রিফান্ড পর্যালোচনার সময় পেআউট নির্দেশনা বন্ধ থাকবে। কোনো পেআউট ট্রান্সফার পাঠাবেন বা নিশ্চিত করবেন না।
+                                                </p>
+                                            </>
+                                        ) : order.refundStatus === "refunded" ||
+                                            order.payout.status === "cancelled" ? (
+                                            <>
+                                                <p>
+                                                    <strong>English:</strong> This seller payout was cancelled. No transfer should be sent for this order.
+                                                </p>
+                                                <p lang="bn">
+                                                    <strong>বাংলা:</strong> এই পেআউট বাতিল করা হয়েছে। এই অর্ডারের জন্য কোনো টাকা পাঠাবেন না।
+                                                </p>
+                                            </>
+                                        ) : order.payout.status === "paid" ? (
                                             <>
                                                 <p>
                                                     <strong>English:</strong> Your payout has been sent to your saved payout account. Please check your account. If it has not arrived, contact Shop support with this order number.
@@ -336,6 +382,7 @@ const SellerOrders = () => {
 
                                 <select
                                     value={order.status}
+                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
                                     onChange={(e) =>
                                         updateStatus(
                                             order._id,

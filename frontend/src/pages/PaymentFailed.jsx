@@ -35,6 +35,10 @@ const PaymentFailed = () => {
                     Unfortunately, your payment could not be completed.
                 </p>
 
+                <p>
+                    Your unpaid order may still reserve product stock. Review your orders to cancel it before starting checkout again.
+                </p>
+
 
                 {transactionId && (
 
@@ -65,10 +69,10 @@ const PaymentFailed = () => {
                 <div className="payment-actions">
 
                     <Link
-                        to="/shop/checkout"
+                        to="/shop/orders"
                         className="payment-btn"
                     >
-                        Try Again
+                        Review orders
                     </Link>
 
 

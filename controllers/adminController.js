@@ -13,6 +13,7 @@ const MarketplaceSettings =
 const {
     getMarketplaceSettings
 } = require("../services/marketplaceSettings");
+const { notifyShopUsers } = require("../services/shopNotifications");
 
 
 // ======================================================
@@ -37,6 +38,7 @@ exports.getAnalytics =
                 cancelledOrders,
 
                 paidPayments,
+                refundedPayments,
                 pendingPayments,
                 failedPayments,
                 cancelledPayments
@@ -83,6 +85,10 @@ exports.getAnalytics =
 
                 Order.countDocuments({
                     paymentStatus: "paid"
+                }),
+
+                Order.countDocuments({
+                    paymentStatus: "refunded"
                 }),
 
                 Order.countDocuments({
@@ -203,6 +209,9 @@ exports.getAnalytics =
 
                         paid:
                             paidPayments,
+
+                        refunded:
+                            refundedPayments,
 
                         pending:
                             pendingPayments,
@@ -389,6 +398,16 @@ exports.approveProduct =
 
 
             await product.save();
+
+            await notifyShopUsers({
+                recipients: [product.seller],
+                eventKey: `${product._id}:product-approved`,
+                type: "product_approved",
+                title: "Shop product approved",
+                message: `${product.name} is approved and can now appear in the Shop. / ${product.name} অনুমোদিত হয়েছে এবং এখন Shop-এ দেখা যাবে।`,
+                href: "/shop/seller/products",
+                productId: product._id
+            });
 
 
             res.json({

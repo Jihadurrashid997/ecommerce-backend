@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import {
     BrowserRouter,
@@ -10,6 +10,7 @@ import {
     Link
 } from "react-router-dom";
 import { useApp } from "./context/AppContext";
+import api from "./services/api";
 
 
 // ======================================================
@@ -61,6 +62,7 @@ import EditProduct from "./pages/EditProduct";
 import AdminDashboard from "./pages/AdminDashboard";
 import Checkout from "./pages/Checkout";
 import OrderHistory from "./pages/OrderHistory";
+import ShopNotifications from "./pages/ShopNotifications";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailed from "./pages/PaymentFailed";
 import EditProfile from "./pages/EditProfile";
@@ -139,12 +141,50 @@ function ShopRedirect({ target }) {
 }
 
 function ShopSectionNavigation({ user }) {
+    const [unreadCount, setUnreadCount] = useState(0);
+    const location = useLocation();
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadUnreadCount = async () => {
+            try {
+                const response = await api.get("/shop-notifications/unread-count");
+                if (!cancelled) {
+                    setUnreadCount(Number(response.data?.unreadCount) || 0);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("SHOP NOTIFICATION COUNT ERROR:", error);
+                }
+            }
+        };
+
+        loadUnreadCount();
+        const intervalId = window.setInterval(loadUnreadCount, 30000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(intervalId);
+        };
+    }, [location.pathname, user?._id]);
+
     return (
         <nav className="shop-section-nav" aria-label="Shop">
             <Link to="/shop">Browse</Link>
             <Link to="/shop/cart">Cart</Link>
             <Link to="/shop/wishlist">Wishlist</Link>
             <Link to="/shop/orders">Orders</Link>
+            <Link
+                to="/shop/notifications"
+                className="shop-notifications-nav-link"
+                aria-label={`Shop notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
+            >
+                Notifications
+                {unreadCount > 0 && (
+                    <span className="shop-notifications-badge">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                )}
+            </Link>
             {user?.role === "seller" && (
                 <>
                     <Link to="/shop/dashboard">Dashboard</Link>
@@ -328,6 +368,7 @@ function AppLayout() {
                 <Route path="/shop/wishlist" element={<PrivateRoute><Wishlist /></PrivateRoute>} />
                 <Route path="/shop/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
                 <Route path="/shop/orders" element={<PrivateRoute><OrderHistory /></PrivateRoute>} />
+                <Route path="/shop/notifications" element={<PrivateRoute><ShopNotifications /></PrivateRoute>} />
                 <Route path="/shop/seller" element={<PrivateRoute allowedRoles={["seller"]}><SellerDashboard /></PrivateRoute>} />
                 <Route path="/shop/seller/products" element={<PrivateRoute allowedRoles={["seller"]}><SellerProducts /></PrivateRoute>} />
                 <Route path="/shop/seller/orders" element={<PrivateRoute allowedRoles={["seller"]}><SellerOrders /></PrivateRoute>} />

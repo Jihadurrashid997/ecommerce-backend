@@ -44,7 +44,9 @@ const Cart = () => {
             sum + item.price * item.quantity,
 
         0
-
+    );
+    const hasStockIssues = cart.some(
+        item => Number(item.quantity) > Number(item.stock ?? 1)
     );
 
     return (
@@ -152,18 +154,24 @@ const Cart = () => {
                                             </span>
 
                                             <button
-
+                                                type="button"
+                                                disabled={
+                                                    Number(product.quantity) >=
+                                                    Number(product.stock ?? 1)
+                                                }
                                                 onClick={()=>
-
                                                 addToCart(product)}
-
                                             >
-
                                                 <FaPlus/>
-
                                             </button>
 
                                         </div>
+                                        {Number(product.quantity) >
+                                            Number(product.stock ?? 1) && (
+                                                <p className="cart-stock-warning" role="alert">
+                                                    Available stock changed. Reduce the quantity before checkout.
+                                                </p>
+                                            )}
 
                                         <button
 
@@ -201,12 +209,19 @@ const Cart = () => {
 
                             </h1>
 
+                            {hasStockIssues && (
+                                <p className="cart-stock-warning" role="alert">
+                                    Update quantities to match available stock before checkout.
+                                </p>
+                            )}
+
                             <Link
-
                                 className="checkout-btn"
-
                                 to="/shop/checkout"
-
+                                aria-disabled={hasStockIssues}
+                                onClick={event => {
+                                    if (hasStockIssues) event.preventDefault();
+                                }}
                             >
 
                                 Proceed To Checkout

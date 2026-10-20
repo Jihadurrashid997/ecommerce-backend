@@ -191,6 +191,11 @@ app.use(
 );
 
 app.use(
+    "/api/shop-notifications",
+    require("./routes/shopNotificationRoutes")
+);
+
+app.use(
     "/api/payment",
     require("./routes/paymentRoutes")
 );

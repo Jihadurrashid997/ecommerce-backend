@@ -511,7 +511,7 @@ const Checkout = () => {
                         </div>
 
                         <p className="checkout-payout-note">
-                            Seller payout stays on hold until you confirm the delivered shipment. Shop administrators then process the transfer manually.
+                            Seller payout stays on hold until both you and the seller confirm the delivered shipment and amount. Shop administrators then send the transfer manually.
                         </p>
 
 

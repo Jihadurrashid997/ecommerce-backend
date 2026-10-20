@@ -1,5 +1,6 @@
 const Product = require("../models/Product");
 const marketplaceSettings = require("../services/marketplaceSettings");
+const { notifyShopUsers } = require("../services/shopNotifications");
 
 // ==============================
 // Get All Products
@@ -136,26 +137,57 @@ exports.createProduct = async (req, res) => {
             });
         }
 
+        const name = String(req.body.name || "").trim();
+        const description = String(req.body.description || "").trim();
+        const category = String(req.body.category || "").trim();
+        const price = Number(req.body.price);
+        const stock = req.body.stock === undefined
+            ? 1
+            : Number(req.body.stock);
+
+        if (
+            !name ||
+            !description ||
+            !category ||
+            !Number.isFinite(price) ||
+            price <= 0 ||
+            !Number.isSafeInteger(stock) ||
+            stock < 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a product name, description, category, positive price, and whole-number stock of zero or more."
+            });
+        }
+
         const product = await Product.create({
-
-            name: req.body.name,
-
-            description: req.body.description,
-
-            price: req.body.price,
-
-            category: req.body.category,
+            name,
+            description,
+            price,
+            category,
 
             image: req.file
                 ? `/uploads/${req.file.filename}`
                 : req.body.image || "",
 
-            stock: req.body.stock,
+            stock,
 
             seller: req.user.id,
             isApproved: !settings.requireProductApproval
 
         });
+
+        if (!product.isApproved) {
+            await notifyShopUsers({
+                recipients: [product.seller],
+                eventKey: `${product._id}:product-review`,
+                type: "product_review",
+                title: "Shop product awaiting review",
+                message: `${product.name} was submitted and will appear in the Shop after administrator approval. / ${product.name} জমা হয়েছে; অ্যাডমিন অনুমোদনের পর Shop-এ দেখা যাবে।`,
+                href: "/shop/seller/products",
+                productId: product._id
+            });
+        }
 
         res.status(201).json(product);
 
@@ -214,10 +246,46 @@ exports.updateProduct = async (req, res) => {
 
         }
 
-        const updatedData = {
-            ...req.body
-        };
-        delete updatedData.isApproved;
+        const updatedData = {};
+        const textFields = ["name", "description", "category"];
+        for (const field of textFields) {
+            if (req.body[field] !== undefined) {
+                const value = String(req.body[field]).trim();
+                if (!value) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `${field} cannot be empty.`
+                    });
+                }
+                updatedData[field] = value;
+            }
+        }
+
+        if (req.body.price !== undefined) {
+            const price = Number(req.body.price);
+            if (!Number.isFinite(price) || price <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Product price must be greater than zero."
+                });
+            }
+            updatedData.price = price;
+        }
+
+        if (req.body.stock !== undefined) {
+            const stock = Number(req.body.stock);
+            if (!Number.isSafeInteger(stock) || stock < 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Product stock must be a whole number of zero or more."
+                });
+            }
+            updatedData.stock = stock;
+        }
+
+        if (req.body.image !== undefined && !req.file) {
+            updatedData.image = String(req.body.image).trim();
+        }
 
         if (
             req.user.role !== "admin" &&
@@ -235,6 +303,22 @@ exports.updateProduct = async (req, res) => {
         Object.assign(product, updatedData);
 
         await product.save();
+
+        if (
+            req.user.role !== "admin" &&
+            settings.requireProductApproval &&
+            product.isApproved === false
+        ) {
+            await notifyShopUsers({
+                recipients: [product.seller],
+                eventKey: `${product._id}:product-review:${product.updatedAt?.getTime?.() || Date.now()}`,
+                type: "product_review",
+                title: "Edited Shop product awaiting review",
+                message: `${product.name} was updated and is hidden until administrator approval. / ${product.name} আপডেট হয়েছে; অ্যাডমিন অনুমোদন না দেওয়া পর্যন্ত Shop-এ দেখা যাবে না।`,
+                href: "/shop/seller/products",
+                productId: product._id
+            });
+        }
 
         res.json(product);
 

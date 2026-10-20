@@ -3,9 +3,16 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 const User = require("../models/User");
 const marketplaceSettings = require("../services/marketplaceSettings");
+const {
+    notifyShopUsers,
+    notifyShopAdmins
+} = require("../services/shopNotifications");
 
 const getCustomerOrder = order => {
-    const result = order.toObject();
+    const result = typeof order.toObject === "function"
+        ? order.toObject()
+        : { ...order };
+    const refundRequest = result.refundRequest || {};
     result.sellerSettlements = (result.sellerSettlements || []).map(
         settlement => ({
             _id: settlement._id,
@@ -16,6 +23,16 @@ const getCustomerOrder = order => {
             payoutStatus: settlement.payoutStatus
         })
     );
+    result.refundRequest = {
+        status: refundRequest.status || "none",
+        reason: refundRequest.reason || "",
+        requestedAt: refundRequest.requestedAt || null,
+        adminNote: refundRequest.adminNote || "",
+        reviewedAt: refundRequest.reviewedAt || null,
+        refundMethod: refundRequest.refundMethod || "",
+        refundReference: refundRequest.refundReference || "",
+        refundedAt: refundRequest.refundedAt || null
+    };
     return result;
 };
 
@@ -49,6 +66,20 @@ const updateOverallDeliveryStatus = order => {
 // ========================================
 
 exports.createOrder = async (req, res) => {
+    const reservedStock = [];
+    let orderCreated = false;
+
+    const restoreReservedStock = async () => {
+        while (reservedStock.length) {
+            const { productId, quantity } = reservedStock[0];
+            await Product.updateOne(
+                { _id: productId },
+                { $inc: { stock: quantity } }
+            );
+            reservedStock.shift();
+        }
+    };
+
     try {
         const settings =
             await marketplaceSettings.getMarketplaceSettings();
@@ -71,14 +102,56 @@ exports.createOrder = async (req, res) => {
             });
         }
 
+        const recipientName = String(shippingAddress?.name || "").trim();
+        const recipientPhone = String(shippingAddress?.phone || "").trim();
+        const recipientAddress = String(shippingAddress?.address || "").trim();
+        if (!recipientName || !recipientPhone || !recipientAddress) {
+            return res.status(400).json({
+                message: "Recipient name, phone, and delivery address are required."
+            });
+        }
+
+        if (paymentMethod && paymentMethod !== "sslcommerz") {
+            return res.status(400).json({
+                message: "SSLCommerz is the only currently supported Shop payment method."
+            });
+        }
+
+        const requestedQuantities = new Map();
+        for (const item of items) {
+            const productId = String(item?.product || item?._id || "");
+            if (!mongoose.Types.ObjectId.isValid(productId)) {
+                return res.status(400).json({
+                    message: "One or more products are invalid."
+                });
+            }
+
+            const quantity = item.quantity === undefined
+                ? 1
+                : Number(item.quantity);
+            if (!Number.isSafeInteger(quantity) || quantity < 1) {
+                return res.status(400).json({
+                    message: "Product quantities must be positive whole numbers."
+                });
+            }
+
+            const totalQuantity =
+                (requestedQuantities.get(productId) || 0) + quantity;
+            if (!Number.isSafeInteger(totalQuantity)) {
+                return res.status(400).json({
+                    message: "Requested quantity is too large."
+                });
+            }
+            requestedQuantities.set(productId, totalQuantity);
+        }
+
         let totalPrice = 0;
         const orderItems = [];
         const sellerAmounts = new Map();
 
-        for (const item of items) {
-            const product = await Product.findById(
-                item.product || item._id
-            );
+        const products = new Map();
+        for (const [productId, quantity] of requestedQuantities) {
+            const product = await Product.findById(productId);
 
             if (!product) {
                 return res.status(404).json({
@@ -101,16 +174,15 @@ exports.createOrder = async (req, res) => {
                 });
             }
 
-            const quantity = Number(item.quantity) || 1;
-
-            if (quantity < 1) {
+            if (!Number.isFinite(Number(product.price)) || Number(product.price) <= 0) {
                 return res.status(400).json({
-                    message: "Invalid quantity"
+                    message: `${product.name} has an invalid price.`
                 });
             }
 
             if (
                 product.stock !== undefined &&
+                product.stock !== null &&
                 product.stock < quantity
             ) {
                 return res.status(400).json({
@@ -118,7 +190,56 @@ exports.createOrder = async (req, res) => {
                 });
             }
 
+            products.set(productId, { product, quantity });
+        }
+
+        for (const [productId, { product: savedProduct, quantity }] of products) {
+            let product = savedProduct;
+
+            if (savedProduct.stock !== undefined && savedProduct.stock !== null) {
+                product = await Product.findOneAndUpdate(
+                    {
+                        _id: productId,
+                        seller: savedProduct.seller,
+                        stock: { $gte: quantity },
+                        ...(settings.requireProductApproval
+                            ? { isApproved: { $ne: false } }
+                            : {})
+                    },
+                    { $inc: { stock: -quantity } },
+                    { new: true }
+                );
+
+                if (!product) {
+                    await restoreReservedStock();
+                    return res.status(409).json({
+                        message: `${savedProduct.name} no longer has enough stock. Please refresh your cart.`
+                    });
+                }
+
+                reservedStock.push({ productId, quantity });
+            }
+
+            if (
+                !product.seller ||
+                (
+                    settings.requireProductApproval &&
+                    product.isApproved === false
+                )
+            ) {
+                if (reservedStock.length) {
+                    await restoreReservedStock();
+                }
+                return res.status(409).json({
+                    message: "One of the products is no longer available."
+                });
+            }
+
             totalPrice += product.price * quantity;
+            if (!Number.isFinite(totalPrice)) {
+                throw new Error("Order total is invalid.");
+            }
+
             const sellerId = String(product.seller);
             sellerAmounts.set(
                 sellerId,
@@ -132,19 +253,6 @@ exports.createOrder = async (req, res) => {
                 quantity,
                 image: product.image || ""
             });
-
-            // Reduce stock now that this item has been
-            // confirmed available and added to the order.
-            // Without this the stock check above is useless:
-            // the same "in stock" quantity would keep passing
-            // for every future order, allowing overselling.
-            if (product.stock !== undefined) {
-
-                product.stock -= quantity;
-
-                await product.save();
-
-            }
         }
 
         const order = await Order.create({
@@ -152,27 +260,49 @@ exports.createOrder = async (req, res) => {
             items: orderItems,
             totalPrice,
             shippingAddress: {
-                name: String(shippingAddress?.name || "").trim(),
-                phone: String(shippingAddress?.phone || "").trim(),
-                address: String(shippingAddress?.address || "").trim(),
+                name: recipientName,
+                phone: recipientPhone,
+                address: recipientAddress,
                 city: String(shippingAddress?.city || "").trim(),
                 postalCode: String(shippingAddress?.postalCode || "").trim()
             },
-            paymentMethod: paymentMethod || "cod",
+            paymentMethod: "sslcommerz",
             sellerSettlements: Array.from(sellerAmounts, ([seller, amount]) => ({
                 seller,
                 amount,
                 payoutStatus: "awaiting_payment"
             }))
         });
+        orderCreated = true;
+
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:order-placed`,
+            type: "order_placed",
+            title: "Shop order placed",
+            message: `Order #${String(order._id).slice(-8)} is created and waiting for SSLCommerz payment. / আপনার অর্ডারটি তৈরি হয়েছে, পেমেন্টের অপেক্ষায় আছে।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
 
         res.status(201).json({
             message: "Order created successfully",
-            order
+            order: getCustomerOrder(order)
         });
 
     } catch (err) {
         console.error(err);
+
+        if (!orderCreated && reservedStock.length) {
+            try {
+                await restoreReservedStock();
+            } catch (rollbackError) {
+                console.error("ORDER STOCK ROLLBACK ERROR:", rollbackError);
+                return res.status(500).json({
+                    message: "Checkout could not be completed safely. Contact Shop support before retrying."
+                });
+            }
+        }
 
         res.status(500).json({
             message: err.message
@@ -247,35 +377,44 @@ exports.getOrder = async (req, res) => {
 
 exports.cancelOrder = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id);
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                user: req.user.id,
+                status: {
+                    $nin: ["Cancelled", "Shipped", "Delivered"]
+                },
+                paymentStatus: { $ne: "paid" },
+                $or: [
+                    { paymentStatus: { $ne: "pending" } },
+                    {
+                        paymentStatus: "pending",
+                        transactionId: ""
+                    },
+                    {
+                        paymentStatus: "pending",
+                        transactionId: { $exists: false }
+                    }
+                ]
+            },
+            {
+                $set: {
+                    status: "Cancelled",
+                    "sellerSettlements.$[settlement].deliveryStatus": "Cancelled",
+                    "sellerSettlements.$[settlement].payoutStatus": "cancelled"
+                }
+            },
+            {
+                new: true,
+                arrayFilters: [{
+                    "settlement.payoutStatus": { $ne: "paid" }
+                }]
+            }
+        );
 
         if (!order) {
-            return res.status(404).json({
-                message: "Order not found"
-            });
-        }
-
-        if (
-            order.user.toString() !==
-            req.user.id.toString()
-        ) {
-            return res.status(403).json({
-                message: "Not authorized"
-            });
-        }
-
-        if (
-            order.status === "Shipped" ||
-            order.status === "Delivered"
-        ) {
-            return res.status(400).json({
-                message: "This order cannot be cancelled"
-            });
-        }
-
-        if (order.paymentStatus === "paid") {
-            return res.status(400).json({
-                message: "Paid orders cannot be cancelled online. Contact Shop support to request a refund."
+            return res.status(409).json({
+                message: "This order is not eligible for unpaid cancellation. Paid eligible orders can submit a full-order refund request from Order History."
             });
         }
 
@@ -291,17 +430,19 @@ exports.cancelOrder = async (req, res) => {
 
         }
 
-        order.status = "Cancelled";
-        for (const settlement of order.sellerSettlements || []) {
-            settlement.deliveryStatus = "Cancelled";
-            settlement.payoutStatus = "cancelled";
-        }
-
-        await order.save();
+        await notifyShopUsers({
+            recipients: [req.user.id],
+            eventKey: `${order._id}:order-cancelled`,
+            type: "order_cancelled",
+            title: "Unpaid Shop order cancelled",
+            message: `Order #${String(order._id).slice(-8)} was cancelled and reserved stock was released. / অর্ডারটি বাতিল হয়েছে এবং পণ্যের স্টক ফেরত যোগ হয়েছে।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
 
         res.json({
             message: "Order cancelled successfully",
-            order
+            order: getCustomerOrder(order)
         });
 
     } catch (err) {
@@ -382,6 +523,7 @@ exports.getSellerOrders = async (req, res) => {
                 ),
                 paymentMethod: order.paymentMethod,
                 paymentStatus: order.paymentStatus,
+                refundStatus: order.refundRequest?.status || "none",
                 status: settlement?.deliveryStatus || order.status,
                 payout: settlement
                     ? {
@@ -482,12 +624,19 @@ exports.updateSellerOrderStatus = async (
             });
         }
 
-        if (order.paymentStatus === "paid" && status === "Cancelled") {
-            return res.status(400).json({
-                message: "Paid orders must be cancelled by an administrator so the refund can be reviewed."
+        if (["requested", "refunded"].includes(order.refundRequest?.status)) {
+            return res.status(409).json({
+                message: "Shipment updates are paused while the Shop reviews this refund request."
             });
         }
 
+        if (order.paymentStatus === "paid" && status === "Cancelled") {
+            return res.status(400).json({
+                message: "Paid orders must use the Shop refund request and review process."
+            });
+        }
+
+        const previousStatus = settlement?.deliveryStatus || order.status;
         if (settlement) {
             if (
                 (settlement.receiptConfirmedAt || settlement.sellerConfirmedAt) &&
@@ -505,6 +654,18 @@ exports.updateSellerOrderStatus = async (
         }
 
         await order.save();
+
+        if (previousStatus !== status) {
+            await notifyShopUsers({
+                recipients: [order.user],
+                eventKey: `${order._id}:shipment:${settlement?._id || req.user.id}:${status}:${order.updatedAt?.getTime() || Date.now()}`,
+                type: "shipment_update",
+                title: "Shop delivery update",
+                message: `Shipment for order #${String(order._id).slice(-8)} is now ${status}. / আপনার অর্ডারের শিপমেন্টের অবস্থা এখন ${status}।`,
+                href: "/shop/orders",
+                orderId: order._id
+            });
+        }
 
         res.json({
             message:
@@ -526,6 +687,7 @@ const markSettlementReadyForPayout = (orderId, fulfillmentId) =>
         {
             _id: orderId,
             paymentStatus: "paid",
+            "refundRequest.status": { $nin: ["requested", "refunded"] },
             sellerSettlements: {
                 $elemMatch: {
                     _id: fulfillmentId,
@@ -564,6 +726,7 @@ exports.confirmOrderReceipt = async (req, res) => {
                 _id: req.params.id,
                 user: req.user.id,
                 paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
                 sellerSettlements: {
                     $elemMatch: {
                         _id: req.params.fulfillmentId,
@@ -588,10 +751,33 @@ exports.confirmOrderReceipt = async (req, res) => {
             });
         }
 
-        await markSettlementReadyForPayout(
+        const readiness = await markSettlementReadyForPayout(
             req.params.id,
             req.params.fulfillmentId
         );
+
+        const settlement = (order.sellerSettlements || []).find(
+            item => String(item._id) === String(req.params.fulfillmentId)
+        );
+        await notifyShopUsers({
+            recipients: [settlement?.seller],
+            eventKey: `${order._id}:buyer-confirmed:${req.params.fulfillmentId}`,
+            type: "buyer_confirmation",
+            title: "Customer confirmed delivery",
+            message: `The customer confirmed receipt for order #${String(order._id).slice(-8)}. / ক্রেতা অর্ডারটির পণ্য পাওয়া নিশ্চিত করেছেন।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
+        if (readiness.modifiedCount === 1) {
+            await notifyShopAdmins({
+                eventKey: `${order._id}:payout-ready:${req.params.fulfillmentId}`,
+                type: "payout_ready",
+                title: "Shop payout ready for review",
+                message: `Both parties confirmed shipment and payout for order #${String(order._id).slice(-8)}. / দুই পক্ষই শিপমেন্ট ও পেআউট নিশ্চিত করেছেন; অ্যাডমিন পর্যালোচনা প্রয়োজন।`,
+                href: "/admin/control",
+                orderId: order._id
+            });
+        }
 
         return res.json({
             success: true,
@@ -651,6 +837,7 @@ exports.confirmSellerPayout = async (req, res) => {
             {
                 _id: req.params.id,
                 paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
                 sellerSettlements: {
                     $elemMatch: {
                         _id: req.params.fulfillmentId,
@@ -678,10 +865,30 @@ exports.confirmSellerPayout = async (req, res) => {
             });
         }
 
-        await markSettlementReadyForPayout(
+        const readiness = await markSettlementReadyForPayout(
             req.params.id,
             req.params.fulfillmentId
         );
+
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:seller-confirmed:${req.params.fulfillmentId}`,
+            type: "seller_confirmation",
+            title: "Seller confirmed delivery and payout",
+            message: `The seller confirmed delivery and payout details for order #${String(order._id).slice(-8)}. / বিক্রেতা অর্ডারটির ডেলিভারি ও পেআউটের তথ্য নিশ্চিত করেছেন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+        if (readiness.modifiedCount === 1) {
+            await notifyShopAdmins({
+                eventKey: `${order._id}:payout-ready:${req.params.fulfillmentId}`,
+                type: "payout_ready",
+                title: "Shop payout ready for review",
+                message: `Both parties confirmed shipment and payout for order #${String(order._id).slice(-8)}. / দুই পক্ষই শিপমেন্ট ও পেআউট নিশ্চিত করেছেন; অ্যাডমিন পর্যালোচনা প্রয়োজন।`,
+                href: "/admin/control",
+                orderId: order._id
+            });
+        }
 
         return res.json({
             success: true,
@@ -704,6 +911,7 @@ exports.getReadySellerPayouts = async (_req, res) => {
     try {
         const orders = await Order.find({
             paymentStatus: "paid",
+            "refundRequest.status": { $nin: ["requested", "refunded"] },
             sellerSettlements: {
                 $elemMatch: {
                     deliveryStatus: "Delivered",
@@ -788,6 +996,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
         const order = await Order.findOne({
             _id: req.params.id,
             paymentStatus: "paid",
+            "refundRequest.status": { $nin: ["requested", "refunded"] },
             sellerSettlements: {
                 $elemMatch: {
                     _id: req.body.fulfillmentId,
@@ -827,6 +1036,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
             {
                 _id: req.params.id,
                 paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
                 sellerSettlements: {
                     $elemMatch: {
                         _id: req.body.fulfillmentId,
@@ -864,6 +1074,25 @@ exports.markSellerPayoutPaid = async (req, res) => {
             });
         }
 
+        await notifyShopUsers({
+            recipients: [settlement.seller?._id],
+            eventKey: `${order._id}:payout-paid:${req.body.fulfillmentId}`,
+            type: "payout_processed",
+            title: "Shop payout recorded",
+            message: `The Shop administrator recorded the payout for order #${String(order._id).slice(-8)}. / Shop অ্যাডমিন এই অর্ডারের পেআউট সম্পন্ন হিসেবে রেকর্ড করেছেন।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:payout-paid:${req.body.fulfillmentId}`,
+            type: "payout_processed",
+            title: "Shop seller payout sent",
+            message: `The Shop administrator recorded the seller payout for order #${String(order._id).slice(-8)}. / Shop অ্যাডমিন বিক্রেতার পেআউট সম্পন্ন হিসেবে রেকর্ড করেছেন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+
         return res.json({
             success: true,
             message: "Seller payout recorded as paid."
@@ -873,6 +1102,332 @@ exports.markSellerPayoutPaid = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Could not record seller payout."
+        });
+    }
+};
+
+// ========================================
+// CUSTOMER - REQUEST A FULL ORDER REFUND
+// ========================================
+
+exports.requestOrderRefund = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order ID."
+        });
+    }
+
+    const reason = typeof req.body?.reason === "string"
+        ? req.body.reason.trim()
+        : "";
+    if (reason.length < 10 || reason.length > 1000) {
+        return res.status(400).json({
+            success: false,
+            message: "Explain the refund request in 10 to 1000 characters."
+        });
+    }
+
+    try {
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                user: req.user.id,
+                paymentStatus: "paid",
+                status: { $ne: "Cancelled" },
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
+                sellerSettlements: {
+                    $not: {
+                        $elemMatch: { payoutStatus: "paid" }
+                    }
+                }
+            },
+            {
+                $set: {
+                    "refundRequest.status": "requested",
+                    "refundRequest.reason": reason,
+                    "refundRequest.requestedAt": new Date(),
+                    "refundRequest.adminNote": "",
+                    "refundRequest.reviewedAt": null,
+                    "refundRequest.reviewedBy": null,
+                    "refundRequest.refundMethod": "",
+                    "refundRequest.refundReference": "",
+                    "refundRequest.refundedAt": null
+                }
+            },
+            { new: true }
+        );
+
+        if (!order) {
+            return res.status(409).json({
+                success: false,
+                message: "This paid order cannot be refunded in the Shop: it may be cancelled, already under review/refunded, unpaid, or its seller payout has already been sent."
+            });
+        }
+
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:refund-submitted:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_submitted",
+            title: "Shop refund request submitted",
+            message: `Your refund request for order #${String(order._id).slice(-8)} is awaiting review. / আপনার রিফান্ড অনুরোধটি পর্যালোচনার অপেক্ষায় আছে।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+        await notifyShopAdmins({
+            eventKey: `${order._id}:refund-review:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_submitted",
+            title: "Shop refund request needs review",
+            message: `A full-order refund was requested for order #${String(order._id).slice(-8)}. / একটি অর্ডারের পূর্ণ রিফান্ড অনুরোধ এসেছে; পর্যালোচনা করুন।`,
+            href: "/admin/control",
+            orderId: order._id
+        });
+        await notifyShopUsers({
+            recipients: (order.sellerSettlements || []).map(
+                settlement => settlement.seller
+            ),
+            eventKey: `${order._id}:refund-pending:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_submitted",
+            title: "Shop refund under review",
+            message: `A refund request is under review for order #${String(order._id).slice(-8)}. Pause shipment updates and payout confirmation until the Shop administrator decides. / রিফান্ড পর্যালোচনাধীন; অ্যাডমিনের সিদ্ধান্ত না আসা পর্যন্ত শিপমেন্ট ও পেআউটের কাজ স্থগিত রাখুন।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
+
+        return res.json({
+            success: true,
+            message: "Your full-order refund request was sent to Shop administrators. The refund is not automatic.",
+            order: getCustomerOrder(order)
+        });
+    } catch (error) {
+        console.error("REQUEST ORDER REFUND ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not submit the refund request."
+        });
+    }
+};
+
+// ========================================
+// ADMIN - REFUND REQUEST QUEUE
+// ========================================
+
+exports.getRequestedOrderRefunds = async (_req, res) => {
+    try {
+        const orders = await Order.find({
+            paymentStatus: "paid",
+            "refundRequest.status": "requested",
+            sellerSettlements: {
+                $not: {
+                    $elemMatch: { payoutStatus: "paid" }
+                }
+            }
+        })
+            .populate("user", "name email")
+            .sort({ "refundRequest.requestedAt": 1 });
+
+        return res.json({
+            success: true,
+            refunds: orders
+        });
+    } catch (error) {
+        console.error("GET ORDER REFUNDS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load refund requests."
+        });
+    }
+};
+
+exports.rejectOrderRefund = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order ID."
+        });
+    }
+
+    const adminNote = typeof req.body?.adminNote === "string"
+        ? req.body.adminNote.trim()
+        : "";
+    if (adminNote.length < 3 || adminNote.length > 500) {
+        return res.status(400).json({
+            success: false,
+            message: "Provide a review note between 3 and 500 characters."
+        });
+    }
+
+    try {
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                "refundRequest.status": "requested",
+                sellerSettlements: {
+                    $not: {
+                        $elemMatch: { payoutStatus: "paid" }
+                    }
+                }
+            },
+            {
+                $set: {
+                    "refundRequest.status": "rejected",
+                    "refundRequest.adminNote": adminNote,
+                    "refundRequest.reviewedAt": new Date(),
+                    "refundRequest.reviewedBy": req.user.id
+                }
+            },
+            { new: true }
+        );
+
+        if (!order) {
+            return res.status(409).json({
+                success: false,
+                message: "This refund request is no longer pending or the seller payout has already been sent."
+            });
+        }
+
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:refund-rejected:${order.refundRequest?.requestedAt?.getTime?.() || order.updatedAt?.getTime?.() || Date.now()}`,
+            type: "refund_decision",
+            title: "Shop refund request reviewed",
+            message: `The refund request for order #${String(order._id).slice(-8)} was declined. Review the note in Shop orders. / রিফান্ড অনুরোধটি গ্রহণ করা হয়নি; Shop orders-এ অ্যাডমিনের নোট দেখুন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+
+        return res.json({
+            success: true,
+            message: "Refund request rejected with a review note."
+        });
+    } catch (error) {
+        console.error("REJECT ORDER REFUND ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not reject the refund request."
+        });
+    }
+};
+
+exports.recordOrderRefund = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order ID."
+        });
+    }
+
+    const refundMethod = typeof req.body?.refundMethod === "string"
+        ? req.body.refundMethod.trim()
+        : "";
+    const refundReference = typeof req.body?.refundReference === "string"
+        ? req.body.refundReference.trim()
+        : "";
+    const adminNote = typeof req.body?.adminNote === "string"
+        ? req.body.adminNote.trim()
+        : "";
+    if (
+        !refundMethod ||
+        refundMethod.length > 40 ||
+        !refundReference ||
+        refundReference.length > 120 ||
+        adminNote.length > 500
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Enter a valid refund method and transfer reference. The review note must be at most 500 characters."
+        });
+    }
+
+    try {
+        const refundedAt = new Date();
+        const order = await Order.findOne({
+            _id: req.params.id,
+            paymentStatus: "paid",
+            "refundRequest.status": "requested",
+            sellerSettlements: {
+                $not: {
+                    $elemMatch: { payoutStatus: "paid" }
+                }
+            }
+        }).select("user sellerSettlements.seller refundRequest.requestedAt");
+
+        if (!order) {
+            return res.status(409).json({
+                success: false,
+                message: "This refund is no longer pending or a seller payout has already been sent."
+            });
+        }
+
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                "refundRequest.status": "requested",
+                sellerSettlements: {
+                    $not: {
+                        $elemMatch: { payoutStatus: "paid" }
+                    }
+                }
+            },
+            {
+                $set: {
+                    paymentStatus: "refunded",
+                    "refundRequest.status": "refunded",
+                    "refundRequest.adminNote": adminNote,
+                    "refundRequest.reviewedAt": refundedAt,
+                    "refundRequest.reviewedBy": req.user.id,
+                    "refundRequest.refundMethod": refundMethod,
+                    "refundRequest.refundReference": refundReference,
+                    "refundRequest.refundedAt": refundedAt,
+                    "sellerSettlements.$[settlement].payoutStatus": "cancelled"
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement.payoutStatus": { $ne: "paid" }
+                }]
+            }
+        );
+
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "This refund is no longer pending or a seller payout has already been sent."
+            });
+        }
+
+        await notifyShopUsers({
+            recipients: [order.user],
+            eventKey: `${order._id}:refund-completed:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_completed",
+            title: "Shop refund recorded",
+            message: `The Shop administrator recorded the refund for order #${String(order._id).slice(-8)}. / Shop অ্যাডমিন অর্ডারটির রিফান্ড সম্পন্ন হিসেবে রেকর্ড করেছেন।`,
+            href: "/shop/orders",
+            orderId: order._id
+        });
+        await notifyShopUsers({
+            recipients: (order.sellerSettlements || []).map(
+                settlement => settlement.seller
+            ),
+            eventKey: `${order._id}:refund-completed:${order.refundRequest.requestedAt?.getTime?.() || Date.now()}`,
+            type: "refund_completed",
+            title: "Shop refund completed",
+            message: `The refund for order #${String(order._id).slice(-8)} was recorded. Its unpaid seller payout was cancelled. / অর্ডারটির রিফান্ড রেকর্ড হয়েছে; বাকি থাকা বিক্রেতার পেআউট বাতিল করা হয়েছে।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
+
+        return res.json({
+            success: true,
+            message: "Manual refund recorded. The order's unpaid seller payouts were cancelled."
+        });
+    } catch (error) {
+        console.error("RECORD ORDER REFUND ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not record the refund."
         });
     }
 };
@@ -942,9 +1497,15 @@ exports.updateOrderStatus = async (
             });
         }
 
+        if (["requested", "refunded"].includes(order.refundRequest?.status)) {
+            return res.status(409).json({
+                message: "Order status cannot change while a refund request is pending or after a refund is completed."
+            });
+        }
+
         if (order.paymentStatus === "paid" && status === "Cancelled") {
             return res.status(400).json({
-                message: "Paid orders must go through the support refund process before cancellation."
+                message: "Paid orders must use the Shop refund request and review process."
             });
         }
 

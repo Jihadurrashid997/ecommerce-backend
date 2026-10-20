@@ -70,3 +70,71 @@
     opacity: .6;
     cursor: wait;
 }
+
+.cancel-unpaid-order-btn {
+    padding: 8px 12px;
+    border: 1px solid #dc2626;
+    border-radius: 8px;
+    background: transparent;
+    color: #dc2626;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cancel-unpaid-order-btn:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+.order-notice {
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid rgba(22, 163, 74, .35);
+    border-radius: 10px;
+    background: rgba(22, 163, 74, .1);
+}
+
+.order-refund {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid rgba(234, 88, 12, .3);
+    border-radius: 14px;
+    background: rgba(234, 88, 12, .06);
+}
+
+.order-refund h3 {
+    margin-top: 0;
+}
+
+.order-refund-form {
+    display: grid;
+    gap: 10px;
+}
+
+.order-refund-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid rgba(127, 127, 127, .4);
+    border-radius: 10px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    resize: vertical;
+}
+
+.request-refund-btn {
+    justify-self: start;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 9px;
+    background: #ea580c;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.request-refund-btn:disabled {
+    opacity: .6;
+    cursor: wait;
+}

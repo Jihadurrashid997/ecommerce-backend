@@ -59,6 +59,18 @@
 
 .seller-confirm-payout {
     margin: 8px 0;
+}
+
+.seller-refund-notice {
+    margin: 12px 0;
+    padding: 12px 14px;
+    border: 1px solid rgba(234, 88, 12, .35);
+    border-radius: 12px;
+    background: rgba(234, 88, 12, .08);
+}
+
+.seller-refund-notice p {
+    margin: 6px 0;
     padding: 10px 14px;
     border: 0;
     border-radius: 8px;
