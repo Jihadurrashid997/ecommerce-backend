@@ -16,10 +16,11 @@
     position: sticky;
     top: 78px;
     z-index: 40;
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 6px;
     padding: 8px 10px;
-    overflow-x: auto;
+    overflow-x: hidden;
     background: linear-gradient(135deg, #1159ff, #0a3fd1);
     scrollbar-width: none;
 }
@@ -27,8 +28,7 @@
 .top-tabs::-webkit-scrollbar { display: none; }
 
 .top-tab {
-    flex: 1 0 auto;
-    min-width: 82px;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -455,8 +455,24 @@
 .progress-track div { height: 100%; background: var(--etop-blue); transition: width 0.2s; }
 
 @media (max-width: 640px) {
-    .top-tabs { top: 64px; }
-    .top-tab { min-width: 78px; padding: 9px 12px; font-size: 12px; }
+    .top-tabs {
+        top: 64px;
+        box-sizing: border-box;
+        width: 100%;
+        gap: 3px;
+        padding: 8px 8px;
+        overflow-x: hidden;
+        touch-action: pan-y;
+    }
+
+    .top-tab {
+        padding: 8px 2px;
+        gap: 5px;
+        font-size: clamp(7px, 2.15vw, 10px);
+        letter-spacing: 0.25px;
+        white-space: nowrap;
+    }
+
     .top-tab-icon { font-size: 17px; }
 }
 
