@@ -1492,7 +1492,12 @@ exports.createCallLog = async (req, res) => {
         let callMessage;
         try {
             callMessage = await Message.findOneAndUpdate(
-                { callId },
+                {
+                    callId,
+                    sender: requestedCallerId,
+                    receiver: otherUserId,
+                    groupId: null
+                },
                 { $setOnInsert: logData },
                 {
                     new: true,
@@ -1505,6 +1510,18 @@ exports.createCallLog = async (req, res) => {
                 throw error;
             }
             callMessage = await Message.findOne({ callId });
+        }
+
+        if (
+            !callMessage ||
+            String(callMessage.sender) !== String(requestedCallerId) ||
+            String(callMessage.receiver) !== String(otherUserId) ||
+            callMessage.groupId
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "This call ID belongs to a different conversation."
+            });
         }
 
         const populated = await populateMessage(

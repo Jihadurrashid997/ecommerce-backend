@@ -5,6 +5,7 @@ const {
     createGroup,
     setGroupEncryption,
     getGroupMessages,
+    createGroupCallLog,
     createGroupCallToken,
     getGroupCallKey,
     createGroupCallKey,
@@ -19,6 +20,7 @@ router.use(auth());
 router.get("/", listGroups);
 router.post("/", createGroup);
 router.put("/:groupId/encryption", setGroupEncryption);
+router.post("/:groupId/call-log", createGroupCallLog);
 router.post("/:groupId/call-token", createGroupCallToken);
 router.get("/:groupId/call-key", getGroupCallKey);
 router.post("/:groupId/call-key", createGroupCallKey);

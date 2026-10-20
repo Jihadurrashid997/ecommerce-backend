@@ -136,6 +136,12 @@ const MessageSchema =
                 default: undefined
             },
 
+            callParticipantCount: {
+                type: Number,
+                min: 1,
+                default: undefined
+            },
+
             isEncrypted: {
                 type: Boolean,
                 default: false

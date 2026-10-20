@@ -712,6 +712,11 @@ io.on(
             async payload => {
                 const callerId = socket.userId;
                 const groupId = normalizeId(payload?.groupId);
+                const callId =
+                    typeof payload?.callId === "string" &&
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload.callId)
+                        ? payload.callId
+                        : crypto.randomUUID();
 
                 if (
                     !callerId ||
@@ -736,6 +741,7 @@ io.on(
                         .lean();
                     const invitation = {
                         groupId,
+                        callId,
                         groupName: group.name,
                         callerId,
                         callerName: caller?.name || "Group member",

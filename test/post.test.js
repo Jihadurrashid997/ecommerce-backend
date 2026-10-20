@@ -103,6 +103,22 @@ test("deleted message tombstones satisfy the persisted message schema", () => {
     assert.equal(deletedMessage.validateSync(), undefined);
 });
 
+test("group call logs satisfy the persisted message schema", () => {
+    const callLog = new Message({
+        sender: TEST_USER_ID,
+        groupId: OTHER_USER_ID,
+        message: "Group voice call ended",
+        type: "call-log",
+        callId: randomUUID(),
+        callType: "voice",
+        callStatus: "ended",
+        callDuration: 45,
+        callParticipantCount: 3
+    });
+
+    assert.equal(callLog.validateSync(), undefined);
+});
+
 test("direct conversation history returns the requested page and indicates older messages", async () => {
     const originalFind = Message.find;
     const newest = { _id: "newest" };
@@ -420,7 +436,12 @@ test("call log endpoint saves a typed call record visible to both participants",
         })
     });
     Message.findOneAndUpdate = async (filter, update, options) => {
-        assert.deepEqual(filter, { callId });
+        assert.deepEqual(filter, {
+            callId,
+            sender: TEST_USER_ID,
+            receiver: OTHER_USER_ID,
+            groupId: null
+        });
         assert.equal(options.upsert, true);
         savedMessage = {
             _id: "507f1f77bcf86cd799439016",
@@ -482,6 +503,53 @@ test("call log endpoint saves a typed call record visible to both participants",
     } finally {
         Message.findById = originalFindById;
         Message.findOneAndUpdate = originalFindOneAndUpdate;
+        User.findById = originalUserFindById;
+    }
+});
+
+test("direct call logs cannot reuse a group-call identifier", async () => {
+    const originalMessageFindOneAndUpdate = Message.findOneAndUpdate;
+    const originalMessageFindOne = Message.findOne;
+    const originalUserFindById = User.findById;
+    const callId = randomUUID();
+    User.findById = id => ({
+        select: () => ({
+            lean: async () => ({ _id: id })
+        })
+    });
+    Message.findOneAndUpdate = async () => {
+        const error = new Error("Duplicate call ID.");
+        error.code = 11000;
+        throw error;
+    };
+    Message.findOne = async () => ({
+        callId,
+        sender: TEST_USER_ID,
+        groupId: OTHER_USER_ID
+    });
+
+    try {
+        const response = makeResponse();
+        await messageController.createCallLog(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    callId,
+                    callerId: TEST_USER_ID,
+                    otherUserId: OTHER_USER_ID,
+                    callType: "voice",
+                    status: "ended",
+                    duration: 20
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.match(response.body.message, /different conversation/i);
+    } finally {
+        Message.findOneAndUpdate = originalMessageFindOneAndUpdate;
+        Message.findOne = originalMessageFindOne;
         User.findById = originalUserFindById;
     }
 });
@@ -1357,6 +1425,185 @@ test("non-members cannot receive group call tokens", async () => {
         assert.equal(response.body.success, false);
     } finally {
         GroupConversation.findOne = originalFindOne;
+    }
+});
+
+test("non-members cannot create group call history", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalFindOneAndUpdate = Message.findOneAndUpdate;
+    const response = makeResponse();
+    GroupConversation.findOne = async filter => {
+        assert.deepEqual(filter, {
+            _id: OTHER_USER_ID,
+            participants: TEST_USER_ID
+        });
+        return null;
+    };
+    Message.findOneAndUpdate = () => {
+        throw new Error("Non-members must not create group call history.");
+    };
+
+    try {
+        await groupController.createGroupCallLog(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID },
+                body: {
+                    callId: randomUUID(),
+                    callType: "voice",
+                    duration: 60,
+                    participantCount: 2
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 404);
+        assert.equal(response.body.success, false);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        Message.findOneAndUpdate = originalFindOneAndUpdate;
+    }
+});
+
+test("group call history is persisted, deduplicated, and broadcast to members", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalMessageFindOneAndUpdate = Message.findOneAndUpdate;
+    const originalMessageFindById = Message.findById;
+    const callId = randomUUID();
+    const events = [];
+    const group = {
+        participants: [TEST_USER_ID, OTHER_USER_ID],
+        async save() {}
+    };
+    const storedCall = {
+        _id: OTHER_USER_ID,
+        sender: TEST_USER_ID,
+        groupId: OTHER_USER_ID,
+        message: "📞 Group voice call ended • 02:05",
+        type: "call-log",
+        callId,
+        callType: "voice",
+        callStatus: "ended",
+        callDuration: 125,
+        callParticipantCount: 3,
+        createdAt: new Date()
+    };
+    const populatedCall = {
+        ...storedCall,
+        sender: { _id: TEST_USER_ID, name: "Test User" },
+        toObject() {
+            return { ...this };
+        }
+    };
+    GroupConversation.findOne = async filter => {
+        assert.deepEqual(filter, {
+            _id: OTHER_USER_ID,
+            participants: TEST_USER_ID
+        });
+        return group;
+    };
+    Message.findOneAndUpdate = async (filter, update, options) => {
+        assert.deepEqual(filter, { callId, groupId: OTHER_USER_ID });
+        assert.equal(update.$setOnInsert.groupId, OTHER_USER_ID);
+        assert.equal(update.$setOnInsert.callParticipantCount, 3);
+        assert.equal(options.upsert, true);
+        return storedCall;
+    };
+    Message.findById = id => {
+        assert.equal(id, OTHER_USER_ID);
+        return makeMessageQuery(populatedCall);
+    };
+
+    try {
+        const response = makeResponse();
+        await groupController.createGroupCallLog(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID },
+                body: {
+                    callId,
+                    callType: "voice",
+                    duration: 125,
+                    participantCount: 3
+                },
+                app: {
+                    get: () => ({
+                        to(room) {
+                            return {
+                                emit(event, payload) {
+                                    events.push({ room, event, payload });
+                                }
+                            };
+                        }
+                    })
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.data.type, "call-log");
+        assert.equal(response.body.data.callDuration, 125);
+        assert.equal(response.body.data.callParticipantCount, 3);
+        assert.equal(group.lastMessage.message, storedCall.message);
+        assert.deepEqual(
+            events.map(({ room, event }) => ({ room, event })),
+            [
+                { room: `group:${OTHER_USER_ID}`, event: "group-message" },
+                { room: `user:${TEST_USER_ID}`, event: "group-message-notification" },
+                { room: `user:${OTHER_USER_ID}`, event: "group-message-notification" }
+            ]
+        );
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        Message.findOneAndUpdate = originalMessageFindOneAndUpdate;
+        Message.findById = originalMessageFindById;
+    }
+});
+
+test("group call logs cannot reuse a call ID from another conversation", async () => {
+    const originalFindOne = GroupConversation.findOne;
+    const originalMessageFindOneAndUpdate = Message.findOneAndUpdate;
+    const originalMessageFindOne = Message.findOne;
+    const group = {
+        participants: [TEST_USER_ID, OTHER_USER_ID],
+        async save() {
+            throw new Error("A conflicting call must not update the group.");
+        }
+    };
+    const response = makeResponse();
+    GroupConversation.findOne = async () => group;
+    Message.findOneAndUpdate = async () => {
+        const error = new Error("Duplicate call ID.");
+        error.code = 11000;
+        throw error;
+    };
+    Message.findOne = async () => ({
+        groupId: TEST_USER_ID
+    });
+
+    try {
+        await groupController.createGroupCallLog(
+            {
+                user: { id: TEST_USER_ID },
+                params: { groupId: OTHER_USER_ID },
+                body: {
+                    callId: randomUUID(),
+                    callType: "video",
+                    duration: 30,
+                    participantCount: 2
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.match(response.body.message, /different conversation/i);
+    } finally {
+        GroupConversation.findOne = originalFindOne;
+        Message.findOneAndUpdate = originalMessageFindOneAndUpdate;
+        Message.findOne = originalMessageFindOne;
     }
 });
 

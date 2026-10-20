@@ -45,3 +45,20 @@ test.each([
     expect(screen.getByLabelText("Call details"))
         .toHaveTextContent(expectedText);
 });
+
+test("shows group-call duration and participant count", () => {
+    render(
+        <CallLogMessage
+            callType="voice"
+            callStatus="ended"
+            callDuration={125}
+            isGroup
+            participantCount={4}
+        />
+    );
+
+    expect(screen.getByLabelText("Call details"))
+        .toHaveTextContent("Group Voice call ended");
+    expect(screen.getByText("2:05")).toBeInTheDocument();
+    expect(screen.getByText("4 joined")).toBeInTheDocument();
+});
