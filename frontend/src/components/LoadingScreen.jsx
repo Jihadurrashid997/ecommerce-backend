@@ -70,12 +70,6 @@ const LoadingScreen = ({ onComplete }) => {
 
             <div className="loading-content">
 
-                <div className="loading-eyebrow">
-                    <span />
-                    YOUR SOCIAL MARKETPLACE
-                    <span />
-                </div>
-
                 <div className="loading-brand loading-brand-etop">
                     <img
                         className="loading-logo-image"
@@ -83,14 +77,6 @@ const LoadingScreen = ({ onComplete }) => {
                         alt="E Top"
                     />
                 </div>
-
-                <h1 className="loading-headline">
-                    Discover. Connect. <span>Shop.</span>
-                </h1>
-
-                <p className="loading-description">
-                    Your community is getting ready.
-                </p>
 
                 <div className="loading-progress">
 

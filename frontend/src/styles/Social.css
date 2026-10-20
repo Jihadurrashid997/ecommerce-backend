@@ -906,6 +906,14 @@
 .top-tab:hover { color: #27594b; background: #edf1e8; }
 .top-tab.active { color: #fff; background: #27594b; box-shadow: none; }
 
+@media (max-width: 640px) {
+    .top-tab-label {
+        font-size: clamp(6px, 1.9vw, 9px);
+        letter-spacing: 0.1px;
+        white-space: nowrap;
+    }
+}
+
 @media (max-width: 1180px) {
     .home-layout { grid-template-columns: minmax(185px, 220px) minmax(380px, 1fr); }
     .home-side-right { display: none; }
