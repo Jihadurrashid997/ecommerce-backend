@@ -16,6 +16,8 @@ const auth =
 
 const emailService =
     require("../services/emailService");
+const googleAuthService =
+    require("../services/googleAuthService");
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const CODE_RESEND_DELAY_MS = 60 * 1000;
@@ -349,6 +351,156 @@ exports.register = async (
 
     }
 
+};
+
+exports.googleAuth = async (req, res) => {
+    const credential = String(req.body?.credential || "").trim();
+    if (!credential || credential.length > 8192) {
+        return res.status(400).json({
+            success: false,
+            message: "A valid Google credential is required."
+        });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        return res.status(503).json({
+            success: false,
+            code: "GOOGLE_AUTH_NOT_CONFIGURED",
+            message: "Google sign-in is not configured. Please use email and password."
+        });
+    }
+
+    try {
+        let identity;
+        try {
+            identity = await googleAuthService.verifyCredential(credential);
+        } catch (error) {
+            console.error("GOOGLE AUTH TOKEN VERIFICATION ERROR:", error);
+            return res.status(401).json({
+                success: false,
+                message: "Google sign-in could not be verified. Please try again."
+            });
+        }
+
+        const normalizedEmail = String(identity.email || "")
+            .trim()
+            .toLowerCase();
+        const googleId = String(identity.googleId || "").trim();
+        if (
+            !googleId ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
+            identity.emailVerified !== true
+        ) {
+            return res.status(401).json({
+                success: false,
+                message: "Google sign-in requires a verified Google email address."
+            });
+        }
+
+        let user = await User.findOne({ googleId }).select("+googleId");
+        let isNewUser = false;
+
+        if (!user) {
+            user = await User.findOne({ email: normalizedEmail })
+                .select("+googleId");
+
+            if (user) {
+                if (user.googleId && user.googleId !== googleId) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "This email is already connected to another Google account."
+                    });
+                }
+
+                const linkedAt = new Date();
+                const linkResult = await User.updateOne(
+                    {
+                        _id: user._id,
+                        $or: [
+                            { googleId: { $exists: false } },
+                            { googleId: null },
+                            { googleId: "" },
+                            { googleId }
+                        ]
+                    },
+                    {
+                        $set: {
+                            googleId,
+                            emailVerified: true,
+                            emailVerifiedAt: linkedAt
+                        }
+                    }
+                );
+
+                if (!linkResult.matchedCount) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "This account could not be connected to Google. Please sign in with your existing method."
+                    });
+                }
+
+                user.googleId = googleId;
+                user.emailVerified = true;
+                user.emailVerifiedAt = linkedAt;
+            } else {
+                const randomPassword = crypto.randomBytes(32).toString("hex");
+                try {
+                    user = await User.create({
+                        name: String(identity.name || normalizedEmail.split("@")[0])
+                            .trim()
+                            .slice(0, 100) || "E Top User",
+                        email: normalizedEmail,
+                        password: await bcrypt.hash(randomPassword, 12),
+                        googleId,
+                        emailVerified: true,
+                        emailVerifiedAt: new Date(),
+                        role: "customer"
+                    });
+                    isNewUser = true;
+                } catch (error) {
+                    if (error.code !== 11000) {
+                        throw error;
+                    }
+                    user = await User.findOne({ googleId })
+                        .select("+googleId");
+                    if (!user) {
+                        return res.status(409).json({
+                            success: false,
+                            message: "An account already exists with this email. Please sign in using your existing method."
+                        });
+                    }
+                }
+            }
+        }
+
+        if (user.isSuspended) {
+            return res.status(403).json({
+                success: false,
+                message: "Your account has been suspended." +
+                    (user.suspendedReason
+                        ? ` Reason: ${user.suspendedReason}`
+                        : "")
+            });
+        }
+
+        const { token, deviceId } = await createDeviceToken(user, req);
+        return res.status(isNewUser ? 201 : 200).json({
+            success: true,
+            message: isNewUser
+                ? "Google registration successful."
+                : "Google sign-in successful.",
+            isNewUser,
+            token,
+            deviceId,
+            user: safeUser(user)
+        });
+    } catch (error) {
+        console.error("GOOGLE AUTH ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Google sign-in failed. Please try again."
+        });
+    }
 };
 
 exports.resendVerification = async (req, res) => {

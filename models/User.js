@@ -16,6 +16,13 @@ const userSchema = new mongoose.Schema(
             trim: true
         },
 
+        googleId: {
+            type: String,
+            unique: true,
+            sparse: true,
+            select: false
+        },
+
         payoutMethod: {
             type: String,
             trim: true,

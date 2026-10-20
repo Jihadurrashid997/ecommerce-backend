@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const DeviceSession = require("../models/DeviceSession");
 const emailService = require("../services/emailService");
+const googleAuthService = require("../services/googleAuthService");
 const authController = require("../controllers/authController");
 const auth = require("../middleware/auth");
 
@@ -19,7 +20,9 @@ const ORIGINALS = {
     deleteMany: DeviceSession.deleteMany,
     isEmailConfigured: emailService.isEmailConfigured,
     sendVerificationEmail: emailService.sendVerificationEmail,
-    sendPasswordResetEmail: emailService.sendPasswordResetEmail
+    sendPasswordResetEmail: emailService.sendPasswordResetEmail,
+    verifyGoogleCredential: googleAuthService.verifyCredential,
+    googleClientId: process.env.GOOGLE_CLIENT_ID
 };
 
 const makeResponse = () => ({
@@ -44,6 +47,7 @@ test.beforeEach(() => {
     emailService.isEmailConfigured = () => true;
     emailService.sendVerificationEmail = async () => ({ sent: true });
     emailService.sendPasswordResetEmail = async () => ({ sent: true });
+    process.env.GOOGLE_CLIENT_ID = "test-google-client-id";
 });
 
 test.afterEach(() => {
@@ -59,6 +63,12 @@ test.afterEach(() => {
     emailService.isEmailConfigured = ORIGINALS.isEmailConfigured;
     emailService.sendVerificationEmail = ORIGINALS.sendVerificationEmail;
     emailService.sendPasswordResetEmail = ORIGINALS.sendPasswordResetEmail;
+    googleAuthService.verifyCredential = ORIGINALS.verifyGoogleCredential;
+    if (ORIGINALS.googleClientId === undefined) {
+        delete process.env.GOOGLE_CLIENT_ID;
+    } else {
+        process.env.GOOGLE_CLIENT_ID = ORIGINALS.googleClientId;
+    }
     auth.invalidate(USER_ID);
 });
 
@@ -142,6 +152,119 @@ test("legacy accounts without verification state can still log in", async () => 
     assert.equal(response.statusCode, 200);
     assert.ok(response.body.token);
     assert.equal(response.body.user.emailVerified, false);
+});
+
+test("Google registration verifies the identity and creates a default customer account", async () => {
+    let created;
+    googleAuthService.verifyCredential = async credential => {
+        assert.equal(credential, "google-id-token");
+        return {
+            googleId: "google-subject-123",
+            email: "USER@example.com",
+            emailVerified: true,
+            name: "Google User"
+        };
+    };
+    User.findOne = () => queryResult(null);
+    User.create = async fields => {
+        created = fields;
+        return { ...fields, _id: USER_ID, isSuspended: false };
+    };
+    DeviceSession.findOneAndUpdate = async () => ({});
+
+    const response = makeResponse();
+    await authController.googleAuth(
+        { body: { credential: "google-id-token" } },
+        response
+    );
+
+    assert.equal(response.statusCode, 201);
+    assert.equal(response.body.isNewUser, true);
+    assert.ok(response.body.token);
+    assert.equal(response.body.user.email, "user@example.com");
+    assert.equal(created.googleId, "google-subject-123");
+    assert.equal(created.emailVerified, true);
+    assert.equal(created.role, "customer");
+    assert.match(created.password, /^\$2[aby]\$/);
+});
+
+test("Google sign-in links a matching existing account", async () => {
+    const existingUser = {
+        _id: USER_ID,
+        email: "user@example.com",
+        role: "customer",
+        isSuspended: false
+    };
+    let lookupCount = 0;
+    let linkedFields;
+    googleAuthService.verifyCredential = async () => ({
+        googleId: "google-subject-123",
+        email: "user@example.com",
+        emailVerified: true,
+        name: "Google User"
+    });
+    User.findOne = () => queryResult(
+        lookupCount++ === 0 ? null : existingUser
+    );
+    User.updateOne = async (filter, update) => {
+        assert.equal(filter._id, USER_ID);
+        linkedFields = update.$set;
+        return { matchedCount: 1 };
+    };
+    DeviceSession.findOneAndUpdate = async () => ({});
+
+    const response = makeResponse();
+    await authController.googleAuth(
+        { body: { credential: "google-id-token" } },
+        response
+    );
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.isNewUser, false);
+    assert.equal(linkedFields.googleId, "google-subject-123");
+    assert.equal(linkedFields.emailVerified, true);
+    assert.ok(response.body.token);
+});
+
+test("Google sign-in cannot link an account already owned by another Google identity", async () => {
+    let lookupCount = 0;
+    User.findOne = () => queryResult(
+        lookupCount++ === 0
+            ? null
+            : {
+                _id: USER_ID,
+                googleId: "different-google-subject"
+            }
+    );
+    googleAuthService.verifyCredential = async () => ({
+        googleId: "google-subject-123",
+        email: "user@example.com",
+        emailVerified: true,
+        name: "Google User"
+    });
+
+    const response = makeResponse();
+    await authController.googleAuth(
+        { body: { credential: "google-id-token" } },
+        response
+    );
+
+    assert.equal(response.statusCode, 409);
+    assert.match(response.body.message, /another Google account/);
+});
+
+test("Google registration rejects credentials the provider cannot verify", async () => {
+    googleAuthService.verifyCredential = async () => {
+        throw new Error("invalid credential");
+    };
+
+    const response = makeResponse();
+    await authController.googleAuth(
+        { body: { credential: "invalid-google-token" } },
+        response
+    );
+
+    assert.equal(response.statusCode, 401);
 });
 
 const awaitHash = bcrypt.hashSync("correct horse battery", 4);

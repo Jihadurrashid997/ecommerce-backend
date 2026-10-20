@@ -64,6 +64,9 @@ const ForgotPassword = () => {
     const [error, setError] =
         useState("");
 
+    const [notice, setNotice] =
+        useState("");
+
 
     /* ---------------- STEP 1: request code ---------------- */
 
@@ -73,6 +76,7 @@ const ForgotPassword = () => {
             event.preventDefault();
 
             setError("");
+            setNotice("");
 
             if (!email.trim()) {
 
@@ -137,10 +141,13 @@ const ForgotPassword = () => {
                         }
                     );
 
-                setResetToken(
-                    response.data?.resetToken || ""
-                );
+                const issuedResetToken = response.data?.resetToken;
+                if (!/^[a-f\d]{64}$/i.test(issuedResetToken || "")) {
+                    setError("The code could not be verified. Request a new code and try again.");
+                    return;
+                }
 
+                setResetToken(issuedResetToken);
                 setStep("password");
 
             } catch (err) {
@@ -158,6 +165,39 @@ const ForgotPassword = () => {
 
         };
 
+    const handleResendCode = async () => {
+        setError("");
+        setNotice("");
+        setLoading(true);
+        try {
+            const response = await api.post(
+                "/auth/forgot-password",
+                { email: email.trim() }
+            );
+            setNotice(
+                response.data?.message ||
+                "If an account exists for that email, a new code has been sent."
+            );
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                "A new reset code could not be sent. Please try again later."
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const requestDifferentEmail = () => {
+        setStep("email");
+        setCode("");
+        setResetToken("");
+        setPassword("");
+        setConfirmPassword("");
+        setError("");
+        setNotice("");
+    };
+
 
     /* ---------------- STEP 3: set new password ---------------- */
 
@@ -167,6 +207,7 @@ const ForgotPassword = () => {
             event.preventDefault();
 
             setError("");
+            setNotice("");
 
             if (
                 password.length < 8 ||
@@ -198,6 +239,7 @@ const ForgotPassword = () => {
                 );
 
                 setStep("done");
+                setNotice("");
 
                 setTimeout(() => {
 
@@ -279,6 +321,12 @@ const ForgotPassword = () => {
                         {error}
                     </div>
 
+                )}
+
+                {notice && (
+                    <div className="login-success" role="status">
+                        {notice}
+                    </div>
                 )}
 
 
@@ -402,12 +450,23 @@ const ForgotPassword = () => {
                             <button
                                 type="button"
                                 className="link-button"
-                                onClick={() => setStep("email")}
+                                onClick={requestDifferentEmail}
                                 disabled={loading}
                             >
                                 Entered the wrong email? Go back
                             </button>
 
+                        </div>
+
+                        <div className="login-register" style={{ marginTop: 8 }}>
+                            <button
+                                type="button"
+                                className="link-button"
+                                onClick={handleResendCode}
+                                disabled={loading}
+                            >
+                                {loading ? "Sending..." : "Resend reset code"}
+                            </button>
                         </div>
 
                     </form>
@@ -505,6 +564,17 @@ const ForgotPassword = () => {
                             )}
 
                         </motion.button>
+
+                        <div className="login-register" style={{ marginTop: 14 }}>
+                            <button
+                                type="button"
+                                className="link-button"
+                                onClick={requestDifferentEmail}
+                                disabled={loading}
+                            >
+                                Code expired? Request a new one
+                            </button>
+                        </div>
 
                     </form>
 
