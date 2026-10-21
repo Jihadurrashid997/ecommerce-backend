@@ -1308,7 +1308,19 @@
     }
 
     .jr-notifications-panel {
-        right: 0;
+        position: fixed;
+        top: 78px;
+        right: 8px;
+        left: 8px;
+        width: auto;
+        max-height: calc(100vh - 86px);
+        max-height: calc(100dvh - 86px);
+        box-sizing: border-box;
+    }
+
+    .jr-notification-list {
+        max-height: min(420px, calc(100vh - 164px));
+        max-height: min(420px, calc(100dvh - 164px));
     }
 
 
@@ -1474,6 +1486,25 @@
     .jr-menu-btn {
         flex-basis: 34px;
         font-size: 17px;
+    }
+
+    .jr-notifications-heading {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .jr-notifications-heading h2 {
+        font-size: 15px;
+    }
+
+    .jr-notification-tools {
+        margin-left: auto;
+    }
+
+    .jr-notification-list {
+        max-height: min(420px, calc(100vh - 204px));
+        max-height: min(420px, calc(100dvh - 204px));
     }
 }
 
