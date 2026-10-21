@@ -445,6 +445,31 @@ const Navbar = () => {
                 variants={navContainer}
             >
 
+                {user && (
+                    <motion.li
+                        className="jr-mobile-search-item"
+                        variants={navItem}
+                    >
+                        <form
+                            className="jr-mobile-search-form"
+                            role="search"
+                            onSubmit={handleSearch}
+                        >
+                            <FaSearch aria-hidden="true" />
+                            <input
+                                type="search"
+                                value={searchText}
+                                onChange={event => setSearchText(event.target.value)}
+                                placeholder="Search profiles..."
+                                aria-label="Search profiles"
+                            />
+                            <button type="submit" aria-label="Search profiles">
+                                Search
+                            </button>
+                        </form>
+                    </motion.li>
+                )}
+
                 {/* HOME */}
 
                 {user && (

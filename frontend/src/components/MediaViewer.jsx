@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import {
     FaArrowLeft,
@@ -53,7 +54,7 @@ const MediaViewer = ({
 
     if (!item) return null;
 
-    return (
+    return createPortal(
         <div
             className="media-viewer"
             role="dialog"
@@ -152,7 +153,8 @@ const MediaViewer = ({
                     {comments}
                 </section>
             )}
-        </div>
+        </div>,
+        document.body
     );
 };
 
