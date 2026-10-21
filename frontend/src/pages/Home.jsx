@@ -32,6 +32,7 @@ const Home = () => {
     const [error, setError] = useState("");
 
     const [caption, setCaption] = useState("");
+    const [visibility, setVisibility] = useState("public");
     const [files, setFiles] = useState([]);
     const [posting, setPosting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -134,6 +135,7 @@ const Home = () => {
 
         files.forEach(f => form.append("photos", f));
         form.append("caption", caption.trim());
+        form.append("visibility", visibility);
 
         try {
 
@@ -152,6 +154,7 @@ const Home = () => {
             setPosts(prev => [res.data.data, ...prev]);
             setFiles([]);
             setCaption("");
+            setVisibility("public");
 
         } catch (e) {
             alert(e.response?.data?.message || "Could not publish your post.");
@@ -305,6 +308,18 @@ const Home = () => {
 
                         <div className="home-composer-footer">
                             <span className="home-composer-hint"><FaImage /> Add up to 5 photos</span>
+                            <label className="home-audience-picker">
+                                <span>Audience</span>
+                                <select
+                                    aria-label="Post audience"
+                                    value={visibility}
+                                    onChange={event => setVisibility(event.target.value)}
+                                >
+                                    <option value="public">Public</option>
+                                    <option value="followers">Followers only</option>
+                                    <option value="private">Only me</option>
+                                </select>
+                            </label>
                             <span className="home-composer-count">{caption.length}/2200</span>
                             <button className="btn-primary" type="submit" disabled={posting || (!caption.trim() && files.length === 0)}>
                                 {posting ? `Sharing ${uploadProgress}%...` : "Share post"} <FaArrowRight />

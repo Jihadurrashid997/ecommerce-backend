@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const Community = require("../models/Community");
 const Post = require("../models/Post");
+const User = require("../models/User");
 const communityController = require("../controllers/communityController");
 const postController = require("../controllers/postController");
 
@@ -55,6 +56,79 @@ test("public community members can publish a community post", () => {
 
     assert.equal(post.validateSync(), undefined);
     assert.equal(String(post.community), COMMUNITY_ID);
+});
+
+test("post audiences default to public and reject unknown values", () => {
+    const post = new Post({
+        author: CREATOR_ID,
+        kind: "post",
+        caption: "A public update",
+        media: []
+    });
+    const invalidPost = new Post({
+        author: CREATOR_ID,
+        kind: "post",
+        visibility: "friends",
+        caption: "An invalid audience",
+        media: []
+    });
+
+    assert.equal(post.visibility, "public");
+    assert.equal(post.validateSync(), undefined);
+    assert.equal(invalidPost.validateSync().errors.visibility.kind, "enum");
+});
+
+test("post creation persists the selected visibility and rejects community-only audiences", async () => {
+    const originalCreate = Post.create;
+    const originalFindById = Post.findById;
+    const originalCommunityFindOne = Community.findOne;
+    let createdPost;
+    Post.create = async fields => {
+        createdPost = fields;
+        return { _id: "507f1f77bcf86cd799439012" };
+    };
+    Post.findById = () => ({
+        populate() {
+            return this;
+        },
+        lean: async () => ({
+            ...createdPost,
+            _id: "507f1f77bcf86cd799439012",
+            author: { _id: CREATOR_ID, name: "Creator" },
+            likes: [],
+            comments: []
+        })
+    });
+    Community.findOne = () => {
+        throw new Error("Community membership must not be queried for a private audience.");
+    };
+
+    try {
+        const response = makeResponse();
+        await postController.createPost({
+            params: {},
+            body: { caption: "A private note", visibility: "private" },
+            files: [],
+            user: { id: CREATOR_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 201);
+        assert.equal(createdPost.visibility, "private");
+        assert.equal(response.body.data.visibility, "private");
+
+        const communityResponse = makeResponse();
+        await postController.createPost({
+            params: { communityId: COMMUNITY_ID },
+            body: { caption: "Private community post", visibility: "private" },
+            files: [],
+            user: { id: CREATOR_ID }
+        }, communityResponse);
+        assert.equal(communityResponse.statusCode, 400);
+    } finally {
+        Post.create = originalCreate;
+        Post.findById = originalFindById;
+        Community.findOne = originalCommunityFindOne;
+    }
 });
 
 test("shared post detail returns a shaped public post", async () => {
@@ -130,6 +204,111 @@ test("shared post detail does not expose private community posts to non-members"
     } finally {
         Post.findById = originalFindById;
         Community.findById = originalCommunityFindById;
+    }
+});
+
+test("post detail only returns follower-only posts to followers and private posts to owners", async () => {
+    const originalPostFindById = Post.findById;
+    const originalUserFindById = User.findById;
+    const post = {
+        _id: "507f1f77bcf86cd799439012",
+        author: { _id: CREATOR_ID, name: "Creator" },
+        caption: "Restricted update",
+        media: [],
+        likes: [],
+        comments: [],
+        visibility: "followers"
+    };
+    let following = [];
+    Post.findById = () => ({
+        populate() {
+            return this;
+        },
+        lean: async () => post
+    });
+    User.findById = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({ following })
+    });
+
+    try {
+        const nonFollowerResponse = makeResponse();
+        await postController.getPost({
+            params: { id: post._id },
+            user: { id: MEMBER_ID }
+        }, nonFollowerResponse);
+        assert.equal(nonFollowerResponse.statusCode, 404);
+
+        following = [CREATOR_ID];
+        const followerResponse = makeResponse();
+        await postController.getPost({
+            params: { id: post._id },
+            user: { id: MEMBER_ID }
+        }, followerResponse);
+        assert.equal(followerResponse.statusCode, 200);
+        assert.equal(followerResponse.body.data.visibility, "followers");
+
+        post.visibility = "private";
+        const privateResponse = makeResponse();
+        await postController.getPost({
+            params: { id: post._id },
+            user: { id: MEMBER_ID }
+        }, privateResponse);
+        assert.equal(privateResponse.statusCode, 404);
+
+        const ownerResponse = makeResponse();
+        await postController.getPost({
+            params: { id: post._id },
+            user: { id: CREATOR_ID }
+        }, ownerResponse);
+        assert.equal(ownerResponse.statusCode, 200);
+    } finally {
+        Post.findById = originalPostFindById;
+        User.findById = originalUserFindById;
+    }
+});
+
+test("non-followers cannot like follower-only posts", async () => {
+    const originalPostFindById = Post.findById;
+    const originalUserFindById = User.findById;
+    const originalUpdateOne = Post.updateOne;
+    const post = {
+        _id: "507f1f77bcf86cd799439012",
+        author: CREATOR_ID,
+        community: null,
+        kind: "post",
+        visibility: "followers",
+        likes: []
+    };
+    let updateAttempted = false;
+    Post.findById = () => ({
+        select: async () => post
+    });
+    User.findById = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({ following: [] })
+    });
+    Post.updateOne = async () => {
+        updateAttempted = true;
+    };
+
+    try {
+        const response = makeResponse();
+        await postController.toggleLike({
+            params: { id: post._id },
+            user: { id: MEMBER_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 404);
+        assert.equal(updateAttempted, false);
+    } finally {
+        Post.findById = originalPostFindById;
+        User.findById = originalUserFindById;
+        Post.updateOne = originalUpdateOne;
     }
 });
 
@@ -266,8 +445,15 @@ test("non-members cannot load private community posts", async () => {
 
 test("private community posts stay out of the global feed", async () => {
     const originalPostFind = Post.find;
+    const originalUserFindById = User.findById;
     const response = makeResponse();
     let selectedFilter;
+    User.findById = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({ following: [CREATOR_ID] })
+    });
     Post.find = filter => {
         selectedFilter = filter;
         return {
@@ -289,11 +475,18 @@ test("private community posts stay out of the global feed", async () => {
 
         assert.deepEqual(selectedFilter, {
             kind: "post",
-            community: null
+            community: null,
+            $or: [
+                { visibility: { $exists: false } },
+                { visibility: "public" },
+                { author: MEMBER_ID },
+                { visibility: "followers", author: { $in: [CREATOR_ID] } }
+            ]
         });
         assert.deepEqual(response.body.data, []);
     } finally {
         Post.find = originalPostFind;
+        User.findById = originalUserFindById;
     }
 });
 

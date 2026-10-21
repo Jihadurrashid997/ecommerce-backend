@@ -52,6 +52,13 @@ const postSchema = new mongoose.Schema(
             index: true
         },
 
+        visibility: {
+            type: String,
+            enum: ["public", "followers", "private"],
+            default: "public",
+            index: true
+        },
+
         kind: {
             type: String,
             enum: ["post", "reel"],
