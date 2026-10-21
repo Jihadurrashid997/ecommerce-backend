@@ -3675,6 +3675,29 @@
     }
 }
 
+@media (max-width: 360px) {
+    .messenger-sidebar-header {
+        gap: 6px;
+        padding-right: 10px;
+        padding-left: 10px;
+    }
+
+    .messenger-sidebar-header > div {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .messenger-sidebar-header h2 {
+        font-size: 22px;
+    }
+
+    .messenger-settings-btn {
+        flex: 0 0 32px;
+        width: 32px;
+        height: 32px;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .messenger-page *,
     .messenger-page *::before,
