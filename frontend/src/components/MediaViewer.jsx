@@ -1,12 +1,12 @@
 import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
+    FaArrowLeft,
     FaChevronLeft,
     FaChevronRight,
     FaHeart,
     FaRegComment,
-    FaRegHeart,
-    FaTimes
+    FaRegHeart
 } from "react-icons/fa";
 import "../styles/MediaViewer.css";
 
@@ -61,26 +61,14 @@ const MediaViewer = ({
             onClick={onClose}
         >
             <header className="media-viewer-header" onClick={event => event.stopPropagation()}>
-                <Link to={authorPath} className="media-viewer-author" onClick={onClose}>
-                    {author?.profileImage || author?.avatar
-                        ? <img src={author.profileImage || author.avatar} alt="" />
-                        : <span>{(author?.name || "U").charAt(0).toUpperCase()}</span>}
-                    <span className="media-viewer-author-copy">
-                        <strong>{author?.name || "User"}</strong>
-                        {createdAt && (
-                            <time dateTime={createdAt}>
-                                {new Date(createdAt).toLocaleString()}
-                            </time>
-                        )}
-                    </span>
-                </Link>
                 <button
                     type="button"
                     className="media-viewer-close"
-                    aria-label="Close photo"
+                    aria-label="Back from photo viewer"
                     onClick={onClose}
                 >
-                    <FaTimes />
+                    <FaArrowLeft />
+                    <span>Back</span>
                 </button>
             </header>
 
@@ -113,7 +101,15 @@ const MediaViewer = ({
             )}
 
             <footer className="media-viewer-post-footer" onClick={event => event.stopPropagation()}>
-                {caption && <p className="media-viewer-caption">{caption}</p>}
+                <div className="media-viewer-post-info">
+                    <Link to={authorPath} className="media-viewer-author" onClick={onClose}>
+                        {author?.profileImage || author?.avatar
+                            ? <img src={author.profileImage || author.avatar} alt="" />
+                            : <span className="media-viewer-avatar">{(author?.name || "U").charAt(0).toUpperCase()}</span>}
+                        <strong>{author?.name || "User"}</strong>
+                    </Link>
+                    {caption && <p className="media-viewer-caption">{caption}</p>}
+                </div>
                 <div className="media-viewer-actions">
                     <button
                         type="button"
@@ -134,10 +130,12 @@ const MediaViewer = ({
                         <FaRegComment />
                         <span>{commentCount}</span>
                     </button>
+                </div>
+                {items.length > 1 && (
                     <span className="media-viewer-count">
                         {index + 1} / {items.length}
                     </span>
-                </div>
+                )}
             </footer>
 
             {commentsOpen && (

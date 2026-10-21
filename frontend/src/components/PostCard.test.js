@@ -48,8 +48,13 @@ test("opens post photos in a full-screen viewer with navigation and close", () =
     fireEvent.click(screen.getByRole("button", { name: "View photo full screen" }));
     const viewer = screen.getByRole("dialog", { name: "Post photo 1 of 2" });
     expect(viewer).toBeVisible();
-    expect(within(viewer).getByRole("link", { name: /Author/ })).toHaveAttribute("href", "/user/author-1");
-    expect(within(viewer).getByText("A shared moment")).toBeVisible();
+    const postFooter = within(viewer).getByRole("contentinfo");
+    const postInfo = postFooter.querySelector(".media-viewer-post-info");
+    const actions = postFooter.querySelector(".media-viewer-actions");
+    expect(within(postInfo).getByRole("link", { name: /Author/ })).toHaveAttribute("href", "/user/author-1");
+    expect(within(postInfo).getByText("A shared moment")).toBeVisible();
+    expect(postFooter.querySelector(".media-viewer-post-info").compareDocumentPosition(actions))
+        .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole("img", { name: "Post media 1" })).toHaveAttribute("src", "/photo-one.jpg");
     expect(within(viewer).getByRole("button", { name: "Like post" })).toHaveAttribute("aria-pressed", "false");
     expect(within(viewer).getByRole("button", { name: "Comments, 1" })).toBeVisible();
@@ -64,7 +69,7 @@ test("opens post photos in a full-screen viewer with navigation and close", () =
     expect(screen.getByRole("dialog", { name: "Post photo 2 of 2" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Post media 2" })).toHaveAttribute("src", "/photo-two.jpg");
 
-    fireEvent.click(screen.getByRole("button", { name: "Close photo" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back from photo viewer" }));
     expect(screen.queryByRole("dialog", { name: "Post photo 2 of 2" })).not.toBeInTheDocument();
 });
 
