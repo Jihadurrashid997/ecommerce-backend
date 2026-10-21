@@ -282,10 +282,8 @@
 }
 .reaction-picker-trigger.selected { color: #1877f2; }
 .reaction-picker-options {
-    position: absolute;
+    position: fixed;
     z-index: 20;
-    left: 50%;
-    bottom: calc(100% + 8px);
     display: flex;
     gap: 4px;
     padding: 7px;
@@ -293,7 +291,6 @@
     border-radius: 999px;
     background: var(--social-surface);
     box-shadow: 0 5px 20px rgba(0, 0, 0, 0.18);
-    transform: translateX(-50%);
 }
 .reaction-picker-options button {
     width: 36px;
@@ -538,10 +535,7 @@
     font-size: 24px;
 }
 .reel-side .reaction-picker-options {
-    right: calc(100% + 8px);
-    bottom: 50%;
-    left: auto;
-    transform: translateY(50%);
+    flex-direction: column;
 }
 
 .reel-add {
