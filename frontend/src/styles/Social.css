@@ -28,6 +28,7 @@
 .top-tabs::-webkit-scrollbar { display: none; }
 
 .top-tab {
+    position: relative;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -56,6 +57,26 @@
 
 .top-tab-label {
     line-height: 1.2;
+}
+
+.top-tab-count {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    min-width: 17px;
+    height: 17px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    background: #ef476f;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .top-tab:active { transform: scale(0.96); }

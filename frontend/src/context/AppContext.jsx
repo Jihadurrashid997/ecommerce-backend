@@ -37,6 +37,9 @@ export const AppProvider = ({ children }) => {
 
     const [notifications, setNotifications] = useState([]);
 
+    const [unreadMessengerCount, setUnreadMessengerCount] =
+        useState(0);
+
 
     // ==========================
     // AUTH LOADING
@@ -488,6 +491,7 @@ export const AppProvider = ({ children }) => {
         // Notifications clear
 
         setNotifications([]);
+        setUnreadMessengerCount(0);
 
 
         /*
@@ -548,6 +552,8 @@ export const AppProvider = ({ children }) => {
         clearNotifications,
 
         unreadNotificationCount,
+        unreadMessengerCount,
+        setUnreadMessengerCount,
 
 
         // ==========================
