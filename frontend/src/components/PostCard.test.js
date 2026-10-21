@@ -76,6 +76,15 @@ test("opens post photos in a full-screen viewer with navigation and close", () =
     expect(screen.queryByRole("dialog", { name: "Post photo 2 of 2" })).not.toBeInTheDocument();
 });
 
+test("closes the full-screen photo viewer with the visible close button", () => {
+    render(<PostCard post={post} />);
+    fireEvent.click(screen.getByRole("button", { name: "View photo full screen" }));
+
+    expect(screen.getByRole("button", { name: "Close photo viewer" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Close photo viewer" }));
+    expect(screen.queryByRole("dialog", { name: "Post photo 1 of 2" })).not.toBeInTheDocument();
+});
+
 test("closes the full-screen photo viewer with Escape", () => {
     render(<PostCard post={post} />);
     fireEvent.click(screen.getByRole("button", { name: "View photo full screen" }));
@@ -108,12 +117,15 @@ test("copies a shareable post link when native sharing is unavailable", async ()
 test("saves a post and offers icon-based reactions", async () => {
     render(<PostCard post={post} />);
 
+    expect(document.querySelectorAll(".post-actions .reaction-picker-trigger")).toHaveLength(1);
+    expect(document.querySelector(".post-actions > button.liked")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save post" }));
     expect(await screen.findByRole("button", { name: "Remove saved post" })).toHaveAttribute("aria-pressed", "true");
     expect(api.put).toHaveBeenCalledWith("/posts/post-1/saved", { saved: true });
 
     fireEvent.click(screen.getByRole("button", { name: "Choose reaction" }));
     expect(screen.getByRole("group", { name: "Reactions" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Choose reaction" })).toHaveTextContent("React");
     expect(screen.queryByRole("combobox", { name: "Choose a reaction" })).not.toBeInTheDocument();
     const loveReaction = screen.getByRole("button", { name: "Love (0)" });
     expect(loveReaction).toHaveTextContent("❤️");
@@ -125,6 +137,13 @@ test("saves a post and offers icon-based reactions", async () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Love reaction selected; choose reaction" }));
     fireEvent.click(screen.getByRole("button", { name: "Love (1)" }));
+    expect(api.put).toHaveBeenLastCalledWith("/posts/post-1/reaction", { reaction: null });
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose reaction" }));
+    fireEvent.click(screen.getByRole("button", { name: "Love (0)" }));
+    expect(screen.getByRole("button", { name: "Love reaction selected; choose reaction" })).toHaveTextContent("3");
+    fireEvent.click(screen.getByRole("button", { name: "Love reaction selected; choose reaction" }));
+    fireEvent.click(screen.getByRole("button", { name: "No reaction" }));
     expect(api.put).toHaveBeenLastCalledWith("/posts/post-1/reaction", { reaction: null });
 });
 

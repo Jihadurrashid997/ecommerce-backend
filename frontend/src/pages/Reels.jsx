@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-    FaArrowLeft, FaHeart, FaRegHeart, FaRegComment, FaPlus, FaTimes,
+    FaArrowLeft, FaRegComment, FaPlus, FaTimes,
     FaVolumeMute, FaVolumeUp, FaTrash, FaBookmark, FaRegBookmark
 } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
@@ -27,8 +27,6 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
     const [commentCount, setCommentCount] = useState(reel.commentCount);
     const [showComments, setShowComments] = useState(false);
     const [actionMessage, setActionMessage] = useState("");
-    const liked = Boolean(reaction);
-
     // play only the reel that's actually on screen
     useEffect(() => {
 
@@ -79,8 +77,6 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
             setActionMessage(e.response?.data?.message || "Could not update your reaction.");
         }
     };
-
-    const toggleLike = () => updateReaction(reaction === "like" ? null : "like");
 
     const toggleSaved = async () => {
         const next = !saved;
@@ -142,14 +138,10 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
 
             <div className="reel-side">
 
-                <button type="button" onClick={toggleLike} className={liked ? "liked" : ""}>
-                    {liked ? <FaHeart /> : <FaRegHeart />}
-                    <span>{likeCount}</span>
-                </button>
-
                 <ReactionPicker
                     reaction={reaction}
                     reactionCounts={reactionCounts}
+                    likeCount={likeCount}
                     onSelect={updateReaction}
                 />
 

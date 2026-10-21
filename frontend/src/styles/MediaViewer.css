@@ -159,6 +159,7 @@
 }
 
 .media-viewer-close,
+.media-viewer-dismiss,
 .media-viewer-nav {
     position: absolute;
     z-index: 1;
@@ -184,6 +185,12 @@
     font-size: 20px;
 }
 
+.media-viewer-dismiss {
+    top: max(16px, env(safe-area-inset-top));
+    right: 16px;
+    font-size: 20px;
+}
+
 .media-viewer-close span {
     font-size: 14px;
     font-weight: 700;
@@ -199,6 +206,7 @@
 .media-viewer-next { right: 16px; }
 
 .media-viewer-close:focus-visible,
+.media-viewer-dismiss:focus-visible,
 .media-viewer-nav:focus-visible {
     outline: 3px solid #84caff;
     outline-offset: 3px;

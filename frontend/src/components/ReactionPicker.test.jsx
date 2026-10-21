@@ -23,6 +23,7 @@ test("keeps the reaction tray inside the viewport on narrow screens", () => {
         const tray = screen.getByRole("group", { name: "Reactions" });
         expect(tray).toHaveStyle({ left: "8px", top: "382px" });
         expect(screen.getAllByRole("button", { name: /\(\d+\)$/ })).toHaveLength(6);
+        expect(screen.getByRole("button", { name: "No reaction" })).toBeVisible();
     } finally {
         Element.prototype.getBoundingClientRect.mockRestore();
         Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });

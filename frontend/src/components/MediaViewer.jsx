@@ -6,7 +6,8 @@ import {
     FaChevronRight,
     FaHeart,
     FaRegComment,
-    FaRegHeart
+    FaRegHeart,
+    FaTimes
 } from "react-icons/fa";
 import "../styles/MediaViewer.css";
 
@@ -69,6 +70,14 @@ const MediaViewer = ({
                 >
                     <FaArrowLeft />
                     <span>Back</span>
+                </button>
+                <button
+                    type="button"
+                    className="media-viewer-dismiss"
+                    aria-label="Close photo viewer"
+                    onClick={onClose}
+                >
+                    <FaTimes />
                 </button>
             </header>
 
