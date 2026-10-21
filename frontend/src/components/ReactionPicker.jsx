@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 
 const REACTIONS = [
     { value: "like", label: "Like", emoji: "👍" },
@@ -11,7 +11,42 @@ const REACTIONS = [
 
 const ReactionPicker = ({ reaction, reactionCounts = {}, onSelect }) => {
     const [open, setOpen] = useState(false);
+    const [position, setPosition] = useState(null);
+    const pickerRef = useRef(null);
+    const optionsRef = useRef(null);
     const selected = REACTIONS.find(item => item.value === reaction);
+
+    useLayoutEffect(() => {
+        if (!open) {
+            setPosition(null);
+            return undefined;
+        }
+
+        const trigger = pickerRef.current?.querySelector(".reaction-picker-trigger");
+        const options = optionsRef.current;
+        if (!trigger || !options) return undefined;
+
+        const triggerRect = trigger.getBoundingClientRect();
+        const optionsRect = options.getBoundingClientRect();
+        const gutter = 8;
+        const left = Math.max(
+            gutter,
+            Math.min(
+                triggerRect.left + triggerRect.width / 2 - optionsRect.width / 2,
+                window.innerWidth - optionsRect.width - gutter
+            )
+        );
+        const top = Math.max(gutter, triggerRect.top - optionsRect.height - gutter);
+        setPosition({ left, top });
+
+        const closeOnViewportChange = () => setOpen(false);
+        window.addEventListener("resize", closeOnViewportChange);
+        window.addEventListener("scroll", closeOnViewportChange, true);
+        return () => {
+            window.removeEventListener("resize", closeOnViewportChange);
+            window.removeEventListener("scroll", closeOnViewportChange, true);
+        };
+    }, [open]);
 
     const chooseReaction = value => {
         onSelect(reaction === value ? null : value);
@@ -20,6 +55,7 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, onSelect }) => {
 
     return (
         <div
+            ref={pickerRef}
             className="reaction-picker"
             onPointerEnter={event => {
                 if (event.pointerType === "mouse") setOpen(true);
@@ -44,7 +80,13 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, onSelect }) => {
                 <span aria-hidden="true">{selected?.emoji || "☺"}</span>
             </button>
             {open && (
-                <div className="reaction-picker-options" role="group" aria-label="Reactions">
+                <div
+                    ref={optionsRef}
+                    className="reaction-picker-options"
+                    role="group"
+                    aria-label="Reactions"
+                    style={position ? { left: position.left, top: position.top } : undefined}
+                >
                     {REACTIONS.map(item => (
                         <button
                             key={item.value}
