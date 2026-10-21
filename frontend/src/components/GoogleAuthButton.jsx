@@ -48,6 +48,31 @@ const GoogleAuthButton = ({
 
         let isMounted = true;
         const buttonContainer = buttonRef.current;
+        const fitButton = () => {
+            const iframe = buttonContainer?.querySelector("iframe");
+            const wrapper = buttonContainer?.parentElement;
+
+            if (!iframe || !wrapper) {
+                return;
+            }
+
+            buttonContainer.style.transform = "none";
+            const frameBounds = iframe.getBoundingClientRect();
+            const containerBounds = buttonContainer.getBoundingClientRect();
+            const availableWidth = wrapper.clientWidth;
+
+            if (!frameBounds.width || !containerBounds.width || !availableWidth) {
+                return;
+            }
+
+            const scale = Math.min(1, availableWidth / frameBounds.width);
+            const containerCenter = containerBounds.left + containerBounds.width / 2;
+            const frameCenter = frameBounds.left + frameBounds.width / 2;
+            const offset = (containerCenter - frameCenter) * scale;
+
+            buttonContainer.style.transformOrigin = "center";
+            buttonContainer.style.transform = `translateX(${offset}px) scaleX(${scale})`;
+        };
         loadGoogleIdentityScript()
             .then(() => {
                 if (!isMounted || !buttonContainer) {
@@ -76,6 +101,8 @@ const GoogleAuthButton = ({
                         Math.floor(buttonContainer.clientWidth || 300)
                     )
                 });
+                // Google renders its hosted iframe wider than the requested width on small screens.
+                fitButton();
             })
             .catch(() => {
                 if (isMounted) {
@@ -83,8 +110,23 @@ const GoogleAuthButton = ({
                 }
             });
 
+        const wrapper = buttonContainer?.parentElement;
+        const resizeObserver = typeof ResizeObserver !== "undefined" && wrapper
+            ? new ResizeObserver(fitButton)
+            : null;
+        resizeObserver?.observe(wrapper);
+        window.addEventListener("resize", fitButton);
+
+        const mutationObserver = typeof MutationObserver !== "undefined" && buttonContainer
+            ? new MutationObserver(fitButton)
+            : null;
+        mutationObserver?.observe(buttonContainer, { childList: true, subtree: true });
+
         return () => {
             isMounted = false;
+            resizeObserver?.disconnect();
+            mutationObserver?.disconnect();
+            window.removeEventListener("resize", fitButton);
             buttonContainer?.replaceChildren();
         };
     }, [clientId, text]);

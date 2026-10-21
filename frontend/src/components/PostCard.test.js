@@ -17,6 +17,7 @@ jest.mock("../services/api", () => ({
     __esModule: true,
     default: {
         post: jest.fn(),
+        put: jest.fn().mockResolvedValue({}),
         delete: jest.fn()
     },
     getUploadUrl: value => value
@@ -34,6 +35,8 @@ jest.mock("./CommentsPanel", () => ({ onClose }) => (
 
 const post = {
     _id: "post-1",
+    kind: "post",
+    visibility: "public",
     author: { _id: "author-1", name: "Author" },
     media: [{ url: "/photo-one.jpg" }, { url: "/photo-two.jpg" }],
     caption: "A shared moment",
@@ -100,4 +103,26 @@ test("copies a shareable post link when native sharing is unavailable", async ()
             value: originalClipboard
         });
     }
+});
+
+test("saves a post and offers richer reactions", async () => {
+    render(<PostCard post={post} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Save post" }));
+    expect(await screen.findByRole("button", { name: "Remove saved post" })).toHaveAttribute("aria-pressed", "true");
+    expect(api.put).toHaveBeenCalledWith("/posts/post-1/saved", { saved: true });
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Choose a reaction" }), {
+        target: { value: "love" }
+    });
+    expect(api.put).toHaveBeenCalledWith("/posts/post-1/reaction", { reaction: "love" });
+    expect(screen.getByRole("combobox", { name: "Choose a reaction" })).toHaveValue("love");
+});
+
+test("reposts a public post", async () => {
+    render(<PostCard post={post} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Repost" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Post reposted.");
+    expect(api.post).toHaveBeenCalledWith("/posts/post-1/repost");
 });

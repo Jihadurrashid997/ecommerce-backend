@@ -256,7 +256,7 @@
 
 .post-dots button.on { background: #fff; }
 
-.post-actions { display: flex; gap: 20px; padding: 10px 14px; }
+.post-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 10px 14px; }
 
 .post-actions button {
     background: none;
@@ -270,12 +270,67 @@
 }
 
 .post-actions button.liked, .reel-side button.liked { color: #ef4444; }
+.post-actions button.is-saved { color: var(--home-green, #36734f); }
+.post-reaction-picker select {
+    max-width: 126px;
+    padding: 5px 7px;
+    border: 1px solid var(--social-border);
+    border-radius: 9px;
+    color: inherit;
+    background: var(--social-surface);
+    font: inherit;
+}
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.post-original {
+    margin: 0 14px 12px;
+    overflow: hidden;
+    border: 1px solid var(--social-border);
+    border-radius: 14px;
+}
+.post-original-author {
+    display: inline-block;
+    padding: 10px 12px 0;
+    color: inherit;
+    font-weight: 700;
+    text-decoration: none;
+}
+.post-original p { margin: 8px 12px 12px; white-space: pre-wrap; }
+.post-original img { display: block; width: 100%; max-height: 420px; object-fit: cover; }
 
 .post-share-status {
     margin: 0;
     padding: 0 14px 10px;
     color: var(--home-green, #36734f);
     font-size: 12px;
+}
+
+.saved-posts-page {
+    width: min(100% - 28px, 680px);
+    margin: 24px auto;
+}
+.saved-posts-page > header { margin-bottom: 18px; }
+.saved-posts-page h1 { margin: 0; font-size: 24px; }
+.saved-posts-page > header p, .saved-posts-empty { color: var(--home-muted, #66736a); }
+.saved-posts-list { display: grid; gap: 16px; }
+.saved-posts-more {
+    display: block;
+    margin: 18px auto;
+    padding: 10px 16px;
+    border: 1px solid var(--social-border);
+    border-radius: 12px;
+    color: inherit;
+    background: var(--social-surface);
+    cursor: pointer;
 }
 
 .shared-post-page {
@@ -412,6 +467,7 @@
 }
 
 .reel-overlay p { margin: 8px 0 0; font-size: 14px; }
+.reel-overlay .reel-action-status { color: #fff; font-size: 12px; }
 
 .reel-author { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }
 
@@ -442,6 +498,15 @@
 }
 
 .reel-side span { font-size: 11px; }
+.reel-reaction-picker select {
+    width: 46px;
+    padding: 5px 2px;
+    border: 0;
+    border-radius: 14px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    font-size: 10px;
+}
 
 .reel-add {
     position: fixed;
