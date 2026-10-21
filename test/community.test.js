@@ -3,6 +3,7 @@ const test = require("node:test");
 const Community = require("../models/Community");
 const Post = require("../models/Post");
 const User = require("../models/User");
+const SavedPost = require("../models/SavedPost");
 const communityController = require("../controllers/communityController");
 const postController = require("../controllers/postController");
 
@@ -133,6 +134,7 @@ test("post creation persists the selected visibility and rejects community-only 
 
 test("shared post detail returns a shaped public post", async () => {
     const originalFindById = Post.findById;
+    const originalSavedPostFind = SavedPost.find;
     const post = {
         _id: "507f1f77bcf86cd799439012",
         author: { _id: CREATOR_ID, name: "Creator" },
@@ -147,6 +149,12 @@ test("shared post detail returns a shaped public post", async () => {
             return this;
         },
         lean: async () => post
+    });
+    SavedPost.find = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => []
     });
 
     try {
@@ -164,6 +172,7 @@ test("shared post detail returns a shaped public post", async () => {
         assert.equal(response.body.data.likes, undefined);
     } finally {
         Post.findById = originalFindById;
+        SavedPost.find = originalSavedPostFind;
     }
 });
 
@@ -210,6 +219,7 @@ test("shared post detail does not expose private community posts to non-members"
 test("post detail only returns follower-only posts to followers and private posts to owners", async () => {
     const originalPostFindById = Post.findById;
     const originalUserFindById = User.findById;
+    const originalSavedPostFind = SavedPost.find;
     const post = {
         _id: "507f1f77bcf86cd799439012",
         author: { _id: CREATOR_ID, name: "Creator" },
@@ -231,6 +241,12 @@ test("post detail only returns follower-only posts to followers and private post
             return this;
         },
         lean: async () => ({ following })
+    });
+    SavedPost.find = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => []
     });
 
     try {
@@ -267,6 +283,7 @@ test("post detail only returns follower-only posts to followers and private post
     } finally {
         Post.findById = originalPostFindById;
         User.findById = originalUserFindById;
+        SavedPost.find = originalSavedPostFind;
     }
 });
 
@@ -309,6 +326,130 @@ test("non-followers cannot like follower-only posts", async () => {
         Post.findById = originalPostFindById;
         User.findById = originalUserFindById;
         Post.updateOne = originalUpdateOne;
+    }
+});
+
+test("non-followers cannot save follower-only posts", async () => {
+    const originalPostFindById = Post.findById;
+    const originalUserFindById = User.findById;
+    const originalSavedPostUpdateOne = SavedPost.updateOne;
+    const post = {
+        _id: "507f1f77bcf86cd799439012",
+        author: CREATOR_ID,
+        community: null,
+        visibility: "followers"
+    };
+    let saveAttempted = false;
+    Post.findById = () => ({
+        select: async () => post
+    });
+    User.findById = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({ following: [] })
+    });
+    SavedPost.updateOne = async () => {
+        saveAttempted = true;
+    };
+
+    try {
+        const response = makeResponse();
+        await postController.setSavedPost({
+            params: { id: post._id },
+            body: { saved: true },
+            user: { id: MEMBER_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 404);
+        assert.equal(saveAttempted, false);
+    } finally {
+        Post.findById = originalPostFindById;
+        User.findById = originalUserFindById;
+        SavedPost.updateOne = originalSavedPostUpdateOne;
+    }
+});
+
+test("reactions replace legacy likes without changing the total reaction count", async () => {
+    const originalPostFindById = Post.findById;
+    const originalPostUpdateOne = Post.updateOne;
+    const post = {
+        _id: "507f1f77bcf86cd799439012",
+        author: MEMBER_ID,
+        community: null,
+        kind: "post",
+        visibility: "public",
+        likes: [MEMBER_ID],
+        reactions: []
+    };
+    let updateCalls = 0;
+    Post.findById = () => ({
+        select: async () => post
+    });
+    Post.updateOne = async () => {
+        updateCalls += 1;
+        return { matchedCount: updateCalls === 1 ? 0 : 1 };
+    };
+
+    try {
+        const response = makeResponse();
+        await postController.setReaction({
+            params: { id: post._id },
+            body: { reaction: "love" },
+            user: { id: MEMBER_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.likeCount, 1);
+        assert.equal(response.body.reactionCounts.like, 0);
+        assert.equal(response.body.reactionCounts.love, 1);
+        assert.equal(response.body.reaction, "love");
+    } finally {
+        Post.findById = originalPostFindById;
+        Post.updateOne = originalPostUpdateOne;
+    }
+});
+
+test("reposts cannot expand the audience of follower-only posts", async () => {
+    const originalPostFindById = Post.findById;
+    const originalUserFindById = User.findById;
+    const originalPostFindOne = Post.findOne;
+    const post = {
+        _id: "507f1f77bcf86cd799439012",
+        author: CREATOR_ID,
+        community: null,
+        kind: "post",
+        visibility: "followers",
+        originalPost: null
+    };
+    let repostLookupAttempted = false;
+    Post.findById = () => ({
+        select: async () => post
+    });
+    User.findById = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({ following: [] })
+    });
+    Post.findOne = () => {
+        repostLookupAttempted = true;
+        return { select: async () => null };
+    };
+
+    try {
+        const response = makeResponse();
+        await postController.repostPost({
+            params: { id: post._id },
+            user: { id: MEMBER_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 404);
+        assert.equal(repostLookupAttempted, false);
+    } finally {
+        Post.findById = originalPostFindById;
+        User.findById = originalUserFindById;
+        Post.findOne = originalPostFindOne;
     }
 });
 

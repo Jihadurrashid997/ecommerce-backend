@@ -14,7 +14,8 @@ import {
     FaCog,
     FaEllipsisH,
     FaCheck,
-    FaTrash
+    FaTrash,
+    FaBookmark
 } from "react-icons/fa";
 
 import { motion, AnimatePresence } from "framer-motion";
@@ -838,6 +839,16 @@ const Navbar = () => {
                                 >
                                     <FaCog />
                                     <span>Settings</span>
+                                </Link>
+                                <Link
+                                    to="/saved"
+                                    onClick={() => {
+                                        setSettingsOpen(false);
+                                        closeMenu();
+                                    }}
+                                >
+                                    <FaBookmark />
+                                    <span>Saved posts</span>
                                 </Link>
                             </div>
                         )}

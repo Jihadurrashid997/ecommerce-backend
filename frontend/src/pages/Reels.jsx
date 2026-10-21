@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
     FaArrowLeft, FaHeart, FaRegHeart, FaRegComment, FaPlus, FaTimes,
-    FaVolumeMute, FaVolumeUp, FaTrash
+    FaVolumeMute, FaVolumeUp, FaTrash, FaBookmark, FaRegBookmark
 } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
@@ -19,10 +19,14 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
     const videoRef = useRef(null);
     const viewed = useRef(false);
 
-    const [liked, setLiked] = useState(reel.likedByMe);
+    const [reaction, setReaction] = useState(reel.reactionByMe || (reel.likedByMe ? "like" : null));
     const [likeCount, setLikeCount] = useState(reel.likeCount);
+    const [reactionCounts, setReactionCounts] = useState(reel.reactionCounts || {});
+    const [saved, setSaved] = useState(Boolean(reel.isSavedByMe));
     const [commentCount, setCommentCount] = useState(reel.commentCount);
     const [showComments, setShowComments] = useState(false);
+    const [actionMessage, setActionMessage] = useState("");
+    const liked = Boolean(reaction);
 
     // play only the reel that's actually on screen
     useEffect(() => {
@@ -57,20 +61,36 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
 
     }, [reel._id]);
 
-    const toggleLike = async () => {
-
-        const next = !liked;
-
-        setLiked(next);
-        setLikeCount(c => c + (next ? 1 : -1));
-
+    const updateReaction = async nextReaction => {
+        const previousReaction = reaction;
+        const nextCounts = { ...reactionCounts };
+        if (previousReaction) nextCounts[previousReaction] = Math.max(0, (nextCounts[previousReaction] || 0) - 1);
+        if (nextReaction) nextCounts[nextReaction] = (nextCounts[nextReaction] || 0) + 1;
+        setReaction(nextReaction);
+        setReactionCounts(nextCounts);
+        setLikeCount(count => count + Number(Boolean(nextReaction)) - Number(Boolean(previousReaction)));
         try {
-            await api.post(`/posts/${reel._id}/like`);
+            await api.put(`/posts/${reel._id}/reaction`, { reaction: nextReaction });
         } catch (e) {
-            setLiked(!next);
-            setLikeCount(c => c + (next ? -1 : 1));
+            setReaction(previousReaction);
+            setReactionCounts(reactionCounts);
+            setLikeCount(count => count + Number(Boolean(previousReaction)) - Number(Boolean(nextReaction)));
+            setActionMessage(e.response?.data?.message || "Could not update your reaction.");
         }
+    };
 
+    const toggleLike = () => updateReaction(reaction === "like" ? null : "like");
+
+    const toggleSaved = async () => {
+        const next = !saved;
+        setSaved(next);
+        try {
+            await api.put(`/posts/${reel._id}/saved`, { saved: next });
+            setActionMessage(next ? "Reel saved." : "Reel removed from saved posts.");
+        } catch (error) {
+            setSaved(!next);
+            setActionMessage(error.response?.data?.message || "Could not update saved reels.");
+        }
     };
 
     const remove = async () => {
@@ -115,6 +135,7 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
                 </Link>
 
                 {reel.caption && <p>{reel.caption}</p>}
+                {actionMessage && <p className="reel-action-status" role="status">{actionMessage}</p>}
 
             </div>
 
@@ -123,6 +144,33 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
                 <button type="button" onClick={toggleLike} className={liked ? "liked" : ""}>
                     {liked ? <FaHeart /> : <FaRegHeart />}
                     <span>{likeCount}</span>
+                </button>
+
+                <label className="reel-reaction-picker">
+                    <span className="sr-only">React to reel</span>
+                    <select
+                        aria-label="Choose a reel reaction"
+                        value={reaction || ""}
+                        onChange={event => updateReaction(event.target.value === "remove" ? null : event.target.value)}
+                    >
+                        <option value="">React</option>
+                        <option value="like">Like ({reactionCounts.like || 0})</option>
+                        <option value="love">Love ({reactionCounts.love || 0})</option>
+                        <option value="haha">Haha ({reactionCounts.haha || 0})</option>
+                        <option value="wow">Wow ({reactionCounts.wow || 0})</option>
+                        <option value="sad">Sad ({reactionCounts.sad || 0})</option>
+                        <option value="angry">Angry ({reactionCounts.angry || 0})</option>
+                        {reaction && <option value="remove">Remove reaction</option>}
+                    </select>
+                </label>
+
+                <button
+                    type="button"
+                    onClick={toggleSaved}
+                    aria-label={saved ? "Remove saved reel" : "Save reel"}
+                    aria-pressed={saved}
+                >
+                    {saved ? <FaBookmark /> : <FaRegBookmark />}
                 </button>
 
                 <button type="button" onClick={() => setShowComments(true)}>

@@ -1,6 +1,9 @@
 import React, { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaHeart, FaRegHeart, FaRegComment, FaShare, FaTrash } from "react-icons/fa";
+import {
+    FaHeart, FaRegHeart, FaRegComment, FaShare, FaTrash,
+    FaBookmark, FaRegBookmark, FaRetweet
+} from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import CommentsPanel from "./CommentsPanel";
@@ -19,14 +22,16 @@ const timeAgo = value => {
 
 };
 
-const PostCard = ({ post, onDeleted }) => {
+const PostCard = ({ post, onDeleted, onSavedChange }) => {
 
     const { user } = useApp();
 
     const myId = String(user?._id || user?.id || "");
 
-    const [liked, setLiked] = useState(post.likedByMe);
+    const [reaction, setReaction] = useState(post.reactionByMe || (post.likedByMe ? "like" : null));
     const [likeCount, setLikeCount] = useState(post.likeCount);
+    const [reactionCounts, setReactionCounts] = useState(post.reactionCounts || {});
+    const [saved, setSaved] = useState(Boolean(post.isSavedByMe));
     const [commentCount, setCommentCount] = useState(post.commentCount);
     const [showComments, setShowComments] = useState(false);
     const [slide, setSlide] = useState(0);
@@ -42,24 +47,50 @@ const PostCard = ({ post, onDeleted }) => {
     }, []);
 
     const author = post.author || {};
+    const liked = Boolean(reaction);
 
     const canDelete =
         String(author._id) === myId || user?.role === "admin";
 
-    const toggleLike = async () => {
-
-        const next = !liked;
-
-        setLiked(next);
-        setLikeCount(c => c + (next ? 1 : -1));
-
+    const updateReaction = async nextReaction => {
+        const previousReaction = reaction;
+        const nextCounts = { ...reactionCounts };
+        if (previousReaction) nextCounts[previousReaction] = Math.max(0, (nextCounts[previousReaction] || 0) - 1);
+        if (nextReaction) nextCounts[nextReaction] = (nextCounts[nextReaction] || 0) + 1;
+        setReaction(nextReaction);
+        setReactionCounts(nextCounts);
+        setLikeCount(count => count + Number(Boolean(nextReaction)) - Number(Boolean(previousReaction)));
         try {
-            await api.post(`/posts/${post._id}/like`);
+            await api.put(`/posts/${post._id}/reaction`, { reaction: nextReaction });
         } catch (e) {
-            setLiked(!next);
-            setLikeCount(c => c + (next ? -1 : 1));
+            setReaction(previousReaction);
+            setReactionCounts(reactionCounts);
+            setLikeCount(count => count + Number(Boolean(previousReaction)) - Number(Boolean(nextReaction)));
+            setShareMessage(e.response?.data?.message || "Could not update your reaction.");
         }
+    };
 
+    const toggleLike = () => updateReaction(reaction === "like" ? null : "like");
+
+    const toggleSaved = async () => {
+        const next = !saved;
+        setSaved(next);
+        try {
+            await api.put(`/posts/${post._id}/saved`, { saved: next });
+            if (!next && onSavedChange) onSavedChange(post._id, false);
+        } catch (error) {
+            setSaved(!next);
+            setShareMessage(error.response?.data?.message || "Could not update saved posts.");
+        }
+    };
+
+    const repost = async () => {
+        try {
+            await api.post(`/posts/${post._id}/repost`);
+            setShareMessage("Post reposted.");
+        } catch (error) {
+            setShareMessage(error.response?.data?.message || "Could not repost this post.");
+        }
     };
 
     const remove = async () => {
@@ -132,6 +163,25 @@ const PostCard = ({ post, onDeleted }) => {
 
             {post.caption && <p className="post-caption">{post.caption}</p>}
 
+            {post.originalPost && (
+                <section className="post-original" aria-label="Reposted post">
+                    <Link
+                        to={`/user/${post.originalPost.author?._id}`}
+                        className="post-original-author"
+                    >
+                        {post.originalPost.author?.name || "Original post"}
+                    </Link>
+                    {post.originalPost.caption && <p>{post.originalPost.caption}</p>}
+                    {post.originalPost.media?.[0]?.url && (
+                        <img
+                            src={getUploadUrl(post.originalPost.media[0].url)}
+                            alt=""
+                            loading="lazy"
+                        />
+                    )}
+                </section>
+            )}
+
             {post.media?.length > 0 && (
             <div className="post-media">
 
@@ -167,6 +217,24 @@ const PostCard = ({ post, onDeleted }) => {
                     {liked ? <FaHeart /> : <FaRegHeart />} {likeCount}
                 </button>
 
+                <label className="post-reaction-picker">
+                    <span className="sr-only">React to post</span>
+                    <select
+                        aria-label="Choose a reaction"
+                        value={reaction || ""}
+                        onChange={event => updateReaction(event.target.value === "remove" ? null : event.target.value)}
+                    >
+                        <option value="">React</option>
+                        <option value="like">Like ({reactionCounts.like || 0})</option>
+                        <option value="love">Love ({reactionCounts.love || 0})</option>
+                        <option value="haha">Haha ({reactionCounts.haha || 0})</option>
+                        <option value="wow">Wow ({reactionCounts.wow || 0})</option>
+                        <option value="sad">Sad ({reactionCounts.sad || 0})</option>
+                        <option value="angry">Angry ({reactionCounts.angry || 0})</option>
+                        {reaction && <option value="remove">Remove reaction</option>}
+                    </select>
+                </label>
+
                 <button type="button" onClick={() => setShowComments(v => !v)}>
                     <FaRegComment /> {commentCount}
                 </button>
@@ -174,6 +242,23 @@ const PostCard = ({ post, onDeleted }) => {
                 <button type="button" onClick={sharePost} aria-label="Share post">
                     <FaShare /> Share
                 </button>
+
+                <button
+                    type="button"
+                    onClick={toggleSaved}
+                    aria-label={saved ? "Remove saved post" : "Save post"}
+                    aria-pressed={saved}
+                    className={saved ? "is-saved" : ""}
+                >
+                    {saved ? <FaBookmark /> : <FaRegBookmark />}
+                </button>
+
+                {post.kind === "post" && !post.originalPost && !post.community &&
+                    (!post.visibility || post.visibility === "public") && (
+                        <button type="button" onClick={repost} aria-label="Repost">
+                            <FaRetweet /> Repost
+                        </button>
+                    )}
 
             </div>
 
