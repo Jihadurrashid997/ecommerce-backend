@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-    FaHeart, FaRegHeart, FaRegComment, FaShare, FaTrash,
+    FaRegComment, FaShare, FaTrash,
     FaBookmark, FaRegBookmark, FaRetweet
 } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
@@ -214,13 +214,10 @@ const PostCard = ({ post, onDeleted, onSavedChange }) => {
 
             <div className="post-actions">
 
-                <button type="button" onClick={toggleLike} className={liked ? "liked" : ""}>
-                    {liked ? <FaHeart /> : <FaRegHeart />} {likeCount}
-                </button>
-
                 <ReactionPicker
                     reaction={reaction}
                     reactionCounts={reactionCounts}
+                    likeCount={likeCount}
                     onSelect={updateReaction}
                 />
 

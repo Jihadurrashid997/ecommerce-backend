@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
+import { FaTimes } from "react-icons/fa";
 
 const REACTIONS = [
     { value: "like", label: "Like", emoji: "👍" },
@@ -9,7 +10,7 @@ const REACTIONS = [
     { value: "angry", label: "Angry", emoji: "😡" }
 ];
 
-const ReactionPicker = ({ reaction, reactionCounts = {}, onSelect }) => {
+const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect }) => {
     const [open, setOpen] = useState(false);
     const [position, setPosition] = useState(null);
     const pickerRef = useRef(null);
@@ -53,6 +54,11 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, onSelect }) => {
         setOpen(false);
     };
 
+    const clearReaction = () => {
+        if (reaction) onSelect(null);
+        setOpen(false);
+    };
+
     return (
         <div
             ref={pickerRef}
@@ -78,6 +84,8 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, onSelect }) => {
                 onClick={() => setOpen(value => !value)}
             >
                 <span aria-hidden="true">{selected?.emoji || "☺"}</span>
+                <span className="reaction-picker-label">{selected ? selected.label : "React"}</span>
+                <span className="reaction-picker-count">{likeCount}</span>
             </button>
             {open && (
                 <div
@@ -100,6 +108,15 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, onSelect }) => {
                             <span aria-hidden="true">{item.emoji}</span>
                         </button>
                     ))}
+                    <button
+                        type="button"
+                        className="reaction-picker-clear"
+                        aria-label="No reaction"
+                        title="No reaction"
+                        onClick={clearReaction}
+                    >
+                        <FaTimes aria-hidden="true" />
+                    </button>
                 </div>
             )}
         </div>
