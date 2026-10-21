@@ -51,6 +51,7 @@ test("opens post photos in a full-screen viewer with navigation and close", () =
     fireEvent.click(screen.getByRole("button", { name: "View photo full screen" }));
     const viewer = screen.getByRole("dialog", { name: "Post photo 1 of 2" });
     expect(viewer).toBeVisible();
+    expect(viewer.parentElement).toBe(document.body);
     const postFooter = within(viewer).getByRole("contentinfo");
     const postInfo = postFooter.querySelector(".media-viewer-post-info");
     const actions = postFooter.querySelector(".media-viewer-actions");
