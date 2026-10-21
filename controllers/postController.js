@@ -1,10 +1,12 @@
 const mongoose = require("mongoose");
 const Post = require("../models/Post");
 const Community = require("../models/Community");
+const User = require("../models/User");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
 const { notifyUser, notifyFollowers } = require("../services/platformNotifications");
 
 const AUTHOR_FIELDS = "name username profileImage avatar role";
+const POST_VISIBILITIES = new Set(["public", "followers", "private"]);
 
 const isId = id => mongoose.Types.ObjectId.isValid(id);
 
@@ -21,6 +23,7 @@ const shape = (post, userId) => {
         _id: post._id,
         kind: post.kind,
         community: post.community || null,
+        visibility: post.visibility || "public",
         author: post.author,
         caption: post.caption,
         media: post.media,
@@ -34,6 +37,21 @@ const shape = (post, userId) => {
 };
 
 const canAccessPost = async (post, userId) => {
+    const authorId = String(post?.author?._id || post?.author || "");
+
+    if (post?.visibility === "private" && authorId !== String(userId)) {
+        return false;
+    }
+
+    if (post?.visibility === "followers" && authorId !== String(userId)) {
+        const viewer = await User.findById(userId).select("following").lean();
+        const followsAuthor = (viewer?.following || []).some(
+            followedId => String(followedId) === authorId
+        );
+
+        if (!followsAuthor) return false;
+    }
+
     if (!post?.community) {
         return true;
     }
@@ -50,6 +68,19 @@ const canAccessPost = async (post, userId) => {
         (community.members || []).some(member => String(member) === String(userId));
 };
 
+const addVisibilityFilter = (filter, userId, following = []) => {
+    filter.$or = [
+        { visibility: { $exists: false } },
+        { visibility: "public" },
+        { author: userId },
+        ...(following.length
+            ? [{ visibility: "followers", author: { $in: following } }]
+            : [])
+    ];
+
+    return filter;
+};
+
 const requirePostAccess = async (post, userId, res) => {
     if (await canAccessPost(post, userId)) {
         return true;
@@ -62,7 +93,7 @@ const requirePostAccess = async (post, userId, res) => {
     return false;
 };
 
-const listQuery = async (filter, req) => {
+const listQuery = async (filter, req, following = []) => {
 
     const requestedLimit = Number(req.query.limit) || 10;
     const limit = Math.max(1, Math.min(requestedLimit, 30));
@@ -75,7 +106,11 @@ const listQuery = async (filter, req) => {
         filter.createdAt = { $lt: before };
     }
 
-    const posts = await Post.find(filter)
+    const queryFilter = filter.kind === "reel"
+        ? filter
+        : addVisibilityFilter(filter, req.user.id, following);
+
+    const posts = await Post.find(queryFilter)
         .sort({ createdAt: -1 })
         .limit(limit + 1)
         .populate("author", AUTHOR_FIELDS)
@@ -105,6 +140,23 @@ exports.createPost = async (req, res) => {
         const files = req.files || [];
         const caption = String(req.body?.caption || "").trim().slice(0, 2200);
         const communityId = req.params?.communityId || null;
+        const visibility = req.body?.visibility === undefined
+            ? "public"
+            : req.body.visibility;
+
+        if (typeof visibility !== "string" || !POST_VISIBILITIES.has(visibility)) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose a valid post audience."
+            });
+        }
+
+        if (communityId && visibility !== "public") {
+            return res.status(400).json({
+                success: false,
+                message: "Community posts are visible to community members."
+            });
+        }
 
         if (files.length === 0 && !caption) {
             return res.status(400).json({
@@ -151,11 +203,12 @@ exports.createPost = async (req, res) => {
             author: req.user.id,
             community: communityId,
             kind: "post",
+            visibility,
             caption,
             media
         });
 
-        if (!communityId) {
+        if (!communityId && visibility !== "private") {
             await notifyFollowers(req.user.id, {
                 type: "post",
                 title: "New post",
@@ -270,22 +323,22 @@ exports.getFeed = async (req, res) => {
 
     try {
         const filter = { kind: "post", community: null };
+        const viewer = await User
+            .findById(req.user.id)
+            .select("following")
+            .lean();
+        const following = viewer?.following || [];
 
         if (req.query.scope === "following") {
-            const user = await User
-                .findById(req.user.id)
-                .select("following")
-                .lean();
-
             filter.author = {
                 $in: [
                     req.user.id,
-                    ...(user?.following || [])
+                    ...following
                 ]
             };
         }
 
-        return res.json(await listQuery(filter, req));
+        return res.json(await listQuery(filter, req, following));
     } catch (error) {
         console.error("GET FEED ERROR:", error);
         return res.status(500).json({ success: false, message: "Could not load the feed." });
@@ -313,12 +366,16 @@ exports.getUserPosts = async (req, res) => {
         }
 
         const filter = { author: req.params.userId, community: null };
+        const viewer = await User
+            .findById(req.user.id)
+            .select("following")
+            .lean();
 
         if (["post", "reel"].includes(req.query.kind)) {
             filter.kind = req.query.kind;
         }
 
-        return res.json(await listQuery(filter, req));
+        return res.json(await listQuery(filter, req, viewer?.following || []));
 
     } catch (error) {
         console.error("GET USER POSTS ERROR:", error);
@@ -385,9 +442,16 @@ exports.getCommunityPosts = async (req, res) => {
             return res.status(404).json({ success: false, message: "Community not found." });
         }
 
-        return res.json(
-            await listQuery({ kind: "post", community: communityId }, req)
-        );
+        const viewer = await User
+            .findById(req.user.id)
+            .select("following")
+            .lean();
+
+        return res.json(await listQuery(
+            { kind: "post", community: communityId },
+            req,
+            viewer?.following || []
+        ));
     } catch (error) {
         console.error("GET COMMUNITY POSTS ERROR:", error);
         return res.status(500).json({ success: false, message: "Could not load community posts." });
@@ -404,7 +468,8 @@ exports.toggleLike = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid post." });
         }
 
-        const post = await Post.findById(req.params.id).select("likes community author kind");
+        const post = await Post.findById(req.params.id)
+            .select("likes community author kind visibility");
 
         if (!post) {
             return res.status(404).json({ success: false, message: "Post not found." });
@@ -459,7 +524,7 @@ exports.getComments = async (req, res) => {
         }
 
         const post = await Post.findById(req.params.id)
-            .select("comments community")
+            .select("comments community author visibility")
             .populate("comments.user", AUTHOR_FIELDS)
             .lean();
 
@@ -497,7 +562,8 @@ exports.addComment = async (req, res) => {
             return res.status(400).json({ success: false, message: "Comment can't be empty." });
         }
 
-        const post = await Post.findById(req.params.id).select("comments community author kind");
+        const post = await Post.findById(req.params.id)
+            .select("comments community author kind visibility");
 
         if (!post) {
             return res.status(404).json({ success: false, message: "Post not found." });
@@ -555,7 +621,8 @@ exports.addView = async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid post." });
         }
 
-        const post = await Post.findById(req.params.id).select("community");
+        const post = await Post.findById(req.params.id)
+            .select("community author visibility");
         if (!post) {
             return res.status(404).json({ success: false, message: "Post not found." });
         }

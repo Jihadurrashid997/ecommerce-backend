@@ -114,6 +114,11 @@ const PostCard = ({ post, onDeleted }) => {
                     <div>
                         <b>{author.name || "User"}</b>
                         <small>{timeAgo(post.createdAt)}</small>
+                        {post.visibility && post.visibility !== "public" && (
+                            <small className="post-audience-label">
+                                {post.visibility === "followers" ? "Followers only" : "Only me"}
+                            </small>
+                        )}
                     </div>
                 </Link>
 

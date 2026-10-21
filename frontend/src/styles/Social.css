@@ -900,8 +900,20 @@
 .home-composer .icon-btn.big:hover { background: #eaf1e7; }
 .home-composer .composer-previews { padding-left: 47px; }
 .home-composer-footer { display: flex; align-items: center; gap: 11px; padding-top: 12px; border-top: 1px solid #eff0e9; }
+.home-composer-footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+}
+.home-composer-hint { min-width: 0; margin-right: 0; }
+.home-audience-picker { grid-column: 2; grid-row: 1; }
+.home-audience-picker select { width: clamp(92px, 30vw, 120px); }
+.home-composer-count { grid-column: 1; grid-row: 2; align-self: center; }
+.home-composer .btn-primary { grid-column: 2; grid-row: 2; justify-self: end; }
 .home-composer-hint { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; color: var(--home-muted); font-size: 9px; }
 .home-composer-hint svg { color: #72927c; }
+.home-audience-picker { display: inline-flex; align-items: center; gap: 6px; color: var(--home-muted); font-size: 9px; }
+.home-audience-picker select { max-width: 120px; padding: 7px 8px; border: 1px solid #e7eae2; border-radius: 10px; color: var(--home-ink); font-size: 10px; background: #f8f9f4; }
 .home-composer-count { color: #98a29a; font-size: 9px; }
 .home-composer .btn-primary { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; color: #fff; font-size: 10px; background: var(--home-green); }
 .home-composer .btn-primary:hover:not(:disabled) { background: #347360; transform: translateY(-1px); }
@@ -924,6 +936,7 @@
 .home-feed-column .post-author { color: var(--home-ink); }
 .home-feed-column .post-author:hover { color: var(--home-green); }
 .home-feed-column .post-author small { color: #89948a; font-size: 9px; }
+.home-feed-column .post-author .post-audience-label { color: var(--home-green); font-weight: 700; }
 .home-feed-column .post-caption { padding: 0 17px 15px; font-size: 12px; line-height: 1.75; }
 .home-feed-column .post-actions { padding: 11px 17px; }
 .home-feed-column .post-actions button { color: #66736a; font-size: 11px; }
