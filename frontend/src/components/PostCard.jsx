@@ -8,6 +8,7 @@ import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import CommentsPanel from "./CommentsPanel";
 import MediaViewer from "./MediaViewer";
+import ReactionPicker from "./ReactionPicker";
 
 const timeAgo = value => {
 
@@ -217,23 +218,11 @@ const PostCard = ({ post, onDeleted, onSavedChange }) => {
                     {liked ? <FaHeart /> : <FaRegHeart />} {likeCount}
                 </button>
 
-                <label className="post-reaction-picker">
-                    <span className="sr-only">React to post</span>
-                    <select
-                        aria-label="Choose a reaction"
-                        value={reaction || ""}
-                        onChange={event => updateReaction(event.target.value === "remove" ? null : event.target.value)}
-                    >
-                        <option value="">React</option>
-                        <option value="like">Like ({reactionCounts.like || 0})</option>
-                        <option value="love">Love ({reactionCounts.love || 0})</option>
-                        <option value="haha">Haha ({reactionCounts.haha || 0})</option>
-                        <option value="wow">Wow ({reactionCounts.wow || 0})</option>
-                        <option value="sad">Sad ({reactionCounts.sad || 0})</option>
-                        <option value="angry">Angry ({reactionCounts.angry || 0})</option>
-                        {reaction && <option value="remove">Remove reaction</option>}
-                    </select>
-                </label>
+                <ReactionPicker
+                    reaction={reaction}
+                    reactionCounts={reactionCounts}
+                    onSelect={updateReaction}
+                />
 
                 <button type="button" onClick={() => setShowComments(v => !v)}>
                     <FaRegComment /> {commentCount}
