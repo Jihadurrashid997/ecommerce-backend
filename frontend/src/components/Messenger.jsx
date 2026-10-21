@@ -10,6 +10,7 @@ import React, {
 import {
     useSearchParams
 } from "react-router-dom";
+import { useApp } from "../context/AppContext";
 
 import {
     FaSearch,
@@ -413,6 +414,7 @@ const createCallId = () => {
 };
 
 const Messenger = ({ isActive = true }) => {
+    const { setUnreadMessengerCount } = useApp();
 
     /*
      * Reads ?user=<id> from the URL - this is how
@@ -8061,6 +8063,10 @@ const onCallMissed =
 
     const unreadConversationCount = Object.values(unreadUsers)
         .reduce((total, count) => total + (Number(count) || 0), 0);
+
+    useEffect(() => {
+        setUnreadMessengerCount(unreadConversationCount);
+    }, [setUnreadMessengerCount, unreadConversationCount]);
 
     const unreadConversations = [...groups, ...users]
         .filter(conversation =>
