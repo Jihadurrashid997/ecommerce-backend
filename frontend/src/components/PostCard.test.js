@@ -105,18 +105,27 @@ test("copies a shareable post link when native sharing is unavailable", async ()
     }
 });
 
-test("saves a post and offers richer reactions", async () => {
+test("saves a post and offers icon-based reactions", async () => {
     render(<PostCard post={post} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Save post" }));
     expect(await screen.findByRole("button", { name: "Remove saved post" })).toHaveAttribute("aria-pressed", "true");
     expect(api.put).toHaveBeenCalledWith("/posts/post-1/saved", { saved: true });
 
-    fireEvent.change(screen.getByRole("combobox", { name: "Choose a reaction" }), {
-        target: { value: "love" }
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Choose reaction" }));
+    expect(screen.getByRole("group", { name: "Reactions" })).toBeVisible();
+    expect(screen.queryByRole("combobox", { name: "Choose a reaction" })).not.toBeInTheDocument();
+    const loveReaction = screen.getByRole("button", { name: "Love (0)" });
+    expect(loveReaction).toHaveTextContent("❤️");
+    expect(loveReaction).not.toHaveTextContent("Love");
+    fireEvent.click(loveReaction);
     expect(api.put).toHaveBeenCalledWith("/posts/post-1/reaction", { reaction: "love" });
-    expect(screen.getByRole("combobox", { name: "Choose a reaction" })).toHaveValue("love");
+    expect(screen.getByRole("button", { name: "Love reaction selected; choose reaction" })).toBeVisible();
+    expect(screen.queryByRole("group", { name: "Reactions" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Love reaction selected; choose reaction" }));
+    fireEvent.click(screen.getByRole("button", { name: "Love (1)" }));
+    expect(api.put).toHaveBeenLastCalledWith("/posts/post-1/reaction", { reaction: null });
 });
 
 test("reposts a public post", async () => {

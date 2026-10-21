@@ -271,15 +271,42 @@
 
 .post-actions button.liked, .reel-side button.liked { color: #ef4444; }
 .post-actions button.is-saved { color: var(--home-green, #36734f); }
-.post-reaction-picker select {
-    max-width: 126px;
-    padding: 5px 7px;
-    border: 1px solid var(--social-border);
-    border-radius: 9px;
-    color: inherit;
-    background: var(--social-surface);
-    font: inherit;
+.reaction-picker { position: relative; display: inline-flex; align-items: center; }
+.post-actions .reaction-picker-trigger {
+    min-width: 30px;
+    min-height: 30px;
+    justify-content: center;
+    padding: 2px 5px;
+    border-radius: 999px;
+    font-size: 20px;
 }
+.reaction-picker-trigger.selected { color: #1877f2; }
+.reaction-picker-options {
+    position: absolute;
+    z-index: 20;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    display: flex;
+    gap: 4px;
+    padding: 7px;
+    border: 1px solid var(--social-border);
+    border-radius: 999px;
+    background: var(--social-surface);
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.18);
+    transform: translateX(-50%);
+}
+.reaction-picker-options button {
+    width: 36px;
+    height: 36px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 25px;
+    transition: transform 120ms ease;
+}
+.reaction-picker-options button:hover,
+.reaction-picker-options button:focus-visible { transform: scale(1.25) translateY(-3px); }
+.reaction-picker-options button.selected { background: rgba(24, 119, 242, 0.12); }
 .sr-only {
     position: absolute;
     width: 1px;
@@ -498,14 +525,23 @@
 }
 
 .reel-side span { font-size: 11px; }
-.reel-reaction-picker select {
-    width: 46px;
-    padding: 5px 2px;
+.reel-side .reaction-picker { justify-content: center; }
+.reel-side .reaction-picker-trigger {
+    width: 38px;
+    height: 38px;
+    justify-content: center;
+    padding: 0;
     border: 0;
-    border-radius: 14px;
-    color: #fff;
-    background: rgba(0, 0, 0, 0.55);
-    font-size: 10px;
+    border-radius: 50%;
+    color: inherit;
+    background: rgba(0, 0, 0, 0.35);
+    font-size: 24px;
+}
+.reel-side .reaction-picker-options {
+    right: calc(100% + 8px);
+    bottom: 50%;
+    left: auto;
+    transform: translateY(50%);
 }
 
 .reel-add {

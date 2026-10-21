@@ -7,6 +7,7 @@ import {
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import CommentsPanel from "../components/CommentsPanel";
+import ReactionPicker from "../components/ReactionPicker";
 import "../styles/Social.css";
 
 const MAX_MINUTES = 5;
@@ -146,23 +147,11 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
                     <span>{likeCount}</span>
                 </button>
 
-                <label className="reel-reaction-picker">
-                    <span className="sr-only">React to reel</span>
-                    <select
-                        aria-label="Choose a reel reaction"
-                        value={reaction || ""}
-                        onChange={event => updateReaction(event.target.value === "remove" ? null : event.target.value)}
-                    >
-                        <option value="">React</option>
-                        <option value="like">Like ({reactionCounts.like || 0})</option>
-                        <option value="love">Love ({reactionCounts.love || 0})</option>
-                        <option value="haha">Haha ({reactionCounts.haha || 0})</option>
-                        <option value="wow">Wow ({reactionCounts.wow || 0})</option>
-                        <option value="sad">Sad ({reactionCounts.sad || 0})</option>
-                        <option value="angry">Angry ({reactionCounts.angry || 0})</option>
-                        {reaction && <option value="remove">Remove reaction</option>}
-                    </select>
-                </label>
+                <ReactionPicker
+                    reaction={reaction}
+                    reactionCounts={reactionCounts}
+                    onSelect={updateReaction}
+                />
 
                 <button
                     type="button"
