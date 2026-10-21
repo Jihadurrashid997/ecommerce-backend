@@ -57,6 +57,82 @@ test("public community members can publish a community post", () => {
     assert.equal(String(post.community), COMMUNITY_ID);
 });
 
+test("shared post detail returns a shaped public post", async () => {
+    const originalFindById = Post.findById;
+    const post = {
+        _id: "507f1f77bcf86cd799439012",
+        author: { _id: CREATOR_ID, name: "Creator" },
+        caption: "A shareable update",
+        media: [],
+        likes: [MEMBER_ID],
+        comments: [{}],
+        createdAt: new Date()
+    };
+    Post.findById = () => ({
+        populate() {
+            return this;
+        },
+        lean: async () => post
+    });
+
+    try {
+        const response = makeResponse();
+        await postController.getPost({
+            params: { id: post._id },
+            user: { id: MEMBER_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.data._id, post._id);
+        assert.equal(response.body.data.likeCount, 1);
+        assert.equal(response.body.data.commentCount, 1);
+        assert.equal(response.body.data.likedByMe, true);
+        assert.equal(response.body.data.likes, undefined);
+    } finally {
+        Post.findById = originalFindById;
+    }
+});
+
+test("shared post detail does not expose private community posts to non-members", async () => {
+    const originalFindById = Post.findById;
+    const originalCommunityFindById = Community.findById;
+    const post = {
+        _id: "507f1f77bcf86cd799439012",
+        author: { _id: CREATOR_ID, name: "Creator" },
+        community: COMMUNITY_ID,
+        caption: "Members only",
+        media: [],
+        likes: [],
+        comments: []
+    };
+    Post.findById = () => ({
+        populate() {
+            return this;
+        },
+        lean: async () => post
+    });
+    Community.findById = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({ privacy: "private", members: [CREATOR_ID] })
+    });
+
+    try {
+        const response = makeResponse();
+        await postController.getPost({
+            params: { id: post._id },
+            user: { id: MEMBER_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 404);
+        assert.equal(response.body.message, "Post not found.");
+    } finally {
+        Post.findById = originalFindById;
+        Community.findById = originalCommunityFindById;
+    }
+});
+
 test("private community join requests stay pending until an admin approves", async () => {
     const originalFindById = Community.findById;
     const community = {

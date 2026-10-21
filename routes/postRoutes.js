@@ -16,6 +16,7 @@ const {
     getFeed,
     getCommunityPosts,
     getReels,
+    getPost,
     getUserPosts,
     toggleLike,
     getComments,
@@ -49,6 +50,7 @@ router.post("/reels", auth(), handle(reelUpload, "video"), createReel);
 router.get("/user/:userId", auth(), getUserPosts);
 
 // Single post actions
+router.get("/:id", auth(), getPost);
 router.post("/:id/like", auth(), toggleLike);
 router.get("/:id/comments", auth(), getComments);
 router.post("/:id/comments", auth(), addComment);

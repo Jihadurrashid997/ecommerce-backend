@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaHeart, FaRegHeart, FaRegComment, FaTrash } from "react-icons/fa";
+import { FaHeart, FaRegHeart, FaRegComment, FaShare, FaTrash } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import CommentsPanel from "./CommentsPanel";
@@ -31,6 +31,7 @@ const PostCard = ({ post, onDeleted }) => {
     const [showComments, setShowComments] = useState(false);
     const [slide, setSlide] = useState(0);
     const [viewerSlide, setViewerSlide] = useState(null);
+    const [shareMessage, setShareMessage] = useState("");
     const photoUrls = (post.media || []).map(media => getUploadUrl(media.url));
     const closeMediaViewer = useCallback(() => {
         setViewerSlide(null);
@@ -72,6 +73,31 @@ const PostCard = ({ post, onDeleted }) => {
             alert(e.response?.data?.message || "Could not delete.");
         }
 
+    };
+
+    const sharePost = async () => {
+        const url = new URL(`/post/${post._id}`, window.location.origin).toString();
+        const shareData = {
+            title: `${author.name || "Someone"} shared a post on E Top`,
+            text: post.caption || "View this post on E Top.",
+            url
+        };
+
+        try {
+            if (navigator.share) {
+                await navigator.share(shareData);
+                setShareMessage("Post shared.");
+            } else if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+                setShareMessage("Post link copied.");
+            } else {
+                throw new Error("Sharing and clipboard are unavailable.");
+            }
+        } catch (error) {
+            if (error.name === "AbortError") return;
+            console.error("SHARE POST ERROR:", error);
+            setShareMessage("Could not share this post.");
+        }
     };
 
     return (
@@ -140,7 +166,15 @@ const PostCard = ({ post, onDeleted }) => {
                     <FaRegComment /> {commentCount}
                 </button>
 
+                <button type="button" onClick={sharePost} aria-label="Share post">
+                    <FaShare /> Share
+                </button>
+
             </div>
+
+            {shareMessage && (
+                <p className="post-share-status" role="status">{shareMessage}</p>
+            )}
 
             {showComments && viewerSlide === null && (
                 <CommentsPanel

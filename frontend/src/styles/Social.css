@@ -271,6 +271,38 @@
 
 .post-actions button.liked, .reel-side button.liked { color: #ef4444; }
 
+.post-share-status {
+    margin: 0;
+    padding: 0 14px 10px;
+    color: var(--home-green, #36734f);
+    font-size: 12px;
+}
+
+.shared-post-page {
+    width: min(100% - 28px, 680px);
+    margin: 24px auto;
+}
+
+.shared-post-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 9px 13px;
+    border: 1px solid var(--social-border);
+    border-radius: 999px;
+    color: inherit;
+    background: var(--social-surface);
+    cursor: pointer;
+}
+
+.shared-post-error {
+    padding: 18px;
+    border: 1px solid var(--social-border);
+    border-radius: 14px;
+    background: var(--social-surface);
+}
+
 /* ---------- comments ---------- */
 
 .comments-panel {

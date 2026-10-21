@@ -79,3 +79,25 @@ test("closes the full-screen photo viewer with Escape", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Post photo 1 of 2" })).not.toBeInTheDocument();
 });
+
+test("copies a shareable post link when native sharing is unavailable", async () => {
+    const originalClipboard = navigator.clipboard;
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { writeText }
+    });
+
+    try {
+        render(<PostCard post={post} />);
+        fireEvent.click(screen.getByRole("button", { name: "Share post" }));
+
+        expect(await screen.findByRole("status")).toHaveTextContent("Post link copied.");
+        expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/post/post-1`);
+    } finally {
+        Object.defineProperty(navigator, "clipboard", {
+            configurable: true,
+            value: originalClipboard
+        });
+    }
+});

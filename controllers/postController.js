@@ -327,6 +327,41 @@ exports.getUserPosts = async (req, res) => {
 
 };
 
+exports.getPost = async (req, res) => {
+    try {
+        if (!isId(req.params.id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid post."
+            });
+        }
+
+        const post = await Post.findById(req.params.id)
+            .populate("author", AUTHOR_FIELDS)
+            .lean();
+
+        if (!post) {
+            return res.status(404).json({
+                success: false,
+                message: "Post not found."
+            });
+        }
+
+        if (!await requirePostAccess(post, req.user.id, res)) return;
+
+        return res.json({
+            success: true,
+            data: shape(post, req.user.id)
+        });
+    } catch (error) {
+        console.error("GET POST ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load the post."
+        });
+    }
+};
+
 exports.getCommunityPosts = async (req, res) => {
     try {
         const { communityId } = req.params;

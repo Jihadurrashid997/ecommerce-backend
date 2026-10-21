@@ -45,6 +45,7 @@ import LoadingScreen from "./components/LoadingScreen";
 // ======================================================
 
 import Home from "./pages/Home";
+import SharedPost from "./pages/SharedPost";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -364,6 +365,15 @@ function AppLayout() {
                     element={
                         <PrivateRoute>
                             <Reels />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
+                    path="/post/:id"
+                    element={
+                        <PrivateRoute>
+                            <SharedPost />
                         </PrivateRoute>
                     }
                 />
