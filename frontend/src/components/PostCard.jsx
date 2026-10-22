@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
     FaRegComment, FaShare, FaTrash,
-    FaBookmark, FaRegBookmark, FaRetweet
+    FaBookmark, FaRegBookmark, FaRetweet,
+    FaEllipsisH, FaPen
 } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
@@ -23,7 +24,7 @@ const timeAgo = value => {
 
 };
 
-const PostCard = ({ post, onDeleted, onSavedChange }) => {
+const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
 
     const { user } = useApp();
 
@@ -38,6 +39,22 @@ const PostCard = ({ post, onDeleted, onSavedChange }) => {
     const [slide, setSlide] = useState(0);
     const [viewerSlide, setViewerSlide] = useState(null);
     const [shareMessage, setShareMessage] = useState("");
+    const [postError, setPostError] = useState("");
+    const [postMenuOpen, setPostMenuOpen] = useState(false);
+    const [editingPost, setEditingPost] = useState(false);
+    const [savingPost, setSavingPost] = useState(false);
+    const [editCaption, setEditCaption] = useState(post.caption || "");
+    const [editVisibility, setEditVisibility] = useState(post.visibility || "public");
+    const [postContent, setPostContent] = useState({
+        caption: post.caption || "",
+        visibility: post.visibility || "public"
+    });
+    useEffect(() => {
+        setPostContent({
+            caption: post.caption || "",
+            visibility: post.visibility || "public"
+        });
+    }, [post.caption, post.visibility]);
     const photoUrls = (post.media || []).map(media => getUploadUrl(media.url));
     const closeMediaViewer = useCallback(() => {
         setViewerSlide(null);
@@ -52,6 +69,8 @@ const PostCard = ({ post, onDeleted, onSavedChange }) => {
 
     const canDelete =
         String(author._id) === myId || user?.role === "admin";
+    const canEdit = String(author._id) === myId &&
+        post.kind === "post" && !post.community && !post.originalPost;
 
     const updateReaction = async nextReaction => {
         const previousReaction = reaction;
@@ -96,22 +115,57 @@ const PostCard = ({ post, onDeleted, onSavedChange }) => {
 
     const remove = async () => {
 
-        if (!window.confirm("Delete this post?")) return;
+        if (!window.confirm("Remove this post for everyone? This cannot be undone.")) return;
 
         try {
             await api.delete(`/posts/${post._id}`);
             if (onDeleted) onDeleted(post._id);
         } catch (e) {
-            alert(e.response?.data?.message || "Could not delete.");
+            setPostError(e.response?.data?.message || "Could not remove this post.");
         }
 
+    };
+
+    const openPostEditor = () => {
+        setEditCaption(postContent.caption);
+        setEditVisibility(postContent.visibility);
+        setPostError("");
+        setEditingPost(true);
+        setPostMenuOpen(false);
+    };
+
+    const savePost = async event => {
+        event.preventDefault();
+        if (savingPost) return;
+
+        setSavingPost(true);
+        setPostError("");
+        try {
+            const response = await api.patch(`/posts/${post._id}`, {
+                caption: editCaption,
+                visibility: editVisibility
+            });
+            const updatedPost = response.data.data;
+            const updatedContent = {
+                caption: updatedPost.caption,
+                visibility: updatedPost.visibility
+            };
+            setPostContent(updatedContent);
+            setEditingPost(false);
+            setShareMessage("Post updated.");
+            if (onUpdated) onUpdated(updatedPost);
+        } catch (error) {
+            setPostError(error.response?.data?.message || "Could not update your post.");
+        } finally {
+            setSavingPost(false);
+        }
     };
 
     const sharePost = async () => {
         const url = new URL(`/post/${post._id}`, window.location.origin).toString();
         const shareData = {
             title: `${author.name || "Someone"} shared a post on E Top`,
-            text: post.caption || "View this post on E Top.",
+            text: postContent.caption || "View this post on E Top.",
             url
         };
 
@@ -146,23 +200,85 @@ const PostCard = ({ post, onDeleted, onSavedChange }) => {
                     <div>
                         <b>{author.name || "User"}</b>
                         <small>{timeAgo(post.createdAt)}</small>
-                        {post.visibility && post.visibility !== "public" && (
+                        {postContent.visibility && postContent.visibility !== "public" && (
                             <small className="post-audience-label">
-                                {post.visibility === "followers" ? "Followers only" : "Only me"}
+                                {postContent.visibility === "followers" ? "Followers only" : "Only me"}
                             </small>
                         )}
                     </div>
                 </Link>
 
-                {canDelete && (
-                    <button type="button" className="icon-btn" onClick={remove} title="Delete">
-                        <FaTrash />
-                    </button>
+                {(canEdit || canDelete) && (
+                    <div className="post-menu-wrap">
+                        <button
+                            type="button"
+                            className="icon-btn post-menu-trigger"
+                            aria-label="More post options"
+                            aria-expanded={postMenuOpen}
+                            onClick={() => setPostMenuOpen(open => !open)}
+                        >
+                            <FaEllipsisH />
+                        </button>
+                        {postMenuOpen && (
+                            <div className="post-menu" role="group" aria-label="Post options">
+                                {canEdit && (
+                                    <button type="button" onClick={openPostEditor}>
+                                        <FaPen /> Edit post
+                                    </button>
+                                )}
+                                {canDelete && (
+                                    <button type="button" onClick={() => {
+                                        setPostMenuOpen(false);
+                                        remove();
+                                    }}>
+                                        <FaTrash /> Remove post
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )}
 
             </header>
 
-            {post.caption && <p className="post-caption">{post.caption}</p>}
+            {postError && <p className="post-error" role="alert">{postError}</p>}
+
+            {editingPost && (
+                <form className="post-edit-form" onSubmit={savePost}>
+                    <label>
+                        Caption
+                        <textarea
+                            aria-label="Edit post caption"
+                            value={editCaption}
+                            onChange={event => setEditCaption(event.target.value)}
+                            maxLength={2200}
+                            rows={3}
+                        />
+                    </label>
+                    <label>
+                        Audience
+                        <select
+                            aria-label="Edit post audience"
+                            value={editVisibility}
+                            onChange={event => setEditVisibility(event.target.value)}
+                        >
+                            <option value="public">Public</option>
+                            <option value="followers">Followers only</option>
+                            <option value="private">Only me</option>
+                        </select>
+                    </label>
+                    <div className="post-edit-actions">
+                        <button type="button" onClick={() => setEditingPost(false)} disabled={savingPost}>
+                            Cancel
+                        </button>
+                        <button type="submit" disabled={savingPost}>
+                            {savingPost ? "Saving..." : "Save changes"}
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            {postContent.caption && <p className="post-caption">{postContent.caption}</p>}
 
             {post.originalPost && (
                 <section className="post-original" aria-label="Reposted post">

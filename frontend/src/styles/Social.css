@@ -224,6 +224,50 @@
     padding: 12px 14px;
 }
 
+.post-menu-wrap { position: relative; }
+.post-menu-trigger { color: #718076; }
+.post-menu {
+    position: absolute;
+    z-index: 5;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 160px;
+    padding: 5px;
+    border: 1px solid var(--social-border);
+    border-radius: 12px;
+    background: var(--social-surface);
+    box-shadow: 0 10px 28px rgba(20, 35, 25, .15);
+}
+.post-menu button {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 10px;
+    border-radius: 8px;
+    color: inherit;
+    text-align: left;
+    background: transparent;
+    cursor: pointer;
+}
+.post-menu button:hover { background: rgba(80, 110, 90, .09); }
+.post-edit-form { display: grid; gap: 11px; padding: 0 17px 14px; }
+.post-edit-form label { display: grid; gap: 5px; color: #64736a; font-size: 11px; font-weight: 700; }
+.post-edit-form textarea, .post-edit-form select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--social-border);
+    border-radius: 9px;
+    color: inherit;
+    font: inherit;
+    background: var(--social-surface);
+}
+.post-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.post-edit-actions button { padding: 8px 12px; border-radius: 9px; font-size: 11px; cursor: pointer; }
+.post-edit-actions button:last-child { color: #fff; background: #27594b; }
+.post-edit-actions button:disabled { opacity: .55; cursor: wait; }
+.post-error { margin: 0 17px 12px; color: #a13e35; font-size: 11px; }
+
 .post-author {
     display: flex;
     align-items: center;
@@ -1094,6 +1138,17 @@
 .home-error { padding: 18px; border: 1px solid #f3d5cf; border-radius: 16px; color: #a13e35; text-align: center; background: #fff9f7; }
 .home-error p { margin: 0 0 10px; font-size: 12px; }
 .home-error button { padding: 7px 12px; border-radius: 9px; color: #fff; font-size: 10px; background: #a13e35; }
+.home-upload-error, .home-draft-error {
+    margin: 0;
+    padding: 9px 11px;
+    border: 1px solid #f0d1ca;
+    border-radius: 10px;
+    color: #9b4036;
+    font-size: 11px;
+    line-height: 1.5;
+    background: #fff8f5;
+}
+.home-draft-status { margin: 0; color: #758176; font-size: 10px; }
 
 .home-editorial-card { position: relative; overflow: hidden; min-height: 231px; padding: 19px; border-radius: 20px; color: #fff; background: linear-gradient(145deg, #654c7b, #46365f); }
 .home-editorial-card::after { content: ""; position: absolute; right: -55px; bottom: -105px; width: 200px; height: 200px; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; box-shadow: 0 0 0 20px rgba(255,255,255,.04), 0 0 0 42px rgba(255,255,255,.04); }
@@ -1135,8 +1190,8 @@
 }
 
 @media (max-width: 760px) {
-    .home-experience { padding: 18px 14px 64px; }
-    .home-welcome { min-height: 260px; padding: 28px 23px; border-radius: 23px; }
+    .home-experience { padding: 14px 14px 64px; }
+    .home-welcome { min-height: 230px; padding: 24px 23px; border-radius: 23px; }
     .home-welcome-copy { max-width: 100%; }
     .home-welcome h1 { max-width: 370px; font-size: clamp(36px, 9vw, 49px); }
     .home-welcome p { max-width: 340px; font-size: 12px; }
@@ -1144,35 +1199,19 @@
     .home-art-orbit-one { width: 220px; height: 220px; }
     .home-art-orbit-two { width: 164px; height: 164px; }
     .home-art-note { width: 112px; height: 112px; top: 88px; right: 68px; font-size: 16px; }
-    .home-shortcuts { gap: 8px; margin: 12px 0 19px; }
-    .home-shortcuts > a { gap: 8px; padding: 10px; border-radius: 15px; }
-    .home-shortcut-icon { width: 32px; height: 32px; flex-basis: 32px; border-radius: 11px; }
-    .home-shortcuts small { display: none; }
+    .home-shortcuts, .home-following-strip { display: none; }
     .home-layout { display: flex; flex-direction: column; gap: 16px; }
     .home-feed-column { width: 100%; order: 1; }
-    .home-side-left { position: static; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); order: 2; width: 100%; }
-    .home-side-left .home-profile-cover { height: 52px; }
-    .home-side-left .home-profile-avatar { width: 50px; height: 50px; margin-top: -25px; }
-    .home-side-left .home-profile-info { padding: 6px 12px 13px; }
-    .home-side-card { padding: 12px; }
+    .home-side-left { display: none; }
 }
 
 @media (max-width: 480px) {
     .home-experience { padding: 12px 10px 48px; }
-    .home-welcome { min-height: 247px; padding: 23px 18px; }
+    .home-welcome { min-height: 215px; padding: 20px 18px; }
     .home-welcome-actions { gap: 14px; }
     .home-primary-link, .home-text-link { font-size: 10px; }
     .home-art-note, .home-art-spark { display: none; }
     .home-welcome-art { right: -185px; opacity: .28; }
-    .home-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .home-shortcuts > a { flex-wrap: wrap; gap: 6px; min-height: 90px; align-content: center; }
-    .home-shortcuts > a > span:nth-child(2) { flex-basis: calc(100% - 42px); }
-    .home-shortcuts > a > svg { display: none; }
-    .home-shortcuts b { font-size: 10px; }
-    .home-following-strip { padding: 10px; }
-    .home-following-intro { gap: 7px; }
-    .home-following-avatars > a { width: 27px; height: 27px; }
-    .home-side-left { grid-template-columns: 1fr; }
     .home-composer { padding: 13px; }
     .home-composer-avatar { width: 34px; height: 34px; }
     .home-composer .icon-btn.big { width: 37px; height: 37px; }

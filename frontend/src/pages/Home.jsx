@@ -11,6 +11,7 @@ import {
     FaUsers
 } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
+import { clearHomeDraft, loadHomeDraft, saveHomeDraft } from "../services/homeDraft";
 import { useApp } from "../context/AppContext";
 import PostCard from "../components/PostCard";
 import "../styles/Social.css";
@@ -23,6 +24,8 @@ const Home = () => {
 
     const fileRef = useRef(null);
     const followingRequestRef = useRef(0);
+    const draftSaveRequestRef = useRef(0);
+    const userId = String(user?._id || user?.id || "");
 
     const [posts, setPosts] = useState([]);
     const [following, setFollowing] = useState([]);
@@ -38,6 +41,11 @@ const Home = () => {
     const [files, setFiles] = useState([]);
     const [posting, setPosting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadError, setUploadError] = useState("");
+    const [draftReady, setDraftReady] = useState(false);
+    const [draftUserId, setDraftUserId] = useState("");
+    const [draftLoadError, setDraftLoadError] = useState("");
+    const [draftStatus, setDraftStatus] = useState("");
 
     // created once per selection (not on every keystroke) and released afterwards
     const previews = useMemo(
@@ -104,6 +112,61 @@ const Home = () => {
         followingRequestRef.current += 1;
     }, []);
 
+    useEffect(() => {
+        let active = true;
+        setDraftReady(false);
+        setDraftLoadError("");
+        setDraftUserId("");
+        if (!userId) return () => { active = false; };
+
+        loadHomeDraft(userId).then(draft => {
+            if (!active) return;
+            if (draft) {
+                setCaption(draft.caption);
+                setVisibility(draft.visibility);
+                setFiles(draft.files);
+            }
+            setDraftUserId(userId);
+            setDraftReady(true);
+            setDraftStatus(draft ? "Draft restored." : "");
+        }).catch(error => {
+            console.error("HOME DRAFT LOAD ERROR:", error);
+            if (!active) return;
+            setDraftLoadError("Your saved draft could not be loaded. Changes will not overwrite it; refresh to try again.");
+            setDraftUserId(userId);
+            setDraftReady(true);
+        });
+
+        return () => { active = false; };
+    }, [userId]);
+
+    useEffect(() => {
+        if (!userId || !draftReady || draftUserId !== userId || draftLoadError) return undefined;
+
+        const requestId = ++draftSaveRequestRef.current;
+        setDraftStatus("Saving draft...");
+        const timeout = setTimeout(async () => {
+            const draft = { caption, visibility, files };
+            const isEmpty = !caption.trim() && files.length === 0;
+            try {
+                if (isEmpty) {
+                    await clearHomeDraft(userId);
+                    if (requestId === draftSaveRequestRef.current) setDraftStatus("");
+                } else {
+                    await saveHomeDraft(userId, draft);
+                    if (requestId === draftSaveRequestRef.current) setDraftStatus("Draft saved.");
+                }
+            } catch (error) {
+                console.error("HOME DRAFT SAVE ERROR:", error);
+                if (requestId === draftSaveRequestRef.current) {
+                    setDraftStatus("Draft could not be saved.");
+                }
+            }
+        }, 350);
+
+        return () => clearTimeout(timeout);
+    }, [caption, visibility, files, userId, draftReady, draftUserId, draftLoadError]);
+
     const pickFiles = event => {
 
         const picked = Array.from(event.target.files || []);
@@ -116,24 +179,25 @@ const Home = () => {
         );
 
         if (unsupported) {
-            alert("Choose a JPG, PNG, WebP, GIF, or HEIC image.");
+            setUploadError("Choose a JPG, PNG, WebP, GIF, or HEIC image.");
             return;
         }
 
         const next = [...files, ...picked].slice(0, MAX_PHOTOS);
 
         if (files.length + picked.length > MAX_PHOTOS) {
-            alert(`You can add up to ${MAX_PHOTOS} photos.`);
+            setUploadError(`You can add up to ${MAX_PHOTOS} photos. The first ${MAX_PHOTOS} are kept.`);
         }
 
         const tooBig = next.find(f => f.size > 10 * 1024 * 1024);
 
         if (tooBig) {
-            alert("Each photo must be under 10MB.");
+            setUploadError("Each photo must be under 10MB.");
             return;
         }
 
         setFiles(next);
+        if (files.length + picked.length <= MAX_PHOTOS) setUploadError("");
 
     };
 
@@ -167,9 +231,17 @@ const Home = () => {
             setFiles([]);
             setCaption("");
             setVisibility("public");
+            setUploadError("");
+            if (!draftLoadError) {
+                draftSaveRequestRef.current += 1;
+                clearHomeDraft(userId).catch(error => {
+                    console.error("HOME DRAFT CLEAR ERROR:", error);
+                    setDraftStatus("Post shared, but the saved draft could not be cleared.");
+                });
+            }
 
         } catch (e) {
-            alert(e.response?.data?.message || "Could not publish your post.");
+            setUploadError(e.response?.data?.message || "Could not publish your post. Your draft is still here; retry when ready.");
         } finally {
             setPosting(false);
             setUploadProgress(0);
@@ -291,9 +363,13 @@ const Home = () => {
                     <input
                         className="composer-input"
                         value={caption}
-                        onChange={e => setCaption(e.target.value)}
+                        onChange={e => {
+                            setCaption(e.target.value);
+                            setUploadError("");
+                        }}
                         placeholder="What's worth sharing today?"
                         maxLength={2200}
+                        disabled={!draftReady || posting}
                     />
 
                     <button
@@ -301,6 +377,7 @@ const Home = () => {
                         className="icon-btn big"
                         onClick={() => fileRef.current?.click()}
                         title="Add photos"
+                        disabled={!draftReady || posting}
                     >
                         <FaImage />
                     </button>
@@ -311,6 +388,7 @@ const Home = () => {
                         accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
                         multiple
                         hidden
+                        disabled={!draftReady || posting}
                         onChange={pickFiles}
                     />
 
@@ -323,7 +401,11 @@ const Home = () => {
                                 <img src={src} alt="" />
                                 <button
                                     type="button"
-                                    onClick={() => setFiles(files.filter((_, n) => n !== i))}
+                                    disabled={posting}
+                                    onClick={() => {
+                                        setFiles(files.filter((_, n) => n !== i));
+                                        setUploadError("");
+                                    }}
                                     aria-label="Remove"
                                 >
                                     <FaTimes />
@@ -333,6 +415,13 @@ const Home = () => {
                     </div>
                 )}
 
+                        {uploadError && <div className="home-upload-error" role="alert">{uploadError}</div>}
+                        {draftLoadError && <p className="home-draft-error" role="alert">{draftLoadError}</p>}
+                        {!draftReady && <p className="home-draft-status" role="status">Loading your saved draft...</p>}
+                        {!draftLoadError && draftStatus && (
+                            <p className="home-draft-status" role="status">{draftStatus}</p>
+                        )}
+
                         <div className="home-composer-footer">
                             <span className="home-composer-hint"><FaImage /> Add up to 5 photos</span>
                             <label className="home-audience-picker">
@@ -340,7 +429,11 @@ const Home = () => {
                                 <select
                                     aria-label="Post audience"
                                     value={visibility}
-                                    onChange={event => setVisibility(event.target.value)}
+                                    onChange={event => {
+                                        setVisibility(event.target.value);
+                                        setUploadError("");
+                                    }}
+                                    disabled={!draftReady || posting}
                                 >
                                     <option value="public">Public</option>
                                     <option value="followers">Followers only</option>
@@ -348,8 +441,8 @@ const Home = () => {
                                 </select>
                             </label>
                             <span className="home-composer-count">{caption.length}/2200</span>
-                            <button className="btn-primary" type="submit" disabled={posting || (!caption.trim() && files.length === 0)}>
-                                {posting ? `Sharing ${uploadProgress}%...` : "Share post"} <FaArrowRight />
+                            <button className="btn-primary" type="submit" disabled={!draftReady || posting || (!caption.trim() && files.length === 0)}>
+                                {posting ? `Sharing ${uploadProgress}%...` : uploadError ? "Retry upload" : "Share post"} <FaArrowRight />
                             </button>
                         </div>
 
@@ -384,6 +477,9 @@ const Home = () => {
                             key={post._id}
                             post={post}
                             onDeleted={id => setPosts(prev => prev.filter(p => p._id !== id))}
+                            onUpdated={updated => setPosts(prev => prev.map(item =>
+                                item._id === updated._id ? { ...item, ...updated } : item
+                            ))}
                         />
                     ))}
 

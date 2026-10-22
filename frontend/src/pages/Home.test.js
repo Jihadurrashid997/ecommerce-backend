@@ -2,6 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import Home from "./Home";
 import api from "../services/api";
+import { clearHomeDraft, loadHomeDraft, saveHomeDraft } from "../services/homeDraft";
 
 const originalCreateObjectURL = URL.createObjectURL;
 const originalRevokeObjectURL = URL.revokeObjectURL;
@@ -14,9 +15,16 @@ jest.mock("../services/api", () => ({
     __esModule: true,
     default: {
         get: jest.fn(),
-        post: jest.fn()
+        post: jest.fn(),
+        patch: jest.fn()
     },
     getUploadUrl: value => value
+}));
+
+jest.mock("../services/homeDraft", () => ({
+    loadHomeDraft: jest.fn().mockResolvedValue(null),
+    saveHomeDraft: jest.fn().mockResolvedValue(undefined),
+    clearHomeDraft: jest.fn().mockResolvedValue(undefined)
 }));
 
 jest.mock("../context/AppContext", () => ({
@@ -27,6 +35,9 @@ jest.mock("../components/PostCard", () => ({ post }) => <article>{post.caption}<
 
 beforeEach(() => {
     jest.clearAllMocks();
+    loadHomeDraft.mockResolvedValue(null);
+    saveHomeDraft.mockResolvedValue(undefined);
+    clearHomeDraft.mockResolvedValue(undefined);
     URL.createObjectURL = jest.fn(() => "blob:post-photo");
     URL.revokeObjectURL = jest.fn();
     api.get.mockImplementation(path => Promise.resolve({
@@ -98,7 +109,9 @@ test("photo uploads send the selected image and show upload progress", async () 
 
     const { container } = render(<Home />);
     const photo = new File(["photo-bytes"], "sunny-day.jpg", { type: "image/jpeg" });
-    fireEvent.change(container.querySelector('input[type="file"]'), {
+    const fileInput = container.querySelector('input[type="file"]');
+    await waitFor(() => expect(fileInput).toBeEnabled());
+    fireEvent.change(fileInput, {
         target: { files: [photo] }
     });
     fireEvent.change(screen.getByPlaceholderText("What's worth sharing today?"), {
@@ -131,17 +144,16 @@ test("photo uploads send the selected image and show upload progress", async () 
 });
 
 test("rejects unsupported and oversized photos before publishing", async () => {
-    const alert = jest.spyOn(window, "alert").mockImplementation(() => {});
     const { container } = render(<Home />);
     const fileInput = container.querySelector('input[type="file"]');
+    await waitFor(() => expect(fileInput).toBeEnabled());
 
     fireEvent.change(fileInput, {
         target: { files: [new File(["text"], "notes.txt", { type: "text/plain" })] }
     });
-    expect(alert).toHaveBeenCalledWith("Choose a JPG, PNG, WebP, GIF, or HEIC image.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose a JPG, PNG, WebP, GIF, or HEIC image.");
     expect(container.querySelector(".composer-thumb")).not.toBeInTheDocument();
 
-    alert.mockClear();
     fireEvent.change(fileInput, {
         target: {
             files: [new File([new Uint8Array(10 * 1024 * 1024 + 1)], "large.jpg", {
@@ -149,15 +161,13 @@ test("rejects unsupported and oversized photos before publishing", async () => {
             })]
         }
     });
-    expect(alert).toHaveBeenCalledWith("Each photo must be under 10MB.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Each photo must be under 10MB.");
     expect(container.querySelector(".composer-thumb")).not.toBeInTheDocument();
     expect(api.post).not.toHaveBeenCalled();
-    alert.mockRestore();
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
 });
 
 test("limits a post to five uploaded photos", async () => {
-    const alert = jest.spyOn(window, "alert").mockImplementation(() => {});
     api.post.mockResolvedValue({
         data: {
             data: {
@@ -173,10 +183,12 @@ test("limits a post to five uploaded photos", async () => {
         new File([`photo-${index}`], `photo-${index}.jpg`, { type: "image/jpeg" })
     );
 
-    fireEvent.change(container.querySelector('input[type="file"]'), {
+    const fileInput = container.querySelector('input[type="file"]');
+    await waitFor(() => expect(fileInput).toBeEnabled());
+    fireEvent.change(fileInput, {
         target: { files: photos }
     });
-    expect(alert).toHaveBeenCalledWith("You can add up to 5 photos.");
+    expect(screen.getByRole("alert")).toHaveTextContent("You can add up to 5 photos.");
     expect(container.querySelectorAll(".composer-thumb")).toHaveLength(5);
     fireEvent.change(screen.getByPlaceholderText("What's worth sharing today?"), {
         target: { value: "Five photos" }
@@ -186,29 +198,78 @@ test("limits a post to five uploaded photos", async () => {
     await waitFor(() => expect(api.post).toHaveBeenCalled());
     expect(api.post.mock.calls[0][1].getAll("photos")).toHaveLength(5);
     expect(api.post.mock.calls[0][1].getAll("photos")).toEqual(photos.slice(0, 5));
-    alert.mockRestore();
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
 });
 
 test("keeps the draft available when photo publishing fails", async () => {
-    const alert = jest.spyOn(window, "alert").mockImplementation(() => {});
     api.post.mockRejectedValue({
         response: { data: { message: "Upload failed. Try again." } }
     });
     const { container } = render(<Home />);
     const photo = new File(["photo"], "moment.jpg", { type: "image/jpeg" });
-    fireEvent.change(container.querySelector('input[type="file"]'), {
+    const fileInput = container.querySelector('input[type="file"]');
+    await waitFor(() => expect(fileInput).toBeEnabled());
+    fireEvent.change(fileInput, {
         target: { files: [photo] }
     });
     const caption = screen.getByPlaceholderText("What's worth sharing today?");
     fireEvent.change(caption, { target: { value: "Keep this draft" } });
     fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
 
-    await waitFor(() => expect(alert).toHaveBeenCalledWith("Upload failed. Try again."));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Upload failed. Try again.");
     expect(caption).toHaveValue("Keep this draft");
     expect(container.querySelectorAll(".composer-thumb")).toHaveLength(1);
-    alert.mockRestore();
+    expect(screen.getByRole("button", { name: "Retry upload" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Retry upload" }));
+    expect(api.post).toHaveBeenCalledTimes(2);
+    expect(clearHomeDraft).not.toHaveBeenCalled();
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
+});
+
+test("restores the user's Home draft, including selected photos", async () => {
+    const photo = new File(["photo"], "saved.jpg", { type: "image/jpeg" });
+    loadHomeDraft.mockResolvedValueOnce({
+        caption: "Restored caption",
+        visibility: "private",
+        files: [photo]
+    });
+    const { container } = render(<Home />);
+
+    expect(await screen.findByPlaceholderText("What's worth sharing today?"))
+        .toHaveValue("Restored caption");
+    expect(screen.getByRole("combobox", { name: "Post audience" })).toHaveValue("private");
+    expect(container.querySelectorAll(".composer-thumb")).toHaveLength(1);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Draft"));
+    expect(loadHomeDraft).toHaveBeenCalledWith("current-user");
+});
+
+test("autosaves non-empty Home drafts for the current user", async () => {
+    render(<Home />);
+    const caption = await screen.findByPlaceholderText("What's worth sharing today?");
+    fireEvent.change(caption, { target: { value: "A saved thought" } });
+
+    await waitFor(() => expect(saveHomeDraft).toHaveBeenCalledWith(
+        "current-user",
+        expect.objectContaining({
+            caption: "A saved thought",
+            visibility: "public",
+            files: []
+        })
+    ), { timeout: 2000 });
+});
+
+test("clears the saved Home draft only after a successful publish", async () => {
+    api.post.mockResolvedValue({
+        data: { data: { _id: "published-post", caption: "Publish this", media: [] } }
+    });
+    const { container } = render(<Home />);
+    fireEvent.change(await screen.findByPlaceholderText("What's worth sharing today?"), {
+        target: { value: "Publish this" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Share post" }));
+
+    await waitFor(() => expect(clearHomeDraft).toHaveBeenCalledWith("current-user"));
+    expect(screen.getByPlaceholderText("What's worth sharing today?")).toHaveValue("");
 });
 
 test("loads additional feed posts using the next cursor", async () => {

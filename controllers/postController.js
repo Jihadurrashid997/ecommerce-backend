@@ -421,6 +421,95 @@ exports.getReels = async (req, res) => {
 
 };
 
+exports.updatePost = async (req, res) => {
+    try {
+        if (!isId(req.params.id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid post."
+            });
+        }
+
+        const hasCaption = Object.prototype.hasOwnProperty.call(req.body || {}, "caption");
+        const hasVisibility = Object.prototype.hasOwnProperty.call(req.body || {}, "visibility");
+        if (!hasCaption && !hasVisibility) {
+            return res.status(400).json({
+                success: false,
+                message: "Add a caption or choose an audience to update."
+            });
+        }
+
+        if (hasCaption && typeof req.body.caption !== "string") {
+            return res.status(400).json({
+                success: false,
+                message: "Caption must be text."
+            });
+        }
+
+        if (hasCaption && req.body.caption.length > 2200) {
+            return res.status(400).json({
+                success: false,
+                message: "Caption must be 2200 characters or fewer."
+            });
+        }
+
+        if (hasVisibility && !POST_VISIBILITIES.has(req.body.visibility)) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose a valid post audience."
+            });
+        }
+
+        const post = await Post.findById(req.params.id);
+        if (!post) {
+            return res.status(404).json({
+                success: false,
+                message: "Post not found."
+            });
+        }
+
+        const authorId = String(post.author?._id || post.author || "");
+        if (
+            authorId !== String(req.user.id) ||
+            post.kind !== "post" ||
+            post.community ||
+            post.originalPost
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only edit your own personal posts."
+            });
+        }
+
+        const nextCaption = hasCaption ? req.body.caption.trim() : post.caption;
+        if (!nextCaption && !(post.media || []).length) {
+            return res.status(400).json({
+                success: false,
+                message: "A post needs a caption or at least one photo."
+            });
+        }
+
+        if (hasCaption) post.caption = nextCaption;
+        if (hasVisibility) post.visibility = req.body.visibility;
+        await post.save();
+
+        const updatedPost = await Post.findById(post._id)
+            .populate("author", AUTHOR_FIELDS)
+            .lean();
+
+        return res.json({
+            success: true,
+            data: shape(updatedPost, req.user.id)
+        });
+    } catch (error) {
+        console.error("UPDATE POST ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not update your post."
+        });
+    }
+};
+
 exports.getUserPosts = async (req, res) => {
 
     try {

@@ -17,6 +17,7 @@ const {
     getCommunityPosts,
     getReels,
     getPost,
+    updatePost,
     getSavedPosts,
     setSavedPost,
     repostPost,
@@ -55,6 +56,7 @@ router.get("/user/:userId", auth(), getUserPosts);
 router.get("/saved", auth(), getSavedPosts);
 
 // Single post actions
+router.patch("/:id", auth(), updatePost);
 router.get("/:id", auth(), getPost);
 router.put("/:id/saved", auth(), setSavedPost);
 router.put("/:id/reaction", auth(), setReaction);
