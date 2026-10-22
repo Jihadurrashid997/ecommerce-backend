@@ -930,7 +930,7 @@
     backdrop-filter: blur(5px);
 }
 
-.home-shortcuts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0 27px; }
+.home-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0 27px; }
 .home-shortcuts > a {
     display: flex;
     align-items: center;
@@ -1007,6 +1007,7 @@
 .home-empty-icon { display: grid; place-items: center; width: 42px; height: 42px; margin: auto; border-radius: 50%; color: var(--home-green); background: #e9f0e4; }
 .home-circle-empty b { display: block; margin: 10px 0 4px; font-size: 11px; }
 .home-circle-empty p { margin: 0; color: var(--home-muted); font-size: 10px; line-height: 1.6; }
+.home-circle-retry { margin-top: 10px; padding: 7px 11px; border: 1px solid var(--home-line); border-radius: 9px; color: var(--home-green); font-size: 10px; font-weight: 750; background: var(--home-card); cursor: pointer; }
 
 .home-feed-column { display: flex; flex-direction: column; gap: 13px; min-width: 0; }
 .home-following-strip { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 69px; padding: 12px 16px; }
@@ -1163,7 +1164,7 @@
     .home-primary-link, .home-text-link { font-size: 10px; }
     .home-art-note, .home-art-spark { display: none; }
     .home-welcome-art { right: -185px; opacity: .28; }
-    .home-shortcuts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .home-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .home-shortcuts > a { flex-wrap: wrap; gap: 6px; min-height: 90px; align-content: center; }
     .home-shortcuts > a > span:nth-child(2) { flex-basis: calc(100% - 42px); }
     .home-shortcuts > a > svg { display: none; }
