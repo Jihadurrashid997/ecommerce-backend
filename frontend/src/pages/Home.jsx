@@ -22,9 +22,11 @@ const Home = () => {
     const { user } = useApp();
 
     const fileRef = useRef(null);
+    const followingRequestRef = useRef(0);
 
     const [posts, setPosts] = useState([]);
     const [following, setFollowing] = useState([]);
+    const [followingError, setFollowingError] = useState("");
     const [feedScope, setFeedScope] = useState("for-you");
     const [cursor, setCursor] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -78,18 +80,28 @@ const Home = () => {
         load(null, feedScope);
     }, [feedScope, load]);
 
+    const loadFollowing = useCallback(async () => {
+        const requestId = ++followingRequestRef.current;
+        try {
+            const response = await api.get("/users/following");
+            if (requestId !== followingRequestRef.current) return;
+            setFollowing(response.data.users || []);
+            setFollowingError("");
+        } catch (e) {
+            if (requestId !== followingRequestRef.current) return;
+            console.error("HOME FOLLOWING LOAD ERROR:", e);
+            setFollowingError(
+                e.response?.data?.message || "Could not load your circle."
+            );
+        }
+    }, []);
+
     useEffect(() => {
-        let active = true;
+        loadFollowing();
+    }, [loadFollowing]);
 
-        api.get("/users/following")
-            .then(response => {
-                if (active) setFollowing(response.data.users || []);
-            })
-            .catch(() => {
-                if (active) setFollowing([]);
-            });
-
-        return () => { active = false; };
+    useEffect(() => () => {
+        followingRequestRef.current += 1;
     }, []);
 
     const pickFiles = event => {
@@ -207,7 +219,18 @@ const Home = () => {
                     </section>
                     <section className="home-side-card home-circle-card">
                         <div className="home-side-heading"><span>YOUR CIRCLE</span><Link to="/profile">See all</Link></div>
-                        {following.length > 0 ? following.slice(0, 5).map(person => (
+                        {followingError ? (
+                            <div className="home-circle-empty">
+                                <p role="alert">{followingError}</p>
+                                <button
+                                    type="button"
+                                    className="home-circle-retry"
+                                    onClick={loadFollowing}
+                                >
+                                    Try again
+                                </button>
+                            </div>
+                        ) : following.length > 0 ? following.slice(0, 5).map(person => (
                             <Link className="home-person-row" to={`/user/${person._id}`} key={person._id}>
                                 <span className="home-person-avatar">
                                     {person.profileImage
@@ -232,7 +255,11 @@ const Home = () => {
                     <section className="home-following-strip">
                         <div className="home-following-intro">
                             <span className="home-strip-orb"><FaUsers /></span>
-                            <span><b>Your people, closer</b><small>{following.length ? `${following.length} people in your circle` : "Your circle starts with one follow"}</small></span>
+                            <span><b>Your people, closer</b><small>{followingError
+                                ? "Your circle could not be loaded"
+                                : following.length
+                                    ? `${following.length} people in your circle`
+                                    : "Your circle starts with one follow"}</small></span>
                         </div>
                         <div className="home-following-avatars">
                             {following.slice(0, 4).map(person => (
