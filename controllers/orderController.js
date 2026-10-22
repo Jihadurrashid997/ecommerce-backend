@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const crypto = require("crypto");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const User = require("../models/User");
@@ -7,6 +8,16 @@ const {
     notifyShopUsers,
     notifyShopAdmins
 } = require("../services/shopNotifications");
+
+const getSafeTrackingUrl = value => {
+    if (!value) return "";
+    try {
+        const url = new URL(value);
+        return url.protocol === "https:" ? url.toString() : "";
+    } catch (_error) {
+        return "";
+    }
+};
 
 const getCustomerOrder = order => {
     const result = typeof order.toObject === "function"
@@ -18,6 +29,19 @@ const getCustomerOrder = order => {
             _id: settlement._id,
             amount: settlement.amount,
             deliveryStatus: settlement.deliveryStatus,
+            courierName: settlement.courierName || "",
+            trackingNumber: settlement.trackingNumber || "",
+            trackingUrl: getSafeTrackingUrl(settlement.trackingUrl),
+            deliveryEvidence: settlement.deliveryEvidence || "",
+            shipmentHistory: (settlement.shipmentHistory || []).map(update => ({
+                status: update.status,
+                courierName: update.courierName || "",
+                trackingNumber: update.trackingNumber || "",
+                trackingUrl: getSafeTrackingUrl(update.trackingUrl),
+                note: update.note || "",
+                source: update.source || "manual",
+                createdAt: update.createdAt
+            })),
             receiptConfirmedAt: settlement.receiptConfirmedAt,
             sellerConfirmedAt: settlement.sellerConfirmedAt,
             payoutStatus: settlement.payoutStatus
@@ -68,6 +92,7 @@ const updateOverallDeliveryStatus = order => {
 exports.createOrder = async (req, res) => {
     const reservedStock = [];
     let orderCreated = false;
+    let checkoutRequestHash;
 
     const restoreReservedStock = async () => {
         while (reservedStock.length) {
@@ -145,6 +170,51 @@ exports.createOrder = async (req, res) => {
             requestedQuantities.set(productId, totalQuantity);
         }
 
+        const idempotencyKey = String(
+            req.get?.("Idempotency-Key") ||
+            req.headers?.["idempotency-key"] ||
+            ""
+        ).trim();
+        if (!/^[A-Za-z0-9_-]{8,128}$/.test(idempotencyKey)) {
+            return res.status(400).json({
+                success: false,
+                message: "A valid Idempotency-Key header is required to create an order."
+            });
+        }
+
+        checkoutRequestHash = crypto
+            .createHash("sha256")
+            .update(JSON.stringify({
+                items: [...requestedQuantities.entries()]
+                    .sort(([a], [b]) => a.localeCompare(b)),
+                shippingAddress: {
+                    name: recipientName,
+                    phone: recipientPhone,
+                    address: recipientAddress,
+                    city: String(shippingAddress?.city || "").trim(),
+                    postalCode: String(shippingAddress?.postalCode || "").trim()
+                },
+                paymentMethod: "sslcommerz"
+            }))
+            .digest("hex");
+
+        const existingOrder = await Order.findOne({
+            user: req.user.id,
+            checkoutIdempotencyKey: idempotencyKey
+        }).select("+checkoutRequestHash");
+        if (existingOrder) {
+            if (existingOrder.checkoutRequestHash !== checkoutRequestHash) {
+                return res.status(409).json({
+                    success: false,
+                    message: "This Idempotency-Key was already used for a different checkout."
+                });
+            }
+            return res.status(200).json({
+                message: "Order already created for this checkout request.",
+                order: getCustomerOrder(existingOrder)
+            });
+        }
+
         let totalPrice = 0;
         const orderItems = [];
         const sellerAmounts = new Map();
@@ -166,8 +236,11 @@ exports.createOrder = async (req, res) => {
             }
 
             if (
-                settings.requireProductApproval &&
-                product.isApproved === false
+                ["pending", "rejected"].includes(product.approvalStatus) ||
+                (
+                    settings.requireProductApproval &&
+                    product.isApproved === false
+                )
             ) {
                 return res.status(404).json({
                     message: "One of the products is not available."
@@ -202,6 +275,7 @@ exports.createOrder = async (req, res) => {
                         _id: productId,
                         seller: savedProduct.seller,
                         stock: { $gte: quantity },
+                        approvalStatus: { $nin: ["pending", "rejected"] },
                         ...(settings.requireProductApproval
                             ? { isApproved: { $ne: false } }
                             : {})
@@ -222,6 +296,7 @@ exports.createOrder = async (req, res) => {
 
             if (
                 !product.seller ||
+                ["pending", "rejected"].includes(product.approvalStatus) ||
                 (
                     settings.requireProductApproval &&
                     product.isApproved === false
@@ -257,6 +332,8 @@ exports.createOrder = async (req, res) => {
 
         const order = await Order.create({
             user: req.user.id,
+            checkoutIdempotencyKey: idempotencyKey,
+            checkoutRequestHash,
             items: orderItems,
             totalPrice,
             shippingAddress: {
@@ -300,6 +377,30 @@ exports.createOrder = async (req, res) => {
                 console.error("ORDER STOCK ROLLBACK ERROR:", rollbackError);
                 return res.status(500).json({
                     message: "Checkout could not be completed safely. Contact Shop support before retrying."
+                });
+            }
+        }
+
+        if (err.code === 11000) {
+            const idempotencyKey = String(
+                req.get?.("Idempotency-Key") ||
+                req.headers?.["idempotency-key"] ||
+                ""
+            ).trim();
+            const existingOrder = await Order.findOne({
+                user: req.user.id,
+                checkoutIdempotencyKey: idempotencyKey
+            }).select("+checkoutRequestHash");
+            if (existingOrder) {
+                if (existingOrder.checkoutRequestHash !== checkoutRequestHash) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "This Idempotency-Key was already used for a different checkout."
+                    });
+                }
+                return res.status(200).json({
+                    message: "Order already created for this checkout request.",
+                    order: getCustomerOrder(existingOrder)
                 });
             }
         }
@@ -530,6 +631,19 @@ exports.getSellerOrders = async (req, res) => {
                           id: settlement._id,
                           amount: settlement.amount,
                           status: settlement.payoutStatus,
+                          courierName: settlement.courierName || "",
+                          trackingNumber: settlement.trackingNumber || "",
+                          trackingUrl: getSafeTrackingUrl(settlement.trackingUrl),
+                          deliveryEvidence: settlement.deliveryEvidence || "",
+                          shipmentHistory: (settlement.shipmentHistory || []).map(update => ({
+                              status: update.status,
+                              courierName: update.courierName || "",
+                              trackingNumber: update.trackingNumber || "",
+                              trackingUrl: getSafeTrackingUrl(update.trackingUrl),
+                              note: update.note || "",
+                              source: update.source || "manual",
+                              createdAt: update.createdAt
+                          })),
                           receiptConfirmedAt: settlement.receiptConfirmedAt,
                           sellerConfirmedAt: settlement.sellerConfirmedAt,
                           payoutMethod: settlement.sellerPayoutMethod ||
@@ -567,9 +681,11 @@ exports.updateSellerOrderStatus = async (
 
     try {
 
-        const {
-            status
-        } = req.body;
+        const status = req.body?.status;
+        const courierName = String(req.body?.courierName || "").trim();
+        const trackingNumber = String(req.body?.trackingNumber || "").trim();
+        const trackingUrl = String(req.body?.trackingUrl || "").trim();
+        const deliveryEvidence = String(req.body?.deliveryEvidence || "").trim();
 
         const allowedStatuses = [
             "Pending",
@@ -583,6 +699,28 @@ exports.updateSellerOrderStatus = async (
             return res.status(400).json({
                 message: "Invalid order status"
             });
+        }
+        if (
+            courierName.length > 80 ||
+            trackingNumber.length > 120 ||
+            trackingUrl.length > 500 ||
+            deliveryEvidence.length > 500
+        ) {
+            return res.status(400).json({
+                message: "Shipment details exceed the allowed length."
+            });
+        }
+        if (trackingUrl) {
+            try {
+                const parsedUrl = new URL(trackingUrl);
+                if (parsedUrl.protocol !== "https:") {
+                    throw new Error("Tracking URL must use HTTPS.");
+                }
+            } catch (_error) {
+                return res.status(400).json({
+                    message: "Enter a valid HTTPS courier tracking URL."
+                });
+            }
         }
 
         const order = await Order.findById(
@@ -647,7 +785,40 @@ exports.updateSellerOrderStatus = async (
                 });
             }
 
+            if (
+                status === "Delivered" &&
+                !deliveryEvidence &&
+                !settlement.deliveryEvidence
+            ) {
+                return res.status(400).json({
+                    message: "Add a short delivery note or evidence before marking the shipment delivered."
+                });
+            }
+
+            const trackingChanged =
+                (courierName && courierName !== settlement.courierName) ||
+                (trackingNumber && trackingNumber !== settlement.trackingNumber) ||
+                (trackingUrl && trackingUrl !== settlement.trackingUrl);
+            const statusChanged = previousStatus !== status;
+            if (courierName) settlement.courierName = courierName;
+            if (trackingNumber) settlement.trackingNumber = trackingNumber;
+            if (trackingUrl) settlement.trackingUrl = trackingUrl;
+            if (deliveryEvidence) settlement.deliveryEvidence = deliveryEvidence;
             settlement.deliveryStatus = status;
+            if (status === "Delivered" && statusChanged) {
+                settlement.deliveredAt = new Date();
+            }
+            if (statusChanged || trackingChanged || deliveryEvidence) {
+                settlement.shipmentHistory.push({
+                    status,
+                    courierName: settlement.courierName,
+                    trackingNumber: settlement.trackingNumber,
+                    trackingUrl: settlement.trackingUrl,
+                    note: deliveryEvidence,
+                    source: "manual",
+                    updatedBy: req.user.id
+                });
+            }
             updateOverallDeliveryStatus(order);
         } else {
             order.status = status;
@@ -655,7 +826,10 @@ exports.updateSellerOrderStatus = async (
 
         await order.save();
 
-        if (previousStatus !== status) {
+        if (
+            previousStatus !== status ||
+            (courierName || trackingNumber || trackingUrl || deliveryEvidence)
+        ) {
             await notifyShopUsers({
                 recipients: [order.user],
                 eventKey: `${order._id}:shipment:${settlement?._id || req.user.id}:${status}:${order.updatedAt?.getTime() || Date.now()}`,
@@ -950,7 +1124,20 @@ exports.getReadySellerPayouts = async (_req, res) => {
                         payoutAccount: settlement.sellerPayoutAccount || ""
                     },
                     receiptConfirmedAt: settlement.receiptConfirmedAt,
-                    sellerConfirmedAt: settlement.sellerConfirmedAt
+                    sellerConfirmedAt: settlement.sellerConfirmedAt,
+                    courierName: settlement.courierName || "",
+                    trackingNumber: settlement.trackingNumber || "",
+                    trackingUrl: getSafeTrackingUrl(settlement.trackingUrl),
+                    deliveryEvidence: settlement.deliveryEvidence || "",
+                    shipmentHistory: (settlement.shipmentHistory || []).map(update => ({
+                        status: update.status,
+                        courierName: update.courierName || "",
+                        trackingNumber: update.trackingNumber || "",
+                        trackingUrl: getSafeTrackingUrl(update.trackingUrl),
+                        note: update.note || "",
+                        source: update.source || "manual",
+                        createdAt: update.createdAt
+                    }))
                 }))
         );
 

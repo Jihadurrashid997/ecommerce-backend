@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const crypto = require("node:crypto");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const User = require("../models/User");
@@ -35,6 +36,7 @@ test("orders initialize separate held-payout records for each seller", async () 
     const originalFindById = Product.findById;
     const originalFindOneAndUpdate = Product.findOneAndUpdate;
     const originalCreate = Order.create;
+    const originalFindOne = Order.findOne;
     const productIds = {
         "product-a": "507f1f77bcf86cd799439011",
         "product-b": "507f1f77bcf86cd799439012"
@@ -61,6 +63,9 @@ test("orders initialize separate held-payout records for each seller", async () 
         requireProductApproval: false
     });
     Product.findById = async id => products.get(id);
+    Order.findOne = () => ({
+        select: async () => null
+    });
     Product.findOneAndUpdate = async (filter, update) => {
         const product = products.get(String(filter._id));
         if (!product || product.stock < filter.stock.$gte) return null;
@@ -88,7 +93,8 @@ test("orders initialize separate held-payout records for each seller", async () 
                         email: "private@example.com"
                     }
                 },
-                user: { id: "buyer" }
+                user: { id: "buyer" },
+                headers: { "idempotency-key": "checkout-order-01" }
             },
             response
         );
@@ -134,6 +140,98 @@ test("orders initialize separate held-payout records for each seller", async () 
         Product.findById = originalFindById;
         Product.findOneAndUpdate = originalFindOneAndUpdate;
         Order.create = originalCreate;
+        Order.findOne = originalFindOne;
+    }
+});
+
+test("duplicate checkout idempotency key returns the existing order without reserving stock", async () => {
+    const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
+    const originalFindOne = Order.findOne;
+    const originalProductFindById = Product.findById;
+    const userId = "507f1f77bcf86cd799439017";
+    const productId = "507f1f77bcf86cd799439015";
+    const request = {
+        items: [{ product: productId, quantity: 1 }],
+        shippingAddress: {
+            name: "Recipient",
+            phone: "01700000000",
+            address: "Delivery road"
+        }
+    };
+    const checkoutRequestHash = crypto
+        .createHash("sha256")
+        .update(JSON.stringify({
+            items: [[productId, 1]],
+            shippingAddress: {
+                name: "Recipient",
+                phone: "01700000000",
+                address: "Delivery road",
+                city: "",
+                postalCode: ""
+            },
+            paymentMethod: "sslcommerz"
+        }))
+        .digest("hex");
+    const existingOrder = {
+        _id: "507f1f77bcf86cd799439019",
+        checkoutRequestHash,
+        sellerSettlements: [],
+        refundRequest: { status: "none" },
+        toObject() {
+            return {
+                _id: this._id,
+                sellerSettlements: this.sellerSettlements,
+                refundRequest: this.refundRequest
+            };
+        }
+    };
+    marketplaceSettings.getMarketplaceSettings = async () => ({
+        marketplaceEnabled: true,
+        requireProductApproval: false
+    });
+    Order.findOne = filter => {
+        assert.deepEqual(filter, {
+            user: userId,
+            checkoutIdempotencyKey: "checkout-retry-01"
+        });
+        return {
+            select: async () => existingOrder
+        };
+    };
+    Product.findById = async () => {
+        throw new Error("Replayed checkout must not reserve inventory.");
+    };
+
+    try {
+        const response = makeResponse();
+        await orderController.createOrder(
+            {
+                body: request,
+                user: { id: userId },
+                headers: { "idempotency-key": "checkout-retry-01" }
+            },
+            response
+        );
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.order._id, existingOrder._id);
+
+        const mismatchResponse = makeResponse();
+        await orderController.createOrder(
+            {
+                body: {
+                    ...request,
+                    items: [{ product: productId, quantity: 2 }]
+                },
+                user: { id: userId },
+                headers: { "idempotency-key": "checkout-retry-01" }
+            },
+            mismatchResponse
+        );
+        assert.equal(mismatchResponse.statusCode, 409);
+    } finally {
+        marketplaceSettings.getMarketplaceSettings = originalGetSettings;
+        Order.findOne = originalFindOne;
+        Product.findById = originalProductFindById;
     }
 });
 
@@ -142,6 +240,7 @@ test("order creation reserves duplicate product quantities atomically", async ()
     const originalFindById = Product.findById;
     const originalFindOneAndUpdate = Product.findOneAndUpdate;
     const originalCreate = Order.create;
+    const originalFindOne = Order.findOne;
     const productId = "507f1f77bcf86cd799439015";
     const product = {
         _id: productId,
@@ -157,6 +256,9 @@ test("order creation reserves duplicate product quantities atomically", async ()
         requireProductApproval: false
     });
     Product.findById = async () => ({ ...product });
+    Order.findOne = () => ({
+        select: async () => null
+    });
     Product.findOneAndUpdate = async (filter, update) => {
         reservedQuantity = -update.$inc.stock;
         product.stock -= reservedQuantity;
@@ -183,7 +285,8 @@ test("order creation reserves duplicate product quantities atomically", async ()
                     },
                     paymentMethod: "sslcommerz"
                 },
-                user: { id: "507f1f77bcf86cd799439017" }
+                user: { id: "507f1f77bcf86cd799439017" },
+                headers: { "idempotency-key": "checkout-order-02" }
             },
             response
         );
@@ -199,6 +302,7 @@ test("order creation reserves duplicate product quantities atomically", async ()
         Product.findById = originalFindById;
         Product.findOneAndUpdate = originalFindOneAndUpdate;
         Order.create = originalCreate;
+        Order.findOne = originalFindOne;
     }
 });
 
@@ -208,6 +312,7 @@ test("partial inventory reservation is rolled back when another product sells ou
     const originalFindOneAndUpdate = Product.findOneAndUpdate;
     const originalUpdateOne = Product.updateOne;
     const originalCreate = Order.create;
+    const originalFindOne = Order.findOne;
     const firstId = "507f1f77bcf86cd799439022";
     const secondId = "507f1f77bcf86cd799439023";
     const products = new Map([
@@ -234,6 +339,9 @@ test("partial inventory reservation is rolled back when another product sells ou
     Product.findById = async id => ({
         ...products.get(id),
         ...(id === secondId ? { stock: 2 } : {})
+    });
+    Order.findOne = () => ({
+        select: async () => null
     });
     Product.findOneAndUpdate = async (filter, update) => {
         const product = products.get(String(filter._id));
@@ -263,7 +371,8 @@ test("partial inventory reservation is rolled back when another product sells ou
                         address: "Delivery road"
                     }
                 },
-                user: { id: "507f1f77bcf86cd799439026" }
+                user: { id: "507f1f77bcf86cd799439026" },
+                headers: { "idempotency-key": "checkout-order-03" }
             },
             response
         );
@@ -278,6 +387,7 @@ test("partial inventory reservation is rolled back when another product sells ou
         Product.findOneAndUpdate = originalFindOneAndUpdate;
         Product.updateOne = originalUpdateOne;
         Order.create = originalCreate;
+        Order.findOne = originalFindOne;
     }
 });
 
@@ -414,6 +524,11 @@ test("customer order responses do not expose seller account IDs", async () => {
             _id: "fulfillment-a",
             amount: 100,
             deliveryStatus: "Delivered",
+            courierName: "",
+            trackingNumber: "",
+            trackingUrl: "",
+            deliveryEvidence: "",
+            shipmentHistory: [],
             receiptConfirmedAt: null,
             sellerConfirmedAt: null,
             payoutStatus: "held"
@@ -636,6 +751,103 @@ test("seller order responses omit buyer profile data and seller IDs", async () =
         Product.find = originalProductFind;
         Order.find = originalOrderFind;
         User.findById = originalUserFindById;
+    }
+});
+
+test("seller shipment updates store per-seller tracking and manual delivery history", async () => {
+    const originalFindById = Order.findById;
+    const sellerId = "507f1f77bcf86cd799439041";
+    const settlement = {
+        _id: "507f1f77bcf86cd799439042",
+        seller: sellerId,
+        deliveryStatus: "Processing",
+        shipmentHistory: [],
+        courierName: "",
+        trackingNumber: "",
+        trackingUrl: "",
+        deliveryEvidence: ""
+    };
+    const order = {
+        _id: "507f1f77bcf86cd799439043",
+        user: "507f1f77bcf86cd799439044",
+        status: "Processing",
+        paymentStatus: "paid",
+        refundRequest: { status: "none" },
+        items: [{ product: { seller: sellerId } }],
+        sellerSettlements: [settlement],
+        save: async () => {}
+    };
+    Order.findById = () => ({
+        populate: async () => order
+    });
+
+    try {
+        const response = makeResponse();
+        await orderController.updateSellerOrderStatus(
+            {
+                params: { id: order._id },
+                body: {
+                    status: "Shipped",
+                    courierName: "Example Courier",
+                    trackingNumber: "TRACK-1024",
+                    trackingUrl: "https://courier.example/track/TRACK-1024"
+                },
+                user: { id: sellerId }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(settlement.deliveryStatus, "Shipped");
+        assert.equal(settlement.courierName, "Example Courier");
+        assert.equal(settlement.trackingNumber, "TRACK-1024");
+        assert.equal(settlement.shipmentHistory.length, 1);
+        assert.equal(settlement.shipmentHistory[0].source, "manual");
+        assert.equal(
+            String(settlement.shipmentHistory[0].updatedBy),
+            sellerId
+        );
+    } finally {
+        Order.findById = originalFindById;
+    }
+});
+
+test("manual delivery cannot be marked complete without seller evidence", async () => {
+    const originalFindById = Order.findById;
+    const sellerId = "507f1f77bcf86cd799439045";
+    const order = {
+        _id: "507f1f77bcf86cd799439046",
+        status: "Shipped",
+        paymentStatus: "paid",
+        refundRequest: { status: "none" },
+        items: [{ product: { seller: sellerId } }],
+        sellerSettlements: [{
+            seller: sellerId,
+            deliveryStatus: "Shipped",
+            deliveryEvidence: "",
+            shipmentHistory: []
+        }],
+        save: async () => {}
+    };
+    Order.findById = () => ({
+        populate: async () => order
+    });
+
+    try {
+        const response = makeResponse();
+        await orderController.updateSellerOrderStatus(
+            {
+                params: { id: order._id },
+                body: { status: "Delivered" },
+                user: { id: sellerId }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 400);
+        assert.match(response.body.message, /delivery note or evidence/i);
+    } finally {
+        Order.findById = originalFindById;
     }
 });
 

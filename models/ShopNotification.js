@@ -29,7 +29,10 @@ const ShopNotificationSchema = new mongoose.Schema(
                 "refund_decision",
                 "refund_completed",
                 "product_review",
-                "product_approved"
+                "product_approved",
+                "seller_application",
+                "seller_application_decision",
+                "product_rejected"
             ],
             required: true
         },

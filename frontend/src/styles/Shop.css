@@ -229,6 +229,104 @@
     cursor: pointer;
 }
 
+.shop-seller-application {
+    width: min(760px, calc(100% - 32px));
+    margin: 40px auto;
+    padding: clamp(22px, 5vw, 48px);
+    border: 1px solid rgba(30, 48, 38, .12);
+    border-radius: 24px;
+    background: #fffdf8;
+    box-shadow: 0 18px 55px rgba(39, 49, 40, .08);
+}
+
+.shop-seller-application h1 {
+    margin: 8px 0;
+    color: #21372a;
+    font: 700 clamp(30px, 5vw, 44px)/1.1 Georgia, serif;
+}
+
+.shop-seller-application-intro {
+    max-width: 620px;
+    color: #626a62;
+    line-height: 1.6;
+}
+
+.shop-seller-application-status {
+    display: grid;
+    gap: 6px;
+    margin: 24px 0;
+    padding: 16px;
+    border-radius: 14px;
+    background: #f1f2ec;
+    color: #34453a;
+    text-transform: capitalize;
+}
+
+.shop-seller-application-status span,
+.shop-seller-application-status p {
+    margin: 0;
+    color: #697268;
+    font-size: 14px;
+}
+
+.shop-seller-application-notice {
+    color: #147347;
+}
+
+.shop-seller-application-form {
+    display: grid;
+    gap: 16px;
+}
+
+.shop-seller-application-form > label:not(.shop-seller-terms) {
+    display: grid;
+    gap: 7px;
+    color: #34453a;
+    font-weight: 650;
+}
+
+.shop-seller-application-form label span {
+    color: #788078;
+    font-weight: 400;
+}
+
+.shop-seller-application-form input:not([type="checkbox"]),
+.shop-seller-application-form textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #d5d9d1;
+    border-radius: 10px;
+    background: white;
+    color: #26372b;
+}
+
+.shop-seller-application-form textarea {
+    min-height: 90px;
+    resize: vertical;
+}
+
+.shop-seller-terms {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: #596359;
+    font-size: 14px;
+}
+
+.shop-seller-application-form > button {
+    justify-self: start;
+    padding: 12px 20px;
+    border: 0;
+    border-radius: 999px;
+    background: #234a36;
+    color: white;
+    font-weight: 700;
+}
+
+.shop-seller-application-form > button:disabled {
+    opacity: .6;
+}
+
 .shop-notifications-list {
     display: grid;
     gap: 10px;

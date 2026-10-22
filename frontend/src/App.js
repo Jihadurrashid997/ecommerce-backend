@@ -67,6 +67,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Checkout from "./pages/Checkout";
 import OrderHistory from "./pages/OrderHistory";
 import ShopNotifications from "./pages/ShopNotifications";
+import SellerApplication from "./pages/SellerApplication";
 import ShopSettings from "./pages/ShopSettings";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailed from "./pages/PaymentFailed";
@@ -203,6 +204,9 @@ function ShopSectionNavigation({ user }) {
                     <Link to="/shop/seller/products" aria-current={location.pathname === "/shop/seller/products" ? "page" : undefined}>My products</Link>
                     <Link to="/shop/seller/orders" aria-current={location.pathname === "/shop/seller/orders" ? "page" : undefined}>Seller orders</Link>
                 </>
+            )}
+            {user?.role === "customer" && (
+                <Link to="/shop/seller/apply">Become a seller</Link>
             )}
         </nav>
     );
@@ -425,6 +429,7 @@ function AppLayout() {
                 <Route path="/shop/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
                 <Route path="/shop/orders" element={<PrivateRoute><OrderHistory /></PrivateRoute>} />
                 <Route path="/shop/notifications" element={<PrivateRoute><ShopNotifications /></PrivateRoute>} />
+                <Route path="/shop/seller/apply" element={<PrivateRoute><SellerApplication /></PrivateRoute>} />
                 <Route path="/shop/settings" element={<PrivateRoute><ShopSettings /></PrivateRoute>} />
                 <Route path="/shop/seller" element={<PrivateRoute allowedRoles={["seller"]}><SellerDashboard /></PrivateRoute>} />
                 <Route path="/shop/seller/products" element={<PrivateRoute allowedRoles={["seller"]}><SellerProducts /></PrivateRoute>} />

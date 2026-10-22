@@ -149,6 +149,7 @@ test("product browse filters pending listings when approval is required", async 
         );
 
         assert.deepEqual(filter, {
+            approvalStatus: { $nin: ["pending", "rejected"] },
             isApproved: { $ne: false }
         });
         assert.deepEqual(response.body, []);
@@ -192,9 +193,56 @@ test("new products start pending when admin approval is enabled", async () => {
 
         assert.equal(response.statusCode, 201);
         assert.equal(response.body.isApproved, false);
+        assert.equal(response.body.approvalStatus, "pending");
     } finally {
         marketplaceSettings.getMarketplaceSettings = originalGetSettings;
         Product.create = originalCreate;
+        User.find = originalUserFind;
+    }
+});
+
+test("admin rejection hides a pending product and stores a seller-facing note", async () => {
+    const originalFindOneAndUpdate = Product.findOneAndUpdate;
+    const originalUserFind = User.find;
+    let filter;
+    let update;
+    Product.findOneAndUpdate = async (nextFilter, nextUpdate) => {
+        filter = nextFilter;
+        update = nextUpdate;
+        return {
+            _id: "507f1f77bcf86cd799439099",
+            seller: "507f1f77bcf86cd799439098",
+            name: "Handmade item",
+            updatedAt: new Date("2026-10-01T00:00:00.000Z")
+        };
+    };
+    User.find = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => [{ _id: "507f1f77bcf86cd799439098" }]
+    });
+
+    try {
+        const response = makeResponse();
+        await adminController.rejectProduct(
+            {
+                params: { productId: "507f1f77bcf86cd799439099" },
+                body: { reviewNote: "Add clear product photos." }
+            },
+            response
+        );
+
+        assert.deepEqual(filter, {
+            _id: "507f1f77bcf86cd799439099",
+            isApproved: false,
+            approvalStatus: { $ne: "rejected" }
+        });
+        assert.equal(update.$set.approvalStatus, "rejected");
+        assert.equal(update.$set.approvalReviewNote, "Add clear product photos.");
+        assert.equal(response.statusCode, 200);
+    } finally {
+        Product.findOneAndUpdate = originalFindOneAndUpdate;
         User.find = originalUserFind;
     }
 });

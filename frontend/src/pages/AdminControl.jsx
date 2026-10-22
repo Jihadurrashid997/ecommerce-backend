@@ -473,6 +473,7 @@ const Content = () => {
 const ShopSettings = () => {
     const [settings, setSettings] = useState(null);
     const [pendingProducts, setPendingProducts] = useState([]);
+    const [sellerApplications, setSellerApplications] = useState([]);
     const [readyPayouts, setReadyPayouts] = useState([]);
     const [refundRequests, setRefundRequests] = useState([]);
     const [payoutForms, setPayoutForms] = useState({});
@@ -486,16 +487,18 @@ const ShopSettings = () => {
         try {
             setLoading(true);
             setError("");
-            const [settingsResponse, productsResponse, payoutsResponse, refundsResponse] = await Promise.all([
+            const [settingsResponse, productsResponse, payoutsResponse, refundsResponse, applicationsResponse] = await Promise.all([
                 api.get("/admin/settings"),
                 api.get("/admin/products/pending"),
                 api.get("/orders/admin/payouts/ready"),
-                api.get("/orders/admin/refunds/requested")
+                api.get("/orders/admin/refunds/requested"),
+                api.get("/admin/seller-applications")
             ]);
             setSettings(settingsResponse.data.settings);
             setPendingProducts(productsResponse.data.products || []);
             setReadyPayouts(payoutsResponse.data.payouts || []);
             setRefundRequests(refundsResponse.data.refunds || []);
+            setSellerApplications(applicationsResponse.data.applications || []);
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not load Shop settings.");
         } finally {
@@ -530,6 +533,64 @@ const ShopSettings = () => {
             setNotice("Product approved and published.");
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not approve product.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const rejectProduct = async productId => {
+        const reviewNote = window.prompt(
+            "Explain what must be corrected before approval (at least 3 characters):",
+            ""
+        );
+        if (reviewNote === null) return;
+        if (reviewNote.trim().length < 3) {
+            setError("A product review note of at least 3 characters is required.");
+            return;
+        }
+
+        try {
+            setBusy(productId);
+            setError("");
+            setNotice("");
+            await api.put(`/admin/reject/${productId}`, { reviewNote });
+            setPendingProducts(products =>
+                products.filter(product => product._id !== productId)
+            );
+            setNotice("Product rejected and the seller was sent a review note.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not reject product.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const reviewSellerApplication = async (application, status) => {
+        const reviewNote = status === "rejected"
+            ? window.prompt("Explain why the application was rejected (at least 3 characters):", "")
+            : "";
+        if (status === "rejected" && reviewNote === null) return;
+        if (status === "rejected" && reviewNote.trim().length < 3) {
+            setError("A rejection note of at least 3 characters is required.");
+            return;
+        }
+
+        try {
+            setBusy(String(application.userId));
+            setError("");
+            setNotice("");
+            await api.put(`/admin/seller-applications/${application.userId}`, {
+                status,
+                reviewNote
+            });
+            setSellerApplications(previous =>
+                previous.filter(item => String(item.userId) !== String(application.userId))
+            );
+            setNotice(status === "approved"
+                ? "Seller application approved; seller access is active."
+                : "Seller application rejected with a review note.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not review seller application.");
         } finally {
             setBusy("");
         }
@@ -694,13 +755,64 @@ const ShopSettings = () => {
                                 <b>{product.name}</b>
                                 <span>{product.seller?.name || "Seller"} · ৳{Number(product.price || 0).toLocaleString("en-BD")}</span>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => approve(product._id)}
-                                disabled={Boolean(busy)}
-                            >
-                                {busy === product._id ? "Approving..." : "Approve"}
-                            </button>
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={() => approve(product._id)}
+                                    disabled={Boolean(busy)}
+                                >
+                                    {busy === product._id ? "Saving..." : "Approve"}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="ac-refund-reject"
+                                    onClick={() => rejectProduct(product._id)}
+                                    disabled={Boolean(busy)}
+                                >
+                                    Reject with note
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            <h3>Seller applications awaiting review ({sellerApplications.length})</h3>
+            <p className="ac-note">
+                Review store and contact information only. Seller access is granted after approval; payout credentials are collected separately and remain private.
+            </p>
+            {sellerApplications.length === 0 ? (
+                <p className="ac-note">There are no seller applications waiting for review.</p>
+            ) : (
+                <div className="ac-list">
+                    {sellerApplications.map(application => (
+                        <div className="ac-item ac-seller-application" key={application.userId}>
+                            <div className="ac-item-main">
+                                <b>{application.displayName} · {application.name}</b>
+                                <span>{application.email} · Contact: {application.contact}</span>
+                                {application.businessName && <span>Business: {application.businessName}</span>}
+                                {application.address && <span>Address: {application.address}</span>}
+                                <span>Submitted: {application.submittedAt
+                                    ? new Date(application.submittedAt).toLocaleString()
+                                    : "Unknown"}</span>
+                            </div>
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={() => reviewSellerApplication(application, "approved")}
+                                    disabled={Boolean(busy)}
+                                >
+                                    {busy === String(application.userId) ? "Saving..." : "Approve"}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="ac-refund-reject"
+                                    onClick={() => reviewSellerApplication(application, "rejected")}
+                                    disabled={Boolean(busy)}
+                                >
+                                    Reject
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>

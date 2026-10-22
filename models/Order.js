@@ -34,6 +34,57 @@ const OrderItemSchema = new mongoose.Schema(
     }
 );
 
+const ShipmentUpdateSchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: [
+                "Pending",
+                "Processing",
+                "Shipped",
+                "Delivered",
+                "Cancelled"
+            ],
+            required: true
+        },
+        courierName: {
+            type: String,
+            trim: true,
+            maxlength: 80,
+            default: ""
+        },
+        trackingNumber: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            default: ""
+        },
+        trackingUrl: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        note: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        source: {
+            type: String,
+            enum: ["manual", "provider"],
+            default: "manual"
+        },
+        updatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        }
+    },
+    { timestamps: true }
+);
+
 const SellerSettlementSchema = new mongoose.Schema(
     {
         seller: {
@@ -56,6 +107,38 @@ const SellerSettlementSchema = new mongoose.Schema(
                 "Cancelled"
             ],
             default: "Pending"
+        },
+        courierName: {
+            type: String,
+            trim: true,
+            maxlength: 80,
+            default: ""
+        },
+        trackingNumber: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            default: ""
+        },
+        trackingUrl: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        deliveryEvidence: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        deliveredAt: {
+            type: Date,
+            default: null
+        },
+        shipmentHistory: {
+            type: [ShipmentUpdateSchema],
+            default: []
         },
         receiptConfirmedAt: {
             type: Date,
@@ -177,6 +260,18 @@ const OrderSchema = new mongoose.Schema(
             required: true
         },
 
+        checkoutIdempotencyKey: {
+            type: String,
+            maxlength: 128,
+            select: false
+        },
+
+        checkoutRequestHash: {
+            type: String,
+            maxlength: 64,
+            select: false
+        },
+
         items: {
             type: [OrderItemSchema],
             required: true
@@ -248,6 +343,16 @@ const OrderSchema = new mongoose.Schema(
     },
     {
         timestamps: true
+    }
+);
+
+OrderSchema.index(
+    { user: 1, checkoutIdempotencyKey: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            checkoutIdempotencyKey: { $type: "string" }
+        }
     }
 );
 

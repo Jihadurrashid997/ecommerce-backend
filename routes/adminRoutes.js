@@ -13,7 +13,10 @@ const {
     getMarketplaceSettings,
     updateMarketplaceSettings,
     approveProduct,
+    rejectProduct,
     getPendingProducts,
+    getSellerApplications,
+    reviewSellerApplication,
     getAllRegisteredUsers,
     getDashboardSummary
 
@@ -75,10 +78,28 @@ router.put(
     approveProduct
 );
 
+router.put(
+    "/reject/:productId",
+    auth(["admin"]),
+    rejectProduct
+);
+
 router.get(
     "/products/pending",
     auth(["admin"]),
     getPendingProducts
+);
+
+router.get(
+    "/seller-applications",
+    auth(["admin"]),
+    getSellerApplications
+);
+
+router.put(
+    "/seller-applications/:userId",
+    auth(["admin"]),
+    reviewSellerApplication
 );
 
 
