@@ -2,11 +2,19 @@ const SSLCommerzPayment = require("sslcommerz-lts");
 const crypto = require("crypto");
 const Order = require("../models/Order");
 const { notifyShopUsers } = require("../services/shopNotifications");
+const { getSSLCommerzConfig } = require("../services/sslcommerzConfig");
 
-const store_id = process.env.SSLC_STORE_ID;
-const store_passwd = process.env.SSLC_STORE_PASSWORD;
-
-const is_live = process.env.SSLC_IS_LIVE === "true";
+const amountsMatch = (provided, expected) => {
+    const providedAmount = Number(provided);
+    const expectedAmount = Number(expected);
+    const providedCents = Math.round(providedAmount * 100);
+    const expectedCents = Math.round(expectedAmount * 100);
+    return Number.isFinite(providedAmount) &&
+        Number.isFinite(expectedAmount) &&
+        Math.abs(providedAmount * 100 - providedCents) < 0.000001 &&
+        Math.abs(expectedAmount * 100 - expectedCents) < 0.000001 &&
+        providedCents === expectedCents;
+};
 
 const markPaymentAttemptEnded = async (transactionId, paymentStatus) => {
     const order = await Order.findOne({ transactionId })
@@ -59,7 +67,7 @@ exports.getPaymentStatus = async (req, res) => {
         }
 
         const order = await Order.findOne({ transactionId })
-            .select("user status paymentStatus transactionId");
+            .select("user status paymentStatus transactionId paymentEnvironment");
 
         if (!order) {
             return res.status(404).json({
@@ -79,7 +87,8 @@ exports.getPaymentStatus = async (req, res) => {
             success: true,
             transactionId: order.transactionId,
             paymentStatus: order.paymentStatus,
-            orderStatus: order.status
+            orderStatus: order.status,
+            paymentEnvironment: order.paymentEnvironment
         });
     } catch (error) {
         console.error("GET PAYMENT STATUS ERROR:", error);
@@ -100,6 +109,7 @@ exports.initPayment = async (req, res) => {
     let transactionId;
 
     try {
+        const config = getSSLCommerzConfig();
 
         const {
             orderId,
@@ -112,6 +122,12 @@ exports.initPayment = async (req, res) => {
             postalCode
         } = req.body;
 
+        const customerFields = [name, email, phone, address];
+        const normalizedCustomer = customerFields.map(value =>
+            typeof value === "string" ? value.trim() : ""
+        );
+        const [customerName, customerEmail, customerPhone, customerAddress] =
+            normalizedCustomer;
 
         if (!orderId) {
 
@@ -123,26 +139,23 @@ exports.initPayment = async (req, res) => {
 
 
         if (
-            !totalAmount ||
-            !name ||
-            !email ||
-            !phone ||
-            !address
+            !Number.isFinite(Number(totalAmount)) ||
+            customerName.length < 1 ||
+            customerName.length > 50 ||
+            customerEmail.length < 3 ||
+            customerEmail.length > 50 ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail) ||
+            customerPhone.length < 1 ||
+            customerPhone.length > 20 ||
+            customerAddress.length < 1 ||
+            customerAddress.length > 50 ||
+            String(city || "Dhaka").length > 50 ||
+            String(postalCode || "").length > 30
         ) {
 
             return res.status(400).json({
                 message:
-                    "All payment information is required."
-            });
-
-        }
-
-
-        if (!store_id || !store_passwd) {
-
-            return res.status(500).json({
-                message:
-                    "SSLCommerz credentials are not configured."
+                    "Enter valid customer details within the payment provider's field limits."
             });
 
         }
@@ -182,6 +195,15 @@ exports.initPayment = async (req, res) => {
             });
         }
 
+        if (
+            order.reservationExpiresAt &&
+            order.reservationExpiresAt <= new Date()
+        ) {
+            return res.status(409).json({
+                message: "This order reservation has expired. Return to the Shop and place a new order."
+            });
+        }
+
         if (order.paymentStatus === "refunded") {
             return res.status(409).json({
                 message: "This order has already been refunded and cannot be paid again."
@@ -202,10 +224,7 @@ exports.initPayment = async (req, res) => {
 
         // Check amount
 
-        if (
-            Number(order.totalPrice) !==
-            Number(totalAmount)
-        ) {
+        if (!amountsMatch(order.totalPrice, totalAmount)) {
 
             return res.status(400).json({
                 message:
@@ -214,10 +233,21 @@ exports.initPayment = async (req, res) => {
 
         }
 
+        if (
+            Number(order.totalPrice) < 10 ||
+            Number(order.totalPrice) > 500000
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Sandbox checkout amount must be between ৳10.00 and ৳500,000.00."
+            });
+        }
+
 
         transactionId = `TXN_${crypto.randomBytes(12).toString("hex")}`;
 
 
+        const paymentAttemptStartedAt = new Date();
         const paymentAttempt = await Order.updateOne(
             {
                 _id: order._id,
@@ -225,17 +255,22 @@ exports.initPayment = async (req, res) => {
                 status: { $ne: "Cancelled" },
                 paymentStatus: order.paymentStatus,
                 transactionId: order.transactionId || "",
-                "refundRequest.status": { $nin: ["requested", "refunded"] }
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
+                $or: [
+                    { reservationExpiresAt: { $gt: paymentAttemptStartedAt } },
+                    { reservationExpiresAt: null }
+                ]
             },
             {
                 $set: {
                     paymentMethod: "sslcommerz",
+                    paymentEnvironment: config.mode,
                     transactionId,
                     paymentStatus: "pending",
                     shippingAddress: {
                         name,
                         phone,
-                        address,
+                        address: customerAddress,
                         city: city || "Dhaka",
                         postalCode: postalCode || ""
                     },
@@ -270,18 +305,18 @@ exports.initPayment = async (req, res) => {
 
             // Customer will be redirected here
             success_url:
-                `${process.env.CLIENT_URL}/shop/payment-success?transactionId=${transactionId}`,
+                `${config.serverUrl}/api/payment/success`,
 
             fail_url:
-                `${process.env.CLIENT_URL}/shop/payment-fail?transactionId=${transactionId}`,
+                `${config.serverUrl}/api/payment/fail`,
 
             cancel_url:
-                `${process.env.CLIENT_URL}/shop/payment-cancel?transactionId=${transactionId}`,
+                `${config.serverUrl}/api/payment/cancel`,
 
 
             // SSLCommerz server will call this
             ipn_url:
-                `${process.env.SERVER_URL}/api/payment/ipn`,
+                `${config.serverUrl}/api/payment/ipn`,
 
 
             shipping_method:
@@ -298,13 +333,13 @@ exports.initPayment = async (req, res) => {
 
 
             cus_name:
-                name,
+                customerName,
 
             cus_email:
-                email,
+                customerEmail,
 
             cus_add1:
-                address,
+                customerAddress,
 
             cus_city:
                 city || "Dhaka",
@@ -316,26 +351,37 @@ exports.initPayment = async (req, res) => {
                 "Bangladesh",
 
             cus_phone:
-                phone
+                customerPhone
 
         };
 
 
         const sslcz =
             new SSLCommerzPayment(
-                store_id,
-                store_passwd,
-                is_live
+                config.storeId,
+                config.storePassword,
+                config.isLive
             );
 
 
         const apiResponse =
             await sslcz.init(data);
 
+        let gatewayUrl;
+        try {
+            const parsedGatewayUrl = new URL(apiResponse?.GatewayPageURL);
+            if (
+                parsedGatewayUrl.protocol === "https:" &&
+                parsedGatewayUrl.hostname === "sandbox.sslcommerz.com"
+            ) {
+                gatewayUrl = parsedGatewayUrl.toString();
+            }
+        } catch (_error) {
+            gatewayUrl = "";
+        }
 
         if (
-            !apiResponse ||
-            !apiResponse.GatewayPageURL
+            !gatewayUrl
         ) {
             await markPaymentAttemptEnded(transactionId, "failed");
 
@@ -353,7 +399,7 @@ exports.initPayment = async (req, res) => {
             success: true,
 
             gateway:
-                apiResponse.GatewayPageURL,
+                gatewayUrl,
 
             transactionId,
 
@@ -373,16 +419,12 @@ exports.initPayment = async (req, res) => {
         }
 
         console.error(
-            "SSLCommerz initialization error:",
-            err
+            "SSLCommerz sandbox initialization failed:",
+            err?.name || "provider error"
         );
-
         res.status(500).json({
-
-            message:
-                err.message ||
-                "Payment initialization failed."
-
+            success: false,
+            message: "Sandbox payment initialization failed. Check backend configuration and SSLCommerz sandbox availability."
         });
 
     }
@@ -398,6 +440,7 @@ exports.initPayment = async (req, res) => {
 exports.paymentSuccess = async (req, res) => {
 
     try {
+        const config = getSSLCommerzConfig();
 
         const transactionId =
             req.body?.tran_id ||
@@ -407,7 +450,7 @@ exports.paymentSuccess = async (req, res) => {
         if (!transactionId) {
 
             return res.redirect(
-                `${process.env.CLIENT_URL}/shop/payment-fail?reason=Transaction%20ID%20missing`
+                `${config.clientUrl}/shop/payment-fail?reason=Transaction%20ID%20missing`
             );
 
         }
@@ -422,7 +465,7 @@ exports.paymentSuccess = async (req, res) => {
         if (!order) {
 
             return res.redirect(
-                `${process.env.CLIENT_URL}/shop/payment-fail?reason=Order%20not%20found`
+                `${config.clientUrl}/shop/payment-fail?reason=Order%20not%20found`
             );
 
         }
@@ -438,7 +481,7 @@ exports.paymentSuccess = async (req, res) => {
 
         res.redirect(
 
-            `${process.env.CLIENT_URL}/shop/payment-success?transactionId=${transactionId}`
+            `${config.clientUrl}/shop/payment-success?transactionId=${encodeURIComponent(transactionId)}`
 
         );
 
@@ -451,9 +494,7 @@ exports.paymentSuccess = async (req, res) => {
         );
 
 
-        res.redirect(
-            `${process.env.CLIENT_URL}/shop/payment-fail`
-        );
+        res.redirect("/shop/payment-fail");
 
     }
 
@@ -468,22 +509,15 @@ exports.paymentSuccess = async (req, res) => {
 exports.paymentFail = async (req, res) => {
 
     try {
+        const config = getSSLCommerzConfig();
 
         const transactionId =
             req.body?.tran_id ||
             req.query?.transactionId;
 
 
-        if (transactionId) {
-
-            await markPaymentAttemptEnded(transactionId, "failed");
-
-        }
-
-
         res.redirect(
-
-            `${process.env.CLIENT_URL}/shop/payment-fail?transactionId=${transactionId || ""}`
+            `${config.clientUrl}/shop/payment-fail?transactionId=${encodeURIComponent(transactionId || "")}`
 
         );
 
@@ -496,9 +530,7 @@ exports.paymentFail = async (req, res) => {
         );
 
 
-        res.redirect(
-            `${process.env.CLIENT_URL}/shop/payment-fail`
-        );
+        res.redirect("/shop/payment-fail");
 
     }
 
@@ -513,22 +545,15 @@ exports.paymentFail = async (req, res) => {
 exports.paymentCancel = async (req, res) => {
 
     try {
+        const config = getSSLCommerzConfig();
 
         const transactionId =
             req.body?.tran_id ||
             req.query?.transactionId;
 
 
-        if (transactionId) {
-
-            await markPaymentAttemptEnded(transactionId, "cancelled");
-
-        }
-
-
         res.redirect(
-
-            `${process.env.CLIENT_URL}/shop/payment-cancel?transactionId=${transactionId || ""}`
+            `${config.clientUrl}/shop/payment-cancel?transactionId=${encodeURIComponent(transactionId || "")}`
 
         );
 
@@ -541,9 +566,7 @@ exports.paymentCancel = async (req, res) => {
         );
 
 
-        res.redirect(
-            `${process.env.CLIENT_URL}/shop/payment-cancel`
-        );
+        res.redirect("/shop/payment-cancel");
 
     }
 
@@ -559,14 +582,14 @@ exports.paymentCancel = async (req, res) => {
 exports.paymentIPN = async (req, res) => {
 
     try {
-
         const {
 
             tran_id,
             val_id,
             status,
             amount,
-            currency
+            currency,
+            currency_type
 
         } = req.body;
 
@@ -617,95 +640,41 @@ exports.paymentIPN = async (req, res) => {
             });
         }
 
-        /*
-        Failed payment
-        */
+        if (
+            order.reservationExpiresAt &&
+            order.reservationExpiresAt <= new Date()
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "This order reservation expired before payment was confirmed."
+            });
+        }
 
         if (
-            status === "FAILED"
+            ["FAILED", "CANCELLED", "EXPIRED", "UNATTEMPTED"].includes(status)
         ) {
-
-            await markPaymentAttemptEnded(tran_id, "failed");
-
+            if (
+                !amountsMatch(amount, order.totalPrice) ||
+                currency !== "BDT" ||
+                currency_type !== "BDT"
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Provider failure notification does not match this order."
+                });
+            }
+            const paymentStatus = status === "FAILED" || status === "EXPIRED"
+                ? "failed"
+                : "cancelled";
+            await markPaymentAttemptEnded(tran_id, paymentStatus);
             return res.status(200).json({
-                message:
-                    "Payment marked as failed."
+                success: true,
+                message: `Payment attempt marked ${paymentStatus}.`
             });
-
         }
 
-
         /*
-        Cancelled payment
-        */
-
-        if (
-            status === "CANCELLED"
-        ) {
-
-            await markPaymentAttemptEnded(tran_id, "cancelled");
-
-            return res.status(200).json({
-                message:
-                    "Payment marked as cancelled."
-            });
-
-        }
-
-
-        /*
-        Successful payment must be VALID
-        */
-
-        if (
-            status !== "VALID" &&
-            status !== "VALIDATED"
-        ) {
-
-            return res.status(400).json({
-                message:
-                    "Payment is not valid."
-            });
-
-        }
-
-
-        /*
-        Check amount
-        */
-
-        if (
-            Number(amount) !==
-            Number(order.totalPrice)
-        ) {
-
-            return res.status(400).json({
-                message:
-                    "Payment amount does not match order amount."
-            });
-
-        }
-
-
-        /*
-        Check currency
-        */
-
-        if (
-            currency &&
-            currency !== "BDT"
-        ) {
-
-            return res.status(400).json({
-                message:
-                    "Invalid payment currency."
-            });
-
-        }
-
-
-        /*
-        Validate transaction with SSLCommerz
+        Verify every IPN with the official server-side Order Validation API.
         */
 
         if (!val_id) {
@@ -717,43 +686,54 @@ exports.paymentIPN = async (req, res) => {
 
         }
 
+        const config = getSSLCommerzConfig();
 
         const sslcz =
             new SSLCommerzPayment(
-                store_id,
-                store_passwd,
-                is_live
+                config.storeId,
+                config.storePassword,
+                config.isLive
             );
 
 
         const validationResponse =
-            await sslcz.validate(val_id);
+            await sslcz.validate({ val_id });
 
+        if (validationResponse instanceof Error) {
+            return res.status(503).json({
+                success: false,
+                message: "SSLCommerz validation service is temporarily unavailable. The payment remains unconfirmed."
+            });
+        }
 
         const validationStatus =
             validationResponse?.status;
 
 
-        if (
-            validationStatus !== "VALID" &&
-            validationStatus !== "VALIDATED"
-        ) {
-
-            await markPaymentAttemptEnded(tran_id, "failed");
-
+        if (validationStatus !== "VALID" && validationStatus !== "VALIDATED") {
             return res.status(400).json({
                 message:
                     "Payment validation failed."
             });
+        }
 
+        if (status !== "VALID" && status !== "VALIDATED") {
+            return res.status(400).json({
+                success: false,
+                message: "IPN status does not indicate a successful validated payment."
+            });
         }
 
         if (
             validationResponse.tran_id !== tran_id ||
-            Number(validationResponse.amount) !== Number(order.totalPrice) ||
-            validationResponse.currency !== "BDT"
+            validationResponse.val_id !== val_id ||
+            !amountsMatch(amount, order.totalPrice) ||
+            !amountsMatch(validationResponse.amount, order.totalPrice) ||
+            currency !== "BDT" ||
+            currency_type !== "BDT" ||
+            validationResponse.currency !== "BDT" ||
+            validationResponse.currency_type !== "BDT"
         ) {
-            await markPaymentAttemptEnded(tran_id, "failed");
             return res.status(400).json({
                 message: "Validated payment details do not match this order."
             });
@@ -768,9 +748,14 @@ exports.paymentIPN = async (req, res) => {
             {
                 _id: order._id,
                 transactionId: tran_id,
+                paymentEnvironment: "sandbox",
                 paymentStatus: { $nin: ["paid", "refunded"] },
                 "refundRequest.status": { $ne: "refunded" },
-                status: { $ne: "Cancelled" }
+                status: { $ne: "Cancelled" },
+                $or: [
+                    { reservationExpiresAt: { $gt: new Date() } },
+                    { reservationExpiresAt: null }
+                ]
             },
             {
                 $set: {
@@ -839,18 +824,12 @@ exports.paymentIPN = async (req, res) => {
     } catch (err) {
 
         console.error(
-            "Payment IPN error:",
-            err
+            "Payment IPN verification failed:",
+            err?.name || "provider error"
         );
-
-
         res.status(500).json({
-
             success: false,
-
-            message:
-                err.message ||
-                "Payment verification failed."
+            message: "Payment verification failed. Check backend logs and SSLCommerz sandbox availability."
 
         });
 

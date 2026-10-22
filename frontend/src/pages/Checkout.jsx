@@ -414,6 +414,10 @@ const Checkout = () => {
 
                         {/* Name */}
 
+                        <p className="checkout-payment-note">
+                            Unpaid orders are cancelled and reserved stock is released after 30 minutes.
+                        </p>
+
                         <input
                             type="text"
                             name="name"

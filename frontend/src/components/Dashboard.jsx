@@ -26,7 +26,9 @@ const Dashboard = () => {
 
             setStats({
 
-                products: productRes.data.length,
+                products: productRes.data?.pagination?.totalItems ||
+                    productRes.data?.products?.length ||
+                    0,
                 orders: 0,
                 users: 0,
                 revenue: 0

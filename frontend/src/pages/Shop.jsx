@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
     FaArrowRight,
@@ -28,9 +28,12 @@ const Shop = () => {
     );
     const [sort, setSort] = useState("stock");
     const [products, setProducts] = useState([]);
+    const [categories, setCategories] = useState([]);
+    const [totalItems, setTotalItems] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const [retry, setRetry] = useState(0);
     const [marketplaceState, setMarketplaceState] = useState("loading");
     const [marketplaceMessage, setMarketplaceMessage] = useState("");
@@ -72,6 +75,10 @@ const Shop = () => {
     }, [keyword, category, setSearchParams]);
 
     useEffect(() => {
+        if (page > totalPages) setPage(totalPages);
+    }, [page, totalPages]);
+
+    useEffect(() => {
         let cancelled = false;
         const loadProducts = async () => {
             if (marketplaceState !== "open") return;
@@ -79,19 +86,31 @@ const Shop = () => {
                 setLoading(true);
                 setError("");
 
-                const response = await api.get("/products", { timeout: 12000 });
+                const response = await api.get("/products", {
+                    timeout: 12000,
+                    params: {
+                        keyword: keyword.trim(),
+                        category,
+                        sort,
+                        page,
+                        limit: PAGE_SIZE
+                    }
+                });
                 if (cancelled) return;
 
-                const data = response.data;
-                const list = Array.isArray(data)
-                    ? data
-                    : data?.products || data?.data || [];
-
-                setProducts(Array.isArray(list) ? list : []);
+                const result = response.data || {};
+                const list = Array.isArray(result.products) ? result.products : [];
+                setProducts(list);
+                setCategories(Array.isArray(result.categories) ? result.categories : []);
+                setTotalItems(Number(result.pagination?.totalItems) || 0);
+                setTotalPages(Math.max(Number(result.pagination?.totalPages) || 1, 1));
             } catch (err) {
                 if (cancelled) return;
                 console.error("PRODUCT LOAD ERROR:", err);
                 setProducts([]);
+                setCategories([]);
+                setTotalItems(0);
+                setTotalPages(1);
                 setError(err.response?.data?.message || "Products couldn't load. Please try again.");
             } finally {
                 if (!cancelled) setLoading(false);
@@ -103,45 +122,10 @@ const Shop = () => {
         return () => {
             cancelled = true;
         };
-    }, [retry, marketplaceState]);
+    }, [retry, marketplaceState, keyword, category, sort, page]);
 
-    const categories = useMemo(() => (
-        Array.from(new Set(products.map(product => product.category).filter(Boolean)))
-            .sort((a, b) => a.localeCompare(b))
-    ), [products]);
-
-    const sortedProducts = useMemo(() => {
-        const search = keyword.trim().toLocaleLowerCase();
-        const result = products.filter(product => {
-            const matchesCategory = !category || product.category === category;
-            const matchesSearch = !search || [
-                product.name,
-                product.description,
-                product.category
-            ].some(value => String(value || "").toLocaleLowerCase().includes(search));
-
-            return matchesCategory && matchesSearch;
-        });
-
-        if (sort === "price-low") {
-            result.sort((a, b) => Number(a.price) - Number(b.price));
-        } else if (sort === "price-high") {
-            result.sort((a, b) => Number(b.price) - Number(a.price));
-        } else if (sort === "newest") {
-            result.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        } else if (sort === "stock") {
-            result.sort((a, b) => Number(b.stock > 0) - Number(a.stock > 0));
-        }
-
-        return result;
-    }, [products, keyword, category, sort]);
-
-    const totalPages = Math.max(Math.ceil(sortedProducts.length / PAGE_SIZE), 1);
     const safePage = Math.min(page, totalPages);
-    const visibleProducts = sortedProducts.slice(
-        (safePage - 1) * PAGE_SIZE,
-        safePage * PAGE_SIZE
-    );
+    const visibleProducts = products;
 
     const updateCategory = value => {
         setCategory(value);
@@ -218,7 +202,7 @@ const Shop = () => {
                     </div>
                     {!loading && !error && (
                         <span className="shop-result-count">
-                            <b>{sortedProducts.length}</b> {sortedProducts.length === 1 ? "find" : "finds"}
+                            <b>{totalItems}</b> {totalItems === 1 ? "find" : "finds"}
                         </span>
                     )}
                 </header>
@@ -243,7 +227,14 @@ const Shop = () => {
                     <label className="shop-sort">
                         <FaSlidersH aria-hidden="true" />
                         <span>Sort</span>
-                        <select value={sort} onChange={event => setSort(event.target.value)} aria-label="Sort products">
+                        <select
+                            value={sort}
+                            onChange={event => {
+                                setSort(event.target.value);
+                                setPage(1);
+                            }}
+                            aria-label="Sort products"
+                        >
                             <option value="stock">In stock first</option>
                             <option value="newest">Newest</option>
                             <option value="price-low">Price: low to high</option>

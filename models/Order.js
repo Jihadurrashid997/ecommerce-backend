@@ -24,6 +24,11 @@ const OrderItemSchema = new mongoose.Schema(
             min: 1
         },
 
+        stockReserved: {
+            type: Boolean,
+            default: true
+        },
+
         image: {
             type: String,
             default: ""
@@ -83,6 +88,57 @@ const ShipmentUpdateSchema = new mongoose.Schema(
         }
     },
     { timestamps: true }
+);
+
+const DeliveryDisputeSchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: ["none", "open", "dismissed", "referred_to_refund"],
+            default: "none"
+        },
+        reason: {
+            type: String,
+            trim: true,
+            maxlength: 1000,
+            default: ""
+        },
+        openedAt: {
+            type: Date,
+            default: null
+        },
+        openedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        sellerReply: {
+            type: String,
+            trim: true,
+            maxlength: 1000,
+            default: ""
+        },
+        sellerReplyAt: {
+            type: Date,
+            default: null
+        },
+        resolutionNote: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        resolvedAt: {
+            type: Date,
+            default: null
+        },
+        resolvedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        }
+    },
+    { _id: false }
 );
 
 const SellerSettlementSchema = new mongoose.Schema(
@@ -147,6 +203,10 @@ const SellerSettlementSchema = new mongoose.Schema(
         sellerConfirmedAt: {
             type: Date,
             default: null
+        },
+        deliveryDispute: {
+            type: DeliveryDisputeSchema,
+            default: () => ({})
         },
         sellerPayoutMethod: {
             type: String,
@@ -282,7 +342,7 @@ const OrderStatusHistorySchema = new mongoose.Schema(
         actor: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            required: true
+            default: null
         },
         actorRole: {
             type: String,
@@ -335,6 +395,17 @@ const OrderSchema = new mongoose.Schema(
             select: false
         },
 
+        reservationExpiresAt: {
+            type: Date,
+            default: null,
+            index: true
+        },
+
+        reservationReleasedAt: {
+            type: Date,
+            default: null
+        },
+
         items: {
             type: [OrderItemSchema],
             required: true
@@ -378,6 +449,12 @@ const OrderSchema = new mongoose.Schema(
                 "online"
             ],
             default: "cod"
+        },
+
+        paymentEnvironment: {
+            type: String,
+            enum: ["sandbox", "live"],
+            default: null
         },
 
         paymentStatus: {

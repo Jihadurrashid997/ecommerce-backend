@@ -14,6 +14,10 @@ const {
     getReadySellerPayouts,
     approveSellerPayout,
     markSellerPayoutPaid,
+    openDeliveryDispute,
+    respondToDeliveryDispute,
+    getOpenDeliveryDisputes,
+    resolveDeliveryDispute,
     requestOrderRefund,
     getRequestedOrderRefunds,
     rejectOrderRefund,
@@ -59,6 +63,12 @@ router.post(
     requestOrderRefund
 );
 
+router.post(
+    "/:id/shipments/:fulfillmentId/dispute",
+    auth(),
+    openDeliveryDispute
+);
+
 router.put(
     "/:id/confirm-received/:fulfillmentId",
     auth(),
@@ -87,10 +97,28 @@ router.put(
     confirmSellerPayout
 );
 
+router.put(
+    "/seller/:id/shipments/:fulfillmentId/dispute-response",
+    auth(["seller"]),
+    respondToDeliveryDispute
+);
+
 router.get(
     "/admin/payouts/ready",
     auth(["admin"]),
     getReadySellerPayouts
+);
+
+router.get(
+    "/admin/disputes/open",
+    auth(["admin"]),
+    getOpenDeliveryDisputes
+);
+
+router.put(
+    "/admin/:id/disputes/resolve",
+    auth(["admin"]),
+    resolveDeliveryDispute
 );
 
 router.get(

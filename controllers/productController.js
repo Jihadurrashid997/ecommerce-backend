@@ -1,6 +1,16 @@
 const Product = require("../models/Product");
+const ProductReview = require("../models/ProductReview");
+const Order = require("../models/Order");
 const marketplaceSettings = require("../services/marketplaceSettings");
 const { notifyShopUsers } = require("../services/shopNotifications");
+
+const DEFAULT_PRODUCT_PAGE_SIZE = 12;
+const MAX_PRODUCT_PAGE_SIZE = 48;
+const DEFAULT_REVIEW_PAGE_SIZE = 10;
+const MAX_REVIEW_PAGE_SIZE = 30;
+
+const escapeRegExp = value =>
+    value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // ==============================
 // Get All Products
@@ -18,34 +28,81 @@ exports.getProducts = async (req, res) => {
             });
         }
 
-        const keyword = req.query.keyword
-            ? {
-                name: {
-                    $regex: req.query.keyword,
-                    $options: "i"
-                }
-            }
-            : {};
+        const rawPage = req.query.page === undefined ? "1" : String(req.query.page);
+        const rawLimit = req.query.limit === undefined
+            ? String(DEFAULT_PRODUCT_PAGE_SIZE)
+            : String(req.query.limit);
+        const page = Number(rawPage);
+        const limit = Number(rawLimit);
+        const keyword = String(req.query.keyword || req.query.search || "").trim();
+        const category = String(req.query.category || "").trim();
+        const sortOption = String(req.query.sort || "newest");
+        const sortOptions = {
+            newest: { createdAt: -1, _id: -1 },
+            stock: { stock: -1, createdAt: -1, _id: -1 },
+            "price-low": { price: 1, _id: 1 },
+            "price-high": { price: -1, _id: -1 }
+        };
 
-        const category = req.query.category
-            ? {
-                category: req.query.category
-            }
-            : {};
+        if (
+            !Number.isSafeInteger(page) ||
+            page < 1 ||
+            !Number.isSafeInteger(limit) ||
+            limit < 1 ||
+            limit > MAX_PRODUCT_PAGE_SIZE ||
+            keyword.length > 100 ||
+            category.length > 80 ||
+            !sortOptions[sortOption]
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Product browse filters or pagination are invalid."
+            });
+        }
 
-        const filters = {
-            ...keyword,
-            ...category,
+        const availabilityFilters = {
             approvalStatus: { $nin: ["pending", "rejected"] },
             ...(settings.requireProductApproval
                 ? { isApproved: { $ne: false } }
                 : {})
         };
+        const filters = {
+            ...availabilityFilters,
+            ...(keyword
+                ? {
+                    $or: [
+                        { name: { $regex: escapeRegExp(keyword), $options: "i" } },
+                        { description: { $regex: escapeRegExp(keyword), $options: "i" } },
+                        { category: { $regex: escapeRegExp(keyword), $options: "i" } }
+                    ]
+                }
+                : {}),
+            ...(category ? { category } : {})
+        };
 
-        const products = await Product.find(filters)
-            .select("-seller");
+        const skip = (page - 1) * limit;
+        const [products, totalItems, categories] = await Promise.all([
+            Product.find(filters)
+                .select("-seller")
+                .sort(sortOptions[sortOption])
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            Product.countDocuments(filters),
+            Product.distinct("category", availabilityFilters)
+        ]);
 
-        res.json(products);
+        res.json({
+            success: true,
+            products,
+            categories: categories.filter(Boolean).sort((a, b) => a.localeCompare(b)),
+            pagination: {
+                page,
+                limit,
+                totalItems,
+                totalPages: Math.max(Math.ceil(totalItems / limit), 1)
+            }
+        });
 
     } catch (err) {
 
@@ -123,6 +180,172 @@ exports.getProduct = async (req, res) => {
 
     }
 
+};
+
+exports.getProductReviews = async (req, res) => {
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || DEFAULT_REVIEW_PAGE_SIZE);
+    if (
+        !Number.isSafeInteger(page) ||
+        page < 1 ||
+        !Number.isSafeInteger(limit) ||
+        limit < 1 ||
+        limit > MAX_REVIEW_PAGE_SIZE
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Review pagination is invalid."
+        });
+    }
+
+    try {
+        const product = await Product.findById(req.params.id)
+            .select("_id approvalStatus isApproved");
+        if (
+            !product ||
+            ["pending", "rejected"].includes(product.approvalStatus) ||
+            product.isApproved === false
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Product not found."
+            });
+        }
+
+        const [reviews, totalItems, summary] = await Promise.all([
+            ProductReview.find({ product: product._id })
+                .select("rating comment createdAt buyer")
+                .populate("buyer", "name")
+                .sort({ createdAt: -1, _id: -1 })
+                .skip((page - 1) * limit)
+                .limit(limit)
+                .lean(),
+            ProductReview.countDocuments({ product: product._id }),
+            ProductReview.aggregate([
+                { $match: { product: product._id } },
+                {
+                    $group: {
+                        _id: null,
+                        averageRating: { $avg: "$rating" },
+                        reviewCount: { $sum: 1 }
+                    }
+                }
+            ])
+        ]);
+
+        res.json({
+            success: true,
+            reviews,
+            summary: {
+                averageRating: summary[0]?.averageRating || 0,
+                reviewCount: summary[0]?.reviewCount || 0
+            },
+            pagination: {
+                page,
+                limit,
+                totalItems,
+                totalPages: Math.max(Math.ceil(totalItems / limit), 1)
+            }
+        });
+    } catch (error) {
+        console.error("GET PRODUCT REVIEWS ERROR:", error);
+        res.status(500).json({
+            success: false,
+            message: "Could not load product reviews."
+        });
+    }
+};
+
+exports.createProductReview = async (req, res) => {
+    const rating = Number(req.body?.rating);
+    const comment = typeof req.body?.comment === "string"
+        ? req.body.comment.trim()
+        : "";
+    if (
+        !Number.isSafeInteger(rating) ||
+        rating < 1 ||
+        rating > 5 ||
+        comment.length < 3 ||
+        comment.length > 1000
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Choose a 1–5 star rating and write a review between 3 and 1000 characters."
+        });
+    }
+
+    try {
+        const settings = await marketplaceSettings.getMarketplaceSettings();
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: "The Shop is temporarily closed."
+            });
+        }
+
+        const product = await Product.findById(req.params.id)
+            .select("seller approvalStatus isApproved");
+        if (
+            !product ||
+            ["pending", "rejected"].includes(product.approvalStatus) ||
+            (settings.requireProductApproval && product.isApproved === false)
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Product not found."
+            });
+        }
+        if (String(product.seller) === String(req.user.id)) {
+            return res.status(403).json({
+                success: false,
+                message: "Sellers cannot review their own products."
+            });
+        }
+
+        const order = await Order.findOne({
+            user: req.user.id,
+            paymentStatus: "paid",
+            "items.product": product._id,
+            sellerSettlements: {
+                $elemMatch: {
+                    seller: product.seller,
+                    deliveryStatus: "Delivered",
+                    receiptConfirmedAt: { $ne: null }
+                }
+            }
+        }).select("_id");
+        if (!order) {
+            return res.status(403).json({
+                success: false,
+                message: "A review is available after you receive this product from a paid order."
+            });
+        }
+
+        const review = await ProductReview.create({
+            product: product._id,
+            order: order._id,
+            buyer: req.user.id,
+            rating,
+            comment
+        });
+        return res.status(201).json({
+            success: true,
+            message: "Verified purchase review submitted.",
+            review
+        });
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: "You have already reviewed this product from that order."
+            });
+        }
+        console.error("CREATE PRODUCT REVIEW ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not submit product review."
+        });
+    }
 };
 
 // ==============================
