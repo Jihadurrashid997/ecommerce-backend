@@ -8,6 +8,7 @@ const {
     getProduct,
     getProductReviews,
     createProductReview,
+    getInventoryReconciliation,
     createProduct,
     updateProduct,
     deleteProduct
@@ -18,6 +19,7 @@ const auth = require("../middleware/auth");
 // Public Routes
 router.get("/", getProducts);
 router.get("/mine", auth(["seller"]), getMyProducts);
+router.get("/admin/inventory/reconciliation", auth(["admin"]), getInventoryReconciliation);
 router.get("/:id/reviews", getProductReviews);
 router.post("/:id/reviews", auth(), createProductReview);
 router.get("/:id", getProduct);

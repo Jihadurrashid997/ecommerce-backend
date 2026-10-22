@@ -65,9 +65,18 @@ const expireUnpaidReservations = async ({ now = new Date() } = {}) => {
 
                 for (const item of expiredOrder.items) {
                     if (item.stockReserved !== false) {
+                        const stockChange = { stock: item.quantity };
+                        if (item.variantId) {
+                            stockChange["variants.$.stock"] = item.quantity;
+                        }
                         await Product.updateOne(
-                            { _id: item.product },
-                            { $inc: { stock: item.quantity } },
+                            {
+                                _id: item.product,
+                                ...(item.variantId
+                                    ? { "variants._id": item.variantId }
+                                    : {})
+                            },
+                            { $inc: stockChange },
                             { session }
                         );
                     }

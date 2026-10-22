@@ -18,7 +18,8 @@ const SellerDashboard = () => {
     price: "",
     category: "",
     image: "",
-    stock: ""
+    stock: "",
+    variants: ""
   });
 
   useEffect(() => {
@@ -85,10 +86,12 @@ const SellerDashboard = () => {
     try {
 
       const token = localStorage.getItem("token");
+      const payload = { ...form };
+      if (!payload.variants.trim()) delete payload.variants;
 
       const response = await api.post(
         "/products",
-        form,
+        payload,
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -106,7 +109,8 @@ const SellerDashboard = () => {
         price: "",
         category: "",
         image: "",
-        stock: ""
+        stock: "",
+        variants: ""
       });
 
     } catch (err) {
@@ -175,6 +179,18 @@ const SellerDashboard = () => {
           required
         />
 
+        <label className="dashboard-field">
+          Variants (optional JSON)
+          <textarea
+            name="variants"
+            value={form.variants}
+            onChange={handleChange}
+            rows={5}
+            placeholder='[{"name":"Large / Black","sku":"TSHIRT-L-BLK","price":500,"stock":8}]'
+          />
+          <small>For variant products, each option manages its own SKU, price, and stock. Leave blank for a single-option product.</small>
+        </label>
+
         <textarea
           name="description"
           placeholder="Description"
@@ -189,7 +205,7 @@ const SellerDashboard = () => {
           placeholder="Price"
           value={form.price}
           onChange={handleChange}
-          required
+          required={!form.variants.trim()}
         />
 
         <input
@@ -213,7 +229,7 @@ const SellerDashboard = () => {
           placeholder="Stock"
           value={form.stock}
           onChange={handleChange}
-          required
+          required={!form.variants.trim()}
         />
 
         <button type="submit">

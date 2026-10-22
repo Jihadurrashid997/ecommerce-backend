@@ -2,6 +2,7 @@ const Product = require('../models/Product');
 const User = require('../models/User');
 const marketplaceSettings = require('../services/marketplaceSettings');
 const { notifyShopUsers } = require("../services/shopNotifications");
+const { parseProductVariants } = require("../services/productVariants");
 const { notifyShopAdmins } = require("../services/shopNotifications");
 
 exports.getSellerApplication = async (req, res) => {
@@ -196,15 +197,26 @@ exports.uploadProduct = async (req, res) => {
         const stock = req.body.stock === undefined
             ? 1
             : Number(req.body.stock);
+        const parsedVariants = req.body.variants === undefined
+            ? null
+            : parseProductVariants(req.body.variants);
+        if (parsedVariants?.error) {
+            return res.status(400).json({
+                success: false,
+                message: parsedVariants.error
+            });
+        }
 
         if (
             !name ||
             !description ||
             !category ||
-            !Number.isFinite(price) ||
-            price <= 0 ||
-            !Number.isSafeInteger(stock) ||
-            stock < 0
+            (!parsedVariants && (
+                !Number.isFinite(price) ||
+                price <= 0 ||
+                !Number.isSafeInteger(stock) ||
+                stock < 0
+            ))
         ) {
             return res.status(400).json({
                 success: false,
@@ -231,9 +243,10 @@ exports.uploadProduct = async (req, res) => {
         const newProduct = new Product({
             name,
             description,
-            price,
+            price: parsedVariants?.displayPrice ?? price,
             category,
-            stock,
+            stock: parsedVariants?.totalStock ?? stock,
+            variants: parsedVariants?.variants || [],
             image: imagePaths[0] || req.body.image || "",
             seller: req.user.id,
             isApproved: !settings.requireProductApproval,
@@ -375,6 +388,12 @@ exports.updateProduct = async (req, res) => {
             product.category = String(category).trim();
         }
         if (price !== undefined) {
+            if (product.variants?.length && req.body.variants === undefined) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Update price through the product variants list."
+                });
+            }
             const parsedPrice = Number(price);
             if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
                 return res.status(400).json({
@@ -384,6 +403,12 @@ exports.updateProduct = async (req, res) => {
             product.price = parsedPrice;
         }
         if (stock !== undefined) {
+            if (product.variants?.length && req.body.variants === undefined) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Update stock through the product variants list."
+                });
+            }
             const parsedStock = Number(stock);
             if (!Number.isSafeInteger(parsedStock) || parsedStock < 0) {
                 return res.status(400).json({
@@ -391,6 +416,18 @@ exports.updateProduct = async (req, res) => {
                 });
             }
             product.stock = parsedStock;
+        }
+        if (req.body.variants !== undefined) {
+            const parsedVariants = parseProductVariants(req.body.variants);
+            if (parsedVariants.error) {
+                return res.status(400).json({
+                    success: false,
+                    message: parsedVariants.error
+                });
+            }
+            product.variants = parsedVariants.variants;
+            product.stock = parsedVariants.totalStock;
+            product.price = parsedVariants.displayPrice;
         }
 
         if (req.files && req.files.length > 0) {

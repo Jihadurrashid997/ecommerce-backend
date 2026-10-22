@@ -1,5 +1,44 @@
 const mongoose = require("mongoose");
 
+const productVariantSchema = new mongoose.Schema(
+    {
+        name: {
+            type: String,
+            trim: true,
+            required: true,
+            maxlength: 80
+        },
+        sku: {
+            type: String,
+            trim: true,
+            uppercase: true,
+            required: true,
+            maxlength: 64
+        },
+        price: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        stock: {
+            type: Number,
+            required: true,
+            min: 0,
+            validate: {
+                validator: Number.isSafeInteger,
+                message: "Variant stock must be a whole number."
+            }
+        },
+        image: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        }
+    },
+    { timestamps: true }
+);
+
 const productSchema = new mongoose.Schema(
 {
     name:{
@@ -38,6 +77,11 @@ const productSchema = new mongoose.Schema(
         }
     },
 
+    variants: {
+        type: [productVariantSchema],
+        default: []
+    },
+
     isApproved:{
         type:Boolean,
         default:true
@@ -65,6 +109,11 @@ const productSchema = new mongoose.Schema(
 {
     timestamps:true
 }
+);
+
+productSchema.index(
+    { seller: 1, "variants.sku": 1 },
+    { unique: true, sparse: true }
 );
 
 module.exports = mongoose.model("Product",productSchema);

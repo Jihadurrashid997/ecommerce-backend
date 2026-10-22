@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 import api from "../services/api";
 
@@ -8,6 +8,8 @@ const SellerOrders = () => {
 
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
     const [confirmingFulfillment, setConfirmingFulfillment] = useState("");
     const [shipmentDrafts, setShipmentDrafts] = useState({});
     const [disputeReplies, setDisputeReplies] = useState({});
@@ -20,15 +22,20 @@ const SellerOrders = () => {
         Cancelled: []
     };
 
-    const fetchOrders = async () => {
+    const fetchOrders = useCallback(async (requestedPage = page) => {
 
         try {
 
-            const res = await api.get("/orders/seller/orders");
+            setLoading(true);
+            const res = await api.get("/orders/seller/orders", {
+                params: { page: requestedPage, limit: 10 }
+            });
+            const pageOrders = Array.isArray(res.data?.orders) ? res.data.orders : [];
 
-            setOrders(res.data);
+            setOrders(pageOrders);
+            setTotalPages(Math.max(Number(res.data?.pagination?.totalPages) || 1, 1));
             setShipmentDrafts(previous => Object.fromEntries(
-                (res.data || []).map(order => [
+                pageOrders.map(order => [
                     order._id,
                     previous[order._id] || {
                         status: order.status,
@@ -55,13 +62,13 @@ const SellerOrders = () => {
 
         }
 
-    };
+    }, [page]);
 
     useEffect(() => {
 
         fetchOrders();
 
-    }, []);
+    }, [fetchOrders]);
 
 
     const updateStatus = async (orderId, shipment) => {
@@ -228,7 +235,8 @@ const SellerOrders = () => {
                                 >
 
                                     <span>
-                                        {item.name}
+                                        {item.name}{item.variantName ? ` — ${item.variantName}` : ""}
+                                        {item.sku ? ` · SKU ${item.sku}` : ""}
                                     </span>
 
                                     <span>
@@ -582,6 +590,25 @@ const SellerOrders = () => {
 
                 </div>
 
+            )}
+            {totalPages > 1 && (
+                <nav className="order-pagination" aria-label="Seller order pages">
+                    <button
+                        type="button"
+                        disabled={page <= 1 || loading}
+                        onClick={() => setPage(current => Math.max(current - 1, 1))}
+                    >
+                        Previous
+                    </button>
+                    <span>Page {page} of {totalPages}</span>
+                    <button
+                        type="button"
+                        disabled={page >= totalPages || loading}
+                        onClick={() => setPage(current => Math.min(current + 1, totalPages))}
+                    >
+                        Next
+                    </button>
+                </nav>
             )}
 
         </div>

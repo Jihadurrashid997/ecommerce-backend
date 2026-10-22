@@ -3,6 +3,7 @@ const ProductReview = require("../models/ProductReview");
 const Order = require("../models/Order");
 const marketplaceSettings = require("../services/marketplaceSettings");
 const { notifyShopUsers } = require("../services/shopNotifications");
+const { parseProductVariants } = require("../services/productVariants");
 
 const DEFAULT_PRODUCT_PAGE_SIZE = 12;
 const MAX_PRODUCT_PAGE_SIZE = 48;
@@ -131,6 +132,42 @@ exports.getMyProducts = async (req, res) => {
     }
 };
 
+exports.getInventoryReconciliation = async (_req, res) => {
+    try {
+        const products = await Product.find({
+            variants: { $exists: true, $ne: [] }
+        })
+            .select("name seller stock variants")
+            .lean();
+        const mismatches = products.flatMap(product => {
+            const variantStock = (product.variants || []).reduce(
+                (total, variant) => total + Number(variant.stock || 0),
+                0
+            );
+            return variantStock === product.stock
+                ? []
+                : [{
+                    productId: product._id,
+                    name: product.name,
+                    productStock: product.stock,
+                    variantStock
+                }];
+        });
+        return res.json({
+            success: true,
+            checkedProducts: products.length,
+            mismatchCount: mismatches.length,
+            mismatches
+        });
+    } catch (error) {
+        console.error("SHOP INVENTORY RECONCILIATION ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not reconcile variant inventory."
+        });
+    }
+};
+
 // ==============================
 // Get Single Product
 // ==============================
@@ -199,12 +236,23 @@ exports.getProductReviews = async (req, res) => {
     }
 
     try {
+        const settings = await marketplaceSettings.getMarketplaceSettings();
+        if (!settings.marketplaceEnabled) {
+            return res.status(503).json({
+                success: false,
+                message: "The Shop is temporarily closed."
+            });
+        }
+
         const product = await Product.findById(req.params.id)
             .select("_id approvalStatus isApproved");
         if (
             !product ||
             ["pending", "rejected"].includes(product.approvalStatus) ||
-            product.isApproved === false
+            (
+                settings.requireProductApproval &&
+                product.isApproved === false
+            )
         ) {
             return res.status(404).json({
                 success: false,
@@ -371,15 +419,26 @@ exports.createProduct = async (req, res) => {
         const stock = req.body.stock === undefined
             ? 1
             : Number(req.body.stock);
+        const parsedVariants = req.body.variants === undefined
+            ? null
+            : parseProductVariants(req.body.variants);
+        if (parsedVariants?.error) {
+            return res.status(400).json({
+                success: false,
+                message: parsedVariants.error
+            });
+        }
 
         if (
             !name ||
             !description ||
             !category ||
-            !Number.isFinite(price) ||
-            price <= 0 ||
-            !Number.isSafeInteger(stock) ||
-            stock < 0
+            (!parsedVariants && (
+                !Number.isFinite(price) ||
+                price <= 0 ||
+                !Number.isSafeInteger(stock) ||
+                stock < 0
+            ))
         ) {
             return res.status(400).json({
                 success: false,
@@ -390,14 +449,15 @@ exports.createProduct = async (req, res) => {
         const product = await Product.create({
             name,
             description,
-            price,
+            price: parsedVariants?.displayPrice ?? price,
             category,
 
             image: req.file
                 ? `/uploads/${req.file.filename}`
                 : req.body.image || "",
 
-            stock,
+            stock: parsedVariants?.totalStock ?? stock,
+            variants: parsedVariants?.variants || [],
 
             seller: req.user.id,
             isApproved: !settings.requireProductApproval,
@@ -503,6 +563,15 @@ exports.updateProduct = async (req, res) => {
         }
 
         if (req.body.stock !== undefined) {
+            if (
+                product.variants?.length &&
+                req.body.variants === undefined
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Update stock through the product variants list."
+                });
+            }
             const stock = Number(req.body.stock);
             if (!Number.isSafeInteger(stock) || stock < 0) {
                 return res.status(400).json({
@@ -511,6 +580,27 @@ exports.updateProduct = async (req, res) => {
                 });
             }
             updatedData.stock = stock;
+        }
+
+        if (req.body.variants !== undefined) {
+            const parsedVariants = parseProductVariants(req.body.variants);
+            if (parsedVariants.error) {
+                return res.status(400).json({
+                    success: false,
+                    message: parsedVariants.error
+                });
+            }
+            updatedData.variants = parsedVariants.variants;
+            updatedData.stock = parsedVariants.totalStock;
+            updatedData.price = parsedVariants.displayPrice;
+        } else if (
+            product.variants?.length &&
+            req.body.price !== undefined
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Update price through the product variants list."
+            });
         }
 
         if (req.body.image !== undefined && !req.file) {

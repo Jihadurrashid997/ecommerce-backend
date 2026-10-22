@@ -22,6 +22,23 @@ const canTransitionShipment = (fromStatus, toStatus) =>
     (allowedShipmentTransitions[fromStatus] || []).includes(toStatus);
 
 const DISPUTE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const ORDER_PAGE_SIZE = 10;
+const MAX_ORDER_PAGE_SIZE = 50;
+
+const parseOrderPagination = query => {
+    const page = Number(query.page || 1);
+    const limit = Number(query.limit || ORDER_PAGE_SIZE);
+    if (
+        !Number.isSafeInteger(page) ||
+        page < 1 ||
+        !Number.isSafeInteger(limit) ||
+        limit < 1 ||
+        limit > MAX_ORDER_PAGE_SIZE
+    ) {
+        return null;
+    }
+    return { page, limit, skip: (page - 1) * limit };
+};
 
 const disputeIsOpen = settlement =>
     settlement?.deliveryDispute?.status === "open";
@@ -142,10 +159,15 @@ exports.createOrder = async (req, res) => {
 
     const restoreReservedStock = async () => {
         while (reservedStock.length) {
-            const { productId, quantity } = reservedStock[0];
+            const { productId, variantId, quantity } = reservedStock[0];
+            const stockChange = { stock: quantity };
+            if (variantId) stockChange["variants.$.stock"] = quantity;
             await Product.updateOne(
-                { _id: productId },
-                { $inc: { stock: quantity } }
+                {
+                    _id: productId,
+                    ...(variantId ? { "variants._id": variantId } : {})
+                },
+                { $inc: stockChange }
             );
             reservedStock.shift();
         }
@@ -206,14 +228,28 @@ exports.createOrder = async (req, res) => {
                 });
             }
 
+            const variantId = item?.variantId
+                ? String(item.variantId)
+                : "";
+            if (variantId && !mongoose.Types.ObjectId.isValid(variantId)) {
+                return res.status(400).json({
+                    message: "One or more product variants are invalid."
+                });
+            }
+
+            const itemKey = `${productId}:${variantId || "base"}`;
             const totalQuantity =
-                (requestedQuantities.get(productId) || 0) + quantity;
+                (requestedQuantities.get(itemKey)?.quantity || 0) + quantity;
             if (!Number.isSafeInteger(totalQuantity)) {
                 return res.status(400).json({
                     message: "Requested quantity is too large."
                 });
             }
-            requestedQuantities.set(productId, totalQuantity);
+            requestedQuantities.set(itemKey, {
+                productId,
+                variantId,
+                quantity: totalQuantity
+            });
         }
 
         const idempotencyKey = String(
@@ -232,7 +268,15 @@ exports.createOrder = async (req, res) => {
             .createHash("sha256")
             .update(JSON.stringify({
                 items: [...requestedQuantities.entries()]
-                    .sort(([a], [b]) => a.localeCompare(b)),
+                    .map(([, item]) => item)
+                    .sort((a, b) =>
+                        `${a.productId}:${a.variantId}`.localeCompare(
+                            `${b.productId}:${b.variantId}`
+                        )
+                    )
+                    .map(item => item.variantId
+                        ? [item.productId, item.variantId, item.quantity]
+                        : [item.productId, item.quantity]),
                 shippingAddress: {
                     name: recipientName,
                     phone: recipientPhone,
@@ -266,7 +310,8 @@ exports.createOrder = async (req, res) => {
         const sellerAmounts = new Map();
 
         const products = new Map();
-        for (const [productId, quantity] of requestedQuantities) {
+        for (const [itemKey, requestedItem] of requestedQuantities) {
+            const { productId, variantId, quantity } = requestedItem;
             const product = await Product.findById(productId);
 
             if (!product) {
@@ -299,34 +344,85 @@ exports.createOrder = async (req, res) => {
                 });
             }
 
+            const variant = variantId
+                ? product.variants?.find(entry =>
+                    String(entry._id) === variantId
+                )
+                : null;
             if (
-                product.stock !== undefined &&
-                product.stock !== null &&
-                product.stock < quantity
+                (product.variants?.length && !variantId) ||
+                (variantId && !variant)
             ) {
                 return res.status(400).json({
-                    message: `${product.name} is out of stock`
+                    message: `${product.name} needs a valid variant selection.`
+                });
+            }
+            const itemPrice = variant ? Number(variant.price) : Number(product.price);
+            const itemStock = variant ? Number(variant.stock) : Number(product.stock);
+            if (!Number.isFinite(itemPrice) || itemPrice <= 0) {
+                return res.status(400).json({
+                    message: `${product.name} has an invalid variant price.`
+                });
+            }
+            if (
+                itemStock !== undefined &&
+                itemStock !== null &&
+                itemStock < quantity
+            ) {
+                return res.status(400).json({
+                    message: `${product.name}${variant ? ` (${variant.name})` : ""} is out of stock`
                 });
             }
 
-            products.set(productId, { product, quantity });
+            products.set(itemKey, {
+                product,
+                productId,
+                variantId,
+                variant,
+                quantity,
+                itemPrice
+            });
         }
 
-        for (const [productId, { product: savedProduct, quantity }] of products) {
+        for (const [
+            itemKey,
+            {
+                product: savedProduct,
+                productId,
+                variantId,
+                variant: savedVariant,
+                quantity,
+                itemPrice
+            }
+        ] of products) {
             let product = savedProduct;
 
             if (savedProduct.stock !== undefined && savedProduct.stock !== null) {
+                const stockChange = { stock: -quantity };
+                const variantQuery = variantId
+                    ? {
+                        variants: {
+                            $elemMatch: {
+                                _id: variantId,
+                                stock: { $gte: quantity },
+                                price: itemPrice
+                            }
+                        }
+                    }
+                    : {};
+                if (variantId) stockChange["variants.$.stock"] = -quantity;
                 product = await Product.findOneAndUpdate(
                     {
                         _id: productId,
                         seller: savedProduct.seller,
                         stock: { $gte: quantity },
+                        ...variantQuery,
                         approvalStatus: { $nin: ["pending", "rejected"] },
                         ...(settings.requireProductApproval
                             ? { isApproved: { $ne: false } }
                             : {})
                     },
-                    { $inc: { stock: -quantity } },
+                    { $inc: stockChange },
                     { new: true }
                 );
 
@@ -337,7 +433,7 @@ exports.createOrder = async (req, res) => {
                     });
                 }
 
-                reservedStock.push({ productId, quantity });
+                reservedStock.push({ productId, variantId, quantity });
             }
 
             if (
@@ -356,7 +452,7 @@ exports.createOrder = async (req, res) => {
                 });
             }
 
-            totalPrice += product.price * quantity;
+            totalPrice += itemPrice * quantity;
             if (!Number.isFinite(totalPrice)) {
                 throw new Error("Order total is invalid.");
             }
@@ -364,13 +460,16 @@ exports.createOrder = async (req, res) => {
             const sellerId = String(product.seller);
             sellerAmounts.set(
                 sellerId,
-                (sellerAmounts.get(sellerId) || 0) + product.price * quantity
+                (sellerAmounts.get(sellerId) || 0) + itemPrice * quantity
             );
 
             orderItems.push({
                 product: product._id,
                 name: product.name,
-                price: product.price,
+                variantId: savedVariant?._id || null,
+                variantName: savedVariant?.name || "",
+                sku: savedVariant?.sku || "",
+                price: itemPrice,
                 quantity,
                 stockReserved:
                     savedProduct.stock !== undefined &&
@@ -476,14 +575,36 @@ exports.createOrder = async (req, res) => {
 // ========================================
 
 exports.getMyOrders = async (req, res) => {
-    try {
-        const orders = await Order.find({
-            user: req.user.id
-        })
-            .populate("items.product", "name image price")
-            .sort({ createdAt: -1 });
+    const pagination = parseOrderPagination(req.query || {});
+    if (!pagination) {
+        return res.status(400).json({
+            success: false,
+            message: "Order pagination is invalid."
+        });
+    }
 
-        res.json(orders.map(getCustomerOrder));
+    try {
+        const filter = {
+            user: req.user.id
+        };
+        const [orders, totalItems] = await Promise.all([
+            Order.find(filter)
+            .populate("items.product", "name image price")
+                .sort({ createdAt: -1, _id: -1 })
+                .skip(pagination.skip)
+                .limit(pagination.limit),
+            Order.countDocuments(filter)
+        ]);
+
+        res.json({
+            orders: orders.map(getCustomerOrder),
+            pagination: {
+                page: pagination.page,
+                limit: pagination.limit,
+                totalItems,
+                totalPages: Math.max(Math.ceil(totalItems / pagination.limit), 1)
+            }
+        });
 
     } catch (err) {
         res.status(500).json({
@@ -593,9 +714,18 @@ exports.cancelOrder = async (req, res) => {
 
                 for (const item of order.items) {
                     if (item.stockReserved !== false) {
+                        const stockChange = { stock: item.quantity };
+                        if (item.variantId) {
+                            stockChange["variants.$.stock"] = item.quantity;
+                        }
                         await Product.updateOne(
-                            { _id: item.product },
-                            { $inc: { stock: item.quantity } },
+                            {
+                                _id: item.product,
+                                ...(item.variantId
+                                    ? { "variants._id": item.variantId }
+                                    : {})
+                            },
+                            { $inc: stockChange },
                             { session }
                         );
                     }
@@ -639,6 +769,14 @@ exports.cancelOrder = async (req, res) => {
 // ========================================
 
 exports.getSellerOrders = async (req, res) => {
+    const pagination = parseOrderPagination(req.query || {});
+    if (!pagination) {
+        return res.status(400).json({
+            success: false,
+            message: "Order pagination is invalid."
+        });
+    }
+
     try {
 
         const seller = await User.findById(req.user.id)
@@ -651,7 +789,7 @@ exports.getSellerOrders = async (req, res) => {
             product => product._id
         );
 
-        const orders = await Order.find({
+        const filter = {
             $or: [
                 { "sellerSettlements.seller": req.user.id },
                 {
@@ -660,14 +798,18 @@ exports.getSellerOrders = async (req, res) => {
                     }
                 }
             ]
-        })
+        };
+        const [orders, totalItems] = await Promise.all([
+            Order.find(filter)
             .populate(
                 "items.product",
                 "name price image seller"
             )
-            .sort({
-                createdAt: -1
-            });
+                .sort({ createdAt: -1, _id: -1 })
+                .skip(pagination.skip)
+                .limit(pagination.limit),
+            Order.countDocuments(filter)
+        ]);
 
         const sellerOrders = orders.map(order => {
 
@@ -752,7 +894,15 @@ exports.getSellerOrders = async (req, res) => {
 
         });
 
-        res.json(sellerOrders);
+        res.json({
+            orders: sellerOrders,
+            pagination: {
+                page: pagination.page,
+                limit: pagination.limit,
+                totalItems,
+                totalPages: Math.max(Math.ceil(totalItems / pagination.limit), 1)
+            }
+        });
 
     } catch (err) {
         console.error(err);

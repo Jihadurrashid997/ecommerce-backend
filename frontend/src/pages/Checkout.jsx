@@ -194,6 +194,8 @@ const Checkout = () => {
                         item._id ||
                         item.id,
 
+                    variantId: item.variantId || undefined,
+
                     quantity:
                         Number(item.quantity || 1)
 

@@ -15,13 +15,26 @@ const EditProduct = () => {
         price:"",
         category:"",
         image:"",
-        stock:""
+        stock:"",
+        variants:""
     });
 
     const loadProduct = useCallback(async () => {
         try{
             const res = await api.get(`/products/${id}`);
-            setForm(res.data);
+            setForm({
+                ...res.data,
+                variants: Array.isArray(res.data.variants)
+                    ? JSON.stringify(res.data.variants.map(({
+                        _id,
+                        name,
+                        sku,
+                        price,
+                        stock,
+                        image
+                    }) => ({ _id, name, sku, price, stock, image })), null, 2)
+                    : ""
+            });
         }
         catch(err){
             console.log(err);
@@ -50,7 +63,9 @@ const EditProduct = () => {
 
         try{
 
-            await api.put(`/products/${id}`,form);
+            const payload = { ...form };
+            if (!payload.variants.trim()) delete payload.variants;
+            await api.put(`/products/${id}`,payload);
 
             alert("Product Updated Successfully");
 
@@ -95,6 +110,18 @@ const EditProduct = () => {
                 value={form.price}
                 onChange={handleChange}
                 />
+
+                <label>
+                    Variants (optional JSON)
+                    <textarea
+                        name="variants"
+                        value={form.variants || ""}
+                        onChange={handleChange}
+                        rows={6}
+                        placeholder='[{"name":"Large / Black","sku":"TSHIRT-L-BLK","price":500,"stock":8}]'
+                    />
+                    <small>When variants are set, their prices and stock replace the product-level values.</small>
+                </label>
 
                 <input
                 name="category"
