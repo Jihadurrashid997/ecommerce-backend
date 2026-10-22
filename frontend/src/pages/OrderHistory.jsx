@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 import api from "../services/api";
 
@@ -8,6 +8,8 @@ import "../styles/OrderHistory.css";
 const OrderHistory = () => {
 
     const [orders, setOrders] = useState([]);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
 
     const [loading, setLoading] =
         useState(true);
@@ -29,7 +31,7 @@ const OrderHistory = () => {
     const [notice, setNotice] = useState("");
 
 
-    const fetchOrders = async () => {
+    const fetchOrders = useCallback(async (requestedPage = page) => {
 
         try {
 
@@ -39,14 +41,12 @@ const OrderHistory = () => {
 
 
             const response =
-                await api.get("/orders");
+                await api.get("/orders", {
+                    params: { page: requestedPage, limit: 10 }
+                });
 
-
-            setOrders(
-                Array.isArray(response.data)
-                    ? response.data
-                    : []
-            );
+            setOrders(Array.isArray(response.data?.orders) ? response.data.orders : []);
+            setTotalPages(Math.max(Number(response.data?.pagination?.totalPages) || 1, 1));
 
 
         } catch (err) {
@@ -69,14 +69,14 @@ const OrderHistory = () => {
 
         }
 
-    };
+    }, [page]);
 
 
     useEffect(() => {
 
         fetchOrders();
 
-    }, []);
+    }, [fetchOrders]);
 
     const confirmReceipt = async (orderId, fulfillmentId) => {
         setConfirmingFulfillment(fulfillmentId);
@@ -452,6 +452,9 @@ const OrderHistory = () => {
                                             <h4>
                                                 {item.name}
                                             </h4>
+                                            {item.variantName && (
+                                                <p>{item.variantName}{item.sku ? ` · SKU ${item.sku}` : ""}</p>
+                                            )}
 
                                             <p>
                                                 Quantity:{" "}
@@ -485,7 +488,6 @@ const OrderHistory = () => {
                                     </div>
 
                                 ))}
-
                             </div>
 
 
@@ -807,6 +809,26 @@ const OrderHistory = () => {
                     ))}
 
                 </div>
+
+                {totalPages > 1 && (
+                    <nav className="order-pagination" aria-label="Order history pages">
+                        <button
+                            type="button"
+                            disabled={page <= 1 || loading}
+                            onClick={() => setPage(current => Math.max(current - 1, 1))}
+                        >
+                            Previous
+                        </button>
+                        <span>Page {page} of {totalPages}</span>
+                        <button
+                            type="button"
+                            disabled={page >= totalPages || loading}
+                            onClick={() => setPage(current => Math.min(current + 1, totalPages))}
+                        >
+                            Next
+                        </button>
+                    </nav>
+                )}
 
             </div>
 

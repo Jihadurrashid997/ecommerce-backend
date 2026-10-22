@@ -31,6 +31,36 @@ const makeResponse = () => ({
     }
 });
 
+test("buyer and seller order endpoints reject invalid pagination", async () => {
+    const originalFind = Order.find;
+    const originalUserFindById = User.findById;
+    Order.find = () => {
+        assert.fail("Invalid pagination must be rejected before querying orders.");
+    };
+
+    try {
+        const buyerResponse = makeResponse();
+        await orderController.getMyOrders({
+            user: { id: "buyer" },
+            query: { page: "0", limit: "10" }
+        }, buyerResponse);
+        assert.equal(buyerResponse.statusCode, 400);
+
+        User.findById = () => {
+            assert.fail("Invalid seller pagination must be rejected before loading seller details.");
+        };
+        const sellerResponse = makeResponse();
+        await orderController.getSellerOrders({
+            user: { id: "seller" },
+            query: { page: "1", limit: "51" }
+        }, sellerResponse);
+        assert.equal(sellerResponse.statusCode, 400);
+    } finally {
+        Order.find = originalFind;
+        User.findById = originalUserFindById;
+    }
+});
+
 test("orders initialize separate held-payout records for each seller", async () => {
     const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
     const originalFindById = Product.findById;
@@ -514,6 +544,7 @@ test("unpaid order cancellation is atomic and restores reserved inventory", asyn
 
 test("customer order responses do not expose seller account IDs", async () => {
     const originalFind = Order.find;
+    const originalCountDocuments = Order.countDocuments;
     const order = {
         sellerSettlements: [{
             _id: "fulfillment-a",
@@ -546,17 +577,31 @@ test("customer order responses do not expose seller account IDs", async () => {
         populate() {
             return this;
         },
-        sort: async () => [order]
+        sort() {
+            return this;
+        },
+        skip(value) {
+            assert.equal(value, 0);
+            return this;
+        },
+        limit(value) {
+            assert.equal(value, 10);
+            return this;
+        },
+        then(resolve, reject) {
+            return Promise.resolve([order]).then(resolve, reject);
+        }
     });
+    Order.countDocuments = async () => 1;
 
     try {
         const response = makeResponse();
         await orderController.getMyOrders(
-            { user: { id: "buyer" } },
+            { user: { id: "buyer" }, query: {} },
             response
         );
 
-        assert.deepEqual(response.body[0].sellerSettlements, [{
+        assert.deepEqual(response.body.orders[0].sellerSettlements, [{
             _id: "fulfillment-a",
             amount: 100,
             deliveryStatus: "Delivered",
@@ -581,9 +626,16 @@ test("customer order responses do not expose seller account IDs", async () => {
         }]);
         assert.equal(JSON.stringify(response.body).includes("seller-private-id"), false);
         assert.equal(JSON.stringify(response.body).includes("private-account"), false);
-        assert.equal("actor" in response.body[0].statusHistory[0], false);
+        assert.equal("actor" in response.body.orders[0].statusHistory[0], false);
+        assert.deepEqual(response.body.pagination, {
+            page: 1,
+            limit: 10,
+            totalItems: 1,
+            totalPages: 1
+        });
     } finally {
         Order.find = originalFind;
+        Order.countDocuments = originalCountDocuments;
     }
 });
 
@@ -726,6 +778,7 @@ test("seller must confirm their own paid delivered shipment before payout readin
 test("seller order responses omit buyer profile data and seller IDs", async () => {
     const originalProductFind = Product.find;
     const originalOrderFind = Order.find;
+    const originalOrderCountDocuments = Order.countDocuments;
     const originalUserFindById = User.findById;
     User.findById = () => ({
         select: async () => ({
@@ -740,7 +793,17 @@ test("seller order responses omit buyer profile data and seller IDs", async () =
         populate() {
             return this;
         },
-        sort: async () => [{
+        sort() {
+            return this;
+        },
+        skip() {
+            return this;
+        },
+        limit() {
+            return this;
+        },
+        then(resolve, reject) {
+            return Promise.resolve([{
             _id: "order-a",
             user: { name: "Private Buyer", email: "buyer@example.com" },
             items: [{
@@ -784,28 +847,31 @@ test("seller order responses omit buyer profile data and seller IDs", async () =
             },
             shippingAddress: { name: "Recipient", address: "Delivery road" },
             createdAt: new Date()
-        }]
+        }]).then(resolve, reject);
+        }
     });
+    Order.countDocuments = async () => 1;
 
     try {
         const response = makeResponse();
         await orderController.getSellerOrders(
-            { user: { id: "seller-a" } },
+            { user: { id: "seller-a" }, query: {} },
             response
         );
 
-        assert.equal(response.body.length, 1);
-        assert.equal("user" in response.body[0], false);
-        assert.equal("seller" in response.body[0].items[0].product, false);
-        assert.equal(response.body[0].shippingAddress.name, "Recipient");
-        assert.equal(response.body[0].payout.sellerConfirmedAt, null);
-        assert.equal(response.body[0].payout.payoutAccount, "01700000000");
-        assert.equal(response.body[0].refundStatus, "requested");
-        assert.equal("refundRequest" in response.body[0], false);
+        assert.equal(response.body.orders.length, 1);
+        assert.equal("user" in response.body.orders[0], false);
+        assert.equal("seller" in response.body.orders[0].items[0].product, false);
+        assert.equal(response.body.orders[0].shippingAddress.name, "Recipient");
+        assert.equal(response.body.orders[0].payout.sellerConfirmedAt, null);
+        assert.equal(response.body.orders[0].payout.payoutAccount, "01700000000");
+        assert.equal(response.body.orders[0].refundStatus, "requested");
+        assert.equal("refundRequest" in response.body.orders[0], false);
         assert.equal(JSON.stringify(response.body).includes("private buyer explanation"), false);
     } finally {
         Product.find = originalProductFind;
         Order.find = originalOrderFind;
+        Order.countDocuments = originalOrderCountDocuments;
         User.findById = originalUserFindById;
     }
 });

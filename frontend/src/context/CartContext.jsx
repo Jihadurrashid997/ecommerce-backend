@@ -8,6 +8,11 @@ import React, {
 
 const CartContext = createContext();
 
+export const getCartItemKey = item => {
+    const productId = item?.product || item?._id || item?.id || "";
+    return `${productId}:${item?.variantId || ""}`;
+};
+
 export const CartProvider = ({ children }) => {
 
     const [cart, setCart] = useState(() => {
@@ -36,9 +41,10 @@ export const CartProvider = ({ children }) => {
             const stockLimit = Number.isSafeInteger(parsedStock) && parsedStock >= 0
                 ? parsedStock
                 : 0;
-            const exists = previous.some(item => item._id === product._id);
+            const itemKey = getCartItemKey(product);
+            const exists = previous.some(item => getCartItemKey(item) === itemKey);
             const currentQuantity = previous.find(
-                item => item._id === product._id
+                item => getCartItemKey(item) === itemKey
             )?.quantity || 0;
 
             if (currentQuantity >= stockLimit) {
@@ -47,7 +53,7 @@ export const CartProvider = ({ children }) => {
 
             return exists
                 ? previous.map(item =>
-                    item._id === product._id
+                    getCartItemKey(item) === itemKey
                         ? { ...item, quantity: item.quantity + 1 }
                         : item
                 )
@@ -56,7 +62,10 @@ export const CartProvider = ({ children }) => {
     }, []);
 
     const removeFromCart = useCallback((id) => {
-        setCart(previous => previous.filter(item => item._id !== id));
+        setCart(previous => previous.filter(item =>
+            getCartItemKey(item) !== id &&
+            String(item._id || item.id) !== String(id)
+        ));
     }, []);
 
     const clearCart = useCallback(() => {

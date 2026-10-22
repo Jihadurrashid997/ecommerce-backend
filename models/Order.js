@@ -13,6 +13,25 @@ const OrderItemSchema = new mongoose.Schema(
             required: true
         },
 
+        variantId: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: null
+        },
+
+        variantName: {
+            type: String,
+            trim: true,
+            maxlength: 80,
+            default: ""
+        },
+
+        sku: {
+            type: String,
+            trim: true,
+            maxlength: 64,
+            default: ""
+        },
+
         price: {
             type: Number,
             required: true

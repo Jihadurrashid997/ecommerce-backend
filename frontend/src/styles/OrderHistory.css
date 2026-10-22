@@ -138,3 +138,25 @@
     opacity: .6;
     cursor: wait;
 }
+
+.order-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin: 24px 0;
+}
+
+.order-pagination button {
+    padding: 8px 14px;
+    border: 1px solid rgba(127, 127, 127, .4);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.order-pagination button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}

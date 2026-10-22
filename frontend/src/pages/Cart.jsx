@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { FaTrash, FaMinus, FaPlus } from "react-icons/fa";
-import { useCart } from "../context/CartContext";
+import { getCartItemKey, useCart } from "../context/CartContext";
 import "../styles/Cart.css";
 
 const Cart = () => {
@@ -16,7 +16,7 @@ const Cart = () => {
 
         if (product.quantity <= 1) {
 
-            removeFromCart(product._id);
+            removeFromCart(getCartItemKey(product));
 
             return;
 
@@ -27,7 +27,7 @@ const Cart = () => {
             quantity: product.quantity - 1
         };
 
-        removeFromCart(product._id);
+        removeFromCart(getCartItemKey(product));
 
         for (let i = 0; i < updated.quantity; i++) {
 
@@ -105,7 +105,7 @@ const Cart = () => {
 
                                         className="cart-item"
 
-                                        key={product._id}
+                                        key={getCartItemKey(product)}
 
                                     >
 
@@ -124,6 +124,9 @@ const Cart = () => {
                                                 {product.name}
 
                                             </h3>
+                                            {product.variantName && (
+                                                <p>{product.variantName}{product.sku ? ` · SKU ${product.sku}` : ""}</p>
+                                            )}
 
                                             <p>
 
@@ -179,7 +182,7 @@ const Cart = () => {
 
                                             onClick={()=>
 
-                                            removeFromCart(product._id)}
+                                            removeFromCart(getCartItemKey(product))}
 
                                         >
 

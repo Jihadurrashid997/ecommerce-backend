@@ -52,6 +52,21 @@ font-size:32px;
 
 }
 
+.product-variant-select {
+    display: grid;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.product-variant-select select {
+    padding: 12px;
+    border: 1px solid rgba(127, 127, 127, .4);
+    border-radius: 10px;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+}
+
 .buy-btn,
 .cart-btn,
 .wish-btn{
@@ -98,4 +113,86 @@ color:white;
 .cart-btn:disabled {
     opacity: .55;
     cursor: not-allowed;
+}
+
+.product-reviews {
+    max-width: 1000px;
+    margin: 0 auto 56px;
+    padding: 28px;
+    border: 1px solid rgba(127, 127, 127, .25);
+    border-radius: 18px;
+}
+
+.product-reviews header,
+.product-review > div,
+.product-review-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.product-review-form {
+    display: grid;
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.product-review-form label {
+    display: grid;
+    gap: 6px;
+    font-weight: 600;
+}
+
+.product-review-form textarea,
+.product-review-form select {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid rgba(127, 127, 127, .4);
+    border-radius: 9px;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+}
+
+.product-review-form button,
+.product-review-pagination button {
+    justify-self: start;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 9px;
+    background: #2563eb;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.product-review-form button:disabled,
+.product-review-pagination button:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.product-review {
+    padding: 16px 0;
+    border-top: 1px solid rgba(127, 127, 127, .2);
+}
+
+.product-review > div span {
+    color: #d97706;
+    letter-spacing: 2px;
+}
+
+.product-review-error {
+    color: #dc2626;
+}
+
+.product-review-message {
+    color: #16a34a;
+}
+
+.product-review-pagination {
+    justify-content: center;
+    margin-top: 18px;
 }
