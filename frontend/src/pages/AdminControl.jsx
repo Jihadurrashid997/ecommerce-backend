@@ -476,8 +476,10 @@ const ShopSettings = () => {
     const [sellerApplications, setSellerApplications] = useState([]);
     const [readyPayouts, setReadyPayouts] = useState([]);
     const [refundRequests, setRefundRequests] = useState([]);
+    const [deliveryDisputes, setDeliveryDisputes] = useState([]);
     const [payoutForms, setPayoutForms] = useState({});
     const [refundForms, setRefundForms] = useState({});
+    const [disputeForms, setDisputeForms] = useState({});
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState("");
     const [error, setError] = useState("");
@@ -487,18 +489,20 @@ const ShopSettings = () => {
         try {
             setLoading(true);
             setError("");
-            const [settingsResponse, productsResponse, payoutsResponse, refundsResponse, applicationsResponse] = await Promise.all([
+            const [settingsResponse, productsResponse, payoutsResponse, refundsResponse, applicationsResponse, disputesResponse] = await Promise.all([
                 api.get("/admin/settings"),
                 api.get("/admin/products/pending"),
                 api.get("/orders/admin/payouts/ready"),
                 api.get("/orders/admin/refunds/requested"),
-                api.get("/admin/seller-applications")
+                api.get("/admin/seller-applications"),
+                api.get("/orders/admin/disputes/open")
             ]);
             setSettings(settingsResponse.data.settings);
             setPendingProducts(productsResponse.data.products || []);
             setReadyPayouts(payoutsResponse.data.payouts || []);
             setRefundRequests(refundsResponse.data.refunds || []);
             setSellerApplications(applicationsResponse.data.applications || []);
+            setDeliveryDisputes(disputesResponse.data.disputes || []);
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not load Shop settings.");
         } finally {
@@ -728,6 +732,66 @@ const ShopSettings = () => {
         }
     };
 
+    const updateDisputeForm = (fulfillmentId, field, value) => {
+        setDisputeForms(previous => ({
+            ...previous,
+            [fulfillmentId]: {
+                resolutionNote: "",
+                ...previous[fulfillmentId],
+                [field]: value
+            }
+        }));
+    };
+
+    const resolveDispute = async (dispute, resolution) => {
+        const form = disputeForms[dispute.fulfillmentId] || {};
+        if ((form.resolutionNote || "").trim().length < 3) {
+            setError("Add an administrator decision note of at least 3 characters.");
+            return;
+        }
+
+        if (
+            resolution === "refer_to_refund" &&
+            !window.confirm(
+                "This sends the FULL order to the existing refund review. It does not issue a refund. Continue?"
+            )
+        ) {
+            return;
+        }
+
+        try {
+            setBusy(dispute.fulfillmentId);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${dispute.orderId}/disputes/resolve`, {
+                fulfillmentId: dispute.fulfillmentId,
+                resolution,
+                resolutionNote: form.resolutionNote
+            });
+            setDeliveryDisputes(previous =>
+                previous.filter(item => item.fulfillmentId !== dispute.fulfillmentId)
+            );
+            setDisputeForms(previous => {
+                const next = { ...previous };
+                delete next[dispute.fulfillmentId];
+                return next;
+            });
+            if (resolution === "refer_to_refund") {
+                setReadyPayouts(previous =>
+                    previous.filter(item => String(item.orderId) !== String(dispute.orderId))
+                );
+                setNotice("Dispute referred to full-order refund review. No refund was issued.");
+            } else {
+                setNotice("Delivery dispute closed; eligible payout may return to the review queue.");
+                await load();
+            }
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not resolve delivery dispute.");
+        } finally {
+            setBusy("");
+        }
+    };
+
     if (loading) return <p className="ac-note">Loading Shop settings...</p>;
     if (!settings) return <p className="ac-note error" role="alert">{error}</p>;
 
@@ -904,6 +968,68 @@ const ShopSettings = () => {
                                             onClick={() => rejectRefund(order)}
                                         >
                                             {busy === order._id ? "Saving..." : "Reject request"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            <h3>Delivery disputes ({deliveryDisputes.length})</h3>
+            <p className="ac-note">
+                Buyers can report a delivery issue within 14 days. Open issues block payout approval and transfer recording. “Refer to refund review” starts the existing full-order manual refund review; it does not process a refund.
+            </p>
+            {deliveryDisputes.length === 0 ? (
+                <p className="ac-note">There are no delivery disputes awaiting review.</p>
+            ) : (
+                <div className="ac-list">
+                    {deliveryDisputes.map(dispute => {
+                        const form = disputeForms[dispute.fulfillmentId] || {
+                            resolutionNote: ""
+                        };
+                        return (
+                            <div className="ac-refund-card" key={dispute.fulfillmentId}>
+                                <div className="ac-refund-summary">
+                                    <b>Order #{dispute.orderNumber} · ৳{Number(dispute.amount || 0).toLocaleString("en-BD")}</b>
+                                    <span>Buyer: {dispute.buyer?.name || "Unknown"} · {dispute.buyer?.email || "No email"}</span>
+                                    <span>Seller: {dispute.seller?.name || "Unknown"} · {dispute.seller?.email || "No email"}</span>
+                                    <span>Reported: {dispute.openedAt ? new Date(dispute.openedAt).toLocaleString() : "Date unavailable"}</span>
+                                    <span>Delivery issue: {dispute.reason}</span>
+                                    {dispute.sellerReply && (
+                                        <span>Seller response: {dispute.sellerReply}</span>
+                                    )}
+                                    <span>Items: {(dispute.items || []).map(item => `${item.name} × ${item.quantity}`).join(", ") || "No item details"}</span>
+                                </div>
+                                <div className="ac-refund-actions">
+                                    <textarea
+                                        aria-label={`Decision note for order ${dispute.orderNumber}`}
+                                        value={form.resolutionNote}
+                                        onChange={event => updateDisputeForm(
+                                            dispute.fulfillmentId,
+                                            "resolutionNote",
+                                            event.target.value
+                                        )}
+                                        maxLength={500}
+                                        rows={2}
+                                        placeholder="Decision note (required)"
+                                    />
+                                    <div>
+                                        <button
+                                            type="button"
+                                            disabled={Boolean(busy)}
+                                            onClick={() => resolveDispute(dispute, "dismiss")}
+                                        >
+                                            {busy === dispute.fulfillmentId ? "Saving..." : "Close issue"}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="ac-refund-complete"
+                                            disabled={Boolean(busy)}
+                                            onClick={() => resolveDispute(dispute, "refer_to_refund")}
+                                        >
+                                            Refer full order to refund review
                                         </button>
                                     </div>
                                 </div>

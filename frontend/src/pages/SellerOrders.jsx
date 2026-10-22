@@ -10,6 +10,8 @@ const SellerOrders = () => {
     const [loading, setLoading] = useState(true);
     const [confirmingFulfillment, setConfirmingFulfillment] = useState("");
     const [shipmentDrafts, setShipmentDrafts] = useState({});
+    const [disputeReplies, setDisputeReplies] = useState({});
+    const [respondingToDispute, setRespondingToDispute] = useState("");
     const nextShipmentStatuses = {
         Pending: ["Processing"],
         Processing: ["Shipped"],
@@ -108,6 +110,34 @@ const SellerOrders = () => {
             );
         } finally {
             setConfirmingFulfillment("");
+        }
+    };
+
+    const respondToDispute = async (orderId, payout) => {
+        const sellerReply = String(disputeReplies[payout.id] || "").trim();
+        if (sellerReply.length < 3 || sellerReply.length > 1000) {
+            window.alert("Provide a response between 3 and 1000 characters.");
+            return;
+        }
+
+        setRespondingToDispute(payout.id);
+        try {
+            await api.put(
+                `/orders/seller/${orderId}/shipments/${payout.id}/dispute-response`,
+                { sellerReply }
+            );
+            setDisputeReplies(previous => ({
+                ...previous,
+                [payout.id]: ""
+            }));
+            await fetchOrders();
+        } catch (error) {
+            window.alert(
+                error.response?.data?.message ||
+                "Could not save the delivery issue response."
+            );
+        } finally {
+            setRespondingToDispute("");
         }
     };
 
@@ -280,7 +310,9 @@ const SellerOrders = () => {
 
                             <p>
                                 <strong>Seller payout:</strong>{" "}
-                                {order.refundStatus === "requested"
+                                {order.payout?.deliveryDispute?.status === "open"
+                                    ? "Paused during delivery issue review"
+                                    : order.refundStatus === "requested"
                                     ? "Paused during refund review"
                                     : order.refundStatus === "refunded"
                                         ? "Cancelled after refund"
@@ -297,9 +329,45 @@ const SellerOrders = () => {
                                                 : "Waiting for payment"}
                             </p>
 
+                            {order.payout?.deliveryDispute?.status === "open" && (
+                                <div className="seller-refund-notice" role="status">
+                                    <p><strong>Buyer-reported issue:</strong> {order.payout.deliveryDispute.reason}</p>
+                                    {order.payout.deliveryDispute.sellerReply ? (
+                                        <p><strong>Your response:</strong> {order.payout.deliveryDispute.sellerReply}</p>
+                                    ) : (
+                                        <div>
+                                            <label>
+                                                Response for Shop admin
+                                                <textarea
+                                                    rows={3}
+                                                    maxLength={1000}
+                                                    value={disputeReplies[order.payout.id] || ""}
+                                                    onChange={event => setDisputeReplies(previous => ({
+                                                        ...previous,
+                                                        [order.payout.id]: event.target.value
+                                                    }))}
+                                                    placeholder="Add your response (3–1000 characters)"
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                disabled={respondingToDispute === order.payout.id}
+                                                onClick={() => respondToDispute(order._id, order.payout)}
+                                            >
+                                                {respondingToDispute === order.payout.id
+                                                    ? "Submitting..."
+                                                    : "Send response"}
+                                            </button>
+                                        </div>
+                                    )}
+                                    <p>Shipment updates, confirmations, and payout actions are paused until admin review.</p>
+                                </div>
+                            )}
+
                             {order.paymentStatus === "paid" &&
                                 order.status === "Delivered" &&
                                 order.payout?.status === "held" &&
+                                order.payout?.deliveryDispute?.status !== "open" &&
                                 !["requested", "refunded"].includes(order.refundStatus) && (
                                     <>
                                         <p>
@@ -415,7 +483,8 @@ const SellerOrders = () => {
                                     value={shipmentDrafts[order._id]?.status || order.status}
                                     disabled={
                                         order.paymentStatus !== "paid" ||
-                                        ["requested", "refunded"].includes(order.refundStatus)
+                                                ["requested", "refunded"].includes(order.refundStatus) ||
+                                                order.payout?.deliveryDispute?.status === "open"
                                     }
                                     onChange={event => setShipmentDrafts(previous => ({
                                         ...previous,

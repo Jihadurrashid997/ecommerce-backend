@@ -22,8 +22,9 @@ const OrderHistory = () => {
         useState("");
 
     const [refundReasons, setRefundReasons] = useState({});
-
+    const [disputeReasons, setDisputeReasons] = useState({});
     const [refundingOrder, setRefundingOrder] = useState("");
+    const [openingDispute, setOpeningDispute] = useState("");
 
     const [notice, setNotice] = useState("");
 
@@ -148,6 +149,39 @@ const OrderHistory = () => {
             );
         } finally {
             setRefundingOrder("");
+        }
+    };
+
+    const openDispute = async (order, settlement) => {
+        const reason = String(
+            disputeReasons[settlement._id] || ""
+        ).trim();
+        if (reason.length < 10 || reason.length > 1000) {
+            setError("Describe the delivery problem in 10 to 1000 characters.");
+            return;
+        }
+
+        setOpeningDispute(settlement._id);
+        setError("");
+        setNotice("");
+        try {
+            const response = await api.post(
+                `/orders/${order._id}/shipments/${settlement._id}/dispute`,
+                { reason }
+            );
+            setDisputeReasons(previous => ({
+                ...previous,
+                [settlement._id]: ""
+            }));
+            setNotice(response.data?.message || "Delivery issue sent for review.");
+            await fetchOrders();
+        } catch (requestError) {
+            setError(
+                requestError.response?.data?.message ||
+                "Could not submit the delivery issue."
+            );
+        } finally {
+            setOpeningDispute("");
         }
     };
 
@@ -350,6 +384,15 @@ const OrderHistory = () => {
                                 </div>
 
                                 {order.paymentStatus !== "paid" &&
+                                    order.status !== "Cancelled" &&
+                                    order.reservationExpiresAt && (
+                                        <p className="order-reservation-note">
+                                            Unpaid order stock reservation expires{" "}
+                                            {new Date(order.reservationExpiresAt).toLocaleString()}.
+                                        </p>
+                                    )}
+
+                                {order.paymentStatus !== "paid" &&
                                     (order.paymentStatus !== "pending" || !order.transactionId) &&
                                     !["Cancelled", "Shipped", "Delivered"].includes(order.status) && (
                                         <button
@@ -491,6 +534,62 @@ const OrderHistory = () => {
                                                     ? "Confirmed"
                                                     : "Waiting for seller"}
                                             </p>
+                                            {settlement.deliveryDispute?.status === "open" ? (
+                                                <div className="order-dispute">
+                                                    <strong>Delivery issue under review</strong>
+                                                    <p>{settlement.deliveryDispute.reason}</p>
+                                                    {settlement.deliveryDispute.sellerReply && (
+                                                        <p>
+                                                            <strong>Seller response:</strong>{" "}
+                                                            {settlement.deliveryDispute.sellerReply}
+                                                        </p>
+                                                    )}
+                                                    <p>Seller payout is paused while the administrator reviews this issue.</p>
+                                                </div>
+                                            ) : settlement.deliveryDispute?.status &&
+                                                settlement.deliveryDispute.status !== "none" ? (
+                                                <div className="order-dispute">
+                                                    <strong>
+                                                        {settlement.deliveryDispute.status === "referred_to_refund"
+                                                            ? "Referred to full-order refund review"
+                                                            : "Delivery issue reviewed"}
+                                                    </strong>
+                                                    {settlement.deliveryDispute.resolutionNote && (
+                                                        <p>{settlement.deliveryDispute.resolutionNote}</p>
+                                                    )}
+                                                </div>
+                                            ) : order.paymentStatus === "paid" &&
+                                                settlement.deliveryStatus === "Delivered" &&
+                                                settlement.payoutStatus !== "paid" &&
+                                                settlement.payoutStatus !== "approved" &&
+                                                (!settlement.deliveredAt ||
+                                                    Date.now() - new Date(settlement.deliveredAt).getTime() <= 14 * 24 * 60 * 60 * 1000) && (
+                                                <div className="order-dispute">
+                                                    <label>
+                                                        Report a delivery issue (within 14 days)
+                                                        <textarea
+                                                            value={disputeReasons[settlement._id] || ""}
+                                                            maxLength={1000}
+                                                            rows={3}
+                                                            onChange={event => setDisputeReasons(previous => ({
+                                                                ...previous,
+                                                                [settlement._id]: event.target.value
+                                                            }))}
+                                                            placeholder="Describe what went wrong (10–1000 characters)"
+                                                        />
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        disabled={openingDispute === settlement._id}
+                                                        onClick={() => openDispute(order, settlement)}
+                                                    >
+                                                        {openingDispute === settlement._id
+                                                            ? "Submitting..."
+                                                            : "Report delivery issue"}
+                                                    </button>
+                                                    <small>Reporting an issue pauses payout during review. This does not automatically refund the order.</small>
+                                                </div>
+                                            )}
                                             {order.paymentStatus === "paid" &&
                                                 settlement.deliveryStatus === "Delivered" &&
                                                 settlement.payoutStatus === "held" &&

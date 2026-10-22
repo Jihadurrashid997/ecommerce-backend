@@ -21,6 +21,11 @@ const canTransitionShipment = (fromStatus, toStatus) =>
     fromStatus === toStatus ||
     (allowedShipmentTransitions[fromStatus] || []).includes(toStatus);
 
+const DISPUTE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+const disputeIsOpen = settlement =>
+    settlement?.deliveryDispute?.status === "open";
+
 const getSafeTrackingUrl = value => {
     if (!value) return "";
     try {
@@ -35,6 +40,12 @@ const getCustomerOrder = order => {
     const result = typeof order.toObject === "function"
         ? order.toObject()
         : { ...order };
+    result.items = (result.items || []).map(item => {
+        const publicItem = { ...item };
+        delete publicItem.stockReserved;
+        return publicItem;
+    });
+    delete result.reservationReleasedAt;
     const refundRequest = result.refundRequest || {};
     result.sellerSettlements = (result.sellerSettlements || []).map(
         settlement => ({
@@ -45,6 +56,11 @@ const getCustomerOrder = order => {
             trackingNumber: settlement.trackingNumber || "",
             trackingUrl: getSafeTrackingUrl(settlement.trackingUrl),
             deliveryEvidence: settlement.deliveryEvidence || "",
+            deliveredAt: settlement.deliveredAt ||
+                [...(settlement.shipmentHistory || [])]
+                    .reverse()
+                    .find(update => update.status === "Delivered")?.createdAt ||
+                null,
             shipmentHistory: (settlement.shipmentHistory || []).map(update => ({
                 status: update.status,
                 courierName: update.courierName || "",
@@ -56,7 +72,16 @@ const getCustomerOrder = order => {
             })),
             receiptConfirmedAt: settlement.receiptConfirmedAt,
             sellerConfirmedAt: settlement.sellerConfirmedAt,
-            payoutStatus: settlement.payoutStatus
+            payoutStatus: settlement.payoutStatus,
+            deliveryDispute: {
+                status: settlement.deliveryDispute?.status || "none",
+                reason: settlement.deliveryDispute?.reason || "",
+                openedAt: settlement.deliveryDispute?.openedAt || null,
+                sellerReply: settlement.deliveryDispute?.sellerReply || "",
+                sellerReplyAt: settlement.deliveryDispute?.sellerReplyAt || null,
+                resolutionNote: settlement.deliveryDispute?.resolutionNote || "",
+                resolvedAt: settlement.deliveryDispute?.resolvedAt || null
+            }
         })
     );
     result.refundRequest = {
@@ -347,6 +372,9 @@ exports.createOrder = async (req, res) => {
                 name: product.name,
                 price: product.price,
                 quantity,
+                stockReserved:
+                    savedProduct.stock !== undefined &&
+                    savedProduct.stock !== null,
                 image: product.image || ""
             });
         }
@@ -355,6 +383,7 @@ exports.createOrder = async (req, res) => {
             user: req.user.id,
             checkoutIdempotencyKey: idempotencyKey,
             checkoutRequestHash,
+            reservationExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
             items: orderItems,
             totalPrice,
             shippingAddress: {
@@ -365,6 +394,7 @@ exports.createOrder = async (req, res) => {
                 postalCode: String(shippingAddress?.postalCode || "").trim()
             },
             paymentMethod: "sslcommerz",
+            paymentEnvironment: "sandbox",
             statusHistory: [{
                 fromStatus: "",
                 toStatus: "Pending",
@@ -507,67 +537,78 @@ exports.getOrder = async (req, res) => {
 
 exports.cancelOrder = async (req, res) => {
     try {
-        const order = await Order.findOneAndUpdate(
-            {
-                _id: req.params.id,
-                user: req.user.id,
-                status: {
-                    $nin: ["Cancelled", "Shipped", "Delivered"]
-                },
-                paymentStatus: { $ne: "paid" },
-                $or: [
-                    { paymentStatus: { $ne: "pending" } },
+        const session = await mongoose.startSession();
+        let order;
+        try {
+            await session.withTransaction(async () => {
+                order = await Order.findOneAndUpdate(
                     {
-                        paymentStatus: "pending",
-                        transactionId: ""
+                        _id: req.params.id,
+                        user: req.user.id,
+                        status: {
+                            $nin: ["Cancelled", "Shipped", "Delivered"]
+                        },
+                        paymentStatus: { $ne: "paid" },
+                        $or: [
+                            { paymentStatus: { $ne: "pending" } },
+                            {
+                                paymentStatus: "pending",
+                                transactionId: ""
+                            },
+                            {
+                                paymentStatus: "pending",
+                                transactionId: { $exists: false }
+                            }
+                        ]
                     },
                     {
-                        paymentStatus: "pending",
-                        transactionId: { $exists: false }
+                        $set: {
+                            status: "Cancelled",
+                            paymentStatus: "cancelled",
+                            reservationReleasedAt: new Date(),
+                            "sellerSettlements.$[settlement].deliveryStatus": "Cancelled",
+                            "sellerSettlements.$[settlement].payoutStatus": "cancelled"
+                        },
+                        $push: {
+                            statusHistory: {
+                                fromStatus: "Pending",
+                                toStatus: "Cancelled",
+                                actor: req.user.id,
+                                actorRole: "buyer",
+                                note: "Buyer cancelled the unpaid order.",
+                                source: "buyer"
+                            }
+                        }
+                    },
+                    {
+                        new: true,
+                        session,
+                        arrayFilters: [{
+                            "settlement.payoutStatus": { $ne: "paid" }
+                        }]
                     }
-                ]
-            },
-            {
-                $set: {
-                    status: "Cancelled",
-                    "sellerSettlements.$[settlement].deliveryStatus": "Cancelled",
-                    "sellerSettlements.$[settlement].payoutStatus": "cancelled"
-                },
-                $push: {
-                    statusHistory: {
-                        fromStatus: "Pending",
-                        toStatus: "Cancelled",
-                        actor: req.user.id,
-                        actorRole: "buyer",
-                        note: "Buyer cancelled the unpaid order.",
-                        source: "buyer"
+                );
+
+                if (!order) return;
+
+                for (const item of order.items) {
+                    if (item.stockReserved !== false) {
+                        await Product.updateOne(
+                            { _id: item.product },
+                            { $inc: { stock: item.quantity } },
+                            { session }
+                        );
                     }
                 }
-            },
-            {
-                new: true,
-                arrayFilters: [{
-                    "settlement.payoutStatus": { $ne: "paid" }
-                }]
-            }
-        );
+            });
+        } finally {
+            await session.endSession();
+        }
 
         if (!order) {
             return res.status(409).json({
                 message: "This order is not eligible for unpaid cancellation. Paid eligible orders can submit a full-order refund request from Order History."
             });
-        }
-
-        // Restore stock for every item in this order, since it
-        // was deducted when the order was placed. Without this,
-        // cancelled orders would permanently shrink stock.
-        for (const item of order.items) {
-
-            await Product.findByIdAndUpdate(
-                item.product,
-                { $inc: { stock: item.quantity } }
-            );
-
         }
 
         await notifyShopUsers({
@@ -685,6 +726,20 @@ exports.getSellerOrders = async (req, res) => {
                           })),
                           receiptConfirmedAt: settlement.receiptConfirmedAt,
                           sellerConfirmedAt: settlement.sellerConfirmedAt,
+                          deliveredAt: settlement.deliveredAt ||
+                              [...(settlement.shipmentHistory || [])]
+                                  .reverse()
+                                  .find(update => update.status === "Delivered")?.createdAt ||
+                              null,
+                          deliveryDispute: {
+                              status: settlement.deliveryDispute?.status || "none",
+                              reason: settlement.deliveryDispute?.reason || "",
+                              openedAt: settlement.deliveryDispute?.openedAt || null,
+                              sellerReply: settlement.deliveryDispute?.sellerReply || "",
+                              sellerReplyAt: settlement.deliveryDispute?.sellerReplyAt || null,
+                              resolutionNote: settlement.deliveryDispute?.resolutionNote || "",
+                              resolvedAt: settlement.deliveryDispute?.resolvedAt || null
+                          },
                           payoutMethod: settlement.sellerPayoutMethod ||
                               seller?.payoutMethod || "",
                           payoutAccount: settlement.sellerPayoutAccount ||
@@ -804,6 +859,11 @@ exports.updateSellerOrderStatus = async (
         if (["requested", "refunded"].includes(order.refundRequest?.status)) {
             return res.status(409).json({
                 message: "Shipment updates are paused while the Shop reviews this refund request."
+            });
+        }
+        if (disputeIsOpen(settlement)) {
+            return res.status(409).json({
+                message: "Shipment changes are paused while the delivery issue is under review."
             });
         }
 
@@ -946,7 +1006,8 @@ const markSettlementReadyForPayout = (orderId, fulfillmentId) =>
                     deliveryStatus: "Delivered",
                     payoutStatus: "held",
                     receiptConfirmedAt: { $ne: null },
-                    sellerConfirmedAt: { $ne: null }
+                    sellerConfirmedAt: { $ne: null },
+                    "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                 }
             }
         },
@@ -984,7 +1045,8 @@ exports.confirmOrderReceipt = async (req, res) => {
                         _id: req.params.fulfillmentId,
                         deliveryStatus: "Delivered",
                         payoutStatus: "held",
-                        receiptConfirmedAt: null
+                        receiptConfirmedAt: null,
+                        "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                     }
                 }
             },
@@ -1096,7 +1158,8 @@ exports.confirmSellerPayout = async (req, res) => {
                         seller: req.user.id,
                         deliveryStatus: "Delivered",
                         payoutStatus: "held",
-                        sellerConfirmedAt: null
+                        sellerConfirmedAt: null,
+                        "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                     }
                 }
             },
@@ -1163,13 +1226,15 @@ exports.getReadySellerPayouts = async (_req, res) => {
     try {
         const orders = await Order.find({
             paymentStatus: "paid",
+            paymentEnvironment: { $ne: "sandbox" },
             "refundRequest.status": { $nin: ["requested", "refunded"] },
             sellerSettlements: {
                 $elemMatch: {
                     deliveryStatus: "Delivered",
                     payoutStatus: { $in: ["ready", "approved"] },
                     receiptConfirmedAt: { $ne: null },
-                    sellerConfirmedAt: { $ne: null }
+                    sellerConfirmedAt: { $ne: null },
+                    "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                 }
             }
         })
@@ -1186,6 +1251,9 @@ exports.getReadySellerPayouts = async (_req, res) => {
                     settlement.deliveryStatus === "Delivered" &&
                     settlement.receiptConfirmedAt &&
                     settlement.sellerConfirmedAt &&
+                    !["open", "referred_to_refund"].includes(
+                        settlement.deliveryDispute?.status
+                    ) &&
                     settlement.seller
                 )
                 .map(settlement => ({
@@ -1246,6 +1314,7 @@ exports.approveSellerPayout = async (req, res) => {
         const order = await Order.findOne({
             _id: req.params.id,
             paymentStatus: "paid",
+            paymentEnvironment: { $ne: "sandbox" },
             "refundRequest.status": { $nin: ["requested", "refunded"] },
             sellerSettlements: {
                 $elemMatch: {
@@ -1253,7 +1322,8 @@ exports.approveSellerPayout = async (req, res) => {
                     deliveryStatus: "Delivered",
                     payoutStatus: "ready",
                     receiptConfirmedAt: { $ne: null },
-                    sellerConfirmedAt: { $ne: null }
+                    sellerConfirmedAt: { $ne: null },
+                    "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                 }
             }
         }).select("sellerSettlements");
@@ -1293,6 +1363,7 @@ exports.approveSellerPayout = async (req, res) => {
             {
                 _id: req.params.id,
                 paymentStatus: "paid",
+                paymentEnvironment: { $ne: "sandbox" },
                 "refundRequest.status": { $nin: ["requested", "refunded"] },
                 sellerSettlements: {
                     $elemMatch: {
@@ -1300,7 +1371,8 @@ exports.approveSellerPayout = async (req, res) => {
                         deliveryStatus: "Delivered",
                         payoutStatus: "ready",
                         receiptConfirmedAt: { $ne: null },
-                        sellerConfirmedAt: { $ne: null }
+                        sellerConfirmedAt: { $ne: null },
+                        "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                     }
                 }
             },
@@ -1317,7 +1389,10 @@ exports.approveSellerPayout = async (req, res) => {
                     "settlement.deliveryStatus": "Delivered",
                     "settlement.payoutStatus": "ready",
                     "settlement.receiptConfirmedAt": { $ne: null },
-                    "settlement.sellerConfirmedAt": { $ne: null }
+                    "settlement.sellerConfirmedAt": { $ne: null },
+                    "settlement.deliveryDispute.status": {
+                        $nin: ["open", "referred_to_refund"]
+                    }
                 }]
             }
         );
@@ -1374,6 +1449,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
         const order = await Order.findOne({
             _id: req.params.id,
             paymentStatus: "paid",
+            paymentEnvironment: { $ne: "sandbox" },
             "refundRequest.status": { $nin: ["requested", "refunded"] },
             sellerSettlements: {
                 $elemMatch: {
@@ -1381,7 +1457,8 @@ exports.markSellerPayoutPaid = async (req, res) => {
                     deliveryStatus: "Delivered",
                     payoutStatus: "approved",
                     receiptConfirmedAt: { $ne: null },
-                    sellerConfirmedAt: { $ne: null }
+                    sellerConfirmedAt: { $ne: null },
+                    "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                 }
             }
         }).populate({
@@ -1414,6 +1491,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
             {
                 _id: req.params.id,
                 paymentStatus: "paid",
+                paymentEnvironment: { $ne: "sandbox" },
                 "refundRequest.status": { $nin: ["requested", "refunded"] },
                 sellerSettlements: {
                     $elemMatch: {
@@ -1421,7 +1499,8 @@ exports.markSellerPayoutPaid = async (req, res) => {
                         deliveryStatus: "Delivered",
                         payoutStatus: "approved",
                         receiptConfirmedAt: { $ne: null },
-                        sellerConfirmedAt: { $ne: null }
+                        sellerConfirmedAt: { $ne: null },
+                        "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                     }
                 }
             },
@@ -1440,7 +1519,10 @@ exports.markSellerPayoutPaid = async (req, res) => {
                     "settlement.deliveryStatus": "Delivered",
                     "settlement.payoutStatus": "approved",
                     "settlement.receiptConfirmedAt": { $ne: null },
-                    "settlement.sellerConfirmedAt": { $ne: null }
+                    "settlement.sellerConfirmedAt": { $ne: null },
+                    "settlement.deliveryDispute.status": {
+                        $nin: ["open", "referred_to_refund"]
+                    }
                 }]
             }
         );
@@ -1485,6 +1567,449 @@ exports.markSellerPayoutPaid = async (req, res) => {
 };
 
 // ========================================
+// BUYER / SELLER / ADMIN - DELIVERY DISPUTES
+// ========================================
+
+exports.openDeliveryDispute = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.params.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+
+    const reason = typeof req.body?.reason === "string"
+        ? req.body.reason.trim()
+        : "";
+    if (reason.length < 10 || reason.length > 1000) {
+        return res.status(400).json({
+            success: false,
+            message: "Describe the delivery problem in 10 to 1000 characters."
+        });
+    }
+
+    try {
+        const order = await Order.findOne({
+            _id: req.params.id,
+            user: req.user.id,
+            paymentStatus: "paid",
+            "refundRequest.status": { $nin: ["requested", "refunded"] },
+            sellerSettlements: {
+                $elemMatch: {
+                    _id: req.params.fulfillmentId,
+                    deliveryStatus: "Delivered",
+                    payoutStatus: { $in: ["held", "ready"] },
+                    "deliveryDispute.status": { $in: ["none", null] }
+                }
+            }
+        }).select("sellerSettlements");
+
+        const settlement = order?.sellerSettlements?.find(
+            entry => String(entry._id) === String(req.params.fulfillmentId)
+        );
+        if (!settlement) {
+            return res.status(409).json({
+                success: false,
+                message: "This shipment cannot accept a delivery dispute."
+            });
+        }
+
+        const deliveredAt = settlement.deliveredAt ||
+            [...(settlement.shipmentHistory || [])]
+                .reverse()
+                .find(update => update.status === "Delivered")?.createdAt;
+        if (
+            !deliveredAt ||
+            Date.now() - new Date(deliveredAt).getTime() > DISPUTE_WINDOW_MS
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "Delivery disputes must be submitted within 14 days of delivery."
+            });
+        }
+
+        const openedAt = new Date();
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                user: req.user.id,
+                paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.params.fulfillmentId,
+                        deliveryStatus: "Delivered",
+                        payoutStatus: { $in: ["held", "ready"] },
+                        "deliveryDispute.status": { $in: ["none", null] }
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$[settlement].deliveryDispute.status": "open",
+                    "sellerSettlements.$[settlement].deliveryDispute.reason": reason,
+                    "sellerSettlements.$[settlement].deliveryDispute.openedAt": openedAt,
+                    "sellerSettlements.$[settlement].deliveryDispute.openedBy": req.user.id
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.params.fulfillmentId,
+                    "settlement.deliveryStatus": "Delivered",
+                    "settlement.payoutStatus": { $in: ["held", "ready"] },
+                    "settlement.deliveryDispute.status": { $in: ["none", null] }
+                }]
+            }
+        );
+
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "This shipment already has a dispute or is no longer eligible."
+            });
+        }
+
+        const sellerId = String(settlement.seller);
+        await notifyShopUsers({
+            recipients: [sellerId],
+            eventKey: `${order._id}:delivery-dispute:${req.params.fulfillmentId}`,
+            type: "refund_submitted",
+            title: "Shop delivery issue reported",
+            message: `A buyer reported a delivery issue for order #${String(order._id).slice(-8)}. Payout is paused while an administrator reviews the case. / ক্রেতা ডেলিভারি সমস্যা জানিয়েছেন; অ্যাডমিন পর্যালোচনা না করা পর্যন্ত পেআউট স্থগিত।`,
+            href: "/shop/seller/orders",
+            orderId: order._id
+        });
+        await notifyShopAdmins({
+            eventKey: `${order._id}:delivery-dispute:${req.params.fulfillmentId}`,
+            type: "refund_submitted",
+            title: "Shop delivery dispute needs review",
+            message: `A delivery dispute was opened for order #${String(order._id).slice(-8)}. Review it before approving any payout. / একটি ডেলিভারি বিরোধ এসেছে; পেআউট অনুমোদনের আগে পর্যালোচনা করুন।`,
+            href: "/admin/control",
+            orderId: order._id
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Delivery issue sent to the Shop administrator. Payout is paused during review."
+        });
+    } catch (error) {
+        console.error("OPEN DELIVERY DISPUTE ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not submit the delivery issue."
+        });
+    }
+};
+
+exports.respondToDeliveryDispute = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.params.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+
+    const sellerReply = typeof req.body?.sellerReply === "string"
+        ? req.body.sellerReply.trim()
+        : "";
+    if (sellerReply.length < 3 || sellerReply.length > 1000) {
+        return res.status(400).json({
+            success: false,
+            message: "Provide a seller response between 3 and 1000 characters."
+        });
+    }
+
+    try {
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.params.fulfillmentId,
+                        seller: req.user.id,
+                        payoutStatus: { $in: ["held", "ready"] },
+                        "deliveryDispute.status": "open",
+                        "deliveryDispute.sellerReplyAt": null
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$[settlement].deliveryDispute.sellerReply": sellerReply,
+                    "sellerSettlements.$[settlement].deliveryDispute.sellerReplyAt": new Date()
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.params.fulfillmentId,
+                    "settlement.seller": req.user.id,
+                    "settlement.deliveryDispute.status": "open",
+                    "settlement.deliveryDispute.sellerReplyAt": null
+                }]
+            }
+        );
+
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "This delivery dispute is not open or has already received a seller response."
+            });
+        }
+
+        const order = await Order.findById(req.params.id).select("user");
+        await notifyShopUsers({
+            recipients: [order?.user],
+            eventKey: `${req.params.id}:delivery-dispute-response:${req.params.fulfillmentId}`,
+            type: "refund_decision",
+            title: "Seller responded to delivery issue",
+            message: `The seller responded to the delivery issue for order #${String(req.params.id).slice(-8)}. An administrator will review the case. / বিক্রেতা ডেলিভারি সমস্যার জবাব দিয়েছেন; অ্যাডমিন পর্যালোচনা করবেন।`,
+            href: "/shop/orders",
+            orderId: req.params.id
+        });
+
+        return res.json({
+            success: true,
+            message: "Seller response saved for administrator review."
+        });
+    } catch (error) {
+        console.error("RESPOND TO DELIVERY DISPUTE ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not save the seller response."
+        });
+    }
+};
+
+exports.getOpenDeliveryDisputes = async (_req, res) => {
+    try {
+        const orders = await Order.find({
+            paymentStatus: "paid",
+            "sellerSettlements.deliveryDispute.status": "open"
+        })
+            .populate("user", "name email")
+            .populate("sellerSettlements.seller", "name email")
+            .populate("items.product", "seller")
+            .sort({ updatedAt: -1 });
+
+        const disputes = orders.flatMap(order =>
+            (order.sellerSettlements || [])
+                .filter(settlement =>
+                    settlement.deliveryDispute?.status === "open"
+                )
+                .map(settlement => ({
+                    orderId: order._id,
+                    orderNumber: String(order._id).slice(-8),
+                    fulfillmentId: settlement._id,
+                    amount: settlement.amount,
+                    deliveredAt: settlement.deliveredAt,
+                    reason: settlement.deliveryDispute.reason,
+                    openedAt: settlement.deliveryDispute.openedAt,
+                    sellerReply: settlement.deliveryDispute.sellerReply,
+                    sellerReplyAt: settlement.deliveryDispute.sellerReplyAt,
+                    buyer: order.user,
+                    seller: settlement.seller,
+                    items: order.items
+                        .filter(item =>
+                            item.product &&
+                            String(item.product.seller) ===
+                                String(settlement.seller?._id || settlement.seller)
+                        )
+                        .map(({ name, quantity }) => ({ name, quantity }))
+                }))
+        );
+
+        return res.json({ success: true, disputes });
+    } catch (error) {
+        console.error("GET OPEN DELIVERY DISPUTES ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load delivery disputes."
+        });
+    }
+};
+
+exports.resolveDeliveryDispute = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.body?.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+
+    const resolution = String(req.body?.resolution || "");
+    const resolutionNote = typeof req.body?.resolutionNote === "string"
+        ? req.body.resolutionNote.trim()
+        : "";
+    if (
+        !["dismiss", "refer_to_refund"].includes(resolution) ||
+        resolutionNote.length < 3 ||
+        resolutionNote.length > 500
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Choose a valid resolution and add a note between 3 and 500 characters."
+        });
+    }
+
+    try {
+        const order = await Order.findOne({
+            _id: req.params.id,
+            paymentStatus: "paid",
+            sellerSettlements: {
+                $elemMatch: {
+                    _id: req.body.fulfillmentId,
+                    payoutStatus: { $in: ["held", "ready"] },
+                    "deliveryDispute.status": "open"
+                }
+            }
+        }).select("user sellerSettlements refundRequest");
+        const settlement = order?.sellerSettlements?.find(
+            entry => String(entry._id) === String(req.body.fulfillmentId)
+        );
+
+        if (!settlement) {
+            return res.status(409).json({
+                success: false,
+                message: "This dispute is not open or its payout is no longer eligible."
+            });
+        }
+
+        if (
+            resolution === "refer_to_refund" &&
+            (["requested", "refunded"].includes(order.refundRequest?.status) ||
+                (order.sellerSettlements || []).some(entry =>
+                    entry.payoutStatus === "paid"
+                ))
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "This order cannot enter refund review because a refund is already open or a seller has already been paid."
+            });
+        }
+
+        const now = new Date();
+        const filter = {
+            _id: req.params.id,
+            paymentStatus: "paid",
+            sellerSettlements: {
+                $elemMatch: {
+                    _id: req.body.fulfillmentId,
+                    payoutStatus: { $in: ["held", "ready"] },
+                    "deliveryDispute.status": "open"
+                }
+            },
+            ...(resolution === "refer_to_refund"
+                ? {
+                    "refundRequest.status": { $nin: ["requested", "refunded"] },
+                    sellerSettlements: {
+                        $not: { $elemMatch: { payoutStatus: "paid" } },
+                        $elemMatch: {
+                            _id: req.body.fulfillmentId,
+                            payoutStatus: { $in: ["held", "ready"] },
+                            "deliveryDispute.status": "open"
+                        }
+                    }
+                }
+                : {})
+        };
+        const setFields = {
+            "sellerSettlements.$[settlement].deliveryDispute.status":
+                resolution === "dismiss" ? "dismissed" : "referred_to_refund",
+            "sellerSettlements.$[settlement].deliveryDispute.resolutionNote": resolutionNote,
+            "sellerSettlements.$[settlement].deliveryDispute.resolvedAt": now,
+            "sellerSettlements.$[settlement].deliveryDispute.resolvedBy": req.user.id
+        };
+        if (resolution === "refer_to_refund") {
+            setFields["refundRequest.status"] = "requested";
+            setFields["refundRequest.reason"] =
+                `Delivery dispute: ${settlement.deliveryDispute.reason}`;
+            setFields["refundRequest.requestedAt"] = now;
+            setFields["refundRequest.adminNote"] = resolutionNote;
+        }
+
+        const result = await Order.updateOne(
+            filter,
+            { $set: setFields },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.body.fulfillmentId,
+                    "settlement.payoutStatus": { $in: ["held", "ready"] },
+                    "settlement.deliveryDispute.status": "open"
+                }]
+            }
+        );
+
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "The dispute changed while being resolved. Refresh and review it again."
+            });
+        }
+
+        if (resolution === "dismiss") {
+            await Order.updateOne(
+                {
+                    _id: req.params.id,
+                    paymentStatus: "paid",
+                    sellerSettlements: {
+                        $elemMatch: {
+                            _id: req.body.fulfillmentId,
+                            deliveryStatus: "Delivered",
+                            payoutStatus: "held",
+                            receiptConfirmedAt: { $ne: null },
+                            sellerConfirmedAt: { $ne: null },
+                            "deliveryDispute.status": "dismissed"
+                        }
+                    }
+                },
+                {
+                    $set: {
+                        "sellerSettlements.$.payoutStatus": "ready"
+                    }
+                }
+            );
+        }
+
+        await notifyShopUsers({
+            recipients: [order.user, settlement.seller],
+            eventKey: `${req.params.id}:delivery-dispute-resolved:${req.body.fulfillmentId}`,
+            type: resolution === "dismiss" ? "refund_decision" : "refund_submitted",
+            title: resolution === "dismiss"
+                ? "Shop delivery dispute reviewed"
+                : "Delivery dispute referred to refund review",
+            message: resolution === "dismiss"
+                ? `The administrator reviewed the delivery issue for order #${String(req.params.id).slice(-8)}. See the order for the decision note. / অ্যাডমিন ডেলিভারি সমস্যাটি পর্যালোচনা করেছেন; সিদ্ধান্তের নোট অর্ডারে দেখুন।`
+                : `The delivery issue for order #${String(req.params.id).slice(-8)} was referred to the existing full-order refund review. No refund has been issued. / ডেলিভারি সমস্যাটি পূর্ণ অর্ডারের রিফান্ড পর্যালোচনায় পাঠানো হয়েছে; কোনো রিফান্ড দেওয়া হয়নি।`,
+            href: "/shop/orders",
+            orderId: req.params.id
+        });
+
+        return res.json({
+            success: true,
+            message: resolution === "dismiss"
+                ? "Dispute closed. Any otherwise eligible payout may return to the admin review queue."
+                : "Dispute referred to the existing full-order refund review; no refund was issued."
+        });
+    } catch (error) {
+        console.error("RESOLVE DELIVERY DISPUTE ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not resolve delivery dispute."
+        });
+    }
+};
+
+// ========================================
 // CUSTOMER - REQUEST A FULL ORDER REFUND
 // ========================================
 
@@ -1516,7 +2041,12 @@ exports.requestOrderRefund = async (req, res) => {
                 "refundRequest.status": { $nin: ["requested", "refunded"] },
                 sellerSettlements: {
                     $not: {
-                        $elemMatch: { payoutStatus: "paid" }
+                        $elemMatch: {
+                            $or: [
+                                { payoutStatus: "paid" },
+                                { "deliveryDispute.status": "open" }
+                            ]
+                        }
                     }
                 }
             },

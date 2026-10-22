@@ -8,6 +8,32 @@ const paymentController = require("../controllers/paymentController");
 const { notifyShopUsers } = require("../services/shopNotifications");
 const SSLCommerzPayment = require("sslcommerz-lts");
 
+const originalPaymentEnvironment = {
+    mode: process.env.SSLCOMMERZ_MODE,
+    sandboxStoreId: process.env.SSLCOMMERZ_SANDBOX_STORE_ID,
+    sandboxStorePassword: process.env.SSLCOMMERZ_SANDBOX_STORE_PASSWORD,
+    serverUrl: process.env.SERVER_URL,
+    clientUrl: process.env.CLIENT_URL
+};
+process.env.SSLCOMMERZ_MODE = "sandbox";
+process.env.SSLCOMMERZ_SANDBOX_STORE_ID = "sandbox-store";
+process.env.SSLCOMMERZ_SANDBOX_STORE_PASSWORD = "sandbox-password";
+process.env.SERVER_URL = "https://api.example.test";
+process.env.CLIENT_URL = "https://client.example.test";
+
+test.after(() => {
+    if (originalPaymentEnvironment.mode === undefined) delete process.env.SSLCOMMERZ_MODE;
+    else process.env.SSLCOMMERZ_MODE = originalPaymentEnvironment.mode;
+    if (originalPaymentEnvironment.sandboxStoreId === undefined) delete process.env.SSLCOMMERZ_SANDBOX_STORE_ID;
+    else process.env.SSLCOMMERZ_SANDBOX_STORE_ID = originalPaymentEnvironment.sandboxStoreId;
+    if (originalPaymentEnvironment.sandboxStorePassword === undefined) delete process.env.SSLCOMMERZ_SANDBOX_STORE_PASSWORD;
+    else process.env.SSLCOMMERZ_SANDBOX_STORE_PASSWORD = originalPaymentEnvironment.sandboxStorePassword;
+    if (originalPaymentEnvironment.serverUrl === undefined) delete process.env.SERVER_URL;
+    else process.env.SERVER_URL = originalPaymentEnvironment.serverUrl;
+    if (originalPaymentEnvironment.clientUrl === undefined) delete process.env.CLIENT_URL;
+    else process.env.CLIENT_URL = originalPaymentEnvironment.clientUrl;
+});
+
 const makeResponse = () => ({
     statusCode: 200,
     body: null,
@@ -353,12 +379,17 @@ test("verified Shop payment notifies buyer and sellers without sharing buyer ide
         },
         lean: async () => filter._id.$in.map(_id => ({ _id }))
     });
-    SSLCommerzPayment.prototype.validate = async () => ({
+    SSLCommerzPayment.prototype.validate = async data => {
+        assert.deepEqual(data, { val_id: "VALIDATION-ID" });
+        return {
         status: "VALID",
         tran_id: "TXN-PAID",
+        val_id: "VALIDATION-ID",
         amount: "50",
-        currency: "BDT"
-    });
+        currency: "BDT",
+        currency_type: "BDT"
+        };
+    };
 
     try {
         const response = makeResponse();
@@ -369,6 +400,7 @@ test("verified Shop payment notifies buyer and sellers without sharing buyer ide
                     status: "VALID",
                     amount: "50",
                     currency: "BDT",
+                    currency_type: "BDT",
                     val_id: "VALIDATION-ID"
                 }
             },
@@ -416,6 +448,7 @@ test("SSLCommerz validation rejects mismatched provider transaction details", as
         select: async () => order,
         then: (resolve, reject) => Promise.resolve(order).then(resolve, reject)
     });
+
     Order.updateOne = async (filter, update) => {
         updates.push({ filter, update });
         return { modifiedCount: 0 };
@@ -423,8 +456,10 @@ test("SSLCommerz validation rejects mismatched provider transaction details", as
     SSLCommerzPayment.prototype.validate = async () => ({
         status: "VALID",
         tran_id: "TXN-OTHER",
+        val_id: "VALIDATION-ID",
         amount: "50",
-        currency: "BDT"
+        currency: "BDT",
+        currency_type: "BDT"
     });
 
     try {
@@ -436,6 +471,7 @@ test("SSLCommerz validation rejects mismatched provider transaction details", as
                     status: "VALID",
                     amount: "50",
                     currency: "BDT",
+                    currency_type: "BDT",
                     val_id: "VALIDATION-ID"
                 }
             },
@@ -448,6 +484,131 @@ test("SSLCommerz validation rejects mismatched provider transaction details", as
             updates.some(({ update }) => update.$set?.paymentStatus === "paid"),
             false
         );
+    } finally {
+        Order.findOne = originalFindOne;
+        Order.updateOne = originalUpdateOne;
+        SSLCommerzPayment.prototype.validate = originalValidate;
+    }
+});
+
+test("SSLCommerz IPN rejects mismatched amount, currency, validation ID, and order transaction", async () => {
+    const originalFindOne = Order.findOne;
+    const originalUpdateOne = Order.updateOne;
+    const originalValidate = SSLCommerzPayment.prototype.validate;
+    const order = {
+        _id: "507f1f77bcf86cd799439013",
+        user: "507f1f77bcf86cd799439011",
+        totalPrice: 50,
+        paymentStatus: "pending",
+        sellerSettlements: []
+    };
+    let updateCount = 0;
+    let validation = {};
+    Order.findOne = async () => order;
+    Order.updateOne = async () => {
+        updateCount += 1;
+        return { modifiedCount: 1 };
+    };
+    SSLCommerzPayment.prototype.validate = async () => validation;
+
+    const invalidCases = [
+        { name: "IPN amount", body: { amount: "50.01" } },
+        { name: "IPN currency", body: { currency: "USD" } },
+        { name: "IPN currency type", body: { currency_type: "USD" } },
+        { name: "validated amount", validation: { amount: "49.99" } },
+        { name: "validated currency", validation: { currency: "USD" } },
+        { name: "validated currency type", validation: { currency_type: "USD" } },
+        { name: "validation ID", validation: { val_id: "OTHER-VALIDATION-ID" } },
+        { name: "provider transaction ID", validation: { tran_id: "TXN-OTHER" } }
+    ];
+
+    try {
+        for (const invalidCase of invalidCases) {
+            validation = {
+                status: "VALID",
+                tran_id: "TXN-PAID",
+                val_id: "VALIDATION-ID",
+                amount: "50.00",
+                currency: "BDT",
+                currency_type: "BDT",
+                ...invalidCase.validation
+            };
+            const response = makeResponse();
+            await paymentController.paymentIPN(
+                {
+                    body: {
+                        tran_id: "TXN-PAID",
+                        status: "VALID",
+                        amount: "50.00",
+                        currency: "BDT",
+                        currency_type: "BDT",
+                        val_id: "VALIDATION-ID",
+                        ...invalidCase.body
+                    }
+                },
+                response
+            );
+
+            assert.equal(response.statusCode, 400, invalidCase.name);
+            assert.equal(updateCount, 0, invalidCase.name);
+        }
+    } finally {
+        Order.findOne = originalFindOne;
+        Order.updateOne = originalUpdateOne;
+        SSLCommerzPayment.prototype.validate = originalValidate;
+    }
+});
+
+test("expired order cannot be paid or marked paid by a late provider callback", async () => {
+    const originalFindOne = Order.findOne;
+    const originalUpdateOne = Order.updateOne;
+    const originalValidate = SSLCommerzPayment.prototype.validate;
+    const order = {
+        _id: "507f1f77bcf86cd799439013",
+        user: "507f1f77bcf86cd799439011",
+        totalPrice: 50,
+        status: "Pending",
+        paymentStatus: "pending",
+        reservationExpiresAt: new Date("2026-10-22T13:30:00.000Z"),
+        sellerSettlements: []
+    };
+    let paymentUpdateCalled = false;
+    Order.findOne = () => ({
+        select: async () => order,
+        then: (resolve, reject) => Promise.resolve(order).then(resolve, reject)
+    });
+    Order.updateOne = async () => {
+        paymentUpdateCalled = true;
+        return { modifiedCount: 1 };
+    };
+    SSLCommerzPayment.prototype.validate = async () => ({
+        status: "VALID",
+        tran_id: "TXN-PAID",
+        val_id: "VALIDATION-ID",
+        amount: "50",
+        currency: "BDT",
+        currency_type: "BDT"
+    });
+
+    try {
+        const response = makeResponse();
+        await paymentController.paymentIPN(
+            {
+                body: {
+                    tran_id: "TXN-PAID",
+                    status: "VALID",
+                    amount: "50",
+                    currency: "BDT",
+                    currency_type: "BDT",
+                    val_id: "VALIDATION-ID"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 409);
+        assert.match(response.body.message, /reservation expired/i);
+        assert.equal(paymentUpdateCalled, false);
     } finally {
         Order.findOne = originalFindOne;
         Order.updateOne = originalUpdateOne;
@@ -484,8 +645,10 @@ test("duplicate valid SSLCommerz IPN does not process payment or notify twice", 
     SSLCommerzPayment.prototype.validate = async () => ({
         status: "VALID",
         tran_id: "TXN-PAID",
+        val_id: "VALIDATION-ID",
         amount: "50",
-        currency: "BDT"
+        currency: "BDT",
+        currency_type: "BDT"
     });
 
     try {
@@ -497,6 +660,7 @@ test("duplicate valid SSLCommerz IPN does not process payment or notify twice", 
                     status: "VALID",
                     amount: "50",
                     currency: "BDT",
+                    currency_type: "BDT",
                     val_id: "VALIDATION-ID"
                 }
             },
@@ -519,8 +683,11 @@ test("duplicate valid SSLCommerz IPN does not process payment or notify twice", 
 test("concurrent payment initialization permits only one attempt for the same pending order", async () => {
     const paymentControllerPath = require.resolve("../controllers/paymentController");
     const originalController = require.cache[paymentControllerPath];
-    const originalStoreId = process.env.SSLC_STORE_ID;
-    const originalStorePassword = process.env.SSLC_STORE_PASSWORD;
+    const originalStoreId = process.env.SSLCOMMERZ_SANDBOX_STORE_ID;
+    const originalStorePassword = process.env.SSLCOMMERZ_SANDBOX_STORE_PASSWORD;
+    const originalMode = process.env.SSLCOMMERZ_MODE;
+    const originalServerUrl = process.env.SERVER_URL;
+    const originalClientUrl = process.env.CLIENT_URL;
     const originalFindById = Order.findById;
     const originalUpdateOne = Order.updateOne;
     const originalInit = SSLCommerzPayment.prototype.init;
@@ -537,8 +704,9 @@ test("concurrent payment initialization permits only one attempt for the same pe
     };
     const filters = [];
     let gatewayInitializations = 0;
-    process.env.SSLC_STORE_ID = "test-store";
-    process.env.SSLC_STORE_PASSWORD = "test-password";
+    process.env.SSLCOMMERZ_MODE = "sandbox";
+    process.env.SSLCOMMERZ_SANDBOX_STORE_ID = "test-store";
+    process.env.SSLCOMMERZ_SANDBOX_STORE_PASSWORD = "test-password";
     delete require.cache[paymentControllerPath];
     const configuredPaymentController = require("../controllers/paymentController");
     Order.findById = async () => ({ ...order });
@@ -546,9 +714,17 @@ test("concurrent payment initialization permits only one attempt for the same pe
         filters.push(filter);
         return { modifiedCount: filters.length === 1 ? 1 : 0 };
     };
-    SSLCommerzPayment.prototype.init = async () => {
+    let initData;
+    SSLCommerzPayment.prototype.init = async function(data) {
+        initData = data;
+        assert.equal(this.baseURL, "https://sandbox.sslcommerz.com");
+        assert.equal(this.store_id, "test-store");
+        assert.equal(this.store_passwd, "test-password");
         gatewayInitializations += 1;
-        return { GatewayPageURL: "https://gateway.example/test" };
+        return {
+            GatewayPageURL:
+                "https://sandbox.sslcommerz.com/gwprocess/v4/test"
+        };
     };
 
     const request = {
@@ -573,6 +749,14 @@ test("concurrent payment initialization permits only one attempt for the same pe
         assert.equal(secondResponse.statusCode, 409);
         assert.equal(gatewayInitializations, 1);
         assert.equal(filters.length, 2);
+        assert.equal(initData.success_url, "https://api.example.test/api/payment/success");
+        assert.equal(initData.fail_url, "https://api.example.test/api/payment/fail");
+        assert.equal(initData.cancel_url, "https://api.example.test/api/payment/cancel");
+        assert.equal(initData.ipn_url, "https://api.example.test/api/payment/ipn");
+        assert.equal("store_id" in initData, false);
+        assert.equal("store_passwd" in initData, false);
+        assert.equal(JSON.stringify(firstResponse.body).includes("test-password"), false);
+        assert.equal(JSON.stringify(firstResponse.body).includes("test-store"), false);
         assert.ok(filters.every(filter =>
             filter.paymentStatus === "pending" && filter.transactionId === ""
         ));
@@ -580,10 +764,16 @@ test("concurrent payment initialization permits only one attempt for the same pe
         Order.findById = originalFindById;
         Order.updateOne = originalUpdateOne;
         SSLCommerzPayment.prototype.init = originalInit;
-        if (originalStoreId === undefined) delete process.env.SSLC_STORE_ID;
-        else process.env.SSLC_STORE_ID = originalStoreId;
-        if (originalStorePassword === undefined) delete process.env.SSLC_STORE_PASSWORD;
-        else process.env.SSLC_STORE_PASSWORD = originalStorePassword;
+        if (originalStoreId === undefined) delete process.env.SSLCOMMERZ_SANDBOX_STORE_ID;
+        else process.env.SSLCOMMERZ_SANDBOX_STORE_ID = originalStoreId;
+        if (originalStorePassword === undefined) delete process.env.SSLCOMMERZ_SANDBOX_STORE_PASSWORD;
+        else process.env.SSLCOMMERZ_SANDBOX_STORE_PASSWORD = originalStorePassword;
+        if (originalMode === undefined) delete process.env.SSLCOMMERZ_MODE;
+        else process.env.SSLCOMMERZ_MODE = originalMode;
+        if (originalServerUrl === undefined) delete process.env.SERVER_URL;
+        else process.env.SERVER_URL = originalServerUrl;
+        if (originalClientUrl === undefined) delete process.env.CLIENT_URL;
+        else process.env.CLIENT_URL = originalClientUrl;
         delete require.cache[paymentControllerPath];
         if (originalController) require.cache[paymentControllerPath] = originalController;
     }

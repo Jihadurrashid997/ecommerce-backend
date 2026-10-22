@@ -129,7 +129,12 @@ test("admin analytics separates refunds from paid revenue", async () => {
 test("product browse filters pending listings when approval is required", async () => {
     const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
     const originalFind = Product.find;
+    const originalCountDocuments = Product.countDocuments;
+    const originalDistinct = Product.distinct;
     let filter;
+    let sort;
+    let skip;
+    let limit;
     marketplaceSettings.getMarketplaceSettings = async () => ({
         marketplaceEnabled: true,
         requireProductApproval: true
@@ -137,9 +142,26 @@ test("product browse filters pending listings when approval is required", async 
     Product.find = query => {
         filter = query;
         return {
-            select: async () => []
+            select() {
+                return this;
+            },
+            sort(value) {
+                sort = value;
+                return this;
+            },
+            skip(value) {
+                skip = value;
+                return this;
+            },
+            limit(value) {
+                limit = value;
+                return this;
+            },
+            lean: async () => []
         };
     };
+    Product.countDocuments = async () => 0;
+    Product.distinct = async () => [];
 
     try {
         const response = makeResponse();
@@ -152,10 +174,96 @@ test("product browse filters pending listings when approval is required", async 
             approvalStatus: { $nin: ["pending", "rejected"] },
             isApproved: { $ne: false }
         });
-        assert.deepEqual(response.body, []);
+        assert.deepEqual(sort, { createdAt: -1, _id: -1 });
+        assert.equal(skip, 0);
+        assert.equal(limit, 12);
+        assert.deepEqual(response.body, {
+            success: true,
+            products: [],
+            categories: [],
+            pagination: {
+                page: 1,
+                limit: 12,
+                totalItems: 0,
+                totalPages: 1
+            }
+        });
     } finally {
         marketplaceSettings.getMarketplaceSettings = originalGetSettings;
         Product.find = originalFind;
+        Product.countDocuments = originalCountDocuments;
+        Product.distinct = originalDistinct;
+    }
+});
+
+test("product browse validates pagination and treats search input as literal text", async () => {
+    const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
+    const originalFind = Product.find;
+    const originalCountDocuments = Product.countDocuments;
+    const originalDistinct = Product.distinct;
+    let filter;
+    let sort;
+    let skip;
+    let limit;
+    marketplaceSettings.getMarketplaceSettings = async () => ({
+        marketplaceEnabled: true,
+        requireProductApproval: false
+    });
+    Product.find = query => {
+        filter = query;
+        return {
+            select() { return this; },
+            sort(value) { sort = value; return this; },
+            skip(value) { skip = value; return this; },
+            limit(value) { limit = value; return this; },
+            lean: async () => [{ _id: "product-1" }]
+        };
+    };
+    Product.countDocuments = async () => 25;
+    Product.distinct = async () => ["Crafts", "Home"];
+
+    try {
+        const response = makeResponse();
+        await productController.getProducts(
+            {
+                query: {
+                    keyword: "mug.+",
+                    category: "Home",
+                    sort: "price-low",
+                    page: "2",
+                    limit: "10"
+                }
+            },
+            response
+        );
+
+        assert.deepEqual(filter.$or, [
+            { name: { $regex: "mug\\.\\+", $options: "i" } },
+            { description: { $regex: "mug\\.\\+", $options: "i" } },
+            { category: { $regex: "mug\\.\\+", $options: "i" } }
+        ]);
+        assert.equal(filter.category, "Home");
+        assert.deepEqual(sort, { price: 1, _id: 1 });
+        assert.equal(skip, 10);
+        assert.equal(limit, 10);
+        assert.deepEqual(response.body.pagination, {
+            page: 2,
+            limit: 10,
+            totalItems: 25,
+            totalPages: 3
+        });
+
+        const invalidResponse = makeResponse();
+        await productController.getProducts(
+            { query: { page: "0" } },
+            invalidResponse
+        );
+        assert.equal(invalidResponse.statusCode, 400);
+    } finally {
+        marketplaceSettings.getMarketplaceSettings = originalGetSettings;
+        Product.find = originalFind;
+        Product.countDocuments = originalCountDocuments;
+        Product.distinct = originalDistinct;
     }
 });
 

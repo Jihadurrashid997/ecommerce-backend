@@ -130,6 +130,9 @@ test("orders initialize separate held-payout records for each seller", async () 
         assert.equal(products.get(productIds["product-a"]).stock, 3);
         assert.equal(products.get(productIds["product-b"]).stock, 4);
         assert.equal(createdOrder.paymentMethod, "sslcommerz");
+        assert.ok(createdOrder.reservationExpiresAt instanceof Date);
+        assert.equal(createdOrder.items[0].stockReserved, true);
+        assert.equal(response.body.order.items[0].stockReserved, undefined);
         assert.equal(createdOrder.statusHistory[0].toStatus, "Pending");
         assert.equal(createdOrder.statusHistory[0].actorRole, "buyer");
         assert.equal(
@@ -435,12 +438,19 @@ test("order creation rejects invalid quantities before reserving stock", async (
 });
 
 test("unpaid order cancellation is atomic and restores reserved inventory", async () => {
+    const mongoose = require("mongoose");
     const originalFindOneAndUpdate = Order.findOneAndUpdate;
-    const originalFindByIdAndUpdate = Product.findByIdAndUpdate;
+    const originalStartSession = mongoose.startSession;
+    const originalUpdateOne = Product.updateOne;
     let filter;
     let update;
     let options;
     const restoredItems = [];
+    let sessionEnded = false;
+    mongoose.startSession = async () => ({
+        withTransaction: async callback => callback(),
+        endSession: async () => { sessionEnded = true; }
+    });
     Order.findOneAndUpdate = async (nextFilter, nextUpdate, nextOptions) => {
         filter = nextFilter;
         update = nextUpdate;
@@ -448,12 +458,13 @@ test("unpaid order cancellation is atomic and restores reserved inventory", asyn
         return {
             items: [{
                 product: "507f1f77bcf86cd799439019",
-                quantity: 2
+                quantity: 2,
+                stockReserved: true
             }]
         };
     };
-    Product.findByIdAndUpdate = async (id, change) => {
-        restoredItems.push({ id, change });
+    Product.updateOne = async (nextFilter, change, updateOptions) => {
+        restoredItems.push({ filter: nextFilter, change, options: updateOptions });
     };
 
     try {
@@ -474,6 +485,7 @@ test("unpaid order cancellation is atomic and restores reserved inventory", asyn
             "Delivered"
         ]);
         assert.equal(update.$set.status, "Cancelled");
+        assert.equal(update.$set.paymentStatus, "cancelled");
         assert.deepEqual(update.$push.statusHistory, {
             fromStatus: "Pending",
             toStatus: "Cancelled",
@@ -485,14 +497,18 @@ test("unpaid order cancellation is atomic and restores reserved inventory", asyn
         assert.deepEqual(options.arrayFilters, [{
             "settlement.payoutStatus": { $ne: "paid" }
         }]);
+        assert.equal(options.session !== undefined, true);
         assert.deepEqual(restoredItems, [{
-            id: "507f1f77bcf86cd799439019",
-            change: { $inc: { stock: 2 } }
+            filter: { _id: "507f1f77bcf86cd799439019" },
+            change: { $inc: { stock: 2 } },
+            options: { session: options.session }
         }]);
+        assert.equal(sessionEnded, true);
         assert.equal(response.statusCode, 200);
     } finally {
+        mongoose.startSession = originalStartSession;
         Order.findOneAndUpdate = originalFindOneAndUpdate;
-        Product.findByIdAndUpdate = originalFindByIdAndUpdate;
+        Product.updateOne = originalUpdateOne;
     }
 });
 
@@ -551,7 +567,17 @@ test("customer order responses do not expose seller account IDs", async () => {
             shipmentHistory: [],
             receiptConfirmedAt: null,
             sellerConfirmedAt: null,
-            payoutStatus: "held"
+            payoutStatus: "held",
+            deliveredAt: null,
+            deliveryDispute: {
+                status: "none",
+                reason: "",
+                openedAt: null,
+                sellerReply: "",
+                sellerReplyAt: null,
+                resolvedAt: null,
+                resolutionNote: ""
+            }
         }]);
         assert.equal(JSON.stringify(response.body).includes("seller-private-id"), false);
         assert.equal(JSON.stringify(response.body).includes("private-account"), false);
@@ -596,7 +622,10 @@ test("only the order owner can confirm receipt after paid delivery", async () =>
             _id: "507f1f77bcf86cd799439012",
             deliveryStatus: "Delivered",
             payoutStatus: "held",
-            receiptConfirmedAt: null
+            receiptConfirmedAt: null,
+            "deliveryDispute.status": {
+                $nin: ["open", "referred_to_refund"]
+            }
         });
         assert.equal(
             update.$set["sellerSettlements.$.receiptConfirmedAt"] instanceof Date,
@@ -608,7 +637,10 @@ test("only the order owner can confirm receipt after paid delivery", async () =>
             deliveryStatus: "Delivered",
             payoutStatus: "held",
             receiptConfirmedAt: { $ne: null },
-            sellerConfirmedAt: { $ne: null }
+            sellerConfirmedAt: { $ne: null },
+            "deliveryDispute.status": {
+                $nin: ["open", "referred_to_refund"]
+            }
         });
         assert.equal(response.statusCode, 200);
     } finally {
@@ -662,7 +694,10 @@ test("seller must confirm their own paid delivered shipment before payout readin
             seller: "seller-a",
             deliveryStatus: "Delivered",
             payoutStatus: "held",
-            sellerConfirmedAt: null
+            sellerConfirmedAt: null,
+            "deliveryDispute.status": {
+                $nin: ["open", "referred_to_refund"]
+            }
         });
         assert.equal(
             update.$set["sellerSettlements.$.sellerConfirmedAt"] instanceof Date,
@@ -1128,12 +1163,16 @@ test("admin payout queue requires both buyer and seller confirmations", async ()
             deliveryStatus: "Delivered",
             payoutStatus: { $in: ["ready", "approved"] },
             receiptConfirmedAt: { $ne: null },
-            sellerConfirmedAt: { $ne: null }
+            sellerConfirmedAt: { $ne: null },
+            "deliveryDispute.status": {
+                $nin: ["open", "referred_to_refund"]
+            }
         });
         assert.deepEqual(filter["refundRequest.status"].$nin, [
             "requested",
             "refunded"
         ]);
+        assert.deepEqual(filter.paymentEnvironment, { $ne: "sandbox" });
         assert.equal(response.body.payouts.length, 2);
         assert.equal(response.body.payouts[0].fulfillmentId, "fulfillment-ready");
         assert.equal(response.body.payouts[1].payoutStatus, "approved");
@@ -1186,6 +1225,7 @@ test("admin can record a seller payout only after approval", async () => {
         );
 
         assert.equal(updateFilter.paymentStatus, "paid");
+        assert.deepEqual(updateFilter.paymentEnvironment, { $ne: "sandbox" });
         assert.equal(
             updateFilter.sellerSettlements.$elemMatch.payoutStatus,
             "approved"
@@ -1211,7 +1251,10 @@ test("admin can record a seller payout only after approval", async () => {
             "settlement.deliveryStatus": "Delivered",
             "settlement.payoutStatus": "approved",
             "settlement.receiptConfirmedAt": { $ne: null },
-            "settlement.sellerConfirmedAt": { $ne: null }
+            "settlement.sellerConfirmedAt": { $ne: null },
+            "settlement.deliveryDispute.status": {
+                $nin: ["open", "referred_to_refund"]
+            }
         }]);
         assert.equal(
             update.$set["sellerSettlements.$[settlement].payoutReference"],
@@ -1331,12 +1374,14 @@ test("admin payout approval requires paid order, confirmations, and an active se
         );
 
         assert.equal(findFilter.paymentStatus, "paid");
+        assert.deepEqual(findFilter.paymentEnvironment, { $ne: "sandbox" });
         assert.equal(findFilter.sellerSettlements.$elemMatch.payoutStatus, "ready");
         assert.deepEqual(findFilter["refundRequest.status"].$nin, [
             "requested",
             "refunded"
         ]);
         assert.equal(updateFilter.paymentStatus, "paid");
+        assert.deepEqual(updateFilter.paymentEnvironment, { $ne: "sandbox" });
         assert.equal(
             update.$set["sellerSettlements.$[settlement].payoutStatus"],
             "approved"
@@ -1451,7 +1496,10 @@ test("customer refund requests are paid-order only and hide reviewer identity", 
         assert.equal(filter.paymentStatus, "paid");
         assert.deepEqual(filter["refundRequest.status"].$nin, ["requested", "refunded"]);
         assert.deepEqual(filter.sellerSettlements.$not.$elemMatch, {
-            payoutStatus: "paid"
+            $or: [
+                { payoutStatus: "paid" },
+                { "deliveryDispute.status": "open" }
+            ]
         });
         assert.equal(update.$set["refundRequest.reason"], "The package arrived damaged.");
         assert.equal(response.body.order.refundRequest.status, "requested");

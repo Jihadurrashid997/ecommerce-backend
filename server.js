@@ -27,6 +27,7 @@ const GroupConversation = require("./models/GroupConversation");
 const DeviceSession = require("./models/DeviceSession");
 const { sendPushToUsers } = require("./services/pushNotifications");
 const { purgeExpiredStories } = require("./services/storyCleanup");
+const { startOrderReservationCleanup } = require("./services/orderReservationCleanup");
 
 dotenv.config();
 
@@ -2376,6 +2377,7 @@ const startServer =
                 });
             }, 60 * 60 * 1000);
             storyCleanupTimer.unref();
+            startOrderReservationCleanup();
 
             server.listen(
                 PORT,
