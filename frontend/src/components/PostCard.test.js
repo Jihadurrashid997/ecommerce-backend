@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import api from "../services/api";
 import PostCard from "./PostCard";
 
@@ -18,6 +18,7 @@ jest.mock("../services/api", () => ({
     default: {
         post: jest.fn(),
         put: jest.fn().mockResolvedValue({}),
+        patch: jest.fn(),
         delete: jest.fn()
     },
     getUploadUrl: value => value
@@ -154,4 +155,52 @@ test("reposts a public post", async () => {
     fireEvent.click(screen.getByRole("button", { name: "Repost" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Post reposted.");
     expect(api.post).toHaveBeenCalledWith("/posts/post-1/repost");
+});
+
+test("post owners can edit a caption and audience", async () => {
+    const ownedPost = {
+        ...post,
+        author: { _id: "viewer", name: "Viewer" }
+    };
+    const updatedPost = { ...ownedPost, caption: "Edited caption", visibility: "followers" };
+    const onUpdated = jest.fn();
+    api.patch.mockResolvedValue({ data: { data: updatedPost } });
+    render(<PostCard post={ownedPost} onUpdated={onUpdated} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More post options" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit post" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Edit post caption" }), {
+        target: { value: "Edited caption" }
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Edit post audience" }), {
+        target: { value: "followers" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByText("Edited caption")).toBeVisible();
+    expect(api.patch).toHaveBeenCalledWith("/posts/post-1", {
+        caption: "Edited caption",
+        visibility: "followers"
+    });
+    expect(onUpdated).toHaveBeenCalledWith(updatedPost);
+    expect(screen.getByText("Followers only")).toBeVisible();
+});
+
+test("non-owners do not see post editing or removal controls", () => {
+    render(<PostCard post={post} />);
+    expect(screen.queryByRole("button", { name: "More post options" })).not.toBeInTheDocument();
+});
+
+test("owners can remove their post for everyone", async () => {
+    const confirm = jest.spyOn(window, "confirm").mockReturnValue(true);
+    const onDeleted = jest.fn();
+    api.delete.mockResolvedValue({});
+    render(<PostCard post={{ ...post, author: { _id: "viewer", name: "Viewer" } }} onDeleted={onDeleted} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More post options" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove post" }));
+    expect(confirm).toHaveBeenCalledWith("Remove this post for everyone? This cannot be undone.");
+    await waitFor(() => expect(api.delete).toHaveBeenCalledWith("/posts/post-1"));
+    expect(onDeleted).toHaveBeenCalledWith("post-1");
+    confirm.mockRestore();
 });
