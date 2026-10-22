@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../services/api";
 import "../styles/Dashboard.css";
@@ -18,29 +18,19 @@ const EditProduct = () => {
         stock:""
     });
 
-    useEffect(()=>{
-
-        loadProduct();
-
-    },[]);
-
-    const loadProduct = async()=>{
-
+    const loadProduct = useCallback(async () => {
         try{
-
             const res = await api.get(`/products/${id}`);
-
             setForm(res.data);
-
         }
-
         catch(err){
-
             console.log(err);
-
         }
+    }, [id]);
 
-    };
+    useEffect(() => {
+        loadProduct();
+    }, [loadProduct]);
 
     const handleChange=(e)=>{
 

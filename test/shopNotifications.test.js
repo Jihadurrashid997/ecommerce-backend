@@ -339,7 +339,10 @@ test("verified Shop payment notifies buyer and sellers without sharing buyer ide
         sellerSettlements: [{ seller: sellerId }]
     };
     let operations = [];
-    Order.findOne = async () => order;
+    Order.findOne = () => ({
+        select: async () => order,
+        then: (resolve, reject) => Promise.resolve(order).then(resolve, reject)
+    });
     Order.updateOne = async () => ({ modifiedCount: 1 });
     ShopNotification.bulkWrite = async nextOperations => {
         operations = [...operations, ...nextOperations];
@@ -394,5 +397,194 @@ test("verified Shop payment notifies buyer and sellers without sharing buyer ide
         ShopNotification.bulkWrite = originalBulkWrite;
         User.find = originalUserFind;
         SSLCommerzPayment.prototype.validate = originalValidate;
+    }
+});
+
+test("SSLCommerz validation rejects mismatched provider transaction details", async () => {
+    const originalFindOne = Order.findOne;
+    const originalUpdateOne = Order.updateOne;
+    const originalValidate = SSLCommerzPayment.prototype.validate;
+    const order = {
+        _id: "507f1f77bcf86cd799439013",
+        user: "507f1f77bcf86cd799439011",
+        totalPrice: 50,
+        paymentStatus: "pending",
+        sellerSettlements: []
+    };
+    const updates = [];
+    Order.findOne = () => ({
+        select: async () => order,
+        then: (resolve, reject) => Promise.resolve(order).then(resolve, reject)
+    });
+    Order.updateOne = async (filter, update) => {
+        updates.push({ filter, update });
+        return { modifiedCount: 0 };
+    };
+    SSLCommerzPayment.prototype.validate = async () => ({
+        status: "VALID",
+        tran_id: "TXN-OTHER",
+        amount: "50",
+        currency: "BDT"
+    });
+
+    try {
+        const response = makeResponse();
+        await paymentController.paymentIPN(
+            {
+                body: {
+                    tran_id: "TXN-PAID",
+                    status: "VALID",
+                    amount: "50",
+                    currency: "BDT",
+                    val_id: "VALIDATION-ID"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 400);
+        assert.match(response.body.message, /do not match/i);
+        assert.equal(
+            updates.some(({ update }) => update.$set?.paymentStatus === "paid"),
+            false
+        );
+    } finally {
+        Order.findOne = originalFindOne;
+        Order.updateOne = originalUpdateOne;
+        SSLCommerzPayment.prototype.validate = originalValidate;
+    }
+});
+
+test("duplicate valid SSLCommerz IPN does not process payment or notify twice", async () => {
+    const originalFindOne = Order.findOne;
+    const originalFindById = Order.findById;
+    const originalUpdateOne = Order.updateOne;
+    const originalValidate = SSLCommerzPayment.prototype.validate;
+    const originalBulkWrite = ShopNotification.bulkWrite;
+    const order = {
+        _id: "507f1f77bcf86cd799439013",
+        user: "507f1f77bcf86cd799439011",
+        totalPrice: 50,
+        paymentStatus: "pending",
+        sellerSettlements: []
+    };
+    let paymentUpdates = 0;
+    let notificationWrites = 0;
+    Order.findOne = async () => order;
+    Order.findById = () => ({
+        select: async () => ({ paymentStatus: "paid" })
+    });
+    Order.updateOne = async () => {
+        paymentUpdates += 1;
+        return { modifiedCount: 0 };
+    };
+    ShopNotification.bulkWrite = async () => {
+        notificationWrites += 1;
+    };
+    SSLCommerzPayment.prototype.validate = async () => ({
+        status: "VALID",
+        tran_id: "TXN-PAID",
+        amount: "50",
+        currency: "BDT"
+    });
+
+    try {
+        const response = makeResponse();
+        await paymentController.paymentIPN(
+            {
+                body: {
+                    tran_id: "TXN-PAID",
+                    status: "VALID",
+                    amount: "50",
+                    currency: "BDT",
+                    val_id: "VALIDATION-ID"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.match(response.body.message, /already verified/i);
+        assert.equal(paymentUpdates, 1);
+        assert.equal(notificationWrites, 0);
+    } finally {
+        Order.findOne = originalFindOne;
+        Order.findById = originalFindById;
+        Order.updateOne = originalUpdateOne;
+        ShopNotification.bulkWrite = originalBulkWrite;
+        SSLCommerzPayment.prototype.validate = originalValidate;
+    }
+});
+
+test("concurrent payment initialization permits only one attempt for the same pending order", async () => {
+    const paymentControllerPath = require.resolve("../controllers/paymentController");
+    const originalController = require.cache[paymentControllerPath];
+    const originalStoreId = process.env.SSLC_STORE_ID;
+    const originalStorePassword = process.env.SSLC_STORE_PASSWORD;
+    const originalFindById = Order.findById;
+    const originalUpdateOne = Order.updateOne;
+    const originalInit = SSLCommerzPayment.prototype.init;
+    const orderId = "507f1f77bcf86cd799439013";
+    const buyerId = "507f1f77bcf86cd799439011";
+    const order = {
+        _id: orderId,
+        user: buyerId,
+        totalPrice: 50,
+        status: "Pending",
+        paymentStatus: "pending",
+        transactionId: "",
+        sellerSettlements: []
+    };
+    const filters = [];
+    let gatewayInitializations = 0;
+    process.env.SSLC_STORE_ID = "test-store";
+    process.env.SSLC_STORE_PASSWORD = "test-password";
+    delete require.cache[paymentControllerPath];
+    const configuredPaymentController = require("../controllers/paymentController");
+    Order.findById = async () => ({ ...order });
+    Order.updateOne = async filter => {
+        filters.push(filter);
+        return { modifiedCount: filters.length === 1 ? 1 : 0 };
+    };
+    SSLCommerzPayment.prototype.init = async () => {
+        gatewayInitializations += 1;
+        return { GatewayPageURL: "https://gateway.example/test" };
+    };
+
+    const request = {
+        body: {
+            orderId,
+            totalAmount: 50,
+            name: "Buyer",
+            email: "buyer@example.com",
+            phone: "01700000000",
+            address: "Dhaka"
+        },
+        user: { id: buyerId }
+    };
+
+    try {
+        const firstResponse = makeResponse();
+        const secondResponse = makeResponse();
+        await configuredPaymentController.initPayment(request, firstResponse);
+        await configuredPaymentController.initPayment(request, secondResponse);
+
+        assert.equal(firstResponse.statusCode, 200);
+        assert.equal(secondResponse.statusCode, 409);
+        assert.equal(gatewayInitializations, 1);
+        assert.equal(filters.length, 2);
+        assert.ok(filters.every(filter =>
+            filter.paymentStatus === "pending" && filter.transactionId === ""
+        ));
+    } finally {
+        Order.findById = originalFindById;
+        Order.updateOne = originalUpdateOne;
+        SSLCommerzPayment.prototype.init = originalInit;
+        if (originalStoreId === undefined) delete process.env.SSLC_STORE_ID;
+        else process.env.SSLC_STORE_ID = originalStoreId;
+        if (originalStorePassword === undefined) delete process.env.SSLC_STORE_PASSWORD;
+        else process.env.SSLC_STORE_PASSWORD = originalStorePassword;
+        delete require.cache[paymentControllerPath];
+        if (originalController) require.cache[paymentControllerPath] = originalController;
     }
 });

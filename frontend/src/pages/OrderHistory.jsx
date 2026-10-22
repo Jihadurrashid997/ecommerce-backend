@@ -474,9 +474,11 @@ const OrderHistory = () => {
                                             <p>
                                                 Seller payout:{" "}
                                                 {settlement.payoutStatus === "held"
-                                                    ? "Held until you and the seller confirm"
+                                                    ? "Awaiting buyer and seller confirmations; payment is not held by the Shop"
                                                     : settlement.payoutStatus === "ready"
-                                                        ? "Both confirmations received; awaiting admin payout"
+                                                        ? "Both confirmations received; awaiting admin approval"
+                                                        : settlement.payoutStatus === "approved"
+                                                            ? "Admin approved; manual transfer not yet recorded"
                                                         : settlement.payoutStatus === "paid"
                                                             ? "Paid by Shop admin"
                                                             : settlement.payoutStatus === "cancelled"

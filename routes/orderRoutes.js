@@ -12,6 +12,7 @@ const {
     confirmSellerPayout,
     confirmOrderReceipt,
     getReadySellerPayouts,
+    approveSellerPayout,
     markSellerPayoutPaid,
     requestOrderRefund,
     getRequestedOrderRefunds,
@@ -96,6 +97,12 @@ router.get(
     "/admin/refunds/requested",
     auth(["admin"]),
     getRequestedOrderRefunds
+);
+
+router.put(
+    "/admin/:id/payout/approve",
+    auth(["admin"]),
+    approveSellerPayout
 );
 
 router.put(

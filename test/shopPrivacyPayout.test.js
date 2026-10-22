@@ -130,6 +130,8 @@ test("orders initialize separate held-payout records for each seller", async () 
         assert.equal(products.get(productIds["product-a"]).stock, 3);
         assert.equal(products.get(productIds["product-b"]).stock, 4);
         assert.equal(createdOrder.paymentMethod, "sslcommerz");
+        assert.equal(createdOrder.statusHistory[0].toStatus, "Pending");
+        assert.equal(createdOrder.statusHistory[0].actorRole, "buyer");
         assert.equal(
             response.body.order.sellerSettlements.some(settlement => "seller" in settlement),
             false
@@ -472,6 +474,14 @@ test("unpaid order cancellation is atomic and restores reserved inventory", asyn
             "Delivered"
         ]);
         assert.equal(update.$set.status, "Cancelled");
+        assert.deepEqual(update.$push.statusHistory, {
+            fromStatus: "Pending",
+            toStatus: "Cancelled",
+            actor: "507f1f77bcf86cd799439021",
+            actorRole: "buyer",
+            note: "Buyer cancelled the unpaid order.",
+            source: "buyer"
+        });
         assert.deepEqual(options.arrayFilters, [{
             "settlement.payoutStatus": { $ne: "paid" }
         }]);
@@ -499,10 +509,20 @@ test("customer order responses do not expose seller account IDs", async () => {
             sellerConfirmedAt: null,
             sellerPayoutAccount: "private-account"
         }],
+        statusHistory: [{
+            fromStatus: "Pending",
+            toStatus: "Processing",
+            actor: "seller-private-id",
+            actorRole: "seller",
+            fulfillmentId: "fulfillment-a",
+            source: "seller",
+            occurredAt: new Date()
+        }],
         toObject() {
             return {
                 _id: "order-a",
-                sellerSettlements: this.sellerSettlements
+                sellerSettlements: this.sellerSettlements,
+                statusHistory: this.statusHistory
             };
         }
     };
@@ -535,6 +555,7 @@ test("customer order responses do not expose seller account IDs", async () => {
         }]);
         assert.equal(JSON.stringify(response.body).includes("seller-private-id"), false);
         assert.equal(JSON.stringify(response.body).includes("private-account"), false);
+        assert.equal("actor" in response.body[0].statusHistory[0], false);
     } finally {
         Order.find = originalFind;
     }
@@ -773,6 +794,7 @@ test("seller shipment updates store per-seller tracking and manual delivery hist
         status: "Processing",
         paymentStatus: "paid",
         refundRequest: { status: "none" },
+        statusHistory: [],
         items: [{ product: { seller: sellerId } }],
         sellerSettlements: [settlement],
         save: async () => {}
@@ -803,10 +825,139 @@ test("seller shipment updates store per-seller tracking and manual delivery hist
         assert.equal(settlement.trackingNumber, "TRACK-1024");
         assert.equal(settlement.shipmentHistory.length, 1);
         assert.equal(settlement.shipmentHistory[0].source, "manual");
+        assert.equal(order.statusHistory.length, 1);
+        assert.equal(order.statusHistory[0].fromStatus, "Processing");
+        assert.equal(order.statusHistory[0].toStatus, "Shipped");
+        assert.equal(order.statusHistory[0].actorRole, "seller");
         assert.equal(
             String(settlement.shipmentHistory[0].updatedBy),
             sellerId
         );
+    } finally {
+        Order.findById = originalFindById;
+    }
+});
+
+test("seller cannot advance unpaid shipments, skip transitions, or cancel via shipment updates", async () => {
+    const originalFindById = Order.findById;
+    const sellerId = "507f1f77bcf86cd799439047";
+    const order = {
+        _id: "507f1f77bcf86cd799439048",
+        status: "Pending",
+        paymentStatus: "pending",
+        refundRequest: { status: "none" },
+        statusHistory: [],
+        items: [{ product: { seller: sellerId } }],
+        sellerSettlements: [{
+            _id: "507f1f77bcf86cd799439050",
+            seller: sellerId,
+            deliveryStatus: "Pending",
+            shipmentHistory: [],
+            deliveryEvidence: ""
+        }],
+        save: async () => {
+            order.saved = true;
+        }
+    };
+    Order.findById = () => ({
+        populate: async () => order
+    });
+
+    try {
+        const unpaidResponse = makeResponse();
+        await orderController.updateSellerOrderStatus(
+            {
+                params: { id: order._id },
+                body: { status: "Processing" },
+                user: { id: sellerId }
+            },
+            unpaidResponse
+        );
+        assert.equal(unpaidResponse.statusCode, 409);
+        assert.equal(order.saved, undefined);
+
+        order.paymentStatus = "paid";
+        const skippedResponse = makeResponse();
+        await orderController.updateSellerOrderStatus(
+            {
+                params: { id: order._id },
+                body: {
+                    status: "Delivered",
+                    deliveryEvidence: "Left at the delivery address."
+                },
+                user: { id: sellerId }
+            },
+            skippedResponse
+        );
+        assert.equal(skippedResponse.statusCode, 409);
+        assert.equal(order.saved, undefined);
+
+        const cancelledResponse = makeResponse();
+        await orderController.updateSellerOrderStatus(
+            {
+                params: { id: order._id },
+                body: { status: "Cancelled" },
+                user: { id: sellerId }
+            },
+            cancelledResponse
+        );
+        assert.equal(cancelledResponse.statusCode, 400);
+        assert.equal(order.saved, undefined);
+    } finally {
+        Order.findById = originalFindById;
+    }
+});
+
+test("admin order updates cannot skip shipment transitions and are auditable", async () => {
+    const originalFindById = Order.findById;
+    const order = {
+        _id: "507f1f77bcf86cd799439051",
+        status: "Pending",
+        paymentStatus: "paid",
+        refundRequest: { status: "none" },
+        statusHistory: [],
+        sellerSettlements: [{
+            _id: "507f1f77bcf86cd799439052",
+            seller: "507f1f77bcf86cd799439053",
+            deliveryStatus: "Pending",
+            shipmentHistory: [],
+            deliveryEvidence: "",
+            courierName: "",
+            trackingNumber: "",
+            trackingUrl: ""
+        }],
+        save: async () => {
+            order.saved = true;
+        }
+    };
+    Order.findById = async () => order;
+
+    try {
+        const skippedResponse = makeResponse();
+        await orderController.updateOrderStatus(
+            {
+                params: { id: order._id },
+                body: { status: "Shipped" },
+                user: { id: "507f1f77bcf86cd799439054" }
+            },
+            skippedResponse
+        );
+        assert.equal(skippedResponse.statusCode, 409);
+        assert.equal(order.saved, undefined);
+
+        const validResponse = makeResponse();
+        await orderController.updateOrderStatus(
+            {
+                params: { id: order._id },
+                body: { status: "Processing" },
+                user: { id: "507f1f77bcf86cd799439054" }
+            },
+            validResponse
+        );
+        assert.equal(validResponse.statusCode, 200);
+        assert.equal(order.statusHistory.length, 1);
+        assert.equal(order.statusHistory[0].actorRole, "admin");
+        assert.equal(order.sellerSettlements[0].shipmentHistory[0].updatedBy, "507f1f77bcf86cd799439054");
     } finally {
         Order.findById = originalFindById;
     }
@@ -944,6 +1095,18 @@ test("admin payout queue requires both buyer and seller confirmations", async ()
                         sellerPayoutAccount: "01700000000"
                     },
                     {
+                        _id: "fulfillment-approved",
+                        seller,
+                        amount: 40,
+                        deliveryStatus: "Delivered",
+                        payoutStatus: "approved",
+                        payoutApprovedAt: confirmedAt,
+                        receiptConfirmedAt: confirmedAt,
+                        sellerConfirmedAt: confirmedAt,
+                        sellerPayoutMethod: "bKash",
+                        sellerPayoutAccount: "01700000000"
+                    },
+                    {
                         _id: "fulfillment-waiting",
                         seller,
                         amount: 30,
@@ -963,7 +1126,7 @@ test("admin payout queue requires both buyer and seller confirmations", async ()
 
         assert.deepEqual(filter.sellerSettlements.$elemMatch, {
             deliveryStatus: "Delivered",
-            payoutStatus: "ready",
+            payoutStatus: { $in: ["ready", "approved"] },
             receiptConfirmedAt: { $ne: null },
             sellerConfirmedAt: { $ne: null }
         });
@@ -971,14 +1134,15 @@ test("admin payout queue requires both buyer and seller confirmations", async ()
             "requested",
             "refunded"
         ]);
-        assert.equal(response.body.payouts.length, 1);
+        assert.equal(response.body.payouts.length, 2);
         assert.equal(response.body.payouts[0].fulfillmentId, "fulfillment-ready");
+        assert.equal(response.body.payouts[1].payoutStatus, "approved");
     } finally {
         Order.find = originalFind;
     }
 });
 
-test("admin can record a seller payout only against a ready shipment", async () => {
+test("admin can record a seller payout only after approval", async () => {
     const originalUpdateOne = Order.updateOne;
     const originalFindOne = Order.findOne;
     let updateFilter;
@@ -1024,7 +1188,7 @@ test("admin can record a seller payout only against a ready shipment", async () 
         assert.equal(updateFilter.paymentStatus, "paid");
         assert.equal(
             updateFilter.sellerSettlements.$elemMatch.payoutStatus,
-            "ready"
+            "approved"
         );
         assert.equal(
             updateFilter.sellerSettlements.$elemMatch.deliveryStatus,
@@ -1045,7 +1209,7 @@ test("admin can record a seller payout only against a ready shipment", async () 
         assert.deepEqual(options.arrayFilters, [{
             "settlement._id": "507f1f77bcf86cd799439012",
             "settlement.deliveryStatus": "Delivered",
-            "settlement.payoutStatus": "ready",
+            "settlement.payoutStatus": "approved",
             "settlement.receiptConfirmedAt": { $ne: null },
             "settlement.sellerConfirmedAt": { $ne: null }
         }]);
@@ -1057,6 +1221,136 @@ test("admin can record a seller payout only against a ready shipment", async () 
     } finally {
         Order.updateOne = originalUpdateOne;
         Order.findOne = originalFindOne;
+    }
+});
+
+test("duplicate manual payout recording is rejected atomically", async () => {
+    const originalFindOne = Order.findOne;
+    const originalUpdateOne = Order.updateOne;
+    const originalBulkWrite = ShopNotification.bulkWrite;
+    let updateCount = 0;
+    Order.findOne = () => ({
+        populate: async () => ({
+            _id: "507f1f77bcf86cd799439011",
+            user: "507f1f77bcf86cd799439015",
+            sellerSettlements: [{
+                _id: "507f1f77bcf86cd799439012",
+                seller: {
+                    _id: "507f1f77bcf86cd799439013",
+                    name: "Seller"
+                },
+                sellerPayoutMethod: "bKash",
+                sellerPayoutAccount: "01700000000"
+            }]
+        })
+    });
+    Order.updateOne = async filter => {
+        updateCount += 1;
+        assert.equal(
+            filter.sellerSettlements.$elemMatch.payoutStatus,
+            "approved"
+        );
+        return { modifiedCount: 0 };
+    };
+    ShopNotification.bulkWrite = async () => {
+        assert.fail("Duplicate payout processing must not emit payout notifications.");
+    };
+
+    try {
+        const response = makeResponse();
+        await orderController.markSellerPayoutPaid(
+            {
+                params: { id: "507f1f77bcf86cd799439011" },
+                body: {
+                    fulfillmentId: "507f1f77bcf86cd799439012",
+                    payoutMethod: "bKash",
+                    payoutReference: "TRX-DUPLICATE"
+                },
+                user: { id: "507f1f77bcf86cd799439014" }
+            },
+            response
+        );
+
+        assert.equal(updateCount, 1);
+        assert.equal(response.statusCode, 409);
+        assert.match(response.body.message, /not ready|already been processed/i);
+    } finally {
+        Order.findOne = originalFindOne;
+        Order.updateOne = originalUpdateOne;
+        ShopNotification.bulkWrite = originalBulkWrite;
+    }
+});
+
+test("admin payout approval requires paid order, confirmations, and an active seller", async () => {
+    const originalFindOne = Order.findOne;
+    const originalUpdateOne = Order.updateOne;
+    const originalUserFindOne = User.findOne;
+    let findFilter;
+    let updateFilter;
+    let update;
+    let options;
+    Order.findOne = filter => {
+        findFilter = filter;
+        return {
+            select: async () => ({
+                sellerSettlements: [{
+                    _id: "507f1f77bcf86cd799439012",
+                    seller: "507f1f77bcf86cd799439013",
+                    sellerPayoutMethod: "bKash",
+                    sellerPayoutAccount: "01700000000"
+                }]
+            })
+        };
+    };
+    User.findOne = filter => ({
+        select: async () => {
+            assert.deepEqual(filter, {
+                _id: "507f1f77bcf86cd799439013",
+                role: "seller",
+                isSuspended: { $ne: true }
+            });
+            return { _id: filter._id };
+        }
+    });
+    Order.updateOne = async (filter, nextUpdate, nextOptions) => {
+        updateFilter = filter;
+        update = nextUpdate;
+        options = nextOptions;
+        return { modifiedCount: 1 };
+    };
+
+    try {
+        const response = makeResponse();
+        await orderController.approveSellerPayout(
+            {
+                params: { id: "507f1f77bcf86cd799439011" },
+                body: { fulfillmentId: "507f1f77bcf86cd799439012" },
+                user: { id: "507f1f77bcf86cd799439014" }
+            },
+            response
+        );
+
+        assert.equal(findFilter.paymentStatus, "paid");
+        assert.equal(findFilter.sellerSettlements.$elemMatch.payoutStatus, "ready");
+        assert.deepEqual(findFilter["refundRequest.status"].$nin, [
+            "requested",
+            "refunded"
+        ]);
+        assert.equal(updateFilter.paymentStatus, "paid");
+        assert.equal(
+            update.$set["sellerSettlements.$[settlement].payoutStatus"],
+            "approved"
+        );
+        assert.equal(
+            update.$set["sellerSettlements.$[settlement].payoutApprovedBy"],
+            "507f1f77bcf86cd799439014"
+        );
+        assert.equal(options.arrayFilters[0]["settlement.payoutStatus"], "ready");
+        assert.equal(response.statusCode, 200);
+    } finally {
+        Order.findOne = originalFindOne;
+        Order.updateOne = originalUpdateOne;
+        User.findOne = originalUserFindOne;
     }
 });
 
@@ -1083,7 +1377,7 @@ test("admin cannot cancel a paid order without the refund process", async () => 
 
         assert.equal(response.statusCode, 400);
         assert.equal(saveCalled, false);
-        assert.match(response.body.message, /refund request and review process/i);
+        assert.match(response.body.message, /generic status updates cannot cancel orders/i);
     } finally {
         Order.findById = originalFindById;
     }

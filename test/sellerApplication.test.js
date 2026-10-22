@@ -1,7 +1,9 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const ShopNotification = require("../models/ShopNotification");
+const auth = require("../middleware/auth");
 const sellerController = require("../controllers/sellerController");
 const adminController = require("../controllers/adminController");
 
@@ -100,6 +102,47 @@ test("seller application submission queues admin review without granting seller 
         User.findById = originalFindById;
         User.find = originalFind;
         ShopNotification.bulkWrite = originalBulkWrite;
+    }
+});
+
+test("pending seller applicants are denied protected seller routes", async () => {
+    const originalFindById = User.findById;
+    const originalSecret = process.env.JWT_SECRET;
+    const userId = "507f1f77bcf86cd799439011";
+    process.env.JWT_SECRET = "seller-role-test-secret";
+    auth.invalidate(userId);
+    User.findById = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({
+            role: "customer",
+            isSuspended: false,
+            suspendedReason: ""
+        })
+    });
+
+    try {
+        const response = makeResponse();
+        let nextCalled = false;
+        await auth(["seller"])(
+            {
+                header: () => `Bearer ${jwt.sign({ id: userId }, process.env.JWT_SECRET)}`
+            },
+            response,
+            () => {
+                nextCalled = true;
+            }
+        );
+
+        assert.equal(response.statusCode, 403);
+        assert.equal(response.body.message, "Access Denied");
+        assert.equal(nextCalled, false);
+    } finally {
+        User.findById = originalFindById;
+        auth.invalidate(userId);
+        if (originalSecret === undefined) delete process.env.JWT_SECRET;
+        else process.env.JWT_SECRET = originalSecret;
     }
 });
 

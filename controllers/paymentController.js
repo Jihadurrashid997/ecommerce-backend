@@ -8,17 +8,6 @@ const store_passwd = process.env.SSLC_STORE_PASSWORD;
 
 const is_live = process.env.SSLC_IS_LIVE === "true";
 
-const setSellerPayoutStatus = (order, payoutStatus) => {
-    for (const settlement of order.sellerSettlements || []) {
-        if (
-            settlement.payoutStatus === "awaiting_payment" ||
-            (payoutStatus === "held" && settlement.payoutStatus === "cancelled")
-        ) {
-            settlement.payoutStatus = payoutStatus;
-        }
-    }
-};
-
 const markPaymentAttemptEnded = async (transactionId, paymentStatus) => {
     const order = await Order.findOne({ transactionId })
         .select("_id user");
@@ -229,31 +218,42 @@ exports.initPayment = async (req, res) => {
         transactionId = `TXN_${crypto.randomBytes(12).toString("hex")}`;
 
 
-        // Save transaction information
+        const paymentAttempt = await Order.updateOne(
+            {
+                _id: order._id,
+                user: req.user.id,
+                status: { $ne: "Cancelled" },
+                paymentStatus: order.paymentStatus,
+                transactionId: order.transactionId || "",
+                "refundRequest.status": { $nin: ["requested", "refunded"] }
+            },
+            {
+                $set: {
+                    paymentMethod: "sslcommerz",
+                    transactionId,
+                    paymentStatus: "pending",
+                    shippingAddress: {
+                        name,
+                        phone,
+                        address,
+                        city: city || "Dhaka",
+                        postalCode: postalCode || ""
+                    },
+                    "sellerSettlements.$[settlement].payoutStatus": "awaiting_payment"
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement.payoutStatus": { $in: ["awaiting_payment", "cancelled"] }
+                }]
+            }
+        );
 
-        order.paymentMethod =
-            "sslcommerz";
-
-        order.transactionId =
-            transactionId;
-
-        order.paymentStatus =
-            "pending";
-
-        setSellerPayoutStatus(order, "awaiting_payment");
-
-        order.shippingAddress = {
-
-            name,
-            phone,
-            address,
-            city: city || "Dhaka",
-            postalCode: postalCode || ""
-
-        };
-
-
-        await order.save();
+        if (paymentAttempt.modifiedCount !== 1) {
+            return res.status(409).json({
+                message: "Another payment attempt is active or this order is no longer payable."
+            });
+        }
 
 
         const data = {
@@ -571,12 +571,6 @@ exports.paymentIPN = async (req, res) => {
         } = req.body;
 
 
-        console.log(
-            "SSLCommerz IPN:",
-            req.body
-        );
-
-
         if (!tran_id) {
 
             return res.status(400).json({
@@ -734,12 +728,6 @@ exports.paymentIPN = async (req, res) => {
 
         const validationResponse =
             await sslcz.validate(val_id);
-
-
-        console.log(
-            "SSLCommerz validation response:",
-            validationResponse
-        );
 
 
         const validationStatus =

@@ -9,6 +9,18 @@ const {
     notifyShopAdmins
 } = require("../services/shopNotifications");
 
+const allowedShipmentTransitions = {
+    Pending: ["Processing"],
+    Processing: ["Shipped"],
+    Shipped: ["Delivered"],
+    Delivered: [],
+    Cancelled: []
+};
+
+const canTransitionShipment = (fromStatus, toStatus) =>
+    fromStatus === toStatus ||
+    (allowedShipmentTransitions[fromStatus] || []).includes(toStatus);
+
 const getSafeTrackingUrl = value => {
     if (!value) return "";
     try {
@@ -57,6 +69,15 @@ const getCustomerOrder = order => {
         refundReference: refundRequest.refundReference || "",
         refundedAt: refundRequest.refundedAt || null
     };
+    result.statusHistory = (result.statusHistory || []).map(event => ({
+        fromStatus: event.fromStatus || "",
+        toStatus: event.toStatus,
+        actorRole: event.actorRole,
+        fulfillmentId: event.fulfillmentId || null,
+        note: event.note || "",
+        source: event.source,
+        occurredAt: event.occurredAt || null
+    }));
     return result;
 };
 
@@ -344,6 +365,14 @@ exports.createOrder = async (req, res) => {
                 postalCode: String(shippingAddress?.postalCode || "").trim()
             },
             paymentMethod: "sslcommerz",
+            statusHistory: [{
+                fromStatus: "",
+                toStatus: "Pending",
+                actor: req.user.id,
+                actorRole: "buyer",
+                note: "Order placed.",
+                source: "checkout"
+            }],
             sellerSettlements: Array.from(sellerAmounts, ([seller, amount]) => ({
                 seller,
                 amount,
@@ -503,6 +532,16 @@ exports.cancelOrder = async (req, res) => {
                     status: "Cancelled",
                     "sellerSettlements.$[settlement].deliveryStatus": "Cancelled",
                     "sellerSettlements.$[settlement].payoutStatus": "cancelled"
+                },
+                $push: {
+                    statusHistory: {
+                        fromStatus: "Pending",
+                        toStatus: "Cancelled",
+                        actor: req.user.id,
+                        actorRole: "buyer",
+                        note: "Buyer cancelled the unpaid order.",
+                        source: "buyer"
+                    }
                 }
             },
             {
@@ -775,6 +814,24 @@ exports.updateSellerOrderStatus = async (
         }
 
         const previousStatus = settlement?.deliveryStatus || order.status;
+        if (status === "Cancelled") {
+            return res.status(400).json({
+                message: "Sellers cannot cancel orders from shipment updates. Use the eligible order cancellation or refund process."
+            });
+        }
+        if (status !== previousStatus) {
+            if (order.paymentStatus !== "paid") {
+                return res.status(409).json({
+                    message: "Shipment processing can begin only after payment is verified."
+                });
+            }
+            if (!canTransitionShipment(previousStatus, status)) {
+                return res.status(409).json({
+                    message: `Shipment cannot move directly from ${previousStatus} to ${status}.`
+                });
+            }
+        }
+
         if (settlement) {
             if (
                 (settlement.receiptConfirmedAt || settlement.sellerConfirmedAt) &&
@@ -819,9 +876,30 @@ exports.updateSellerOrderStatus = async (
                     updatedBy: req.user.id
                 });
             }
+            if (statusChanged) {
+                order.statusHistory.push({
+                    fromStatus: previousStatus,
+                    toStatus: status,
+                    actor: req.user.id,
+                    actorRole: "seller",
+                    fulfillmentId: settlement._id,
+                    note: deliveryEvidence,
+                    source: "seller"
+                });
+            }
             updateOverallDeliveryStatus(order);
         } else {
             order.status = status;
+            if (previousStatus !== status) {
+                order.statusHistory.push({
+                    fromStatus: previousStatus,
+                    toStatus: status,
+                    actor: req.user.id,
+                    actorRole: "seller",
+                    note: deliveryEvidence,
+                    source: "seller"
+                });
+            }
         }
 
         await order.save();
@@ -1089,7 +1167,7 @@ exports.getReadySellerPayouts = async (_req, res) => {
             sellerSettlements: {
                 $elemMatch: {
                     deliveryStatus: "Delivered",
-                    payoutStatus: "ready",
+                    payoutStatus: { $in: ["ready", "approved"] },
                     receiptConfirmedAt: { $ne: null },
                     sellerConfirmedAt: { $ne: null }
                 }
@@ -1104,7 +1182,7 @@ exports.getReadySellerPayouts = async (_req, res) => {
         const payouts = orders.flatMap(order =>
             (order.sellerSettlements || [])
                 .filter(settlement =>
-                    settlement.payoutStatus === "ready" &&
+                    ["ready", "approved"].includes(settlement.payoutStatus) &&
                     settlement.deliveryStatus === "Delivered" &&
                     settlement.receiptConfirmedAt &&
                     settlement.sellerConfirmedAt &&
@@ -1125,6 +1203,8 @@ exports.getReadySellerPayouts = async (_req, res) => {
                     },
                     receiptConfirmedAt: settlement.receiptConfirmedAt,
                     sellerConfirmedAt: settlement.sellerConfirmedAt,
+                    payoutStatus: settlement.payoutStatus,
+                    payoutApprovedAt: settlement.payoutApprovedAt || null,
                     courierName: settlement.courierName || "",
                     trackingNumber: settlement.trackingNumber || "",
                     trackingUrl: getSafeTrackingUrl(settlement.trackingUrl),
@@ -1147,6 +1227,117 @@ exports.getReadySellerPayouts = async (_req, res) => {
         return res.status(500).json({
             success: false,
             message: "Could not load seller payouts."
+        });
+    }
+};
+
+exports.approveSellerPayout = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.body?.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+
+    try {
+        const order = await Order.findOne({
+            _id: req.params.id,
+            paymentStatus: "paid",
+            "refundRequest.status": { $nin: ["requested", "refunded"] },
+            sellerSettlements: {
+                $elemMatch: {
+                    _id: req.body.fulfillmentId,
+                    deliveryStatus: "Delivered",
+                    payoutStatus: "ready",
+                    receiptConfirmedAt: { $ne: null },
+                    sellerConfirmedAt: { $ne: null }
+                }
+            }
+        }).select("sellerSettlements");
+
+        const settlement = order?.sellerSettlements?.find(
+            entry => String(entry._id) === String(req.body.fulfillmentId)
+        );
+
+        if (!settlement) {
+            return res.status(409).json({
+                success: false,
+                message: "This payout is not eligible for approval or has already been approved."
+            });
+        }
+
+        const activeSeller = await User.findOne({
+            _id: settlement.seller,
+            role: "seller",
+            isSuspended: { $ne: true }
+        }).select("_id");
+
+        if (!activeSeller) {
+            return res.status(409).json({
+                success: false,
+                message: "The seller is not currently eligible to receive a payout."
+            });
+        }
+
+        if (!settlement.sellerPayoutMethod || !settlement.sellerPayoutAccount) {
+            return res.status(400).json({
+                success: false,
+                message: "The seller's confirmed payout details are missing."
+            });
+        }
+
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.body.fulfillmentId,
+                        deliveryStatus: "Delivered",
+                        payoutStatus: "ready",
+                        receiptConfirmedAt: { $ne: null },
+                        sellerConfirmedAt: { $ne: null }
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$[settlement].payoutStatus": "approved",
+                    "sellerSettlements.$[settlement].payoutApprovedAt": new Date(),
+                    "sellerSettlements.$[settlement].payoutApprovedBy": req.user.id
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.body.fulfillmentId,
+                    "settlement.deliveryStatus": "Delivered",
+                    "settlement.payoutStatus": "ready",
+                    "settlement.receiptConfirmedAt": { $ne: null },
+                    "settlement.sellerConfirmedAt": { $ne: null }
+                }]
+            }
+        );
+
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "This payout is not eligible for approval or has already been approved."
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: "Seller payout approved. Record it only after the manual transfer succeeds."
+        });
+    } catch (error) {
+        console.error("APPROVE SELLER PAYOUT ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not approve seller payout."
         });
     }
 };
@@ -1188,7 +1379,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
                 $elemMatch: {
                     _id: req.body.fulfillmentId,
                     deliveryStatus: "Delivered",
-                    payoutStatus: "ready",
+                    payoutStatus: "approved",
                     receiptConfirmedAt: { $ne: null },
                     sellerConfirmedAt: { $ne: null }
                 }
@@ -1228,7 +1419,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
                     $elemMatch: {
                         _id: req.body.fulfillmentId,
                         deliveryStatus: "Delivered",
-                        payoutStatus: "ready",
+                        payoutStatus: "approved",
                         receiptConfirmedAt: { $ne: null },
                         sellerConfirmedAt: { $ne: null }
                     }
@@ -1247,7 +1438,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
                 arrayFilters: [{
                     "settlement._id": req.body.fulfillmentId,
                     "settlement.deliveryStatus": "Delivered",
-                    "settlement.payoutStatus": "ready",
+                    "settlement.payoutStatus": "approved",
                     "settlement.receiptConfirmedAt": { $ne: null },
                     "settlement.sellerConfirmedAt": { $ne: null }
                 }]
@@ -1675,6 +1866,11 @@ exports.updateOrderStatus = async (
                 message: "Invalid order status"
             });
         }
+        if (status === "Cancelled") {
+            return res.status(400).json({
+                message: "Use the eligible customer cancellation or refund workflow; generic status updates cannot cancel orders."
+            });
+        }
 
         const order = await Order.findById(req.params.id);
 
@@ -1707,12 +1903,66 @@ exports.updateOrderStatus = async (
             });
         }
 
-        order.status = status;
-        for (const settlement of order.sellerSettlements || []) {
-            settlement.deliveryStatus = status;
-            if (status === "Cancelled" && settlement.payoutStatus !== "paid") {
-                settlement.payoutStatus = "cancelled";
+        const previousOrderStatus = order.status;
+        const settlements = order.sellerSettlements || [];
+        if (status !== order.status && order.paymentStatus !== "paid") {
+            return res.status(409).json({
+                message: "Order fulfillment can progress only after payment is verified."
+            });
+        }
+        if (!canTransitionShipment(order.status, status)) {
+            return res.status(409).json({
+                message: `Order cannot move directly from ${order.status} to ${status}.`
+            });
+        }
+        for (const settlement of settlements) {
+            if (!canTransitionShipment(settlement.deliveryStatus, status)) {
+                return res.status(409).json({
+                    message: `A seller shipment cannot move directly from ${settlement.deliveryStatus} to ${status}.`
+                });
             }
+            if (status === "Delivered" && !settlement.deliveryEvidence) {
+                return res.status(409).json({
+                    message: "Every shipment must have delivery evidence before the order can be marked delivered."
+                });
+            }
+        }
+
+        order.status = status;
+        for (const settlement of settlements) {
+            const previousStatus = settlement.deliveryStatus;
+            settlement.deliveryStatus = status;
+            if (previousStatus !== status) {
+                settlement.shipmentHistory.push({
+                    status,
+                    courierName: settlement.courierName || "",
+                    trackingNumber: settlement.trackingNumber || "",
+                    trackingUrl: settlement.trackingUrl || "",
+                    note: "Status updated manually by an administrator.",
+                    source: "manual",
+                    updatedBy: req.user.id
+                });
+                if (status === "Delivered") {
+                    settlement.deliveredAt = new Date();
+                }
+                order.statusHistory.push({
+                    fromStatus: previousStatus,
+                    toStatus: status,
+                    actor: req.user.id,
+                    actorRole: "admin",
+                    fulfillmentId: settlement._id,
+                    source: "admin"
+                });
+            }
+        }
+        if (!settlements.length && previousOrderStatus !== status) {
+            order.statusHistory.push({
+                fromStatus: previousOrderStatus,
+                toStatus: status,
+                actor: req.user.id,
+                actorRole: "admin",
+                source: "admin"
+            });
         }
         await order.save();
 
