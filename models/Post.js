@@ -36,6 +36,22 @@ const mediaSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const reactionSchema = new mongoose.Schema(
+    {
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        },
+        type: {
+            type: String,
+            enum: ["like", "love", "haha", "wow", "sad", "angry"],
+            required: true
+        }
+    },
+    { _id: false }
+);
+
 const postSchema = new mongoose.Schema(
     {
         author: {
@@ -52,10 +68,24 @@ const postSchema = new mongoose.Schema(
             index: true
         },
 
+        visibility: {
+            type: String,
+            enum: ["public", "followers", "private"],
+            default: "public",
+            index: true
+        },
+
         kind: {
             type: String,
             enum: ["post", "reel"],
             required: true,
+            index: true
+        },
+
+        originalPost: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Post",
+            default: null,
             index: true
         },
 
@@ -72,6 +102,7 @@ const postSchema = new mongoose.Schema(
                 validator(v) {
                     return Array.isArray(v) && (
                         v.length > 0 ||
+                        Boolean(this.originalPost) ||
                         (this.kind === "post" && Boolean(this.caption?.trim()))
                     );
                 },
@@ -86,6 +117,11 @@ const postSchema = new mongoose.Schema(
             }
         ],
 
+        reactions: {
+            type: [reactionSchema],
+            default: []
+        },
+
         comments: [commentSchema],
 
         views: {
@@ -98,5 +134,9 @@ const postSchema = new mongoose.Schema(
 
 postSchema.index({ kind: 1, createdAt: -1 });
 postSchema.index({ community: 1, kind: 1, createdAt: -1 });
+postSchema.index(
+    { author: 1, originalPost: 1 },
+    { unique: true, partialFilterExpression: { originalPost: { $type: "objectId" } } }
+);
 
 module.exports = mongoose.model("Post", postSchema);

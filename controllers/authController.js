@@ -11,11 +11,17 @@ const crypto =
     require("crypto");
 const DeviceSession =
     require("../models/DeviceSession");
+const auth =
+    require("../middleware/auth");
 
-const {
-    sendPasswordResetEmail,
-    isEmailConfigured
-} = require("../services/emailService");
+const emailService =
+    require("../services/emailService");
+const googleAuthService =
+    require("../services/googleAuthService");
+
+const CODE_TTL_MS = 10 * 60 * 1000;
+const CODE_RESEND_DELAY_MS = 60 * 1000;
+const MAX_CODE_ATTEMPTS = 5;
 
 
 /*
@@ -83,6 +89,25 @@ const createDeviceToken = async (user, req) => {
     };
 };
 
+const hashCode = value => {
+    if (!process.env.JWT_SECRET) {
+        throw new Error("JWT_SECRET is not configured on the server");
+    }
+    return crypto
+        .createHmac("sha256", process.env.JWT_SECRET)
+        .update(String(value))
+        .digest("hex");
+};
+
+const createVerificationCode = () =>
+    String(crypto.randomInt(100000, 1_000_000));
+
+const genericResendResponse = res =>
+    res.json({
+        success: true,
+        message: "If the account needs verification, a new code will be sent."
+    });
+
 
 const safeUser = (user) => {
 
@@ -114,6 +139,9 @@ const safeUser = (user) => {
 
         isVerified:
             Boolean(user.isVerified),
+
+        emailVerified:
+            user.emailVerified === true,
 
         createdAt:
             user.createdAt
@@ -176,6 +204,13 @@ exports.register = async (
 
         }
 
+        if (cleanName.length > 100) {
+            return res.status(400).json({
+                success: false,
+                message: "Name must be 100 characters or fewer."
+            });
+        }
+
 
         if (
             !/^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -195,7 +230,8 @@ exports.register = async (
 
 
         if (
-            cleanPassword.length < 8
+            cleanPassword.length < 8 ||
+            Buffer.byteLength(cleanPassword, "utf8") > 72
         ) {
 
             return res.status(400).json({
@@ -203,12 +239,11 @@ exports.register = async (
                 success: false,
 
                 message:
-                    "Password must be at least 8 characters"
+                    "Password must be 8 to 72 bytes long"
 
             });
 
         }
-
 
         /*
         CHECK EXISTING USER
@@ -269,27 +304,14 @@ exports.register = async (
 
             });
 
-
-        /*
-        CREATE TOKEN
-        */
-
-        const { token, deviceId } =
-            await createDeviceToken(user, req);
-
-
         return res.status(201).json({
 
             success: true,
 
             message:
-                "Registration successful",
-
-            token,
-            deviceId,
-
-            user:
-                safeUser(user)
+                "Registration successful. You can now sign in.",
+            verificationRequired: false,
+            email: normalizedEmail
 
         });
 
@@ -329,6 +351,309 @@ exports.register = async (
 
     }
 
+};
+
+exports.googleAuth = async (req, res) => {
+    const credential = String(req.body?.credential || "").trim();
+    if (!credential || credential.length > 8192) {
+        return res.status(400).json({
+            success: false,
+            message: "A valid Google credential is required."
+        });
+    }
+
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        return res.status(503).json({
+            success: false,
+            code: "GOOGLE_AUTH_NOT_CONFIGURED",
+            message: "Google sign-in is not configured. Please use email and password."
+        });
+    }
+
+    try {
+        let identity;
+        try {
+            identity = await googleAuthService.verifyCredential(credential);
+        } catch (error) {
+            console.error("GOOGLE AUTH TOKEN VERIFICATION ERROR:", error);
+            return res.status(401).json({
+                success: false,
+                message: "Google sign-in could not be verified. Please try again."
+            });
+        }
+
+        const normalizedEmail = String(identity.email || "")
+            .trim()
+            .toLowerCase();
+        const googleId = String(identity.googleId || "").trim();
+        if (
+            !googleId ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
+            identity.emailVerified !== true
+        ) {
+            return res.status(401).json({
+                success: false,
+                message: "Google sign-in requires a verified Google email address."
+            });
+        }
+
+        let user = await User.findOne({ googleId }).select("+googleId");
+        let isNewUser = false;
+
+        if (!user) {
+            user = await User.findOne({ email: normalizedEmail })
+                .select("+googleId");
+
+            if (user) {
+                if (user.googleId && user.googleId !== googleId) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "This email is already connected to another Google account."
+                    });
+                }
+
+                const linkedAt = new Date();
+                const linkResult = await User.updateOne(
+                    {
+                        _id: user._id,
+                        $or: [
+                            { googleId: { $exists: false } },
+                            { googleId: null },
+                            { googleId: "" },
+                            { googleId }
+                        ]
+                    },
+                    {
+                        $set: {
+                            googleId,
+                            emailVerified: true,
+                            emailVerifiedAt: linkedAt
+                        }
+                    }
+                );
+
+                if (!linkResult.matchedCount) {
+                    return res.status(409).json({
+                        success: false,
+                        message: "This account could not be connected to Google. Please sign in with your existing method."
+                    });
+                }
+
+                user.googleId = googleId;
+                user.emailVerified = true;
+                user.emailVerifiedAt = linkedAt;
+            } else {
+                const randomPassword = crypto.randomBytes(32).toString("hex");
+                try {
+                    user = await User.create({
+                        name: String(identity.name || normalizedEmail.split("@")[0])
+                            .trim()
+                            .slice(0, 100) || "E Top User",
+                        email: normalizedEmail,
+                        password: await bcrypt.hash(randomPassword, 12),
+                        googleId,
+                        emailVerified: true,
+                        emailVerifiedAt: new Date(),
+                        role: "customer"
+                    });
+                    isNewUser = true;
+                } catch (error) {
+                    if (error.code !== 11000) {
+                        throw error;
+                    }
+                    user = await User.findOne({ googleId })
+                        .select("+googleId");
+                    if (!user) {
+                        return res.status(409).json({
+                            success: false,
+                            message: "An account already exists with this email. Please sign in using your existing method."
+                        });
+                    }
+                }
+            }
+        }
+
+        if (user.isSuspended) {
+            return res.status(403).json({
+                success: false,
+                message: "Your account has been suspended." +
+                    (user.suspendedReason
+                        ? ` Reason: ${user.suspendedReason}`
+                        : "")
+            });
+        }
+
+        const { token, deviceId } = await createDeviceToken(user, req);
+        return res.status(isNewUser ? 201 : 200).json({
+            success: true,
+            message: isNewUser
+                ? "Google registration successful."
+                : "Google sign-in successful.",
+            isNewUser,
+            token,
+            deviceId,
+            user: safeUser(user)
+        });
+    } catch (error) {
+        console.error("GOOGLE AUTH ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Google sign-in failed. Please try again."
+        });
+    }
+};
+
+exports.resendVerification = async (req, res) => {
+    try {
+        const email = String(req.body?.email || "")
+            .trim()
+            .toLowerCase();
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required."
+            });
+        }
+        if (!emailService.isEmailConfigured()) {
+            return res.status(503).json({
+                success: false,
+                code: "EMAIL_NOT_CONFIGURED",
+                message: "Email verification is not configured. Please contact support."
+            });
+        }
+
+        const user = await User.findOne({ email }).select(
+            "+emailVerificationLastSentAt"
+        );
+        if (!user || user.emailVerified === true) {
+            return genericResendResponse(res);
+        }
+        if (
+            user.emailVerificationLastSentAt &&
+            Date.now() - user.emailVerificationLastSentAt.getTime() <
+                CODE_RESEND_DELAY_MS
+        ) {
+            return genericResendResponse(res);
+        }
+
+        const code = createVerificationCode();
+        const now = new Date();
+        await User.updateOne(
+            { _id: user._id, emailVerified: { $ne: true } },
+            {
+                $set: {
+                    emailVerificationCodeHash: hashCode(code),
+                    emailVerificationExpires: new Date(
+                        now.getTime() + CODE_TTL_MS
+                    ),
+                    emailVerificationAttempts: 0,
+                    emailVerificationLastSentAt: now
+                }
+            }
+        );
+
+        const emailResult = await emailService.sendVerificationEmail({
+            to: user.email,
+            name: user.name,
+            code
+        });
+        if (!emailResult.sent) {
+            await User.updateOne(
+                { _id: user._id },
+                { $unset: { emailVerificationLastSentAt: "" } }
+            );
+            return res.status(503).json({
+                success: false,
+                message: "We couldn't send the verification code. Please try again later."
+            });
+        }
+
+        return genericResendResponse(res);
+    } catch (error) {
+        console.error("RESEND EMAIL VERIFICATION ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not send a verification code. Please try again."
+        });
+    }
+};
+
+exports.verifyEmail = async (req, res) => {
+    try {
+        const email = String(req.body?.email || "")
+            .trim()
+            .toLowerCase();
+        const code = String(req.body?.code || "").trim();
+        if (!email || !/^\d{6}$/.test(code)) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter your email and the 6-digit verification code."
+            });
+        }
+
+        const now = new Date();
+        const verifiedUser = await User.findOneAndUpdate(
+            {
+                email,
+                emailVerified: false,
+                emailVerificationCodeHash: hashCode(code),
+                emailVerificationExpires: { $gt: now },
+                emailVerificationAttempts: { $lt: MAX_CODE_ATTEMPTS }
+            },
+            {
+                $set: {
+                    emailVerified: true,
+                    emailVerifiedAt: now
+                },
+                $unset: {
+                    emailVerificationCodeHash: "",
+                    emailVerificationExpires: "",
+                    emailVerificationAttempts: "",
+                    emailVerificationLastSentAt: ""
+                }
+            },
+            { new: true }
+        ).select("_id");
+
+        if (verifiedUser) {
+            auth.invalidate(verifiedUser._id);
+            return res.json({
+                success: true,
+                message: "Email verified. You can now sign in."
+            });
+        }
+
+        await User.updateOne(
+            {
+                email,
+                emailVerified: false,
+                emailVerificationExpires: { $gt: now },
+                emailVerificationAttempts: { $lt: MAX_CODE_ATTEMPTS }
+            },
+            { $inc: { emailVerificationAttempts: 1 } }
+        );
+
+        const existingUser = await User.findOne({ email }).select(
+            "emailVerified"
+        );
+        if (existingUser?.emailVerified === true) {
+            return res.json({
+                success: true,
+                message: "Email is already verified. You can sign in."
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            message: "That code is incorrect, expired, or has reached its attempt limit."
+        });
+    } catch (error) {
+        console.error("VERIFY EMAIL ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not verify your email. Please try again."
+        });
+    }
 };
 
 
@@ -500,7 +825,6 @@ exports.login = async (
 
         }
 
-
         /*
         AUTO-MIGRATE LEGACY PASSWORD
         */
@@ -666,7 +990,7 @@ exports.forgotPassword = async (req, res) => {
 
         }
 
-        if (!isEmailConfigured()) {
+        if (!emailService.isEmailConfigured()) {
             return res.status(503).json({
                 success: false,
                 message: "Password reset email is not configured. Please contact support."
@@ -674,7 +998,9 @@ exports.forgotPassword = async (req, res) => {
         }
 
         const user =
-            await User.findOne({ email });
+            await User.findOne({ email }).select(
+                "+resetPasswordLastSentAt"
+            );
 
         /*
          * Always respond with the same success message
@@ -693,29 +1019,33 @@ exports.forgotPassword = async (req, res) => {
             return res.json(genericResponse);
         }
 
-        const code =
-            String(
-                crypto.randomInt(100000, 999999)
-            );
+        if (
+            user.resetPasswordLastSentAt &&
+            Date.now() - user.resetPasswordLastSentAt.getTime() <
+                CODE_RESEND_DELAY_MS
+        ) {
+            return res.json(genericResponse);
+        }
 
-        const hashedCode =
-            crypto
-                .createHash("sha256")
-                .update(code)
-                .digest("hex");
+        const code = createVerificationCode();
+        const now = new Date();
+        const hashedCode = hashCode(code);
 
         await User.updateOne(
             { _id: user._id },
             {
                 $set: {
                     resetPasswordToken: hashedCode,
-                    resetPasswordExpires: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+                    resetPasswordExpires: new Date(
+                        now.getTime() + CODE_TTL_MS
+                    ),
+                    resetPasswordAttempts: 0
                 }
             }
         );
 
         const emailResult =
-            await sendPasswordResetEmail({
+            await emailService.sendPasswordResetEmail({
                 to: user.email,
                 name: user.name,
                 code
@@ -733,7 +1063,8 @@ exports.forgotPassword = async (req, res) => {
                 {
                     $unset: {
                         resetPasswordToken: "",
-                        resetPasswordExpires: ""
+                        resetPasswordExpires: "",
+                        resetPasswordAttempts: ""
                     }
                 }
             );
@@ -744,6 +1075,11 @@ exports.forgotPassword = async (req, res) => {
             });
 
         }
+
+        await User.updateOne(
+            { _id: user._id },
+            { $set: { resetPasswordLastSentAt: now } }
+        );
 
         return res.json(genericResponse);
 
@@ -784,7 +1120,7 @@ exports.verifyResetCode = async (req, res) => {
         const code =
             String(req.body?.code || "").trim();
 
-        if (!email || !code) {
+        if (!email || !/^\d{6}$/.test(code)) {
 
             return res.status(400).json({
                 success: false,
@@ -793,49 +1129,59 @@ exports.verifyResetCode = async (req, res) => {
 
         }
 
-        const hashedCode =
-            crypto
-                .createHash("sha256")
-                .update(code)
-                .digest("hex");
-
-        const user =
-            await User.findOne({
+        const now = new Date();
+        const hashedCode = hashCode(code);
+        const user = await User.findOne({
                 email,
                 resetPasswordToken: hashedCode,
-                resetPasswordExpires: { $gt: Date.now() }
-            }).select("+resetPasswordToken +resetPasswordExpires");
+                resetPasswordExpires: { $gt: now },
+                resetPasswordAttempts: { $lt: MAX_CODE_ATTEMPTS }
+            }).select(
+                "+resetPasswordToken +resetPasswordExpires +resetPasswordAttempts"
+            );
 
         if (!user) {
-
+            await User.updateOne(
+                {
+                    email,
+                    resetPasswordExpires: { $gt: now },
+                    resetPasswordAttempts: { $lt: MAX_CODE_ATTEMPTS }
+                },
+                { $inc: { resetPasswordAttempts: 1 } }
+            );
             return res.status(400).json({
                 success: false,
-                message: "That code is incorrect or has expired."
+                message: "That code is incorrect, expired, or has reached its attempt limit."
             });
-
         }
 
-        // One-time use - clear it now that it's been
-        // verified, so it can't be replayed.
-        await User.updateOne(
-            { _id: user._id },
+        const resetToken = crypto.randomBytes(32).toString("hex");
+        const resetSession = await User.findOneAndUpdate(
             {
+                _id: user._id,
+                resetPasswordToken: hashedCode,
+                resetPasswordExpires: { $gt: now },
+                resetPasswordAttempts: { $lt: MAX_CODE_ATTEMPTS }
+            },
+            {
+                $set: {
+                    resetSessionTokenHash: hashCode(resetToken),
+                    resetSessionExpires: new Date(now.getTime() + 15 * 60 * 1000)
+                },
                 $unset: {
                     resetPasswordToken: "",
-                    resetPasswordExpires: ""
+                    resetPasswordExpires: "",
+                    resetPasswordAttempts: ""
                 }
-            }
-        );
-
-        const resetToken =
-            jwt.sign(
-                {
-                    id: user._id,
-                    purpose: "password-reset"
-                },
-                process.env.JWT_SECRET,
-                { expiresIn: "15m" }
-            );
+            },
+            { new: true }
+        ).select("_id");
+        if (!resetSession) {
+            return res.status(400).json({
+                success: false,
+                message: "That code is incorrect, expired, or has already been used."
+            });
+        }
 
         return res.json({
             success: true,
@@ -859,101 +1205,94 @@ exports.verifyResetCode = async (req, res) => {
 /*
 =========================================================
 RESET PASSWORD (step 3 of 3)
-Takes the short-lived resetToken from step 2 and sets
-the new password.
+Consumes a random, hashed, one-time reset token.
 =========================================================
 */
 
 exports.resetPassword = async (req, res) => {
-
     try {
+        const resetToken = String(req.body?.resetToken || "");
+        const password = String(req.body?.password || "");
 
-        const resetToken =
-            req.body?.resetToken;
-
-        const password =
-            String(req.body?.password || "");
-
-        if (!resetToken || !password) {
-
+        if (!/^[a-f\d]{64}$/i.test(resetToken) || !password) {
             return res.status(400).json({
                 success: false,
                 message: "Missing verification. Please verify your code again."
             });
-
         }
 
-        if (password.length < 8) {
-
+        if (
+            password.length < 8 ||
+            Buffer.byteLength(password, "utf8") > 72
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Password must be at least 8 characters."
+                message: "Password must be 8 to 72 bytes long."
             });
-
         }
 
-        let decoded;
-
-        try {
-
-            decoded =
-                jwt.verify(
-                    resetToken,
-                    process.env.JWT_SECRET
-                );
-
-        } catch (_) {
-
-            return res.status(400).json({
-                success: false,
-                message: "This session has expired. Please request a new code."
-            });
-
-        }
-
-        if (decoded?.purpose !== "password-reset") {
-
-            return res.status(400).json({
-                success: false,
-                message: "Invalid reset session."
-            });
-
-        }
-
-        const user =
-            await User.findById(decoded.id);
-
+        const now = new Date();
+        const tokenHash = hashCode(resetToken);
+        const user = await User.findOne({
+            resetSessionTokenHash: tokenHash,
+            resetSessionExpires: { $gt: now }
+        }).select("_id");
         if (!user) {
-
             return res.status(400).json({
                 success: false,
-                message: "Account not found."
+                message: "This reset session is invalid or expired. Please request a new code."
             });
-
         }
 
-        const hashedPassword =
-            await bcrypt.hash(password, 12);
+        const hashedPassword = await bcrypt.hash(password, 12);
 
-        await User.updateOne(
-            { _id: user._id },
-            { $set: { password: hashedPassword } }
-        );
+        await DeviceSession.deleteMany({ user: user._id });
+        const updated = await User.findOneAndUpdate(
+            {
+                _id: user._id,
+                resetSessionTokenHash: tokenHash,
+                resetSessionExpires: { $gt: now }
+            },
+            {
+                $set: {
+                    password: hashedPassword,
+                    emailVerified: true,
+                    emailVerifiedAt: now
+                },
+                $unset: {
+                    resetSessionTokenHash: "",
+                    resetSessionExpires: "",
+                    resetPasswordToken: "",
+                    resetPasswordExpires: "",
+                    resetPasswordAttempts: "",
+                    resetPasswordLastSentAt: "",
+                    emailVerificationCodeHash: "",
+                    emailVerificationExpires: "",
+                    emailVerificationAttempts: "",
+                    emailVerificationLastSentAt: ""
+                }
+            },
+            { new: true }
+        ).select("_id");
+
+        if (!updated) {
+            return res.status(400).json({
+                success: false,
+                message: "This reset session is invalid or has already been used."
+            });
+        }
+
+        auth.invalidate(updated._id);
 
         return res.json({
             success: true,
             message: "Your password has been reset. You can now log in."
         });
-
     } catch (error) {
-
         console.error("RESET PASSWORD ERROR:", error);
-
         return res.status(500).json({
             success: false,
             message: "Something went wrong. Please try again."
         });
-
     }
-
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 
 import {
@@ -12,13 +12,16 @@ import {
     FaUserShield,
     FaBell,
     FaCog,
+    FaEllipsisH,
     FaCheck,
-    FaTrash
+    FaTrash,
+    FaBookmark
 } from "react-icons/fa";
 
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useApp } from "../context/AppContext";
+import api from "../services/api";
 import EtopLogo from "./EtopLogo";
 import "../styles/EtopLogo.css";
 
@@ -30,30 +33,60 @@ const Navbar = () => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [searchText, setSearchText] = useState("");
     const [notificationsOpen, setNotificationsOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+    const [notificationError, setNotificationError] = useState("");
     const notificationRef = useRef(null);
+    const settingsRef = useRef(null);
 
-    const {
-        user,
-        logout,
-        notifications,
-        setNotifications,
-        markNotificationRead,
-        clearNotifications,
-        unreadNotificationCount
-    } = useApp();
+    const { user, logout } = useApp();
     const navigate = useNavigate();
     const location = useLocation();
+
+    const loadNotifications = useCallback(async () => {
+        if (!user) {
+            setNotifications([]);
+            setUnreadNotificationCount(0);
+            return;
+        }
+        try {
+            const response = await api.get("/notifications", { params: { limit: 20 } });
+            setNotifications(response.data.notifications || []);
+            setUnreadNotificationCount(response.data.unreadCount || 0);
+            setNotificationError("");
+        } catch (error) {
+            console.error("LOAD PLATFORM NOTIFICATIONS ERROR:", error);
+            setNotificationError(error.response?.data?.message || "Could not load notifications.");
+        }
+    }, [user]);
+
+    useEffect(() => {
+        loadNotifications();
+        if (!user) return undefined;
+        const refresh = () => loadNotifications();
+        const interval = window.setInterval(refresh, 30000);
+        window.addEventListener("focus", refresh);
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener("focus", refresh);
+        };
+    }, [loadNotifications, user]);
 
     useEffect(() => {
         const closeNotifications = event => {
             if (!notificationRef.current?.contains(event.target)) {
                 setNotificationsOpen(false);
             }
+            if (!settingsRef.current?.contains(event.target)) {
+                setSettingsOpen(false);
+            }
         };
 
         const closeOnEscape = event => {
             if (event.key === "Escape") {
                 setNotificationsOpen(false);
+                setSettingsOpen(false);
             }
         };
 
@@ -126,6 +159,50 @@ const Navbar = () => {
         closeMenu();
 
         navigate("/login");
+    };
+
+    const markAllNotificationsRead = async () => {
+        try {
+            await api.patch("/notifications/read-all");
+            const readAt = new Date().toISOString();
+            setNotifications(previous => previous.map(item => ({ ...item, readAt })));
+            setUnreadNotificationCount(0);
+        } catch (error) {
+            console.error("MARK ALL PLATFORM NOTIFICATIONS READ ERROR:", error);
+            setNotificationError(error.response?.data?.message || "Could not update notifications.");
+        }
+    };
+
+    const clearAllNotifications = async () => {
+        try {
+            await api.delete("/notifications");
+            setNotifications([]);
+            setUnreadNotificationCount(0);
+            setNotificationError("");
+        } catch (error) {
+            console.error("CLEAR PLATFORM NOTIFICATIONS ERROR:", error);
+            setNotificationError(error.response?.data?.message || "Could not clear notifications.");
+        }
+    };
+
+    const openNotification = async notification => {
+        if (!notification.readAt) {
+            try {
+                await api.patch(`/notifications/${notification._id}/read`);
+                setNotifications(previous => previous.map(item =>
+                    item._id === notification._id
+                        ? { ...item, readAt: new Date().toISOString() }
+                        : item
+                ));
+                setUnreadNotificationCount(count => Math.max(0, count - 1));
+            } catch (error) {
+                console.error("MARK PLATFORM NOTIFICATION READ ERROR:", error);
+                setNotificationError(error.response?.data?.message || "Could not update this notification.");
+                return;
+            }
+        }
+        setNotificationsOpen(false);
+        if (notification.link) navigate(notification.link);
     };
 
 
@@ -367,6 +444,31 @@ const Navbar = () => {
                 }
                 variants={navContainer}
             >
+
+                {user && (
+                    <motion.li
+                        className="jr-mobile-search-item"
+                        variants={navItem}
+                    >
+                        <form
+                            className="jr-mobile-search-form"
+                            role="search"
+                            onSubmit={handleSearch}
+                        >
+                            <FaSearch aria-hidden="true" />
+                            <input
+                                type="search"
+                                value={searchText}
+                                onChange={event => setSearchText(event.target.value)}
+                                placeholder="Search profiles..."
+                                aria-label="Search profiles"
+                            />
+                            <button type="submit" aria-label="Search profiles">
+                                Search
+                            </button>
+                        </form>
+                    </motion.li>
+                )}
 
                 {/* HOME */}
 
@@ -629,6 +731,16 @@ const Navbar = () => {
 
             {user && (
                 <div className="jr-header-actions">
+                    <Link
+                        to="/profile"
+                        className={`jr-header-action jr-profile-action${isActive("/profile") ? " is-active" : ""}`}
+                        aria-label="Your profile"
+                        title="Profile"
+                        onClick={closeMenu}
+                    >
+                        <FaUserCircle />
+                    </Link>
+
                     <div className="jr-notification-wrap" ref={notificationRef}>
                         <button
                             type="button"
@@ -669,12 +781,7 @@ const Navbar = () => {
                                                 title="Mark all as read"
                                                 aria-label="Mark all notifications as read"
                                                 onClick={() =>
-                                                    setNotifications(previous =>
-                                                        previous.map(notification => ({
-                                                            ...notification,
-                                                            read: true
-                                                        }))
-                                                    )
+                                                    markAllNotificationsRead()
                                                 }
                                             >
                                                 <FaCheck />
@@ -685,7 +792,7 @@ const Navbar = () => {
                                                 type="button"
                                                 title="Clear notifications"
                                                 aria-label="Clear all notifications"
-                                                onClick={clearNotifications}
+                                                onClick={clearAllNotifications}
                                             >
                                                 <FaTrash />
                                             </button>
@@ -693,18 +800,24 @@ const Navbar = () => {
                                     </div>
                                 </div>
 
+                                {notificationError && (
+                                    <p className="jr-notifications-error" role="alert">{notificationError}</p>
+                                )}
                                 {notifications.length ? (
                                     <div className="jr-notification-list">
                                         {notifications.slice(0, 8).map(notification => (
                                             <button
                                                 type="button"
-                                                key={notification.id}
-                                                className={`jr-notification-item${notification.read ? "" : " is-unread"}`}
-                                                onClick={() => markNotificationRead(notification.id)}
+                                                key={notification._id}
+                                                className={`jr-notification-item${notification.readAt ? "" : " is-unread"}`}
+                                                onClick={() => openNotification(notification)}
                                             >
                                                 <span className={`jr-notification-dot type-${notification.type || "info"}`} />
                                                 <span className="jr-notification-content">
-                                                    <span>{notification.message}</span>
+                                                    <strong>{notification.title}</strong>
+                                                    <span>{notification.actor?.name
+                                                        ? `${notification.actor.name}: ${notification.message}`
+                                                        : notification.message}</span>
                                                     <time dateTime={notification.createdAt}>
                                                         {notification.createdAt
                                                             ? new Date(notification.createdAt).toLocaleString()
@@ -724,15 +837,47 @@ const Navbar = () => {
                         )}
                     </div>
 
-                    <Link
-                        to="/edit-profile"
-                        className="jr-header-action jr-settings-action"
-                        aria-label="Settings"
-                        title="Settings"
-                        onClick={closeMenu}
-                    >
-                        <FaCog />
-                    </Link>
+                    <div className="jr-settings-wrap" ref={settingsRef}>
+                        <button
+                            type="button"
+                            className={`jr-header-action jr-settings-action${settingsOpen ? " is-active" : ""}`}
+                            aria-label="Open settings menu"
+                            aria-expanded={settingsOpen}
+                            aria-controls="jr-settings-menu"
+                            title="More options"
+                            onClick={() => {
+                                setSettingsOpen(open => !open);
+                                setNotificationsOpen(false);
+                            }}
+                        >
+                            <FaEllipsisH />
+                        </button>
+
+                        {settingsOpen && (
+                            <div className="jr-settings-menu" id="jr-settings-menu">
+                                <Link
+                                    to="/settings"
+                                    onClick={() => {
+                                        setSettingsOpen(false);
+                                        closeMenu();
+                                    }}
+                                >
+                                    <FaCog />
+                                    <span>Settings</span>
+                                </Link>
+                                <Link
+                                    to="/saved"
+                                    onClick={() => {
+                                        setSettingsOpen(false);
+                                        closeMenu();
+                                    }}
+                                >
+                                    <FaBookmark />
+                                    <span>Saved posts</span>
+                                </Link>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 

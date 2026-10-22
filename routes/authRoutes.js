@@ -7,6 +7,9 @@ const router =
 
 const {
     register,
+    googleAuth,
+    verifyEmail,
+    resendVerification,
     login,
     me,
     forgotPassword,
@@ -43,6 +46,11 @@ router.post(
     "/register",
     register
 );
+
+router.post("/google", googleAuth);
+
+router.post("/verify-email", verifyEmail);
+router.post("/resend-verification", resendVerification);
 
 
 /*

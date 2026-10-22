@@ -22,6 +22,8 @@ import {
 } from "framer-motion";
 
 import api from "../services/api";
+import { googleAuthUser } from "../services/auth";
+import GoogleAuthButton from "../components/GoogleAuthButton";
 
 import EtopLogo from "../components/EtopLogo";
 
@@ -32,6 +34,7 @@ import {
 } from "../context/AppContext";
 
 import "../styles/Login.css";
+import "../styles/GoogleAuthButton.css";
 
 
 const Login = () => {
@@ -72,6 +75,12 @@ const Login = () => {
         setLoading
     ] = useState(false);
 
+    const [
+        googleLoading,
+        setGoogleLoading
+    ] = useState(false);
+
+    const authBusy = loading || googleLoading;
 
     const [
         showPassword,
@@ -83,7 +92,6 @@ const Login = () => {
         error,
         setError
     ] = useState("");
-
 
     /*
     =====================================================
@@ -176,7 +184,6 @@ const Login = () => {
             setError("");
 
         }
-
     };
 
 
@@ -192,7 +199,7 @@ const Login = () => {
             e.preventDefault();
 
 
-            if (loading) {
+            if (authBusy) {
                 return;
             }
 
@@ -226,8 +233,6 @@ const Login = () => {
 
             setLoading(true);
             setError("");
-
-
             try {
 
                 /*
@@ -379,7 +384,6 @@ const Login = () => {
                 const serverMessage =
                     err.response?.data?.message;
 
-
                 if (
                     serverMessage
                 ) {
@@ -427,6 +431,32 @@ const Login = () => {
             }
 
         };
+
+    const handleGoogleCredential = async credential => {
+        if (authBusy) {
+            return;
+        }
+
+        setGoogleLoading(true);
+        setError("");
+        try {
+            const response = await googleAuthUser(credential);
+            setUser(response.data.user);
+            const requestedPage = location.state?.from;
+            navigate(
+                typeof requestedPage === "string" ? requestedPage : "/",
+                { replace: true }
+            );
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                err.message ||
+                "Google sign-in failed. Please try again."
+            );
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
 
 
     /*
@@ -607,7 +637,6 @@ const Login = () => {
 
                 )}
 
-
                 {/* FORM */}
 
                 <form
@@ -652,9 +681,7 @@ const Login = () => {
 
                                 autoComplete="email"
 
-                                disabled={
-                                    loading
-                                }
+                                disabled={authBusy}
 
                                 required
                             />
@@ -703,9 +730,7 @@ const Login = () => {
 
                                 autoComplete="current-password"
 
-                                disabled={
-                                    loading
-                                }
+                                disabled={authBusy}
 
                                 required
                             />
@@ -723,9 +748,7 @@ const Login = () => {
                                     )
                                 }
 
-                                disabled={
-                                    loading
-                                }
+                                disabled={authBusy}
 
                                 aria-label={
                                     showPassword
@@ -764,11 +787,11 @@ const Login = () => {
                         className="login-submit-btn"
 
                         disabled={
-                            loading
+                            authBusy
                         }
 
                         whileHover={
-                            !loading
+                            !authBusy
                                 ? {
                                     scale: 1.02,
                                     y: -2
@@ -777,7 +800,7 @@ const Login = () => {
                         }
 
                         whileTap={
-                            !loading
+                            !authBusy
                                 ? {
                                     scale: 0.98
                                 }
@@ -786,13 +809,13 @@ const Login = () => {
                     >
 
                         {
-                            loading
+                            authBusy
                                 ? "Signing in..."
                                 : "Login to E Top"
                         }
 
 
-                        {!loading && (
+                        {!authBusy && (
 
                             <FaArrowRight />
 
@@ -803,6 +826,17 @@ const Login = () => {
 
                 </form>
 
+                {googleLoading && (
+                    <div className="login-success" role="status">
+                        Signing in with Google...
+                    </div>
+                )}
+                <GoogleAuthButton
+                    onCredential={handleGoogleCredential}
+                    disabled={authBusy}
+                    text="signin_with"
+                />
+                <div className="auth-divider"><span>OR SIGN IN WITH EMAIL</span></div>
 
                 {/* REGISTER */}
 

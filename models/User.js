@@ -80,6 +80,13 @@ const userSchema = new mongoose.Schema(
             trim: true
         },
 
+        googleId: {
+            type: String,
+            unique: true,
+            sparse: true,
+            select: false
+        },
+
         payoutMethod: {
             type: String,
             trim: true,
@@ -129,6 +136,24 @@ const userSchema = new mongoose.Schema(
             maxlength: 500
         },
 
+        theme: {
+            type: String,
+            enum: ["dark", "light"],
+            default: "dark"
+        },
+
+        notificationPreferences: {
+            follows: { type: Boolean, default: true },
+            posts: { type: Boolean, default: true },
+            communities: { type: Boolean, default: true },
+            announcements: { type: Boolean, default: true }
+        },
+
+        shopNotificationPreferences: {
+            orders: { type: Boolean, default: true },
+            refundsAndPayouts: { type: Boolean, default: true },
+            products: { type: Boolean, default: true }
+        },
         location: {
             type: String,
             default: "",
@@ -172,6 +197,38 @@ const userSchema = new mongoose.Schema(
             index: true
         },
 
+        emailVerified: {
+            type: Boolean,
+            default: undefined,
+            index: true
+        },
+
+        emailVerifiedAt: {
+            type: Date,
+            default: null
+        },
+
+        emailVerificationCodeHash: {
+            type: String,
+            select: false
+        },
+
+        emailVerificationExpires: {
+            type: Date,
+            select: false
+        },
+
+        emailVerificationAttempts: {
+            type: Number,
+            default: 0,
+            select: false
+        },
+
+        emailVerificationLastSentAt: {
+            type: Date,
+            select: false
+        },
+
         verifiedAt: {
             type: Date,
             default: null
@@ -202,6 +259,27 @@ const userSchema = new mongoose.Schema(
         },
 
         resetPasswordExpires: {
+            type: Date,
+            select: false
+        },
+
+        resetPasswordAttempts: {
+            type: Number,
+            default: 0,
+            select: false
+        },
+
+        resetPasswordLastSentAt: {
+            type: Date,
+            select: false
+        },
+
+        resetSessionTokenHash: {
+            type: String,
+            select: false
+        },
+
+        resetSessionExpires: {
             type: Date,
             select: false
         },

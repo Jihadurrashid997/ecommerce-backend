@@ -27,6 +27,12 @@
 button:disabled { opacity: .5; cursor: default; }
 
 .ac-list { display: flex; flex-direction: column; gap: 8px; }
+.ac-announcements h3 { margin: 16px 0 4px; }
+.ac-announcements form { display: flex; flex-direction: column; gap: 12px; max-width: 620px; margin: 0 auto; padding: 16px; border: 1px solid rgba(127,127,127,.28); border-radius: 14px; background: rgba(127,127,127,.08); }
+.ac-announcements label { display: flex; flex-direction: column; gap: 6px; font-weight: 650; }
+.ac-announcements input, .ac-announcements textarea, .ac-announcements select { width: 100%; padding: 10px 12px; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: #fff; color: #111; font: inherit; }
+.ac-announcements textarea { resize: vertical; }
+.ac-announcements form button { align-self: flex-start; padding: 10px 15px; border-radius: 10px; background: #1159ff; color: #fff; font-weight: 700; }
 .ac-item { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(127,127,127,.28); background: rgba(127,127,127,.1); color: inherit; cursor: pointer; }
 .ac-shop-settings h3 { margin: 20px 0 8px; }
 .ac-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 10px 0; padding: 14px; border: 1px solid rgba(127,127,127,.28); border-radius: 14px; background: rgba(127,127,127,.1); }

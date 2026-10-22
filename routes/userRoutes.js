@@ -14,6 +14,10 @@ const {
     deleteUser,
     blockUser,
     unblockUser,
+    getBlockedUsers,
+    getSettings,
+    updateSettings,
+    changePassword,
     getSocialStats,
     toggleFollow,
     getFollowing
@@ -37,6 +41,10 @@ const {
 
 
 // MY PROFILE
+router.get("/settings", auth(), getSettings);
+router.patch("/settings", auth(), updateSettings);
+router.patch("/change-password", auth(), changePassword);
+router.get("/blocked", auth(), getBlockedUsers);
 
 router.get(
     "/profile",

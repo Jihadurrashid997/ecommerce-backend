@@ -355,6 +355,18 @@
         jrPageEnter 0.8s cubic-bezier(.22, 1, .36, 1);
 }
 
+.route-3d-stage {
+    width: 100%;
+    transform-style: preserve-3d;
+}
+
+@media (max-width: 760px) {
+    .route-3d-stage {
+        transform: none !important;
+        transform-style: flat;
+    }
+}
+
 
 /* =========================================================
    MODAL

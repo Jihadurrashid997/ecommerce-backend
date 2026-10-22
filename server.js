@@ -179,6 +179,11 @@ app.use(
 );
 
 app.use(
+    "/api/notifications",
+    require("./routes/platformNotificationRoutes")
+);
+
+app.use(
     "/api/admin",
     require("./routes/adminRoutes")
 );

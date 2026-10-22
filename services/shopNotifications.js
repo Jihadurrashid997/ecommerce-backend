@@ -1,6 +1,33 @@
 const ShopNotification = require("../models/ShopNotification");
 const User = require("../models/User");
 
+const preferenceForType = type => {
+    if ([
+        "order_placed",
+        "payment_received",
+        "payment_failed",
+        "payment_cancelled",
+        "order_cancelled",
+        "shipment_update",
+        "buyer_confirmation",
+        "seller_confirmation"
+    ].includes(type)) {
+        return "orders";
+    }
+
+    if ([
+        "payout_ready",
+        "payout_processed",
+        "refund_submitted",
+        "refund_decision",
+        "refund_completed"
+    ].includes(type)) {
+        return "refundsAndPayouts";
+    }
+
+    return "products";
+};
+
 const notifyShopUsers = async ({
     recipients,
     eventKey,
@@ -23,13 +50,23 @@ const notifyShopUsers = async ({
 
     const createdAt = new Date();
     try {
+        const preference = preferenceForType(type);
+        const eligibleUsers = await User.find({
+            _id: { $in: uniqueRecipients },
+            [`shopNotificationPreferences.${preference}`]: { $ne: false }
+        }).select("_id").lean();
+
+        if (!eligibleUsers.length) {
+            return;
+        }
+
         await ShopNotification.bulkWrite(
-            uniqueRecipients.map(recipient => ({
+            eligibleUsers.map(user => ({
                 updateOne: {
-                    filter: { recipient, eventKey },
+                    filter: { recipient: user._id, eventKey },
                     update: {
                         $setOnInsert: {
-                            recipient,
+                            recipient: user._id,
                             eventKey,
                             type,
                             title,

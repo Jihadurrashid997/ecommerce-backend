@@ -13,19 +13,21 @@ import {
 } from "react-icons/fa";
 
 import api from "../services/api";
+import { googleAuthUser } from "../services/auth";
+import GoogleAuthButton from "../components/GoogleAuthButton";
+import { useApp } from "../context/AppContext";
 
 import EtopLogo from "../components/EtopLogo";
 
 import "../styles/EtopLogo.css";
 
 import "../styles/Register.css";
+import "../styles/GoogleAuthButton.css";
 
 
 const Register = () => {
-
     const navigate = useNavigate();
-
-
+    const { setUser } = useApp();
     const [form, setForm] = useState({
         name: "",
         email: "",
@@ -42,7 +44,13 @@ const Register = () => {
 
     const [loading, setLoading] =
         useState(false);
+    const [googleLoading, setGoogleLoading] =
+        useState(false);
 
+    const [registrationComplete, setRegistrationComplete] = useState(false);
+    const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
+    const authBusy = loading || googleLoading;
 
     // ==========================
     // HANDLE CHANGE
@@ -57,7 +65,6 @@ const Register = () => {
 
     };
 
-
     // ==========================
     // REGISTER
     // ==========================
@@ -65,7 +72,12 @@ const Register = () => {
     const handleSubmit = async (e) => {
 
         e.preventDefault();
+        setError("");
+        setNotice("");
 
+        if (authBusy) {
+            return;
+        }
 
         if (
             !form.name.trim() ||
@@ -74,17 +86,20 @@ const Register = () => {
             !form.confirmPassword
         ) {
 
-            alert("Please fill all fields.");
+            setError("Please fill all fields.");
 
             return;
 
         }
 
 
-        if (form.password.length < 8) {
+        if (
+            form.password.length < 8 ||
+            new TextEncoder().encode(form.password).length > 72
+        ) {
 
-            alert(
-                "Password must be at least 8 characters."
+            setError(
+                "Password must be 8 to 72 bytes long."
             );
 
             return;
@@ -97,7 +112,7 @@ const Register = () => {
             form.confirmPassword
         ) {
 
-            alert(
+            setError(
                 "Passwords do not match."
             );
 
@@ -127,26 +142,16 @@ const Register = () => {
                 );
 
 
-            alert(
+            setRegistrationComplete(true);
+            setNotice(
                 response.data?.message ||
-                "Registration successful!"
+                "Registration successful. You can now sign in."
             );
-
-
-            // Reset form
-
-            setForm({
-                name: "",
-                email: "",
+            setForm(previous => ({
+                ...previous,
                 password: "",
                 confirmPassword: ""
-            });
-
-
-            // Go to login
-
-            navigate("/login");
-
+            }));
 
         } catch (error) {
 
@@ -156,11 +161,10 @@ const Register = () => {
             );
 
 
-            alert(
+            setError(
                 error.response?.data?.message ||
                 "Registration failed. Please try again."
             );
-
 
         } finally {
 
@@ -168,6 +172,29 @@ const Register = () => {
 
         }
 
+    };
+
+    const handleGoogleCredential = async credential => {
+        if (authBusy) {
+            return;
+        }
+
+        setError("");
+        setNotice("");
+        setGoogleLoading(true);
+        try {
+            const response = await googleAuthUser(credential);
+            setUser(response.data.user);
+            navigate("/", { replace: true });
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                err.message ||
+                "Google registration failed. Please try again."
+            );
+        } finally {
+            setGoogleLoading(false);
+        }
     };
 
 
@@ -266,12 +293,15 @@ const Register = () => {
                 <div className="register-heading">
 
                     <h2>
-                        Create Your Account
+                        {registrationComplete
+                            ? "Registration complete"
+                            : "Create Your Account"}
                     </h2>
 
                     <p>
-                        Join E Top and start your
-                        shopping journey.
+                        {registrationComplete
+                            ? "Your E Top account is ready. You can now sign in."
+                            : "One account for E Top social and Shop."}
                     </p>
 
                 </div>
@@ -281,17 +311,36 @@ const Register = () => {
                     FORM
                 =========================== */}
 
-                <form
-                    className="register-form"
-                    onSubmit={handleSubmit}
-                >
+                {error && <div className="register-message register-message-error" role="alert">{error}</div>}
+                {notice && <div className="register-message register-message-success" role="status">{notice}</div>}
 
+                {!registrationComplete && (
+                    <>
+                        <GoogleAuthButton
+                            onCredential={handleGoogleCredential}
+                            disabled={authBusy}
+                            text="signup_with"
+                        />
+                        {googleLoading && (
+                            <div className="register-message" role="status">
+                                Creating your account with Google...
+                            </div>
+                        )}
+                        <div className="auth-divider"><span>OR SIGN UP WITH EMAIL</span></div>
+                    </>
+                )}
+
+                {!registrationComplete && (
+                    <form
+                        className="register-form"
+                        onSubmit={handleSubmit}
+                    >
 
                     {/* NAME */}
 
                     <div className="register-field">
 
-                        <label>
+                        <label htmlFor="register-name">
                             Full Name
                         </label>
 
@@ -300,13 +349,14 @@ const Register = () => {
                             <FaUser />
 
                             <input
+                                id="register-name"
                                 type="text"
                                 name="name"
                                 placeholder="Enter your full name"
                                 value={form.name}
                                 onChange={handleChange}
                                 autoComplete="name"
-                                disabled={loading}
+                                disabled={authBusy}
                             />
 
                         </div>
@@ -318,7 +368,7 @@ const Register = () => {
 
                     <div className="register-field">
 
-                        <label>
+                        <label htmlFor="register-email">
                             Email Address
                         </label>
 
@@ -327,13 +377,14 @@ const Register = () => {
                             <FaEnvelope />
 
                             <input
+                                id="register-email"
                                 type="email"
                                 name="email"
                                 placeholder="Enter your email"
                                 value={form.email}
                                 onChange={handleChange}
                                 autoComplete="email"
-                                disabled={loading}
+                                disabled={authBusy}
                             />
 
                         </div>
@@ -345,7 +396,7 @@ const Register = () => {
 
                     <div className="register-field">
 
-                        <label>
+                        <label htmlFor="register-password">
                             Password
                         </label>
 
@@ -354,17 +405,18 @@ const Register = () => {
                             <FaLock />
 
                             <input
+                                id="register-password"
                                 type={
                                     showPassword
                                         ? "text"
                                         : "password"
                                 }
                                 name="password"
-                                placeholder="Minimum 8 characters"
+                                placeholder="8 to 72 bytes"
                                 value={form.password}
                                 onChange={handleChange}
                                 autoComplete="new-password"
-                                disabled={loading}
+                                disabled={authBusy}
                             />
 
                             <button
@@ -394,7 +446,7 @@ const Register = () => {
 
                     <div className="register-field">
 
-                        <label>
+                        <label htmlFor="register-confirm-password">
                             Confirm Password
                         </label>
 
@@ -403,6 +455,7 @@ const Register = () => {
                             <FaLock />
 
                             <input
+                                id="register-confirm-password"
                                 type={
                                     showConfirmPassword
                                         ? "text"
@@ -417,7 +470,7 @@ const Register = () => {
                                     handleChange
                                 }
                                 autoComplete="new-password"
-                                disabled={loading}
+                                disabled={authBusy}
                             />
 
                             <button
@@ -490,10 +543,10 @@ const Register = () => {
 
                         className="register-submit"
 
-                        disabled={loading}
+                        disabled={authBusy}
 
                         whileHover={
-                            !loading
+                            !authBusy
                                 ? {
                                     y: -3,
                                     scale: 1.01
@@ -502,7 +555,7 @@ const Register = () => {
                         }
 
                         whileTap={
-                            !loading
+                            !authBusy
                                 ? {
                                     scale: 0.97
                                 }
@@ -511,7 +564,7 @@ const Register = () => {
 
                     >
 
-                        {loading ? (
+                        {authBusy ? (
 
                             <>
 
@@ -538,14 +591,21 @@ const Register = () => {
                     </motion.button>
 
 
-                </form>
+                    </form>
+                )}
+
+                {registrationComplete && (
+                    <div className="register-complete" role="status">
+                        <Link to="/login">Continue to login <FaArrowRight /></Link>
+                    </div>
+                )}
 
 
                 {/* ==========================
                     LOGIN
                 =========================== */}
 
-                <div className="register-login">
+                {!registrationComplete && <div className="register-login">
 
                     <span>
                         Already have an account?
@@ -557,7 +617,7 @@ const Register = () => {
 
                     </Link>
 
-                </div>
+                </div>}
 
 
                 {/* ==========================

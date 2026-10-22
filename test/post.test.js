@@ -13,6 +13,7 @@ const groupController = require("../controllers/groupController");
 const User = require("../models/User");
 const adminControlController = require("../controllers/adminControlController");
 const { forgotPassword } = require("../controllers/authController");
+const { updatePost } = require("../controllers/postController");
 const jwt = require("jsonwebtoken");
 const messageUpload = require("../middleware/messageUpload");
 
@@ -70,6 +71,130 @@ test("a photo post remains valid", () => {
     });
 
     assert.equal(post.validateSync(), undefined);
+});
+
+test("post owners can edit captions and audience", async () => {
+    const post = {
+        _id: TEST_USER_ID,
+        author: TEST_USER_ID,
+        kind: "post",
+        caption: "Before",
+        visibility: "public",
+        media: [],
+        comments: [],
+        likes: [],
+        reactions: [],
+        async save() {}
+    };
+    const populatedPost = {
+        ...post,
+        author: { _id: TEST_USER_ID, name: "Owner" },
+        caption: "After",
+        visibility: "followers"
+    };
+    const originalFindById = Post.findById;
+    let lookups = 0;
+    Post.findById = id => {
+        assert.equal(id, TEST_USER_ID);
+        lookups += 1;
+        if (lookups === 1) return Promise.resolve(post);
+        return {
+            populate() {
+                return this;
+            },
+            lean() {
+                return Promise.resolve(populatedPost);
+            }
+        };
+    };
+
+    try {
+        const response = makeResponse();
+        await updatePost({
+            params: { id: TEST_USER_ID },
+            user: { id: TEST_USER_ID },
+            body: { caption: "After", visibility: "followers" }
+        }, response);
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.data.caption, "After");
+        assert.equal(response.body.data.visibility, "followers");
+        assert.equal(post.caption, "After");
+        assert.equal(post.visibility, "followers");
+    } finally {
+        Post.findById = originalFindById;
+    }
+});
+
+test("post edit rejects invalid visibility and non-owner access", async () => {
+    const originalFindById = Post.findById;
+    const post = {
+        _id: TEST_USER_ID,
+        author: OTHER_USER_ID,
+        kind: "post",
+        caption: "Someone else's post",
+        media: [],
+        save: async () => {}
+    };
+    Post.findById = () => Promise.resolve(post);
+
+    try {
+        const invalidVisibilityResponse = makeResponse();
+        await updatePost({
+            params: { id: TEST_USER_ID },
+            user: { id: TEST_USER_ID },
+            body: { visibility: "friends" }
+        }, invalidVisibilityResponse);
+        assert.equal(invalidVisibilityResponse.statusCode, 400);
+
+        const forbiddenResponse = makeResponse();
+        await updatePost({
+            params: { id: TEST_USER_ID },
+            user: { id: TEST_USER_ID },
+            body: { caption: "Attempted edit" }
+        }, forbiddenResponse);
+        assert.equal(forbiddenResponse.statusCode, 403);
+        assert.equal(post.caption, "Someone else's post");
+    } finally {
+        Post.findById = originalFindById;
+    }
+});
+
+test("post owners cannot edit community posts, reposts, or reels", async () => {
+    const originalFindById = Post.findById;
+    const postTypes = [
+        { kind: "post", community: OTHER_USER_ID },
+        { kind: "post", originalPost: OTHER_USER_ID },
+        { kind: "reel" }
+    ];
+    let saveCalls = 0;
+
+    try {
+        for (const postType of postTypes) {
+            const post = {
+                _id: TEST_USER_ID,
+                author: TEST_USER_ID,
+                kind: "post",
+                caption: "Original caption",
+                media: [],
+                save: async () => { saveCalls += 1; },
+                ...postType
+            };
+            Post.findById = () => Promise.resolve(post);
+            const response = makeResponse();
+            await updatePost({
+                params: { id: TEST_USER_ID },
+                user: { id: TEST_USER_ID },
+                body: { caption: "Changed caption" }
+            }, response);
+            assert.equal(response.statusCode, 403);
+            assert.equal(post.caption, "Original caption");
+        }
+
+        assert.equal(saveCalls, 0);
+    } finally {
+        Post.findById = originalFindById;
+    }
 });
 
 test("a reel still requires video media", () => {

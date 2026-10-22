@@ -162,11 +162,18 @@ test("product browse filters pending listings when approval is required", async 
 test("new products start pending when admin approval is enabled", async () => {
     const originalGetSettings = marketplaceSettings.getMarketplaceSettings;
     const originalCreate = Product.create;
+    const originalUserFind = User.find;
     marketplaceSettings.getMarketplaceSettings = async () => ({
         marketplaceEnabled: true,
         requireProductApproval: true
     });
     Product.create = async product => product;
+    User.find = filter => ({
+        select() {
+            return this;
+        },
+        lean: async () => filter._id.$in.map(_id => ({ _id }))
+    });
 
     try {
         const response = makeResponse();
@@ -190,11 +197,13 @@ test("new products start pending when admin approval is enabled", async () => {
     } finally {
         marketplaceSettings.getMarketplaceSettings = originalGetSettings;
         Product.create = originalCreate;
+        User.find = originalUserFind;
     }
 });
 
 test("admin rejection hides a pending product and stores a seller-facing note", async () => {
     const originalFindOneAndUpdate = Product.findOneAndUpdate;
+    const originalUserFind = User.find;
     let filter;
     let update;
     Product.findOneAndUpdate = async (nextFilter, nextUpdate) => {
@@ -207,6 +216,12 @@ test("admin rejection hides a pending product and stores a seller-facing note", 
             updatedAt: new Date("2026-10-01T00:00:00.000Z")
         };
     };
+    User.find = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => [{ _id: "507f1f77bcf86cd799439098" }]
+    });
 
     try {
         const response = makeResponse();
@@ -228,6 +243,7 @@ test("admin rejection hides a pending product and stores a seller-facing note", 
         assert.equal(response.statusCode, 200);
     } finally {
         Product.findOneAndUpdate = originalFindOneAndUpdate;
+        User.find = originalUserFind;
     }
 });
 

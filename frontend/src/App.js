@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { FaBell, FaCog } from "react-icons/fa";
 
 import {
     BrowserRouter,
@@ -43,9 +45,12 @@ import LoadingScreen from "./components/LoadingScreen";
 // ======================================================
 
 import Home from "./pages/Home";
+import SharedPost from "./pages/SharedPost";
+import SavedPosts from "./pages/SavedPosts";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import Reels from "./pages/Reels";
 import Shop from "./pages/Shop";
 import AdminControl from "./pages/AdminControl";
@@ -63,12 +68,14 @@ import Checkout from "./pages/Checkout";
 import OrderHistory from "./pages/OrderHistory";
 import ShopNotifications from "./pages/ShopNotifications";
 import SellerApplication from "./pages/SellerApplication";
+import ShopSettings from "./pages/ShopSettings";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailed from "./pages/PaymentFailed";
 import EditProfile from "./pages/EditProfile";
 import SearchResults from "./pages/SearchResults";
 import UserProfile from "./pages/UserProfile";
 import Communities from "./pages/Communities";
+import Settings from "./pages/Settings";
 
 
 // ======================================================
@@ -169,15 +176,17 @@ function ShopSectionNavigation({ user }) {
 
     return (
         <nav className="shop-section-nav" aria-label="Shop">
-            <Link to="/shop">Browse</Link>
-            <Link to="/shop/cart">Cart</Link>
-            <Link to="/shop/wishlist">Wishlist</Link>
-            <Link to="/shop/orders">Orders</Link>
+            <Link to="/shop" aria-current={location.pathname === "/shop" ? "page" : undefined}>Browse</Link>
+            <Link to="/shop/cart" aria-current={location.pathname === "/shop/cart" ? "page" : undefined}>Cart</Link>
+            <Link to="/shop/wishlist" aria-current={location.pathname === "/shop/wishlist" ? "page" : undefined}>Wishlist</Link>
+            <Link to="/shop/orders" aria-current={location.pathname === "/shop/orders" ? "page" : undefined}>Orders</Link>
             <Link
                 to="/shop/notifications"
                 className="shop-notifications-nav-link"
+                aria-current={location.pathname === "/shop/notifications" ? "page" : undefined}
                 aria-label={`Shop notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
             >
+                <FaBell aria-hidden="true" />
                 Notifications
                 {unreadCount > 0 && (
                     <span className="shop-notifications-badge">
@@ -185,12 +194,15 @@ function ShopSectionNavigation({ user }) {
                     </span>
                 )}
             </Link>
+            <Link to="/shop/settings" aria-current={location.pathname === "/shop/settings" ? "page" : undefined}>
+                <FaCog aria-hidden="true" /> Settings
+            </Link>
             {user?.role === "seller" && (
                 <>
-                    <Link to="/shop/dashboard">Dashboard</Link>
-                    <Link to="/shop/seller">Add product</Link>
-                    <Link to="/shop/seller/products">My products</Link>
-                    <Link to="/shop/seller/orders">Seller orders</Link>
+                    <Link to="/shop/dashboard" aria-current={location.pathname === "/shop/dashboard" ? "page" : undefined}>Dashboard</Link>
+                    <Link to="/shop/seller" aria-current={location.pathname === "/shop/seller" ? "page" : undefined}>Add product</Link>
+                    <Link to="/shop/seller/products" aria-current={location.pathname === "/shop/seller/products" ? "page" : undefined}>My products</Link>
+                    <Link to="/shop/seller/orders" aria-current={location.pathname === "/shop/seller/orders" ? "page" : undefined}>Seller orders</Link>
                 </>
             )}
             {user?.role === "customer" && (
@@ -209,6 +221,8 @@ function AppLayout() {
 
     const location =
         useLocation();
+    const prefersReducedMotion =
+        useReducedMotion();
     const { user } = useApp();
     const shopSection =
         location.pathname === "/shop" ||
@@ -222,9 +236,12 @@ function AppLayout() {
 
     const authPage =
         location.pathname === "/login" ||
-        location.pathname === "/register";
+        location.pathname === "/register" ||
+        location.pathname === "/verify-email";
     const messengerPage =
         location.pathname === "/messenger";
+    const reelsPage =
+        location.pathname === "/reels";
 
 
   return (
@@ -235,11 +252,11 @@ function AppLayout() {
             NAVBAR
         ================================================== */}
 
-        {!authPage && (
+        {!authPage && !reelsPage && (
             <Navbar />
         )}
 
-        {!authPage && location.pathname !== "/forgot-password" && (
+        {!authPage && !reelsPage && location.pathname !== "/forgot-password" && (
             <TopTabs />
         )}
 
@@ -252,7 +269,30 @@ function AppLayout() {
             ROUTES
         ================================================== */}
 
-        <Routes>
+        <AnimatePresence mode="wait">
+        <motion.div
+            key={location.pathname}
+            className="route-3d-stage"
+            initial={prefersReducedMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: 18, rotateX: 3, rotateY: -1, scale: 0.99 }
+            }
+            animate={{ opacity: 1, y: 0, rotateX: 0, rotateY: 0, scale: 1 }}
+            exit={prefersReducedMotion
+                ? { opacity: 0 }
+                : { opacity: 0, y: -12, rotateX: -2, rotateY: 1, scale: 0.995 }
+            }
+            transition={prefersReducedMotion
+                ? { duration: 0.12 }
+                : { duration: 0.38, ease: [0.22, 1, 0.36, 1] }
+            }
+            style={{
+                transformPerspective: 1400,
+                transformOrigin: "top center",
+                backfaceVisibility: "hidden"
+            }}
+        >
+        <Routes location={location}>
 
 
                 {/* =================================================
@@ -296,6 +336,11 @@ function AppLayout() {
                     }
                 />
 
+                <Route
+                    path="/verify-email"
+                    element={<VerifyEmail />}
+                />
+
 
 
                 {/* =================================================
@@ -325,6 +370,24 @@ function AppLayout() {
                     element={
                         <PrivateRoute>
                             <Reels />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
+                    path="/post/:id"
+                    element={
+                        <PrivateRoute>
+                            <SharedPost />
+                        </PrivateRoute>
+                    }
+                />
+
+                <Route
+                    path="/saved"
+                    element={
+                        <PrivateRoute>
+                            <SavedPosts />
                         </PrivateRoute>
                     }
                 />
@@ -367,6 +430,7 @@ function AppLayout() {
                 <Route path="/shop/orders" element={<PrivateRoute><OrderHistory /></PrivateRoute>} />
                 <Route path="/shop/notifications" element={<PrivateRoute><ShopNotifications /></PrivateRoute>} />
                 <Route path="/shop/seller/apply" element={<PrivateRoute><SellerApplication /></PrivateRoute>} />
+                <Route path="/shop/settings" element={<PrivateRoute><ShopSettings /></PrivateRoute>} />
                 <Route path="/shop/seller" element={<PrivateRoute allowedRoles={["seller"]}><SellerDashboard /></PrivateRoute>} />
                 <Route path="/shop/seller/products" element={<PrivateRoute allowedRoles={["seller"]}><SellerProducts /></PrivateRoute>} />
                 <Route path="/shop/seller/orders" element={<PrivateRoute allowedRoles={["seller"]}><SellerOrders /></PrivateRoute>} />
@@ -491,6 +555,15 @@ function AppLayout() {
                     }
                 />
 
+                <Route
+                    path="/settings"
+                    element={
+                        <PrivateRoute>
+                            <Settings />
+                        </PrivateRoute>
+                    }
+                />
+
 
                 {/* ==========================
                     DASHBOARD
@@ -604,6 +677,8 @@ function AppLayout() {
                 />
 
             </Routes>
+        </motion.div>
+        </AnimatePresence>
 
             {user && (
                 <Messenger isActive={location.pathname === "/messenger"} />
@@ -613,7 +688,7 @@ function AppLayout() {
                 FOOTER
             ================================================== */}
 
-            {!authPage && !messengerPage && (
+            {!authPage && !messengerPage && !reelsPage && (
                 <Footer />
             )}
 

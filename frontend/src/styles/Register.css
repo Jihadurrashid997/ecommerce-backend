@@ -149,6 +149,26 @@
 
     -webkit-backdrop-filter: blur(25px);
 
+    transform-style: preserve-3d;
+    transition:
+        transform 0.45s cubic-bezier(.22, 1, .36, 1),
+        box-shadow 0.45s ease;
+
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .register-container:hover {
+        transform: perspective(1400px) rotateX(1deg) rotateY(-1deg) translateY(-3px);
+        box-shadow:
+            0 42px 110px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .register-container:hover {
+        transform: none;
+    }
 }
 
 
@@ -161,6 +181,8 @@
     display: flex;
 
     align-items: center;
+
+    justify-content: center;
 
     gap: 14px;
 
@@ -375,6 +397,15 @@
 
 }
 
+.register-input input:-webkit-autofill,
+.register-input input:-webkit-autofill:hover,
+.register-input input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #11131d inset;
+    -webkit-text-fill-color: #fff;
+    caret-color: #fff;
+    transition: background-color 9999s ease-out 0s;
+}
+
 
 /* =========================================
    PASSWORD BUTTON
@@ -438,6 +469,70 @@
 .password-no-match {
 
     color: #fb7185;
+
+}
+
+.register-message {
+
+    margin-bottom: 16px;
+
+    padding: 12px 15px;
+
+    border-radius: 12px;
+
+    font-size: 14px;
+
+    line-height: 1.5;
+
+}
+
+.register-message-error {
+
+    color: #fecaca;
+
+    background: rgba(239, 68, 68, .12);
+
+    border: 1px solid rgba(248, 113, 113, .28);
+
+}
+
+.register-message-success {
+
+    color: #bbf7d0;
+
+    background: rgba(34, 197, 94, .1);
+
+    border: 1px solid rgba(34, 197, 94, .25);
+
+}
+
+.register-complete {
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 22px;
+
+    padding: 24px 0;
+
+}
+
+.register-complete a {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 10px;
+
+    color: #c4b5fd;
+
+    font-weight: 700;
+
+    text-decoration: none;
 
 }
 

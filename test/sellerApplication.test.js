@@ -105,6 +105,7 @@ test("seller application submission queues admin review without granting seller 
 
 test("admin approval atomically grants seller role only to pending applicants", async () => {
     const originalFindOneAndUpdate = User.findOneAndUpdate;
+    const originalFind = User.find;
     const originalBulkWrite = ShopNotification.bulkWrite;
     const userId = "507f1f77bcf86cd799439011";
     let filter;
@@ -116,6 +117,12 @@ test("admin approval atomically grants seller role only to pending applicants", 
             select: async () => ({ _id: userId, role: "seller" })
         };
     };
+    User.find = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => [{ _id: userId }]
+    });
     ShopNotification.bulkWrite = async () => ({});
 
     try {
@@ -138,6 +145,7 @@ test("admin approval atomically grants seller role only to pending applicants", 
         assert.equal(response.body.success, true);
     } finally {
         User.findOneAndUpdate = originalFindOneAndUpdate;
+        User.find = originalFind;
         ShopNotification.bulkWrite = originalBulkWrite;
     }
 });

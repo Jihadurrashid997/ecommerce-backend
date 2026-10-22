@@ -1,73 +1,126 @@
 .etop-logo {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .etop-logo-mark {
-    flex-shrink: 0;
-    filter: drop-shadow(0 4px 10px rgba(37, 99, 235, 0.35));
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    overflow: visible;
+    width: min(var(--etop-logo-width), 100%);
+    max-width: 100%;
+    line-height: 0;
 }
 
-.etop-logo-text {
-    font-weight: 900;
-    letter-spacing: -0.5px;
-    background: linear-gradient(135deg, #2563eb, #60a5fa 60%, #7dd3fc);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    line-height: 1;
+.etop-logo-mark::before {
+    position: absolute;
+    z-index: -1;
+    inset: -10%;
+    content: "";
+    pointer-events: none;
+    border-radius: 50%;
+    background: radial-gradient(
+        ellipse at center,
+        rgba(21, 162, 255, 0.36),
+        rgba(21, 162, 255, 0.1) 44%,
+        transparent 72%
+    );
+    filter: blur(12px);
+    opacity: 0.65;
+    animation: etop-logo-halo 3.8s ease-in-out infinite;
 }
 
-.etop-logo-light .etop-logo-text {
-    background: linear-gradient(135deg, #ffffff, #bfdbfe);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+.etop-logo-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    filter:
+        drop-shadow(0 0 10px rgba(21, 162, 255, 0.35))
+        drop-shadow(0 0 22px rgba(40, 150, 255, 0.14));
+    animation: etop-logo-glow 3.8s ease-in-out infinite;
 }
 
-.etop-logo-sm .etop-logo-text {
-    font-size: 22px;
+.etop-logo-sm {
+    --etop-logo-width: 112px;
 }
 
-.etop-logo-md .etop-logo-text {
-    font-size: 32px;
+.etop-logo-md {
+    --etop-logo-width: 210px;
 }
 
-.etop-logo-lg .etop-logo-text {
-    font-size: 52px;
+.etop-logo-lg {
+    --etop-logo-width: 360px;
+}
+
+.etop-logo-with-tagline {
+    flex-direction: column;
+    gap: 8px;
+}
+
+.register-brand > div,
+.login-brand > div {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .etop-logo-tagline {
-    display: flex;
+    display: inline-flex;
     flex-direction: column;
-    margin-left: 6px;
-    line-height: 1.25;
+    flex: 0 0 auto;
+    align-items: center;
+    width: min(170px, 100%);
+    line-height: 0;
+    text-align: center;
 }
 
-.etop-logo-company {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    color: #1d4ed8;
+.etop-logo-company-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    filter: drop-shadow(0 0 9px rgba(21, 162, 255, 0.32));
+    animation: etop-logo-glow 3.8s ease-in-out infinite;
 }
 
-.etop-logo-light .etop-logo-company {
-    color: #dbeafe;
+@keyframes etop-logo-halo {
+    0%,
+    100% {
+        transform: scale(0.94);
+        opacity: 0.46;
+    }
+
+    50% {
+        transform: scale(1.08);
+        opacity: 0.9;
+    }
 }
 
-.etop-logo-company b {
-    font-weight: 900;
+@keyframes etop-logo-glow {
+    0%,
+    100% {
+        filter: drop-shadow(0 0 8px rgba(21, 162, 255, 0.2));
+    }
+
+    50% {
+        filter: drop-shadow(0 0 20px rgba(40, 192, 255, 0.62));
+    }
 }
 
-.etop-logo-company-sub {
-    font-size: 9.5px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: #6b7280;
-}
-
-.etop-logo-light .etop-logo-company-sub {
-    color: rgba(255, 255, 255, 0.6);
+@media (prefers-reduced-motion: reduce) {
+    .etop-logo-mark::before,
+    .etop-logo-image,
+    .etop-logo-company-image {
+        animation: none;
+    }
 }

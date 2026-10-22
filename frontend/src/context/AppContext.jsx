@@ -4,6 +4,7 @@ import React, {
     useEffect,
     useState
 } from "react";
+import api from "../services/api";
 
 const AppContext = createContext(null);
 
@@ -35,6 +36,9 @@ export const AppProvider = ({ children }) => {
     // ==========================
 
     const [notifications, setNotifications] = useState([]);
+
+    const [unreadMessengerCount, setUnreadMessengerCount] =
+        useState(0);
 
 
     // ==========================
@@ -311,6 +315,27 @@ export const AppProvider = ({ children }) => {
 
     }, [theme]);
 
+    useEffect(() => {
+        if (!user || !localStorage.getItem("token")) {
+            return undefined;
+        }
+
+        let active = true;
+        api.get("/users/settings")
+            .then(response => {
+                if (active && response.data.settings?.theme) {
+                    setTheme(response.data.settings.theme);
+                }
+            })
+            .catch(error => {
+                console.error("LOAD ACCOUNT THEME ERROR:", error);
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [user, setTheme]);
+
 
     // ==================================================
     // TOGGLE THEME
@@ -466,6 +491,7 @@ export const AppProvider = ({ children }) => {
         // Notifications clear
 
         setNotifications([]);
+        setUnreadMessengerCount(0);
 
 
         /*
@@ -526,6 +552,8 @@ export const AppProvider = ({ children }) => {
         clearNotifications,
 
         unreadNotificationCount,
+        unreadMessengerCount,
+        setUnreadMessengerCount,
 
 
         // ==========================

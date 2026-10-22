@@ -66,6 +66,25 @@ const MessengerStories = ({ active, currentUser }) => {
         }
     }, [active, loadStories]);
 
+    useEffect(() => {
+        if (!selected) return undefined;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        const closeOnEscape = event => {
+            if (event.key === "Escape") {
+                setSelected(null);
+                setViewers(null);
+            }
+        };
+        window.addEventListener("keydown", closeOnEscape);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener("keydown", closeOnEscape);
+        };
+    }, [selected]);
+
     const publishStory = async event => {
         event.preventDefault();
         if (!text.trim() && !file) {
@@ -118,10 +137,10 @@ const MessengerStories = ({ active, currentUser }) => {
         }
     };
 
-    const closeViewer = () => {
+    const closeViewer = useCallback(() => {
         setSelected(null);
         setViewers(null);
-    };
+    }, []);
 
     const moveStory = direction => {
         const nextIndex = currentIndex + direction;
@@ -324,7 +343,7 @@ const MessengerStories = ({ active, currentUser }) => {
             )}
 
             {selectedGroup && currentStory && (
-                <div className="messenger-story-overlay" role="presentation">
+                <div className="messenger-story-overlay messenger-story-fullscreen" role="presentation">
                     <section className="messenger-story-viewer" role="dialog" aria-modal="true" aria-label="Status viewer">
                         <div className="messenger-story-progress" aria-label={`Status ${currentIndex + 1} of ${storyCount}`}>
                             {selectedGroup.stories.map((story, index) => (
@@ -337,7 +356,15 @@ const MessengerStories = ({ active, currentUser }) => {
                         <header>
                             <strong>{ownerOf(currentStory).name || "User"}</strong>
                             <span>{new Date(currentStory.createdAt).toLocaleString()}</span>
-                            <button type="button" aria-label="Close status" onClick={closeViewer}><FaTimes /></button>
+                            <button
+                                type="button"
+                                className="messenger-story-close"
+                                aria-label="Close status"
+                                onClick={closeViewer}
+                            >
+                                <FaTimes />
+                                <span>Close</span>
+                            </button>
                         </header>
                         {currentStory.media?.type === "video" ? (
                             <video

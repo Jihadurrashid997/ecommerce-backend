@@ -260,6 +260,23 @@ export const loginUser = async (
     return response;
 };
 
+export const googleAuthUser = async credential => {
+    const response = await api.post(
+        "/auth/google",
+        getDeviceLoginPayload({ credential })
+    );
+    const data = response?.data || {};
+    const token = data.token || data.accessToken;
+    const user = data.user || data.data?.user;
+
+    if (!token || !user) {
+        throw new Error("The server returned an invalid Google sign-in response.");
+    }
+
+    saveAuthData({ token, user });
+    return response;
+};
+
 
 /* =========================================================
    REGISTER
@@ -431,7 +448,7 @@ export const getAuthHeader = () => {
    DEFAULT EXPORT
 ========================================================= */
 
-export default {
+const authService = {
     normalizeUserId,
     getToken,
     getStoredUser,
@@ -440,9 +457,12 @@ export default {
     clearAuthData,
     isAuthenticated,
     loginUser,
+    googleAuthUser,
     registerUser,
     refreshCurrentUser,
     logoutUser,
     getSocketUser,
     getAuthHeader
 };
+
+export default authService;

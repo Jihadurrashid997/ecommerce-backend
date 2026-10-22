@@ -16,8 +16,14 @@ const {
     getFeed,
     getCommunityPosts,
     getReels,
+    getPost,
+    updatePost,
+    getSavedPosts,
+    setSavedPost,
+    repostPost,
     getUserPosts,
     toggleLike,
+    setReaction,
     getComments,
     addComment,
     addView,
@@ -47,8 +53,14 @@ router.post("/reels", auth(), handle(reelUpload, "video"), createReel);
 
 // A user's posts / reels (profile)
 router.get("/user/:userId", auth(), getUserPosts);
+router.get("/saved", auth(), getSavedPosts);
 
 // Single post actions
+router.patch("/:id", auth(), updatePost);
+router.get("/:id", auth(), getPost);
+router.put("/:id/saved", auth(), setSavedPost);
+router.put("/:id/reaction", auth(), setReaction);
+router.post("/:id/repost", auth(), repostPost);
 router.post("/:id/like", auth(), toggleLike);
 router.get("/:id/comments", auth(), getComments);
 router.post("/:id/comments", auth(), addComment);

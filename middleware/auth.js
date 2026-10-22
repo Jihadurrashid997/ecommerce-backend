@@ -161,11 +161,11 @@ const auth = (roles = []) => {
             req.user.role = state.role;
 
         } catch (err) {
-
-            // Database hiccup: fall back to the token's own
-            // data instead of locking everybody out.
-            console.error("Auth account lookup failed:", err.message);
-
+            console.error("Auth account lookup failed:", err);
+            return res.status(503).json({
+                success: false,
+                message: "Could not verify account status. Please try again shortly."
+            });
         }
 
         // ==========================

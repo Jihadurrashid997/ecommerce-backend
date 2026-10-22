@@ -27,6 +27,15 @@
     background: #eef4ef;
 }
 
+.shop-section-nav a[aria-current="page"] {
+    color: #1d5146;
+    background: #eef4ef;
+}
+
+.shop-section-nav a svg {
+    flex: 0 0 auto;
+}
+
 .shop-section-nav .shop-notifications-nav-link {
     display: inline-flex;
     align-items: center;
@@ -44,6 +53,116 @@
     color: #fff;
     font-size: 11px;
     line-height: 1;
+}
+
+.shop-settings-page {
+    width: min(900px, calc(100% - 40px));
+    margin: 28px auto 72px;
+    color: #1e293b;
+}
+
+.shop-settings-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 18px;
+    color: #1d5146;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.shop-settings-header h1 {
+    margin: 10px 0 7px;
+    color: #21352f;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(32px, 5vw, 48px);
+    font-weight: 500;
+}
+
+.shop-settings-header p,
+.shop-settings-card > p {
+    color: #667085;
+    line-height: 1.6;
+}
+
+.shop-settings-shortcuts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.shop-settings-shortcuts a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 13px;
+    border: 1px solid #e7e5df;
+    border-radius: 11px;
+    background: #fff;
+    color: #1d5146;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.shop-settings-card {
+    padding: clamp(18px, 3vw, 26px);
+    border: 1px solid #e7e5df;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 12px 34px rgba(29, 81, 70, .07);
+}
+
+.shop-settings-card h2 {
+    margin: 0 0 5px;
+    color: #21352f;
+    font-size: 20px;
+}
+
+.shop-settings-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px 0;
+    border-top: 1px solid #eef0ec;
+    cursor: pointer;
+}
+
+.shop-settings-toggle span {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.shop-settings-toggle small {
+    color: #667085;
+    line-height: 1.45;
+}
+
+.shop-settings-toggle input {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    accent-color: #1d745e;
+}
+
+.shop-settings-feedback,
+.shop-settings-loading {
+    padding: 12px 14px;
+    border-radius: 11px;
+    background: #edf7f1;
+    color: #1d5146;
+}
+
+.shop-settings-feedback.error {
+    background: #fff1ef;
+    color: #b42318;
+}
+
+.shop-settings-saving {
+    color: #667085;
+    font-size: 13px;
 }
 
 .shop-notifications-page {

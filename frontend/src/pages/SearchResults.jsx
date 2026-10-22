@@ -6,7 +6,8 @@ import React, {
 
 import {
     Link,
-    useSearchParams
+    useSearchParams,
+    useNavigate
 } from "react-router-dom";
 
 import {
@@ -25,6 +26,7 @@ const SearchResults = () => {
 
     const [searchParams] =
         useSearchParams();
+    const navigate = useNavigate();
 
     const keyword =
         (
@@ -32,6 +34,38 @@ const SearchResults = () => {
             searchParams.get("search") ||
             ""
         ).trim();
+
+    const [searchText, setSearchText] = useState(keyword);
+
+    useEffect(() => {
+        setSearchText(keyword);
+    }, [keyword]);
+
+    const submitSearch = event => {
+        event.preventDefault();
+        const query = searchText.trim();
+        if (query) {
+            navigate(`/search?q=${encodeURIComponent(query)}`);
+        }
+    };
+
+    const searchForm = (
+        <form className="people-search-form" onSubmit={submitSearch}>
+            <label className="sr-only" htmlFor="people-search-input">Search people</label>
+            <input
+                id="people-search-input"
+                type="search"
+                value={searchText}
+                onChange={event => setSearchText(event.target.value)}
+                placeholder="Search people..."
+                autoComplete="off"
+            />
+            <button type="submit" disabled={!searchText.trim()}>
+                <FaSearch aria-hidden="true" />
+                <span>Search</span>
+            </button>
+        </form>
+    );
 
 
     const [users, setUsers] =
@@ -251,6 +285,8 @@ const SearchResults = () => {
 
                 <div className="search-results-container">
 
+                    {searchForm}
+
                     <div className="no-results">
 
                         <FaSearch />
@@ -295,6 +331,8 @@ const SearchResults = () => {
 
                 <div className="search-results-container">
 
+                    {searchForm}
+
                     <div className="search-loading">
 
                         <div className="search-spinner"></div>
@@ -324,6 +362,7 @@ const SearchResults = () => {
 
             <div className="search-results-container">
 
+                {searchForm}
 
                 {/* HEADER */}
 
