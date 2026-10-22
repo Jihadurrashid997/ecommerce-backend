@@ -707,6 +707,27 @@ const ShopSettings = () => {
         }
     };
 
+    const approvePayout = async payout => {
+        try {
+            setBusy(payout.fulfillmentId);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${payout.orderId}/payout/approve`, {
+                fulfillmentId: payout.fulfillmentId
+            });
+            setReadyPayouts(previous => previous.map(item =>
+                item.fulfillmentId === payout.fulfillmentId
+                    ? { ...item, payoutStatus: "approved" }
+                    : item
+            ));
+            setNotice("Payout approved. Make the manual transfer, then record its actual reference.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not approve payout.");
+        } finally {
+            setBusy("");
+        }
+    };
+
     if (loading) return <p className="ac-note">Loading Shop settings...</p>;
     if (!settings) return <p className="ac-note error" role="alert">{error}</p>;
 
@@ -892,10 +913,10 @@ const ShopSettings = () => {
                 </div>
             )}
 
-            <h3>Seller payouts ready ({readyPayouts.length})</h3>
-            <p className="ac-note">Send the transfer outside the Shop, then record its actual method and reference here. Never mark a payout paid before the transfer succeeds.</p>
+            <h3>Seller payouts for review ({readyPayouts.length})</h3>
+            <p className="ac-note">Approve only eligible payouts. After approval, send the transfer outside the Shop and record its actual method and reference. This is a manual transfer record, not escrow or an automatic payout.</p>
             {readyPayouts.length === 0 ? (
-                <p className="ac-note">No seller payouts are ready.</p>
+                <p className="ac-note">No seller payouts are awaiting approval or transfer recording.</p>
             ) : (
                 <div className="ac-list">
                     {readyPayouts.map(payout => {
@@ -907,10 +928,30 @@ const ShopSettings = () => {
                             <div className="ac-payout-card" key={payout.fulfillmentId}>
                                 <div>
                                     <b>Order #{payout.orderNumber} · ৳{Number(payout.amount || 0).toLocaleString("en-BD")}</b>
+                                    <span>Status: {payout.payoutStatus === "approved" ? "Approved — transfer not yet recorded" : "Awaiting admin approval"}</span>
                                     <span>{payout.seller?.name || "Seller"} · {payout.seller?.email || "No email"}</span>
                                     <span>{payout.seller?.payoutMethod || "Payout method not set"}: {payout.seller?.payoutAccount || "Seller has not added an account"}</span>
                                 </div>
-                                <div className="ac-payout-actions">
+                                {payout.payoutStatus !== "approved" ? (
+                                    <div className="ac-payout-actions">
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                Boolean(busy) ||
+                                                !payout.seller?.payoutMethod ||
+                                                !payout.seller?.payoutAccount
+                                            }
+                                            onClick={() => approvePayout(payout)}
+                                        >
+                                            {busy === payout.fulfillmentId
+                                                ? "Saving..."
+                                                : !payout.seller?.payoutAccount
+                                                    ? "Seller payout details missing"
+                                                    : "Approve payout"}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="ac-payout-actions">
                                     <input
                                         aria-label={`Payout method for order ${payout.orderNumber}`}
                                         value={form.payoutMethod}
@@ -946,9 +987,10 @@ const ShopSettings = () => {
                                             ? "Saving..."
                                             : !payout.seller?.payoutAccount
                                                 ? "Seller payout details missing"
-                                                : "Record payout"}
+                                                : "Record completed transfer"}
                                     </button>
                                 </div>
+                                )}
                             </div>
                         );
                     })}

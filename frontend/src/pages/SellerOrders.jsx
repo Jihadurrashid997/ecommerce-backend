@@ -10,6 +10,13 @@ const SellerOrders = () => {
     const [loading, setLoading] = useState(true);
     const [confirmingFulfillment, setConfirmingFulfillment] = useState("");
     const [shipmentDrafts, setShipmentDrafts] = useState({});
+    const nextShipmentStatuses = {
+        Pending: ["Processing"],
+        Processing: ["Shipped"],
+        Shipped: ["Delivered"],
+        Delivered: [],
+        Cancelled: []
+    };
 
     const fetchOrders = async () => {
 
@@ -278,9 +285,11 @@ const SellerOrders = () => {
                                     : order.refundStatus === "refunded"
                                         ? "Cancelled after refund"
                                         : order.payout?.status === "held"
-                                    ? "Held until both you and the customer confirm"
+                                    ? "Awaiting both confirmations; payment is not held by the Shop"
                                     : order.payout?.status === "ready"
-                                        ? "Both confirmations received; awaiting admin payout"
+                                        ? "Both confirmations received; awaiting admin approval"
+                                        : order.payout?.status === "approved"
+                                            ? "Admin approved; manual transfer not yet recorded"
                                         : order.payout?.status === "paid"
                                             ? "Paid by Shop admin"
                                             : order.payout?.status === "cancelled"
@@ -404,7 +413,10 @@ const SellerOrders = () => {
 
                                 <select
                                     value={shipmentDrafts[order._id]?.status || order.status}
-                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    disabled={
+                                        order.paymentStatus !== "paid" ||
+                                        ["requested", "refunded"].includes(order.refundStatus)
+                                    }
                                     onChange={event => setShipmentDrafts(previous => ({
                                         ...previous,
                                         [order._id]: {
@@ -414,25 +426,13 @@ const SellerOrders = () => {
                                     }))}
                                 >
 
-                                    <option value="Pending">
-                                        Pending
-                                    </option>
-
-                                    <option value="Processing">
-                                        Processing
-                                    </option>
-
-                                    <option value="Shipped">
-                                        Shipped
-                                    </option>
-
-                                    <option value="Delivered">
-                                        Delivered
-                                    </option>
-
-                                    <option value="Cancelled">
-                                        Cancelled
-                                    </option>
+                                    {[order.status, ...(nextShipmentStatuses[order.status] || [])]
+                                        .filter((status, index, statuses) => statuses.indexOf(status) === index)
+                                        .map(status => (
+                                            <option value={status} key={status}>
+                                                {status}
+                                            </option>
+                                        ))}
 
                                 </select>
 

@@ -166,10 +166,20 @@ const SellerSettlementSchema = new mongoose.Schema(
                 "awaiting_payment",
                 "held",
                 "ready",
+                "approved",
                 "paid",
                 "cancelled"
             ],
             default: "awaiting_payment"
+        },
+        payoutApprovedAt: {
+            type: Date,
+            default: null
+        },
+        payoutApprovedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
         },
         payoutMethod: {
             type: String,
@@ -252,6 +262,59 @@ const RefundRequestSchema = new mongoose.Schema(
     }
 );
 
+const OrderStatusHistorySchema = new mongoose.Schema(
+    {
+        fromStatus: {
+            type: String,
+            default: ""
+        },
+        toStatus: {
+            type: String,
+            enum: [
+                "Pending",
+                "Processing",
+                "Shipped",
+                "Delivered",
+                "Cancelled"
+            ],
+            required: true
+        },
+        actor: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true
+        },
+        actorRole: {
+            type: String,
+            enum: ["buyer", "seller", "admin", "system"],
+            required: true
+        },
+        fulfillmentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: null
+        },
+        note: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        source: {
+            type: String,
+            enum: ["checkout", "buyer", "seller", "admin", "system"],
+            required: true
+        },
+        occurredAt: {
+            type: Date,
+            default: Date.now,
+            immutable: true
+        }
+    },
+    {
+        _id: false
+    }
+);
+
 const OrderSchema = new mongoose.Schema(
     {
         user: {
@@ -279,6 +342,11 @@ const OrderSchema = new mongoose.Schema(
 
         sellerSettlements: {
             type: [SellerSettlementSchema],
+            default: []
+        },
+
+        statusHistory: {
+            type: [OrderStatusHistorySchema],
             default: []
         },
 
