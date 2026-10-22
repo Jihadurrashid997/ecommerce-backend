@@ -1,5 +1,7 @@
 const User =
     require("../models/User");
+const mongoose = require("mongoose");
+const auth = require("../middleware/auth");
 
 const Product =
     require("../models/Product");
@@ -325,7 +327,10 @@ exports.getMarketplaceSettings =
 exports.getPendingProducts =
     async (_req, res) => {
         try {
-            const products = await Product.find({ isApproved: false })
+            const products = await Product.find({
+                isApproved: false,
+                approvalStatus: { $nin: ["rejected"] }
+            })
                 .populate("seller", "name")
                 .sort({ createdAt: -1 })
                 .lean();
@@ -342,6 +347,114 @@ exports.getPendingProducts =
             });
         }
     };
+
+exports.getSellerApplications = async (_req, res) => {
+    try {
+        const applicants = await User.find({
+            "sellerApplication.status": "pending_review"
+        })
+            .select("name email createdAt +sellerApplication")
+            .sort({ "sellerApplication.submittedAt": 1 })
+            .lean();
+
+        return res.json({
+            success: true,
+            applications: applicants.map(user => ({
+                userId: user._id,
+                name: user.name,
+                email: user.email,
+                createdAt: user.createdAt,
+                ...user.sellerApplication
+            }))
+        });
+    } catch (error) {
+        console.error("GET SELLER APPLICATIONS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load seller applications."
+        });
+    }
+};
+
+exports.reviewSellerApplication = async (req, res) => {
+    const { userId } = req.params;
+    const status = req.body?.status;
+    const reviewNote = typeof req.body?.reviewNote === "string"
+        ? req.body.reviewNote.trim()
+        : "";
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid applicant."
+        });
+    }
+    if (!["approved", "rejected"].includes(status)) {
+        return res.status(400).json({
+            success: false,
+            message: "Choose approved or rejected."
+        });
+    }
+    if (reviewNote.length > 500 || (status === "rejected" && reviewNote.length < 3)) {
+        return res.status(400).json({
+            success: false,
+            message: "A rejection note is required and must be at most 500 characters."
+        });
+    }
+
+    try {
+        const reviewedAt = new Date();
+        const applicant = await User.findOneAndUpdate(
+            {
+                _id: userId,
+                "sellerApplication.status": "pending_review"
+            },
+            {
+                $set: {
+                    role: status === "approved" ? "seller" : "customer",
+                    "sellerApplication.status": status,
+                    "sellerApplication.reviewedAt": reviewedAt,
+                    "sellerApplication.reviewedBy": req.user.id,
+                    "sellerApplication.reviewNote": reviewNote
+                }
+            },
+            { new: true, runValidators: true }
+        ).select("name +sellerApplication");
+
+        if (!applicant) {
+            return res.status(409).json({
+                success: false,
+                message: "This application is no longer pending."
+            });
+        }
+
+        auth.invalidate(userId);
+        await notifyShopUsers({
+            recipients: [applicant._id],
+            eventKey: `${applicant._id}:seller-application-${status}:${reviewedAt.getTime()}`,
+            type: "seller_application_decision",
+            title: status === "approved"
+                ? "Seller application approved"
+                : "Seller application update",
+            message: status === "approved"
+                ? "Your seller application was approved. Seller tools are now available. / আপনার seller আবেদন অনুমোদিত হয়েছে; এখন seller tools ব্যবহার করতে পারবেন।"
+                : `Your seller application was not approved. ${reviewNote} / আপনার seller আবেদনটি অনুমোদিত হয়নি।`,
+            href: "/shop/seller/apply"
+        });
+
+        return res.json({
+            success: true,
+            status,
+            role: applicant.role
+        });
+    } catch (error) {
+        console.error("REVIEW SELLER APPLICATION ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not review this seller application."
+        });
+    }
+};
 
 
 // ======================================================
@@ -380,6 +493,8 @@ exports.approveProduct =
             ) {
 
                 product.isApproved = true;
+                product.approvalStatus = "approved";
+                product.approvalReviewNote = "";
 
             }
 
@@ -440,6 +555,61 @@ exports.approveProduct =
         }
 
     };
+
+exports.rejectProduct = async (req, res) => {
+    const reviewNote = typeof req.body?.reviewNote === "string"
+        ? req.body.reviewNote.trim()
+        : "";
+    if (reviewNote.length < 3 || reviewNote.length > 500) {
+        return res.status(400).json({
+            success: false,
+            message: "Provide a product review note between 3 and 500 characters."
+        });
+    }
+
+    try {
+        const product = await Product.findOneAndUpdate(
+            {
+                _id: req.params.productId,
+                isApproved: false,
+                approvalStatus: { $ne: "rejected" }
+            },
+            {
+                $set: {
+                    approvalStatus: "rejected",
+                    approvalReviewNote: reviewNote
+                }
+            },
+            { new: true, runValidators: true }
+        );
+        if (!product) {
+            return res.status(409).json({
+                success: false,
+                message: "This product is no longer awaiting approval."
+            });
+        }
+
+        await notifyShopUsers({
+            recipients: [product.seller],
+            eventKey: `${product._id}:product-rejected:${product.updatedAt?.getTime?.() || Date.now()}`,
+            type: "product_rejected",
+            title: "Shop product needs changes",
+            message: `${product.name} was not approved. Review the administrator note in My products. / ${product.name} অনুমোদিত হয়নি; My products-এ অ্যাডমিনের নোট দেখে সংশোধন করুন।`,
+            href: "/shop/seller/products",
+            productId: product._id
+        });
+        return res.json({
+            success: true,
+            message: "Product rejected with a seller-facing review note."
+        });
+    } catch (error) {
+        console.error("REJECT PRODUCT ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not reject this product."
+        });
+    }
+};
 
 
 // ======================================================

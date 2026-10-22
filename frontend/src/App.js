@@ -62,6 +62,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Checkout from "./pages/Checkout";
 import OrderHistory from "./pages/OrderHistory";
 import ShopNotifications from "./pages/ShopNotifications";
+import SellerApplication from "./pages/SellerApplication";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentFailed from "./pages/PaymentFailed";
 import EditProfile from "./pages/EditProfile";
@@ -191,6 +192,9 @@ function ShopSectionNavigation({ user }) {
                     <Link to="/shop/seller/products">My products</Link>
                     <Link to="/shop/seller/orders">Seller orders</Link>
                 </>
+            )}
+            {user?.role === "customer" && (
+                <Link to="/shop/seller/apply">Become a seller</Link>
             )}
         </nav>
     );
@@ -362,6 +366,7 @@ function AppLayout() {
                 <Route path="/shop/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
                 <Route path="/shop/orders" element={<PrivateRoute><OrderHistory /></PrivateRoute>} />
                 <Route path="/shop/notifications" element={<PrivateRoute><ShopNotifications /></PrivateRoute>} />
+                <Route path="/shop/seller/apply" element={<PrivateRoute><SellerApplication /></PrivateRoute>} />
                 <Route path="/shop/seller" element={<PrivateRoute allowedRoles={["seller"]}><SellerDashboard /></PrivateRoute>} />
                 <Route path="/shop/seller/products" element={<PrivateRoute allowedRoles={["seller"]}><SellerProducts /></PrivateRoute>} />
                 <Route path="/shop/seller/orders" element={<PrivateRoute allowedRoles={["seller"]}><SellerOrders /></PrivateRoute>} />

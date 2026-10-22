@@ -10,7 +10,9 @@ const {
     updateProduct, 
     deleteProduct,
     getPayoutDetails,
-    updatePayoutDetails
+    updatePayoutDetails,
+    getSellerApplication,
+    submitSellerApplication
 } = require('../controllers/sellerController');
 
 const storage = multer.diskStorage({
@@ -18,6 +20,9 @@ const storage = multer.diskStorage({
     filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
+
+router.get('/application', auth(), getSellerApplication);
+router.post('/application', auth(), submitSellerApplication);
 
 // ২. প্রোডাক্ট আপলোড রাউট (শুধু সেলারদের জন্য)
 router.post('/upload-product', auth(['seller']), upload.array('images', 20), uploadProduct);

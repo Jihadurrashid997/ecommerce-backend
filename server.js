@@ -21,6 +21,8 @@ const {
 } = require("./services/directCallAccess");
 const Message = require("./models/Message");
 const User = require("./models/User");
+const Order = require("./models/Order");
+const ShopNotification = require("./models/ShopNotification");
 const GroupConversation = require("./models/GroupConversation");
 const DeviceSession = require("./models/DeviceSession");
 const { sendPushToUsers } = require("./services/pushNotifications");
@@ -73,7 +75,8 @@ app.use(
 
         allowedHeaders: [
             "Content-Type",
-            "Authorization"
+            "Authorization",
+            "Idempotency-Key"
         ]
     })
 );
@@ -2357,6 +2360,10 @@ const startServer =
         try {
 
             await connectDB();
+            await Promise.all([
+                Order.createIndexes(),
+                ShopNotification.createIndexes()
+            ]);
 
             const storyCleanupTimer = setInterval(() => {
                 void purgeExpiredStories().catch(error => {

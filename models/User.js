@@ -1,5 +1,69 @@
 const mongoose = require("mongoose");
 
+const sellerApplicationSchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: [
+                "not_submitted",
+                "pending_review",
+                "approved",
+                "rejected",
+                "suspended"
+            ],
+            default: "not_submitted"
+        },
+        displayName: {
+            type: String,
+            trim: true,
+            maxlength: 80,
+            default: ""
+        },
+        contact: {
+            type: String,
+            trim: true,
+            maxlength: 40,
+            default: ""
+        },
+        businessName: {
+            type: String,
+            trim: true,
+            maxlength: 100,
+            default: ""
+        },
+        address: {
+            type: String,
+            trim: true,
+            maxlength: 200,
+            default: ""
+        },
+        termsAcceptedAt: {
+            type: Date,
+            default: null
+        },
+        submittedAt: {
+            type: Date,
+            default: null
+        },
+        reviewedAt: {
+            type: Date,
+            default: null
+        },
+        reviewedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        reviewNote: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        }
+    },
+    { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
     {
         name: {
@@ -29,6 +93,12 @@ const userSchema = new mongoose.Schema(
             trim: true,
             maxlength: 120,
             default: "",
+            select: false
+        },
+
+        sellerApplication: {
+            type: sellerApplicationSchema,
+            default: () => ({}),
             select: false
         },
 

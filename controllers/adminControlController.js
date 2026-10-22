@@ -260,7 +260,15 @@ exports.setRole = async (req, res) => {
             return res.status(400).json({ success: false, message: "You can't change your own role." });
         }
 
-        const result = await User.updateOne({ _id: id }, { $set: { role } });
+        const update = {
+            $set: {
+                role,
+                ...(role === "seller"
+                    ? { "sellerApplication.status": "approved" }
+                    : {})
+            }
+        };
+        const result = await User.updateOne({ _id: id }, update);
 
         if (!result.matchedCount) {
             return res.status(404).json({ success: false, message: "User not found." });

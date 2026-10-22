@@ -17,6 +17,10 @@ const Checkout = () => {
 
 
     const [loading, setLoading] = useState(false);
+    const [idempotencyKey, setIdempotencyKey] = useState(
+        () => window.crypto?.randomUUID?.() ||
+            `checkout_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    );
 
 
     const [formData, setFormData] = useState({
@@ -97,6 +101,10 @@ const Checkout = () => {
             [name]: value
 
         });
+        setIdempotencyKey(
+            window.crypto?.randomUUID?.() ||
+            `checkout_${Date.now()}_${Math.random().toString(36).slice(2)}`
+        );
 
     };
 
@@ -260,6 +268,11 @@ const Checkout = () => {
                         paymentMethod:
                             "sslcommerz"
 
+                    },
+                    {
+                        headers: {
+                            "Idempotency-Key": idempotencyKey
+                        }
                     }
                 );
 
@@ -275,7 +288,6 @@ const Checkout = () => {
                 );
 
             }
-
 
             /*
             ========================================

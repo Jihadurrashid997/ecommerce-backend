@@ -456,6 +456,21 @@ const OrderHistory = () => {
                                                 <strong>Shipment {index + 1}:</strong>{" "}
                                                 {settlement.deliveryStatus}
                                             </p>
+                                            {(settlement.courierName || settlement.trackingNumber) && (
+                                                <p>
+                                                    <strong>Tracking:</strong>{" "}
+                                                    {settlement.courierName || "Courier"}
+                                                    {settlement.trackingNumber
+                                                        ? ` · ${settlement.trackingNumber}`
+                                                        : ""}
+                                                    {settlement.trackingUrl && (
+                                                        <> · <a href={settlement.trackingUrl} target="_blank" rel="noreferrer">Track shipment</a></>
+                                                    )}
+                                                </p>
+                                            )}
+                                            {settlement.deliveryEvidence && (
+                                                <p><strong>Seller delivery note:</strong> {settlement.deliveryEvidence}</p>
+                                            )}
                                             <p>
                                                 Seller payout:{" "}
                                                 {settlement.payoutStatus === "held"

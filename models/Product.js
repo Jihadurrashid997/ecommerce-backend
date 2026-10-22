@@ -43,6 +43,19 @@ const productSchema = new mongoose.Schema(
         default:true
     },
 
+    approvalStatus: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "approved"
+    },
+
+    approvalReviewNote: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+        default: ""
+    },
+
     seller:{
         type:mongoose.Schema.Types.ObjectId,
         ref:"User"

@@ -2,6 +2,122 @@ const Product = require('../models/Product');
 const User = require('../models/User');
 const marketplaceSettings = require('../services/marketplaceSettings');
 const { notifyShopUsers } = require("../services/shopNotifications");
+const { notifyShopAdmins } = require("../services/shopNotifications");
+
+exports.getSellerApplication = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .select("+sellerApplication")
+            .lean();
+        if (!user) {
+            return res.status(404).json({ message: "Account not found." });
+        }
+
+        const application = user.sellerApplication || {};
+        return res.json({
+            status: application.status || "not_submitted",
+            displayName: application.displayName || "",
+            contact: application.contact || "",
+            businessName: application.businessName || "",
+            address: application.address || "",
+            submittedAt: application.submittedAt || null,
+            reviewedAt: application.reviewedAt || null,
+            reviewNote: application.reviewNote || ""
+        });
+    } catch (error) {
+        console.error("GET SELLER APPLICATION ERROR:", error);
+        return res.status(500).json({
+            message: "Could not load your seller application."
+        });
+    }
+};
+
+exports.submitSellerApplication = async (req, res) => {
+    const displayName = String(req.body?.displayName || "").trim();
+    const contact = String(req.body?.contact || "").trim();
+    const businessName = String(req.body?.businessName || "").trim();
+    const address = String(req.body?.address || "").trim();
+
+    if (
+        displayName.length < 2 ||
+        displayName.length > 80 ||
+        contact.length < 5 ||
+        contact.length > 40 ||
+        businessName.length > 100 ||
+        address.length > 200 ||
+        req.body?.termsAccepted !== true
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Enter a seller display name and contact, keep optional details within their limits, and accept the seller terms."
+        });
+    }
+
+    try {
+        const user = await User.findById(req.user.id)
+            .select("+sellerApplication");
+        if (!user) {
+            return res.status(404).json({ message: "Account not found." });
+        }
+        if (user.role === "seller") {
+            return res.status(409).json({
+                message: "This account already has seller access."
+            });
+        }
+
+        const currentStatus = user.sellerApplication?.status || "not_submitted";
+        if (["pending_review", "suspended"].includes(currentStatus)) {
+            return res.status(409).json({
+                message: currentStatus === "pending_review"
+                    ? "Your seller application is already under review."
+                    : "This account cannot submit a seller application."
+            });
+        }
+
+        const submittedAt = new Date();
+        user.sellerApplication = {
+            status: "pending_review",
+            displayName,
+            contact,
+            businessName,
+            address,
+            termsAcceptedAt: submittedAt,
+            submittedAt,
+            reviewedAt: null,
+            reviewedBy: null,
+            reviewNote: ""
+        };
+        await user.save();
+
+        const eventKey = `${user._id}:seller-application:${submittedAt.getTime()}`;
+        await notifyShopUsers({
+            recipients: [user._id],
+            eventKey,
+            type: "seller_application",
+            title: "Seller application submitted",
+            message: "Your seller application is awaiting Shop administrator review. / আপনার seller আবেদনটি Shop administrator-এর পর্যালোচনার অপেক্ষায় আছে।",
+            href: "/shop/seller/apply"
+        });
+        await notifyShopAdmins({
+            eventKey,
+            type: "seller_application",
+            title: "Seller application needs review",
+            message: "A new seller application is awaiting review in Shop controls. / Shop controls-এ নতুন seller আবেদন পর্যালোচনার অপেক্ষায় আছে।",
+            href: "/admin/control"
+        });
+
+        return res.status(202).json({
+            success: true,
+            status: "pending_review",
+            message: "Your seller application was submitted for review."
+        });
+    } catch (error) {
+        console.error("SUBMIT SELLER APPLICATION ERROR:", error);
+        return res.status(500).json({
+            message: "Could not submit your seller application."
+        });
+    }
+};
 
 exports.getPayoutDetails = async (req, res) => {
     try {
@@ -120,7 +236,10 @@ exports.uploadProduct = async (req, res) => {
             stock,
             image: imagePaths[0] || req.body.image || "",
             seller: req.user.id,
-            isApproved: !settings.requireProductApproval
+            isApproved: !settings.requireProductApproval,
+            approvalStatus: settings.requireProductApproval
+                ? "pending"
+                : "approved"
         });
 
         await newProduct.save();
@@ -158,9 +277,12 @@ exports.getProducts = async (req, res) => {
         }
 
         const products = await Product.find(
-            settings.requireProductApproval
-                ? { isApproved: { $ne: false } }
-                : {}
+            {
+                approvalStatus: { $nin: ["pending", "rejected"] },
+                ...(settings.requireProductApproval
+                    ? { isApproved: { $ne: false } }
+                    : {})
+            }
         ).select("-seller");
         res.status(200).json(products);
     } catch (error) {
@@ -183,7 +305,10 @@ exports.getProductById = async (req, res) => {
         if (!product) {
             return res.status(404).json({ message: 'Product not found' });
         }
-        if (settings.requireProductApproval && product.isApproved === false) {
+        if (
+            ["pending", "rejected"].includes(product.approvalStatus) ||
+            (settings.requireProductApproval && product.isApproved === false)
+        ) {
             return res.status(404).json({ message: 'Product not found' });
         }
         res.status(200).json(product);
@@ -214,8 +339,15 @@ exports.updateProduct = async (req, res) => {
             return res.status(401).json({ message: 'Not authorized to update this product' });
         }
 
-        if (settings.requireProductApproval) {
+        const requiresReview =
+            settings.requireProductApproval ||
+            product.approvalStatus === "rejected";
+        if (
+            requiresReview
+        ) {
             product.isApproved = false;
+            product.approvalStatus = "pending";
+            product.approvalReviewNote = "";
         }
 
         if (name !== undefined) {
@@ -269,7 +401,7 @@ exports.updateProduct = async (req, res) => {
 
         await product.save();
 
-        if (settings.requireProductApproval && product.isApproved === false) {
+        if (requiresReview && product.isApproved === false) {
             await notifyShopUsers({
                 recipients: [product.seller],
                 eventKey: `${product._id}:product-review:${product.updatedAt?.getTime?.() || Date.now()}`,

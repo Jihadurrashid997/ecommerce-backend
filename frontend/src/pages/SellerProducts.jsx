@@ -72,6 +72,7 @@ const SellerProducts = () => {
             <th>Price</th>
             <th>Category</th>
             <th>Stock</th>
+            <th>Listing review</th>
             <th>Action</th>
 
           </tr>
@@ -101,6 +102,10 @@ const SellerProducts = () => {
               <td>{product.category}</td>
 
               <td>{product.stock}</td>
+              <td>
+                {product.approvalStatus || (product.isApproved === false ? "pending" : "approved")}
+                {product.approvalReviewNote && <p role="note">{product.approvalReviewNote}</p>}
+              </td>
 
               <td>
 

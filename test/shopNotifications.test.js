@@ -211,7 +211,10 @@ test("verified Shop payment notifies buyer and sellers without sharing buyer ide
         operations = [...operations, ...nextOperations];
     };
     SSLCommerzPayment.prototype.validate = async () => ({
-        status: "VALID"
+        status: "VALID",
+        tran_id: "TXN-PAID",
+        amount: "50",
+        currency: "BDT"
     });
 
     try {

@@ -1,4 +1,5 @@
 const SSLCommerzPayment = require("sslcommerz-lts");
+const crypto = require("crypto");
 const Order = require("../models/Order");
 const { notifyShopUsers } = require("../services/shopNotifications");
 
@@ -204,6 +205,11 @@ exports.initPayment = async (req, res) => {
             });
         }
 
+        if (order.paymentStatus === "pending" && order.transactionId) {
+            return res.status(409).json({
+                message: "A payment attempt is already active for this order. Wait for its result before retrying."
+            });
+        }
 
         // Check amount
 
@@ -220,7 +226,7 @@ exports.initPayment = async (req, res) => {
         }
 
 
-        transactionId = "TXN_" + Date.now();
+        transactionId = `TXN_${crypto.randomBytes(12).toString("hex")}`;
 
 
         // Save transaction information
@@ -752,6 +758,17 @@ exports.paymentIPN = async (req, res) => {
                     "Payment validation failed."
             });
 
+        }
+
+        if (
+            validationResponse.tran_id !== tran_id ||
+            Number(validationResponse.amount) !== Number(order.totalPrice) ||
+            validationResponse.currency !== "BDT"
+        ) {
+            await markPaymentAttemptEnded(tran_id, "failed");
+            return res.status(400).json({
+                message: "Validated payment details do not match this order."
+            });
         }
 
 

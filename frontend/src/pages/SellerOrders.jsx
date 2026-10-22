@@ -9,6 +9,7 @@ const SellerOrders = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [confirmingFulfillment, setConfirmingFulfillment] = useState("");
+    const [shipmentDrafts, setShipmentDrafts] = useState({});
 
     const fetchOrders = async () => {
 
@@ -17,6 +18,18 @@ const SellerOrders = () => {
             const res = await api.get("/orders/seller/orders");
 
             setOrders(res.data);
+            setShipmentDrafts(previous => Object.fromEntries(
+                (res.data || []).map(order => [
+                    order._id,
+                    previous[order._id] || {
+                        status: order.status,
+                        courierName: order.payout?.courierName || "",
+                        trackingNumber: order.payout?.trackingNumber || "",
+                        trackingUrl: order.payout?.trackingUrl || "",
+                        deliveryEvidence: ""
+                    }
+                ])
+            ));
 
         } catch (err) {
 
@@ -42,13 +55,13 @@ const SellerOrders = () => {
     }, []);
 
 
-    const updateStatus = async (orderId, status) => {
+    const updateStatus = async (orderId, shipment) => {
 
         try {
 
             await api.put(
                 `/orders/seller/${orderId}/status`,
-                { status }
+                shipment
             );
 
             alert("Order status updated successfully.");
@@ -248,6 +261,16 @@ const SellerOrders = () => {
                                 </div>
                             )}
 
+                            {order.payout?.trackingNumber && (
+                                <p>
+                                    <strong>Tracking:</strong>{" "}
+                                    {order.payout.courierName || "Courier"} · {order.payout.trackingNumber}
+                                    {order.payout.trackingUrl && (
+                                        <> · <a href={order.payout.trackingUrl} target="_blank" rel="noreferrer">Track shipment</a></>
+                                    )}
+                                </p>
+                            )}
+
                             <p>
                                 <strong>Seller payout:</strong>{" "}
                                 {order.refundStatus === "requested"
@@ -376,19 +399,19 @@ const SellerOrders = () => {
                             <div className="status-controls">
 
                                 <label>
-                                    Update Status
+                                    Shipment status and tracking (seller-entered)
                                 </label>
 
-
                                 <select
-                                    value={order.status}
+                                    value={shipmentDrafts[order._id]?.status || order.status}
                                     disabled={["requested", "refunded"].includes(order.refundStatus)}
-                                    onChange={(e) =>
-                                        updateStatus(
-                                            order._id,
-                                            e.target.value
-                                        )
-                                    }
+                                    onChange={event => setShipmentDrafts(previous => ({
+                                        ...previous,
+                                        [order._id]: {
+                                            ...previous[order._id],
+                                            status: event.target.value
+                                        }
+                                    }))}
                                 >
 
                                     <option value="Pending">
@@ -412,6 +435,75 @@ const SellerOrders = () => {
                                     </option>
 
                                 </select>
+
+                                <input
+                                    value={shipmentDrafts[order._id]?.courierName || ""}
+                                    maxLength={80}
+                                    placeholder="Courier name (optional)"
+                                    aria-label={`Courier for order ${order._id.slice(-8)}`}
+                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    onChange={event => setShipmentDrafts(previous => ({
+                                        ...previous,
+                                        [order._id]: {
+                                            ...previous[order._id],
+                                            courierName: event.target.value
+                                        }
+                                    }))}
+                                />
+                                <input
+                                    value={shipmentDrafts[order._id]?.trackingNumber || ""}
+                                    maxLength={120}
+                                    placeholder="Tracking number (optional)"
+                                    aria-label={`Tracking number for order ${order._id.slice(-8)}`}
+                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    onChange={event => setShipmentDrafts(previous => ({
+                                        ...previous,
+                                        [order._id]: {
+                                            ...previous[order._id],
+                                            trackingNumber: event.target.value
+                                        }
+                                    }))}
+                                />
+                                <input
+                                    type="url"
+                                    value={shipmentDrafts[order._id]?.trackingUrl || ""}
+                                    maxLength={500}
+                                    placeholder="HTTPS tracking link (optional)"
+                                    aria-label={`Tracking link for order ${order._id.slice(-8)}`}
+                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    onChange={event => setShipmentDrafts(previous => ({
+                                        ...previous,
+                                        [order._id]: {
+                                            ...previous[order._id],
+                                            trackingUrl: event.target.value
+                                        }
+                                    }))}
+                                />
+                                <textarea
+                                    value={shipmentDrafts[order._id]?.deliveryEvidence || ""}
+                                    maxLength={500}
+                                    rows={2}
+                                    placeholder="Delivery note/evidence required when marking delivered"
+                                    aria-label={`Delivery note for order ${order._id.slice(-8)}`}
+                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    onChange={event => setShipmentDrafts(previous => ({
+                                        ...previous,
+                                        [order._id]: {
+                                            ...previous[order._id],
+                                            deliveryEvidence: event.target.value
+                                        }
+                                    }))}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    onClick={() => updateStatus(
+                                        order._id,
+                                        shipmentDrafts[order._id] || { status: order.status }
+                                    )}
+                                >
+                                    Save shipment update
+                                </button>
 
                             </div>
 

@@ -36,6 +36,7 @@ exports.getProducts = async (req, res) => {
         const filters = {
             ...keyword,
             ...category,
+            approvalStatus: { $nin: ["pending", "rejected"] },
             ...(settings.requireProductApproval
                 ? { isApproved: { $ne: false } }
                 : {})
@@ -101,8 +102,11 @@ exports.getProduct = async (req, res) => {
         }
 
         if (
-            settings.requireProductApproval &&
-            product.isApproved === false
+            ["pending", "rejected"].includes(product.approvalStatus) ||
+            (
+                settings.requireProductApproval &&
+                product.isApproved === false
+            )
         ) {
             return res.status(404).json({
                 message: "Product not found"
@@ -173,7 +177,10 @@ exports.createProduct = async (req, res) => {
             stock,
 
             seller: req.user.id,
-            isApproved: !settings.requireProductApproval
+            isApproved: !settings.requireProductApproval,
+            approvalStatus: settings.requireProductApproval
+                ? "pending"
+                : "approved"
 
         });
 
@@ -287,11 +294,16 @@ exports.updateProduct = async (req, res) => {
             updatedData.image = String(req.body.image).trim();
         }
 
-        if (
+        const requiresReview =
             req.user.role !== "admin" &&
-            settings.requireProductApproval
-        ) {
+            (
+                settings.requireProductApproval ||
+                product.approvalStatus === "rejected"
+            );
+        if (requiresReview) {
             updatedData.isApproved = false;
+            updatedData.approvalStatus = "pending";
+            updatedData.approvalReviewNote = "";
         }
 
         if (req.file) {
@@ -305,8 +317,7 @@ exports.updateProduct = async (req, res) => {
         await product.save();
 
         if (
-            req.user.role !== "admin" &&
-            settings.requireProductApproval &&
+            requiresReview &&
             product.isApproved === false
         ) {
             await notifyShopUsers({
