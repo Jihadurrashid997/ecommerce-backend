@@ -3,7 +3,7 @@ const Post = require("../models/Post");
 const Community = require("../models/Community");
 const User = require("../models/User");
 const SavedPost = require("../models/SavedPost");
-const { saveFile, deleteFile } = require("../services/mediaStorage");
+const mediaStorage = require("../services/mediaStorage");
 const { notifyUser, notifyFollowers } = require("../services/platformNotifications");
 
 const AUTHOR_FIELDS = "name username profileImage avatar role";
@@ -268,7 +268,7 @@ exports.createPost = async (req, res) => {
         const media = [];
 
         for (const file of files) {
-            media.push(await saveFile(file, "etop/posts"));
+            media.push(await mediaStorage.saveFile(file, "etop/posts"));
         }
 
         const post = await Post.create({
@@ -340,11 +340,11 @@ exports.createReel = async (req, res) => {
             });
         }
 
-        const saved = await saveFile(file, "etop/reels");
+        const saved = await mediaStorage.saveFile(file, "etop/reels");
 
         if (saved.duration > MAX_REEL_SECONDS + 1) {
 
-            await deleteFile(saved);
+            await mediaStorage.deleteFile(saved);
 
             return res.status(400).json({
                 success: false,
@@ -1170,7 +1170,21 @@ exports.deletePost = async (req, res) => {
         }
 
         for (const media of post.media) {
-            await deleteFile(media);
+            const references = [];
+            if (media.publicId) {
+                references.push({ "media.publicId": media.publicId });
+            }
+            if (media.url) {
+                references.push({ "media.url": media.url });
+            }
+            const hasOtherPostReference = references.length > 0 &&
+                await Post.exists({
+                    _id: { $ne: post._id },
+                    $or: references
+                });
+            if (!hasOtherPostReference) {
+                await mediaStorage.deleteFile(media);
+            }
         }
 
         await Post.deleteOne({ _id: post._id });
