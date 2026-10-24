@@ -1023,7 +1023,7 @@ test("users cannot forward messages outside conversations they can access", asyn
     }
 });
 
-test("Messenger attachment uploads accept common audio formats and reject video files", () => {
+test("Messenger attachment uploads accept supported audio and video formats", () => {
     const filterFile = mimetype => {
         let result;
         messageUpload.fileFilter({}, { mimetype }, (error, accepted) => {
@@ -1045,7 +1045,12 @@ test("Messenger attachment uploads accept common audio formats and reject video 
         "audio/flac",
         "audio/m4a",
         "audio/opus",
-        "audio/3gpp"
+        "audio/3gpp",
+        "audio/3gpp2",
+        "video/mp4",
+        "video/webm",
+        "video/quicktime",
+        "video/3gpp"
     ]) {
         assert.deepEqual(filterFile(mimetype), {
             error: null,
@@ -1053,7 +1058,22 @@ test("Messenger attachment uploads accept common audio formats and reject video 
         });
     }
 
-    assert.match(filterFile("video/mp4").error.message, /images, audio/i);
+    assert.match(filterFile("application/x-msdownload").error.message, /images, audio/i);
+
+    const mp4 = Buffer.from([
+        0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70,
+        0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0,
+        0x69, 0x73, 0x6f, 0x6d, 0x6d, 0x70, 0x34, 0x32
+    ]);
+    assert.equal(messageUpload.matchesFileContent("video/mp4", mp4), true);
+    assert.equal(messageUpload.matchesFileContent(
+        "video/mp4",
+        Buffer.from("not a video")
+    ), false);
+    assert.equal(messageUpload.matchesFileContent("audio/3gpp2", Buffer.from([
+        0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x33, 0x67, 0x32, 0x61, 0, 0, 0, 0
+    ])), true);
+    assert.equal(messageUpload.matchesFileContent("audio/wav", Buffer.alloc(0)), false);
 });
 
 test("group messages use a group ID instead of a direct receiver", () => {

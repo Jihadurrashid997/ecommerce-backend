@@ -210,20 +210,6 @@ export const createPeerConnection = ({
     }
 
 
-    console.log(
-        "🧊🔧 ICE_SERVERS being used:",
-        JSON.stringify(
-            ICE_SERVERS.iceServers.map(
-                s => ({
-                    urls: s.urls,
-                    username: s.username,
-                    hasCredential: Boolean(s.credential)
-                })
-            )
-        )
-    );
-
-
     const peer =
         new RTCPeerConnection(
             ICE_SERVERS
@@ -239,31 +225,9 @@ export const createPeerConnection = ({
     peer.onicecandidate =
         event => {
 
-            if (
-                !event.candidate
-            ) {
-
-                console.log(
-                    "🧊 ICE gathering finished (null candidate)"
-                );
-
+            if (!event.candidate) {
                 return;
             }
-
-
-            // typ host = same network, typ srflx = STUN
-            // (public IP discovered), typ relay = TURN
-            // relay actually being used. If you NEVER see
-            // "relay" here on a cross-network call, the
-            // TURN server isn't reachable/working and
-            // that's why the call can't connect.
-            console.log(
-                "🧊 Local ICE candidate:",
-                event.candidate.type,
-                event.candidate.protocol,
-                event.candidate.address ||
-                    event.candidate.candidate
-            );
 
 
             if (

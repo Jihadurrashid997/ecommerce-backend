@@ -96,6 +96,7 @@ router.post(
     "/send",
     auth(),
     handleUpload,
+    messageUpload.validateContent,
     sendMessage
 );
 

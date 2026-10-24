@@ -1,0 +1,112 @@
+.messenger-scanner-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100010;
+    display: grid;
+    place-items: center;
+    overflow-y: auto;
+    padding: 16px;
+    background: rgba(10, 15, 25, 0.78);
+}
+
+.messenger-scanner {
+    width: min(560px, 100%);
+    display: grid;
+    gap: 14px;
+    padding: 20px;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.35);
+}
+
+.messenger-scanner header,
+.messenger-scanner footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.messenger-scanner h2,
+.messenger-scanner p {
+    margin: 0;
+}
+
+.messenger-scanner header button {
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 50%;
+    background: #f2f4f7;
+    cursor: pointer;
+}
+
+.messenger-scanner-camera,
+.messenger-scanner-preview {
+    width: 100%;
+    max-height: min(62vh, 560px);
+    border-radius: 12px;
+    background: #101828;
+    object-fit: contain;
+}
+
+.messenger-scanner-error {
+    color: #b42318;
+}
+
+.messenger-scanner-file {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    gap: 8px;
+    color: #0866ff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.messenger-scanner-file input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+.messenger-scanner footer {
+    justify-content: flex-end;
+}
+
+.messenger-scanner footer button {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 15px;
+    border: 0;
+    border-radius: 10px;
+    background: #0866ff;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.messenger-scanner footer .messenger-scanner-secondary {
+    background: #eef2f6;
+    color: #344054;
+}
+
+.messenger-scanner footer button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+    .messenger-scanner-overlay {
+        padding: 8px;
+    }
+
+    .messenger-scanner {
+        padding: 14px;
+    }
+}

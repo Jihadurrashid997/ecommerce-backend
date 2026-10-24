@@ -17,6 +17,7 @@ const {
 const {
     canHandleDirectCall,
     canStartDirectCall,
+    getConnectedCallDuration,
     hasBlockedUser
 } = require("./services/directCallAccess");
 const Message = require("./models/Message");
@@ -1782,6 +1783,48 @@ socket.on(
     }
 );
 
+/* =========================================================
+   CALL CONNECTED
+========================================================= */
+
+socket.on(
+    "call-connected",
+    payload => {
+        const roomId = String(payload?.roomId || "").toLowerCase();
+        const call = getCall(roomId);
+        const participantId = normalizeId(socket.userId)?.toLowerCase();
+        const otherParticipantId =
+            participantId === call?.callerId
+                ? call?.receiverId
+                : call?.callerId;
+
+        if (
+            !call ||
+            call.status !== "accepted" ||
+            !participantId ||
+            (payload?.callId && payload.callId !== call.callId) ||
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: participantId,
+                callerId: participantId,
+                receiverId: otherParticipantId,
+                role: "participant"
+            })
+        ) {
+            return;
+        }
+
+        if (!call.connectedAt) {
+            call.connectedAt = Date.now();
+            activeCalls.set(roomId, call);
+            emitCallToBoth(call, "call-connected", {
+                connectedAt: call.connectedAt
+            });
+        }
+    }
+);
+
 
 /* =========================================================
    BUSY
@@ -1899,26 +1942,11 @@ socket.on(
         /* -----------------------------------------
            DURATION
 
-           Only counts from when the call was
-           actually accepted - a call that rang but
-           was never picked up has no "connected"
-           time and should show as 0 (the chat log
-           already has separate missed-call /
-           declined messages for that case).
+           Count only from the first successful peer
+           connection; a call that only rang stays at 0.
         ----------------------------------------- */
 
-        const duration =
-            call.acceptedAt
-                ? Math.max(
-                      0,
-                      Math.floor(
-                          (
-                              Date.now() -
-                              call.acceptedAt
-                          ) / 1000
-                      )
-                  )
-                : 0;
+        const duration = getConnectedCallDuration(call);
 
 
         const endedPayload = {
@@ -2285,6 +2313,9 @@ socket.on(
 
                                     reason:
                                         "disconnect",
+
+                                    duration:
+                                        getConnectedCallDuration(call),
 
                                     timestamp:
                                         Date.now()
