@@ -178,3 +178,65 @@ test("selecting an image runs the scan without requesting camera access", async 
     expect(processDocumentImage.mock.calls[0][0]).toBe(image);
     expect(processDocumentImage.mock.calls[0][1]).toBe("enhanced");
 });
+
+test("user can adjust detected page corners before applying the scan", async () => {
+    const detected = [
+        { x: 10, y: 10 },
+        { x: 90, y: 10 },
+        { x: 90, y: 90 },
+        { x: 10, y: 90 }
+    ];
+    const processedFile = new File(["processed"], "scan.jpg", { type: "image/jpeg" });
+    processDocumentImage.mockResolvedValue({
+        file: processedFile,
+        corners: detected,
+        width: 100,
+        height: 100
+    });
+    const { container } = render(
+        <MessengerScanner onClose={jest.fn()} onSend={jest.fn()} />
+    );
+    const image = new File(["page"], "page.png", { type: "image/png" });
+    fireEvent.change(container.querySelector('input[type="file"]'), {
+        target: { files: [image] }
+    });
+    await screen.findByRole("img", { name: "Captured document page" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Adjust corners" }));
+    const svg = container.querySelector(".messenger-scanner-corner-editor svg");
+    svg.getBoundingClientRect = () => ({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100
+    });
+    const firstCorner = container.querySelector(
+        ".messenger-scanner-corner-editor circle"
+    );
+    fireEvent(
+        firstCorner,
+        new MouseEvent("pointerdown", {
+            bubbles: true,
+            clientX: 10,
+            clientY: 10
+        })
+    );
+    fireEvent(
+        svg,
+        new MouseEvent("pointermove", {
+            bubbles: true,
+            clientX: 20,
+            clientY: 25
+        })
+    );
+    fireEvent(svg, new MouseEvent("pointerup", { bubbles: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply corners" }));
+
+    await waitFor(() => {
+        expect(processDocumentImage).toHaveBeenCalledTimes(2);
+    });
+    const adjustedCorners = processDocumentImage.mock.calls[1][2];
+    expect(adjustedCorners[0]).toEqual({ x: 20, y: 25 });
+});

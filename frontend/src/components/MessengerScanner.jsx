@@ -17,11 +17,19 @@ const MessengerScanner = ({ onClose, onSend }) => {
     const [preview, setPreview] = useState(null);
     const [previewUrl, setPreviewUrl] = useState("");
     const [sourceFile, setSourceFile] = useState(null);
+    const [sourceUrl, setSourceUrl] = useState("");
+    const [scanCorners, setScanCorners] = useState(null);
+    const [draftCorners, setDraftCorners] = useState(null);
+    const [scanDimensions, setScanDimensions] = useState(null);
+    const [editingCorners, setEditingCorners] = useState(false);
+    const [draggingCorner, setDraggingCorner] = useState(null);
     const [filterMode, setFilterMode] = useState("enhanced");
     const [processing, setProcessing] = useState(false);
     const [cameraLoading, setCameraLoading] = useState(false);
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
+    const scanCornersRef = useRef(null);
+    const userAdjustedCornersRef = useRef(false);
 
     const releaseCamera = useCallback(() => {
         stopStream(streamRef.current);
@@ -85,15 +93,36 @@ const MessengerScanner = ({ onClose, onSend }) => {
     }, [preview]);
 
     useEffect(() => {
+        if (!sourceFile) {
+            setSourceUrl("");
+            return undefined;
+        }
+        const url = URL.createObjectURL(sourceFile);
+        setSourceUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [sourceFile]);
+
+    useEffect(() => {
         if (!sourceFile) return undefined;
 
         let cancelled = false;
         setProcessing(true);
         setError("");
         setPreview(null);
-        processDocumentImage(sourceFile, filterMode)
-            .then(processedFile => {
-                if (!cancelled) setPreview(processedFile);
+        processDocumentImage(
+            sourceFile,
+            filterMode,
+            userAdjustedCornersRef.current ? scanCornersRef.current : null
+        )
+            .then(result => {
+                if (cancelled) return;
+                const processedFile = result.file || result;
+                setPreview(processedFile);
+                if (result.corners) {
+                    scanCornersRef.current = result.corners;
+                    setScanCorners(result.corners);
+                    setScanDimensions({ width: result.width, height: result.height });
+                }
             })
             .catch(processingError => {
                 if (!cancelled) {
@@ -153,6 +182,12 @@ const MessengerScanner = ({ onClose, onSend }) => {
             setSourceFile(new File([blob], `messenger-capture-${Date.now()}.jpg`, {
                 type: "image/jpeg"
             }));
+            userAdjustedCornersRef.current = false;
+            scanCornersRef.current = null;
+            setScanCorners(null);
+            setDraftCorners(null);
+            setScanDimensions(null);
+            setEditingCorners(false);
             releaseCamera();
             setError("");
         }, "image/jpeg", 0.86);
@@ -171,8 +206,71 @@ const MessengerScanner = ({ onClose, onSend }) => {
             return;
         }
         releaseCamera();
+        userAdjustedCornersRef.current = false;
+        scanCornersRef.current = null;
+        setScanCorners(null);
+        setDraftCorners(null);
+        setScanDimensions(null);
+        setEditingCorners(false);
         setSourceFile(image);
         setError("");
+    };
+
+    const updateCorner = (index, event) => {
+        if (draggingCorner === null || !scanDimensions) return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const x = Math.max(
+            0,
+            Math.min(
+                scanDimensions.width - 1,
+                ((event.clientX - bounds.left) / bounds.width) * scanDimensions.width
+            )
+        );
+        const y = Math.max(
+            0,
+            Math.min(
+                scanDimensions.height - 1,
+                ((event.clientY - bounds.top) / bounds.height) * scanDimensions.height
+            )
+        );
+        const middleX = scanDimensions.width / 2;
+        const middleY = scanDimensions.height / 2;
+        const constrained = {
+            x: index === 0 || index === 3 ? Math.min(x, middleX) : Math.max(x, middleX),
+            y: index === 0 || index === 1 ? Math.min(y, middleY) : Math.max(y, middleY)
+        };
+        const next = draftCorners.map((corner, cornerIndex) =>
+            cornerIndex === index ? constrained : corner
+        );
+        setDraftCorners(next);
+    };
+
+    const applyCorners = async () => {
+        if (!sourceFile || !draftCorners || processing) return;
+        setProcessing(true);
+        setError("");
+        userAdjustedCornersRef.current = true;
+        try {
+            const result = await processDocumentImage(
+                sourceFile,
+                filterMode,
+                draftCorners
+            );
+            setPreview(result.file || result);
+            if (result.corners) {
+                scanCornersRef.current = result.corners;
+                setScanCorners(result.corners);
+                setScanDimensions({ width: result.width, height: result.height });
+            }
+            setEditingCorners(false);
+        } catch (processingError) {
+            setError(
+                processingError.message ||
+                    "The selected page corners could not be applied."
+            );
+        } finally {
+            setProcessing(false);
+        }
     };
 
     const sendScan = async () => {
@@ -210,7 +308,41 @@ const MessengerScanner = ({ onClose, onSend }) => {
                 </header>
                 <p>Capture a page or choose an existing image. Nothing is sent until you confirm.</p>
                 {previewUrl ? (
-                    <img className="messenger-scanner-preview" src={previewUrl} alt="Captured document page" />
+                    editingCorners && sourceUrl && draftCorners && scanDimensions ? (
+                        <div className="messenger-scanner-corner-editor">
+                            <img src={sourceUrl} alt="Original page" />
+                            <svg
+                                viewBox={`0 0 ${scanDimensions.width} ${scanDimensions.height}`}
+                                preserveAspectRatio="none"
+                                onPointerMove={event => updateCorner(draggingCorner, event)}
+                                onPointerUp={() => setDraggingCorner(null)}
+                                onPointerCancel={() => setDraggingCorner(null)}
+                                aria-label="Drag the four page corners"
+                                role="group"
+                            >
+                                <polygon
+                                    points={draftCorners.map(point => `${point.x},${point.y}`).join(" ")}
+                                />
+                                {draftCorners.map((point, index) => (
+                                    <circle
+                                        key={index}
+                                        cx={point.x}
+                                        cy={point.y}
+                                        r={Math.max(12, scanDimensions.width * 0.025)}
+                                        onPointerDown={event => {
+                                            event.preventDefault();
+                                            event.currentTarget.ownerSVGElement
+                                                ?.setPointerCapture?.(event.pointerId);
+                                            setDraggingCorner(index);
+                                        }}
+                                        aria-label={`Page corner ${index + 1}`}
+                                    />
+                                ))}
+                            </svg>
+                        </div>
+                    ) : (
+                        <img className="messenger-scanner-preview" src={previewUrl} alt="Captured document page" />
+                    )
                 ) : sourceFile ? (
                     <p className="messenger-scanner-processing" role="status">
                         {processing
@@ -253,6 +385,19 @@ const MessengerScanner = ({ onClose, onSend }) => {
                         >
                             Original
                         </button>
+                        {scanCorners && (
+                            <button
+                                type="button"
+                                aria-pressed={editingCorners}
+                                disabled={processing || busy}
+                                onClick={() => {
+                                    if (!editingCorners) setDraftCorners(scanCorners);
+                                    setEditingCorners(value => !value);
+                                }}
+                            >
+                                {editingCorners ? "Back to scan" : "Adjust corners"}
+                            </button>
+                        )}
                     </div>
                 )}
                 {error && <p className="messenger-scanner-error" role="alert">{error}</p>}
@@ -271,6 +416,11 @@ const MessengerScanner = ({ onClose, onSend }) => {
                                 onClick={() => {
                                     setSourceFile(null);
                                     setPreview(null);
+                                    setScanCorners(null);
+                                    setDraftCorners(null);
+                                    setScanDimensions(null);
+                                    userAdjustedCornersRef.current = false;
+                                    scanCornersRef.current = null;
                                     void startCamera();
                                 }}
                             >
@@ -279,9 +429,19 @@ const MessengerScanner = ({ onClose, onSend }) => {
                             <button
                                 type="button"
                                 disabled={busy || processing || !preview}
-                                onClick={sendScan}
+                                onClick={
+                                    editingCorners
+                                        ? applyCorners
+                                        : sendScan
+                                }
                             >
-                                {busy ? "Sending…" : processing ? "Preparing…" : "Confirm and send"}
+                                {busy
+                                    ? "Sending…"
+                                    : processing
+                                        ? "Preparing…"
+                                        : editingCorners
+                                            ? "Apply corners"
+                                            : "Confirm and send"}
                             </button>
                         </>
                     ) : (
