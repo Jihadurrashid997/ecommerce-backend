@@ -19,6 +19,7 @@ const MessengerScanner = ({ onClose, onSend }) => {
     const [sourceFile, setSourceFile] = useState(null);
     const [filterMode, setFilterMode] = useState("enhanced");
     const [processing, setProcessing] = useState(false);
+    const [cameraLoading, setCameraLoading] = useState(false);
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
 
@@ -35,6 +36,7 @@ const MessengerScanner = ({ onClose, onSend }) => {
             return;
         }
 
+        setCameraLoading(true);
         try {
             const cameraStream = await navigator.mediaDevices.getUserMedia({
                 audio: false,
@@ -45,16 +47,17 @@ const MessengerScanner = ({ onClose, onSend }) => {
         } catch (cameraError) {
             console.warn("Messenger scanner camera unavailable:", cameraError);
             setError("Camera permission was denied or no camera is available. Choose an image to scan instead.");
+        } finally {
+            setCameraLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        void startCamera();
         return () => {
             stopStream(streamRef.current);
             streamRef.current = null;
         };
-    }, [startCamera]);
+    }, []);
 
     useEffect(() => {
         const video = videoRef.current;
@@ -213,15 +216,22 @@ const MessengerScanner = ({ onClose, onSend }) => {
                         {processing ? "Detecting page edges and enhancing text…" : "Preparing preview…"}
                     </p>
                 ) : (
-                    <video
-                        ref={videoRef}
-                        className="messenger-scanner-camera"
-                        autoPlay
-                        muted
-                        playsInline
-                        aria-label="Camera preview"
-                        style={{ display: stream ? "block" : "none" }}
-                    />
+                    <>
+                        <video
+                            ref={videoRef}
+                            className="messenger-scanner-camera"
+                            autoPlay
+                            muted
+                            playsInline
+                            aria-label="Camera preview"
+                            style={{ display: stream ? "block" : "none" }}
+                        />
+                        {!stream && (
+                            <p className="messenger-scanner-processing">
+                                Choose a photo to scan automatically, or open the camera.
+                            </p>
+                        )}
+                    </>
                 )}
                 {sourceFile && (
                     <div className="messenger-scanner-filters" aria-label="Scan enhancement">
@@ -247,7 +257,7 @@ const MessengerScanner = ({ onClose, onSend }) => {
                 <label className="messenger-scanner-file">
                     <FaUpload aria-hidden="true" />
                     Choose image
-                    <input type="file" accept="image/*" capture="environment" onChange={selectImage} />
+                    <input type="file" accept="image/*" onChange={selectImage} />
                 </label>
                 <footer>
                     {sourceFile ? (
@@ -273,13 +283,24 @@ const MessengerScanner = ({ onClose, onSend }) => {
                             </button>
                         </>
                     ) : (
-                        <button
-                            type="button"
-                            disabled={!stream || busy}
-                            onClick={captureImage}
-                        >
-                            <FaCamera aria-hidden="true" /> Capture page
-                        </button>
+                        stream ? (
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={captureImage}
+                            >
+                                <FaCamera aria-hidden="true" /> Capture page
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                disabled={cameraLoading || busy}
+                                onClick={startCamera}
+                            >
+                                <FaCamera aria-hidden="true" />
+                                {cameraLoading ? "Opening camera…" : "Open camera"}
+                            </button>
+                        )
                     )}
                 </footer>
             </section>
