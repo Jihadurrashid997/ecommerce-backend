@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { processDocumentImage } from "./MessengerDocumentImage";
 import MessengerScanner from "./MessengerScanner";
+
+jest.mock("./MessengerDocumentImage", () => ({
+    processDocumentImage: jest.fn()
+}));
 
 const originalCreateObjectURL = URL.createObjectURL;
 const originalRevokeObjectURL = URL.revokeObjectURL;
@@ -15,6 +20,7 @@ const originalCanvasToBlob = HTMLCanvasElement.prototype.toBlob;
 beforeEach(() => {
     URL.createObjectURL = jest.fn(() => "blob:scan-preview");
     URL.revokeObjectURL = jest.fn();
+    processDocumentImage.mockImplementation(async file => file);
 });
 
 afterEach(() => {
@@ -54,10 +60,22 @@ test("camera permission failure offers image upload and sends only after confirm
 
     expect(await screen.findByRole("img", { name: "Captured document page" }))
         .toHaveAttribute("src", "blob:scan-preview");
+    expect(processDocumentImage.mock.calls[0][0]).toBe(image);
+    expect(processDocumentImage.mock.calls[0][1]).toBe("enhanced");
+    fireEvent.click(screen.getByRole("button", { name: "Original" }));
+    await waitFor(() => {
+        const lastCall = processDocumentImage.mock.calls[
+            processDocumentImage.mock.calls.length - 1
+        ];
+        expect(lastCall[1]).toBe("original");
+    });
+    expect(await screen.findByRole("img", { name: "Captured document page" }))
+        .toHaveAttribute("src", "blob:scan-preview");
     expect(onSend).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Confirm and send" }));
 
-    await waitFor(() => expect(onSend).toHaveBeenCalledWith(image));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend.mock.calls[0][0]).toBe(image);
     expect(onClose).toHaveBeenCalled();
 });
 
@@ -126,13 +144,13 @@ test("camera capture produces an image preview before sending", async () => {
     fireEvent.click(screen.getByRole("button", { name: "Capture page" }));
     const preview = await screen.findByRole("img", { name: "Captured document page" });
     expect(preview).toHaveAttribute("src", "blob:scan-preview");
+    expect(processDocumentImage.mock.calls[0][0].type).toBe("image/jpeg");
+    expect(processDocumentImage.mock.calls[0][1]).toBe("enhanced");
     expect(track.stop).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Confirm and send" }));
 
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
-    expect(onSend.mock.calls[0][0]).toMatchObject({
-        type: "image/jpeg",
-        name: expect.stringMatching(/^messenger-scan-/)
-    });
+    expect(onSend.mock.calls[0][0].type).toBe("image/jpeg");
+    expect(onSend.mock.calls[0][0].name).toMatch(/^messenger-capture-/);
     expect(onClose).toHaveBeenCalled();
 });
