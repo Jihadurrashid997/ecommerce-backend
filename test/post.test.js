@@ -13,11 +13,13 @@ const GroupCallKey = require("../models/GroupCallKey");
 const groupController = require("../controllers/groupController");
 const User = require("../models/User");
 const adminControlController = require("../controllers/adminControlController");
+const mediaStorage = require("../services/mediaStorage");
 const { forgotPassword } = require("../controllers/authController");
 const {
     updatePost,
     undoRepost,
-    deleteComment
+    deleteComment,
+    deletePost
 } = require("../controllers/postController");
 const jwt = require("jsonwebtoken");
 const messageUpload = require("../middleware/messageUpload");
@@ -261,6 +263,76 @@ test("users can undo only their own repost and the original post remains untouch
         Post.findOne = originalFindOne;
         Post.deleteOne = originalDeleteOne;
         SavedPost.deleteMany = originalSavedDeleteMany;
+    }
+});
+
+test("deleting a post preserves media still referenced by another post", async () => {
+    const originals = {
+        findById: Post.findById,
+        exists: Post.exists,
+        deleteOne: Post.deleteOne,
+        deleteMany: Post.deleteMany,
+        savedDeleteMany: SavedPost.deleteMany,
+        deleteFile: mediaStorage.deleteFile
+    };
+    const media = {
+        url: "https://cdn.example.com/shared-photo.jpg",
+        publicId: "posts/shared-photo",
+        type: "image"
+    };
+    const post = {
+        _id: TEST_USER_ID,
+        author: TEST_USER_ID,
+        media: [media],
+        community: null
+    };
+    const deletedMedia = [];
+    let foundReference = true;
+    Post.findById = async () => post;
+    Post.exists = async filter => {
+        assert.deepEqual(filter, {
+            _id: { $ne: TEST_USER_ID },
+            $or: [
+                { "media.publicId": media.publicId },
+                { "media.url": media.url }
+            ]
+        });
+        return foundReference;
+    };
+    Post.deleteOne = async () => {};
+    Post.deleteMany = async () => {};
+    SavedPost.deleteMany = async () => {};
+    mediaStorage.deleteFile = async file => {
+        deletedMedia.push(file);
+        return true;
+    };
+
+    try {
+        const sharedResponse = makeResponse();
+        await deletePost({
+            params: { id: TEST_USER_ID },
+            user: { id: TEST_USER_ID, role: "user" }
+        }, sharedResponse);
+
+        assert.equal(sharedResponse.statusCode, 200);
+        assert.deepEqual(deletedMedia, []);
+
+        foundReference = false;
+        const unsharedResponse = makeResponse();
+        await deletePost({
+            params: { id: TEST_USER_ID },
+            user: { id: TEST_USER_ID, role: "user" }
+        }, unsharedResponse);
+
+        assert.equal(unsharedResponse.statusCode, 200);
+        assert.deepEqual(deletedMedia, [media]);
+    } finally {
+        Post.findById = originals.findById;
+        Post.exists = originals.exists;
+        Post.deleteOne = originals.deleteOne;
+        Post.deleteMany = originals.deleteMany;
+        SavedPost.deleteMany = originals.savedDeleteMany;
+        mediaStorage.deleteFile = originals.deleteFile;
     }
 });
 
