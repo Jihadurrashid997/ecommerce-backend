@@ -92,9 +92,16 @@ const canHandleDirectCall = ({
     );
 };
 
+const getConnectedCallDuration = (call, now = Date.now()) => {
+    const connectedAt = Number(call?.connectedAt);
+    if (!Number.isFinite(connectedAt) || connectedAt <= 0) return 0;
+    return Math.max(0, Math.floor((now - connectedAt) / 1000));
+};
+
 module.exports = {
     canHandleDirectCall,
     canStartDirectCall,
+    getConnectedCallDuration,
     hasBlockedUser,
     isCanonicalDirectCallRoom
 };

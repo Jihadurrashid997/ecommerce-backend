@@ -20,6 +20,11 @@ const ALLOWED_MIME_TYPES = [
     "image/heic",
     "image/heif",
 
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "video/3gpp",
+
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -79,6 +84,143 @@ const fileFilter = (req, file, cb) => {
 
 };
 
+const hasBytes = (buffer, bytes, offset = 0) =>
+    buffer.length >= offset + bytes.length &&
+    buffer.subarray(offset, offset + bytes.length).equals(Buffer.from(bytes));
+
+const isIsoMedia = (buffer, brands) => {
+    if (buffer.length < 12 || buffer.toString("ascii", 4, 8) !== "ftyp") {
+        return false;
+    }
+    const boxSize = buffer.readUInt32BE(0);
+    if (boxSize < 16 || boxSize > buffer.length) return false;
+    for (let offset = 8; offset + 4 <= boxSize; offset += 4) {
+        if (brands.includes(buffer.toString("ascii", offset, offset + 4))) {
+            return true;
+        }
+    }
+    return false;
+};
+
+const matchesFileContent = (mimeType, buffer) => {
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) return false;
+
+    if (mimeType === "application/octet-stream") {
+        return true;
+    }
+    if (mimeType === "image/jpeg") {
+        return hasBytes(buffer, [0xff, 0xd8, 0xff]);
+    }
+    if (mimeType === "image/png") {
+        return hasBytes(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    }
+    if (mimeType === "image/gif") {
+        return ["GIF87a", "GIF89a"].includes(buffer.toString("ascii", 0, 6));
+    }
+    if (mimeType === "image/webp") {
+        return buffer.length >= 12 &&
+            buffer.toString("ascii", 0, 4) === "RIFF" &&
+            buffer.toString("ascii", 8, 12) === "WEBP";
+    }
+    if (mimeType === "image/heic" || mimeType === "image/heif") {
+        return isIsoMedia(
+            buffer,
+            mimeType === "image/heic"
+                ? ["heic", "heix", "hevc", "hevx"]
+                : ["mif1", "msf1", "heif", "heim", "heis", "hevm", "hevs"]
+        );
+    }
+    if (mimeType === "application/pdf") {
+        return buffer.subarray(0, 5).toString("ascii") === "%PDF-";
+    }
+    if (mimeType === "application/msword") {
+        return hasBytes(buffer, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    }
+    if (
+        mimeType === "application/zip" ||
+        mimeType === "application/x-zip-compressed" ||
+        mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ) {
+        return buffer.length >= 4 &&
+            buffer[0] === 0x50 &&
+            buffer[1] === 0x4b &&
+            [0x03, 0x05, 0x07].includes(buffer[2]) &&
+            [0x04, 0x06, 0x08].includes(buffer[3]);
+    }
+    if (mimeType === "text/plain") {
+        return !buffer.includes(0);
+    }
+    if (mimeType === "audio/webm") {
+        return hasBytes(buffer, [0x1a, 0x45, 0xdf, 0xa3]);
+    }
+    if (mimeType === "video/webm") {
+        return hasBytes(buffer, [0x1a, 0x45, 0xdf, 0xa3]);
+    }
+    if (mimeType === "audio/ogg" || mimeType === "audio/opus") {
+        return buffer.subarray(0, 4).toString("ascii") === "OggS";
+    }
+    if (mimeType === "audio/mpeg" || mimeType === "audio/mp3") {
+        return buffer.subarray(0, 3).toString("ascii") === "ID3" ||
+            (buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0);
+    }
+    if (mimeType === "audio/aac") {
+        return buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xf6) === 0xf0;
+    }
+    if (mimeType === "audio/wav" || mimeType === "audio/x-wav") {
+        return buffer.length >= 12 &&
+            buffer.toString("ascii", 0, 4) === "RIFF" &&
+            buffer.toString("ascii", 8, 12) === "WAVE";
+    }
+    if (mimeType === "audio/aiff" || mimeType === "audio/x-aiff") {
+        return buffer.length >= 12 &&
+            buffer.toString("ascii", 0, 4) === "FORM" &&
+            ["AIFF", "AIFC"].includes(buffer.toString("ascii", 8, 12));
+    }
+    if (mimeType === "audio/x-caf") {
+        return buffer.subarray(0, 4).toString("ascii") === "caff";
+    }
+    if (mimeType === "audio/flac" || mimeType === "audio/x-flac") {
+        return buffer.subarray(0, 4).toString("ascii") === "fLaC";
+    }
+    if (
+        mimeType === "audio/mp4" ||
+        mimeType === "audio/m4a" ||
+        mimeType === "audio/x-m4a" ||
+        mimeType === "audio/3gpp" ||
+        mimeType === "audio/3gpp2"
+    ) {
+        return isIsoMedia(buffer, [
+            "M4A ", "M4B ", "isom", "iso2", "mp41", "mp42",
+            "3gp4", "3gp5", "3g2a", "3g2b"
+        ]);
+    }
+    if (
+        mimeType === "video/mp4" ||
+        mimeType === "video/quicktime" ||
+        mimeType === "video/3gpp"
+    ) {
+        return isIsoMedia(buffer, ["isom", "iso2", "mp41", "mp42", "avc1", "qt  ", "3gp4", "3gp5"]);
+    }
+    return false;
+};
+
+const validateMessageFileContent = (req, res, next) => {
+    const file = req.file;
+    if (!file) return next();
+
+    const mimeType = String(file.mimetype || "")
+        .split(";")[0]
+        .trim()
+        .toLowerCase();
+    if (!matchesFileContent(mimeType, file.buffer)) {
+        return res.status(400).json({
+            success: false,
+            message: "The uploaded file content does not match its supported file type."
+        });
+    }
+    return next();
+};
+
 const upload = multer({
 
     storage: multer.memoryStorage(),
@@ -95,5 +237,7 @@ const upload = multer({
 });
 
 upload.fileFilter = fileFilter;
+upload.validateContent = validateMessageFileContent;
+upload.matchesFileContent = matchesFileContent;
 
 module.exports = upload;

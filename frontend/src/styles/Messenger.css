@@ -1312,6 +1312,14 @@
     cursor: pointer;
 }
 
+.message-attachment-video {
+    display: block;
+    width: min(420px, 100%);
+    max-height: 360px;
+    border-radius: 10px;
+    background: #101828;
+}
+
 
 .message-attachment-file {
     display: flex;

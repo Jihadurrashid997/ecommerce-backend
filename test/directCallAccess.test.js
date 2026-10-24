@@ -3,6 +3,7 @@ const test = require("node:test");
 const {
     canHandleDirectCall,
     canStartDirectCall,
+    getConnectedCallDuration,
     hasBlockedUser,
     isCanonicalDirectCallRoom
 } = require("../services/directCallAccess");
@@ -143,4 +144,10 @@ test("block checks handle stored IDs and populated user references", () => {
         hasBlockedUser({ blockedUsers: [OTHER_USER] }, RECEIVER),
         false
     );
+});
+
+test("call duration starts at the authoritative connected timestamp, not acceptance", () => {
+    assert.equal(getConnectedCallDuration({ acceptedAt: 1000 }, 9000), 0);
+    assert.equal(getConnectedCallDuration({ connectedAt: 1000 }, 9000), 8);
+    assert.equal(getConnectedCallDuration({ connectedAt: 9000 }, 1000), 0);
 });

@@ -44,7 +44,8 @@ import {
     FaPlus,
     FaUserPlus,
     FaMapMarkerAlt,
-    FaClock
+    FaClock,
+    FaCamera
 } from "react-icons/fa";
 
 import api, {
@@ -111,6 +112,7 @@ import CallModal from "./CallModal";
 import GroupCallModal from "./GroupCallModal";
 import MessengerStories from "./MessengerStories";
 import MessengerDeviceSettings from "./MessengerDeviceSettings";
+import MessengerScanner from "./MessengerScanner";
 import CallLogMessage from "./CallLogMessage";
 import VerifiedBadge from "./VerifiedBadge";
 import VoiceMessagePlayer, {
@@ -371,6 +373,19 @@ const EncryptedMediaAttachment = ({ url, media, own }) => {
                     className="message-attachment-image"
                 />
             </a>
+        );
+    }
+
+    if (media.fileType.startsWith("video/")) {
+        return (
+            <video
+                src={objectUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="message-attachment-video"
+                aria-label={media.fileName}
+            />
         );
     }
 
@@ -1189,6 +1204,9 @@ const Messenger = ({ isActive = true }) => {
         useState(false);
 
     const [showEmoji, setShowEmoji] =
+        useState(false);
+
+    const [showScanner, setShowScanner] =
         useState(false);
 
     const [showBackgrounds, setShowBackgrounds] =
@@ -2519,6 +2537,11 @@ onTrack:
                     setCallState(
                         connectedCall
                     );
+
+                    socket.emit("call-connected", {
+                        roomId: currentRoomRef.current,
+                        callId: connectedCall.callId
+                    });
 
                     return;
                 }
@@ -4078,6 +4101,27 @@ const onCallAccepted =
 
     };
 
+const onCallConnected =
+    data => {
+    const current = callRef.current || callStateRef.current;
+    if (
+        !current ||
+        (data?.callId && current.callId !== data.callId) ||
+        !Number.isFinite(Number(data?.connectedAt))
+    ) {
+        return;
+    }
+
+    const connectedCall = {
+        ...current,
+        connectedAt: Number(data.connectedAt),
+        mode: "connected",
+        status: "connected"
+    };
+    callRef.current = connectedCall;
+    setCallState(connectedCall);
+    };
+
 /* -------------------------------------------------
    WEBRTC OFFER
 ------------------------------------------------- */
@@ -4378,11 +4422,6 @@ const onIceCandidate =
                 )
             );
 
-            console.log(
-                "🧊 Remote ICE candidate added:",
-                data.candidate?.candidate || data.candidate
-            );
-
         } catch (error) {
 
             console.error(
@@ -4636,6 +4675,11 @@ const onCallMissed =
         );
 
         socket.on(
+            "call-connected",
+            onCallConnected
+        );
+
+        socket.on(
             "call-rejected",
             onCallRejected
         );
@@ -4761,6 +4805,11 @@ const onCallMissed =
             socket.off(
                 "call-accepted",
                 onCallAccepted
+            );
+
+            socket.off(
+                "call-connected",
+                onCallConnected
             );
 
             socket.off(
@@ -6515,6 +6564,23 @@ const onCallMissed =
             id: saved._id || saved.id,
             createdAt: saved.createdAt || new Date().toISOString()
         });
+    };
+
+    const sendScannedImage = async file => {
+        if (!selectedUser || isConversationBlocked) {
+            throw new Error("This conversation cannot receive attachments.");
+        }
+        try {
+            await sendAttachmentFile(file);
+            showMessengerToast("Scanned image sent.");
+        } catch (error) {
+            showMessengerToast(
+                error.response?.data?.message ||
+                    error.message ||
+                    "The scanned image could not be sent."
+            );
+            throw error;
+        }
     };
 
     const handleFile = async event => {
@@ -9528,6 +9594,10 @@ const onCallMissed =
                                                 )
                                             );
 
+                                        const isVideoFile =
+                                            fileUrl &&
+                                            fileType.startsWith("video/");
+
 
                                         const attachmentKey =
                                             getMessageId(
@@ -9795,6 +9865,34 @@ const onCallMissed =
                                                                     </span>
                                                                 </button>
 
+                                                            )
+
+                                                        ) : isVideoFile ? (
+
+                                                            mediaRevealed ? (
+                                                                <video
+                                                                    src={fileUrl}
+                                                                    controls
+                                                                    playsInline
+                                                                    preload="metadata"
+                                                                    className="message-attachment-video"
+                                                                    aria-label={fileName}
+                                                                />
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    className="message-attachment-file"
+                                                                    onClick={() =>
+                                                                        setRevealedMedia(previous => {
+                                                                            const next = new Set(previous);
+                                                                            next.add(attachmentKey);
+                                                                            return next;
+                                                                        })
+                                                                    }
+                                                                >
+                                                                    <FaVideo />
+                                                                    <span>Tap to load video</span>
+                                                                </button>
                                                             )
 
                                                         ) : (
@@ -10407,6 +10505,20 @@ const onCallMissed =
 
                                 <button
                                     type="button"
+                                    title="Scan a document"
+                                    aria-label="Scan a document"
+                                    disabled={
+                                        !selectedUser ||
+                                        isConversationBlocked
+                                    }
+                                    onClick={() => setShowScanner(true)}
+                                >
+                                    <FaCamera />
+                                </button>
+
+
+                                <button
+                                    type="button"
                                     title="Share approximate location"
                                     aria-label="Share approximate location"
                                     disabled={
@@ -10429,7 +10541,7 @@ const onCallMissed =
                                         !selectedUser ||
                                         isConversationBlocked
                                     }
-                                    accept="image/*,audio/*,.pdf,.doc,.docx,.txt,.zip"
+                                    accept="image/*,video/mp4,video/webm,video/quicktime,video/3gpp,audio/*,.pdf,.doc,.docx,.txt,.zip"
                                     aria-label="Attach an image, audio, or document"
                                     onChange={
                                         handleFile
@@ -10999,6 +11111,13 @@ const onCallMissed =
         switchCamera
     }
 />
+
+{showScanner && (
+    <MessengerScanner
+        onClose={() => setShowScanner(false)}
+        onSend={sendScannedImage}
+    />
+)}
 
 {deleteConfirmation && (
     <div

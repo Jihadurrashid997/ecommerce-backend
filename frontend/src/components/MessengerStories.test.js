@@ -127,7 +127,7 @@ test("Home story composer publishes a selected photo", async () => {
     fireEvent.change(container.querySelector(".messenger-story-file input"), {
         target: { files: [photo] }
     });
-    expect(await screen.findByRole("img", { name: "Story photo preview" }))
+    expect(await screen.findByRole("img", { name: "Selected story preview" }))
         .toHaveAttribute("src", "blob:story-photo");
     fireEvent.click(screen.getByRole("button", { name: "Share story" }));
 
