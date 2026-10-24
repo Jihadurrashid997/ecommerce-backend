@@ -48,10 +48,10 @@ const getReactionState = (post, userId) => {
  *  - never ships the whole likes/reactions arrays
  *  - adds reaction counts and the viewer's reaction
  */
-const shape = (post, userId, savedPostIds = new Set()) => {
+const shape = (post, userId, savedPostIds = new Set(), repostedPostIds = new Set()) => {
     const reactionState = getReactionState(post, userId);
     const originalPost = post.originalPost?.author
-        ? shape(post.originalPost, userId, savedPostIds)
+        ? shape(post.originalPost, userId, savedPostIds, repostedPostIds)
         : null;
 
     return {
@@ -70,6 +70,7 @@ const shape = (post, userId, savedPostIds = new Set()) => {
         reactionByMe: reactionState.byMe,
         reactionCounts: reactionState.counts,
         isSavedByMe: savedPostIds.has(String(post._id)),
+        isRepostedByMe: repostedPostIds.has(String(post._id)),
         createdAt: post.createdAt
     };
 
@@ -183,10 +184,17 @@ const listQuery = async (filter, req, following = []) => {
             post: { $in: postIds }
         }).select("post").lean()).map(saved => String(saved.post)))
         : new Set();
+    const repostedPostIds = postIds.length
+        ? new Set((await Post.find({
+            author: req.user.id,
+            originalPost: { $in: postIds }
+        }).select("originalPost").lean())
+            .map(repost => String(repost.originalPost)))
+        : new Set();
 
     return {
         success: true,
-        data: visiblePage.map(post => shape(post, req.user.id, savedPostIds)),
+        data: visiblePage.map(post => shape(post, req.user.id, savedPostIds, repostedPostIds)),
         nextCursor:
             hasMore
                 ? page[page.length - 1].createdAt
@@ -772,6 +780,35 @@ exports.repostPost = async (req, res) => {
     }
 };
 
+exports.undoRepost = async (req, res) => {
+    try {
+        if (!isId(req.params.id)) {
+            return res.status(400).json({ success: false, message: "Invalid post." });
+        }
+
+        const repost = await Post.findOne({
+            author: req.user.id,
+            originalPost: req.params.id
+        });
+        if (!repost) {
+            return res.status(404).json({
+                success: false,
+                message: "You have not reposted this post."
+            });
+        }
+
+        await Post.deleteOne({ _id: repost._id, author: req.user.id });
+        await SavedPost.deleteMany({ post: repost._id, user: req.user.id });
+        return res.json({ success: true, message: "Repost removed." });
+    } catch (error) {
+        console.error("UNDO REPOST ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not remove your repost."
+        });
+    }
+};
+
 exports.getCommunityPosts = async (req, res) => {
     try {
         const { communityId } = req.params;
@@ -1035,6 +1072,44 @@ exports.addComment = async (req, res) => {
         return res.status(500).json({ success: false, message: "Could not add comment." });
     }
 
+};
+
+exports.deleteComment = async (req, res) => {
+    try {
+        if (!isId(req.params.id) || !isId(req.params.commentId)) {
+            return res.status(400).json({ success: false, message: "Invalid comment." });
+        }
+
+        const post = await Post.findById(req.params.id)
+            .select("comments community author visibility");
+        if (!post) {
+            return res.status(404).json({ success: false, message: "Post not found." });
+        }
+        if (!await requirePostAccess(post, req.user.id, res)) return;
+
+        const commentIndex = post.comments.findIndex(
+            comment => String(comment._id) === String(req.params.commentId)
+        );
+        if (commentIndex < 0) {
+            return res.status(404).json({ success: false, message: "Comment not found." });
+        }
+
+        const comment = post.comments[commentIndex];
+        const commentOwner = String(comment.user?._id || comment.user || "");
+        if (commentOwner !== String(req.user.id) && req.user.role !== "admin") {
+            return res.status(403).json({ success: false, message: "Not allowed." });
+        }
+
+        post.comments.splice(commentIndex, 1);
+        await post.save({ validateModifiedOnly: true });
+        return res.json({
+            success: true,
+            commentCount: post.comments.length
+        });
+    } catch (error) {
+        console.error("DELETE COMMENT ERROR:", error);
+        return res.status(500).json({ success: false, message: "Could not delete comment." });
+    }
 };
 
 /* ------------------------------ VIEW (reels) */

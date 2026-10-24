@@ -3,6 +3,14 @@ import { FaPlus, FaTimes, FaTrash, FaEye } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import "./MessengerStories.css";
 
+const STORY_IMAGE_TYPES = new Set([
+    "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif"
+]);
+const STORY_VIDEO_TYPES = new Set([
+    "video/mp4", "video/webm", "video/quicktime", "video/3gpp"
+]);
+const MAX_STORY_FILE_SIZE = 20 * 1024 * 1024;
+
 const userIdOf = user => String(user?._id || user?.id || user || "");
 const ownerOf = story => story.owner || {};
 
@@ -22,7 +30,7 @@ const groupStories = stories => {
     return [...groups.values()];
 };
 
-const MessengerStories = ({ active, currentUser }) => {
+const MessengerStories = ({ active, currentUser, allowVideo = true, home = false }) => {
     const [stories, setStories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -31,6 +39,7 @@ const MessengerStories = ({ active, currentUser }) => {
     const [audience, setAudience] = useState("followers");
     const [file, setFile] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [selected, setSelected] = useState(null);
     const [viewers, setViewers] = useState(null);
 
@@ -42,6 +51,14 @@ const MessengerStories = ({ active, currentUser }) => {
         selectedGroup?.stories?.[selected.storyIndex] || null;
     const currentIndex = selected?.storyIndex || 0;
     const storyCount = selectedGroup?.stories?.length || 0;
+    const filePreview = useMemo(
+        () => file && STORY_IMAGE_TYPES.has(file.type) ? URL.createObjectURL(file) : "",
+        [file]
+    );
+
+    useEffect(() => () => {
+        if (filePreview) URL.revokeObjectURL(filePreview);
+    }, [filePreview]);
 
     const loadStories = useCallback(async () => {
         setLoading(true);
@@ -88,11 +105,21 @@ const MessengerStories = ({ active, currentUser }) => {
     const publishStory = async event => {
         event.preventDefault();
         if (!text.trim() && !file) {
-            setError("Write a status or choose a photo/video.");
+            setError(`Write a status or choose ${allowVideo ? "a photo/video" : "a photo"}.`);
+            return;
+        }
+        if (file && !STORY_IMAGE_TYPES.has(file.type) &&
+            (!allowVideo || !STORY_VIDEO_TYPES.has(file.type))) {
+            setError(allowVideo ? "Choose a supported photo or video." : "Choose a photo for your story.");
+            return;
+        }
+        if (file?.size > MAX_STORY_FILE_SIZE) {
+            setError("Story photos and videos must be under 20MB.");
             return;
         }
         setBusy(true);
         setError("");
+        setUploadProgress(0);
         try {
             const formData = new FormData();
             formData.append("text", text.trim());
@@ -100,7 +127,11 @@ const MessengerStories = ({ active, currentUser }) => {
             if (file) {
                 formData.append("media", file);
             }
-            const response = await api.post("/stories", formData);
+            const response = await api.post(home ? "/stories/home" : "/stories", formData, {
+                onUploadProgress: event => {
+                    if (event.total) setUploadProgress(Math.round(event.loaded / event.total * 100));
+                }
+            });
             setStories(previous => [response.data.data, ...previous]);
             setText("");
             setFile(null);
@@ -114,6 +145,7 @@ const MessengerStories = ({ active, currentUser }) => {
             );
         } finally {
             setBusy(false);
+            setUploadProgress(0);
         }
     };
 
@@ -251,22 +283,30 @@ const MessengerStories = ({ active, currentUser }) => {
 
     return (
         <>
-            <section className="messenger-stories" aria-label="Messenger statuses">
+            <section
+                className={`messenger-stories${home ? " home-stories" : ""}`}
+                aria-label={home ? "Stories" : "Messenger statuses"}
+            >
                 <div className="messenger-stories-heading">
-                    <strong>Status</strong>
+                    <strong>{home ? "Stories" : "Status"}</strong>
                     <button
                         type="button"
                         onClick={() => setShowComposer(true)}
-                        aria-label="Add status"
-                        title="Add status"
+                        aria-label={home ? "Add story" : "Add status"}
+                        title={home ? "Add story" : "Add status"}
                     >
                         <FaPlus aria-hidden="true" />
                     </button>
                 </div>
-                {loading && <p className="messenger-stories-message">Loading statuses…</p>}
-                {error && <p className="messenger-stories-error" role="alert">{error}</p>}
+                {loading && <p className="messenger-stories-message">Loading stories…</p>}
+                {error && !showComposer && (
+                    <div className="messenger-stories-error" role="alert">
+                        <span>{error}</span>
+                        <button type="button" onClick={loadStories} disabled={loading}>Try again</button>
+                    </div>
+                )}
                 {!loading && !groups.length && (
-                    <p className="messenger-stories-message">Share a status that expires after 24 hours.</p>
+                    <p className="messenger-stories-message">Share a story that expires after 24 hours.</p>
                 )}
                 <div className="messenger-stories-list">
                     {groups.map((group, groupIndex) => {
@@ -280,7 +320,7 @@ const MessengerStories = ({ active, currentUser }) => {
                                 className={`messenger-story-avatar ${hasUnread ? "has-unread" : ""}`}
                                 key={userIdOf(group.owner)}
                                 onClick={() => viewStory(group.stories[0], groupIndex)}
-                                aria-label={`${isOwn ? "Your" : group.owner.name}'s status, ${group.stories.length} item(s)`}
+                                aria-label={`${isOwn ? "Your" : group.owner.name}'s ${home ? "story" : "status"}, ${group.stories.length} item(s)`}
                             >
                                 {group.owner.profileImage || group.owner.avatar ? (
                                     <img
@@ -301,7 +341,7 @@ const MessengerStories = ({ active, currentUser }) => {
                 <div className="messenger-story-overlay" role="presentation">
                     <section className="messenger-story-composer" role="dialog" aria-modal="true" aria-labelledby="status-compose-title">
                         <header>
-                            <h3 id="status-compose-title">Create status</h3>
+                            <h3 id="status-compose-title">Create {home ? "story" : "status"}</h3>
                             <button type="button" aria-label="Close" onClick={() => setShowComposer(false)}>
                                 <FaTimes />
                             </button>
@@ -315,14 +355,49 @@ const MessengerStories = ({ active, currentUser }) => {
                                 aria-label="Status text"
                             />
                             <label className="messenger-story-file">
-                                Add photo or video (up to 20MB)
+                                {allowVideo ? "Add photo or video (up to 20MB)" : "Add photo (up to 20MB)"}
                                 <input
                                     type="file"
-                                    accept="image/*,video/mp4,video/webm,video/quicktime,video/3gpp"
-                                    onChange={event => setFile(event.target.files?.[0] || null)}
+                                    accept={allowVideo ? "image/*,video/mp4,video/webm,video/quicktime,video/3gpp" : "image/*"}
+                                    onChange={event => {
+                                        const selectedFile = event.target.files?.[0] || null;
+                                        if (selectedFile && !STORY_IMAGE_TYPES.has(selectedFile.type) &&
+                                            (!allowVideo || !STORY_VIDEO_TYPES.has(selectedFile.type))) {
+                                            setError(allowVideo
+                                                ? "Choose a supported photo or video."
+                                                : "Choose a photo for your story.");
+                                            setFile(null);
+                                            event.target.value = "";
+                                            return;
+                                        }
+                                        if (selectedFile?.size > MAX_STORY_FILE_SIZE) {
+                                            setError("Story photos and videos must be under 20MB.");
+                                            setFile(null);
+                                            event.target.value = "";
+                                            return;
+                                        }
+                                        setError("");
+                                        setFile(selectedFile);
+                                    }}
                                 />
                             </label>
-                            {file && <span className="messenger-story-file-name">{file.name}</span>}
+                            {file && (
+                                <div className="messenger-story-file-preview">
+                                    {filePreview && <img src={filePreview} alt="Selected story preview" />}
+                                    <span className="messenger-story-file-name">{file.name}</span>
+                                    <button
+                                        type="button"
+                                        aria-label="Remove selected story photo"
+                                        onClick={() => {
+                                            setFile(null);
+                                            setError("");
+                                        }}
+                                        disabled={busy}
+                                    >
+                                        <FaTimes />
+                                    </button>
+                                </div>
+                            )}
                             <label>
                                 Who can see this?
                                 <select
@@ -334,8 +409,9 @@ const MessengerStories = ({ active, currentUser }) => {
                                 </select>
                             </label>
                             {error && <p role="alert" className="messenger-stories-error">{error}</p>}
+                            {busy && <progress max="100" value={uploadProgress} aria-label="Story upload progress" />}
                             <button type="submit" disabled={busy}>
-                                {busy ? "Publishing…" : "Share status"}
+                                {busy ? `Publishing… ${uploadProgress}%` : `Share ${home ? "story" : "status"}`}
                             </button>
                         </form>
                     </section>
@@ -344,7 +420,7 @@ const MessengerStories = ({ active, currentUser }) => {
 
             {selectedGroup && currentStory && (
                 <div className="messenger-story-overlay messenger-story-fullscreen" role="presentation">
-                    <section className="messenger-story-viewer" role="dialog" aria-modal="true" aria-label="Status viewer">
+                    <section className="messenger-story-viewer" role="dialog" aria-modal="true" aria-label={home ? "Story viewer" : "Status viewer"}>
                         <div className="messenger-story-progress" aria-label={`Status ${currentIndex + 1} of ${storyCount}`}>
                             {selectedGroup.stories.map((story, index) => (
                                 <span
@@ -355,7 +431,10 @@ const MessengerStories = ({ active, currentUser }) => {
                         </div>
                         <header>
                             <strong>{ownerOf(currentStory).name || "User"}</strong>
-                            <span>{new Date(currentStory.createdAt).toLocaleString()}</span>
+                            <span>
+                                {new Date(currentStory.createdAt).toLocaleString()}
+                                {currentStory.expiresAt && ` · Expires ${new Date(currentStory.expiresAt).toLocaleString()}`}
+                            </span>
                             <button
                                 type="button"
                                 className="messenger-story-close"

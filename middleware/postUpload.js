@@ -66,6 +66,12 @@ exports.storyUpload = makeUploader({
     maxFiles: 1
 });
 
+exports.homeStoryUpload = makeUploader({
+    allowed: IMAGE_TYPES,
+    maxSize: 20 * 1024 * 1024,
+    maxFiles: 1
+});
+
 // Wraps an uploader so ANY multer error becomes a clean JSON 400
 exports.handle = (uploader, field) => (req, res, next) => {
 

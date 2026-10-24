@@ -5,6 +5,7 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const cloudinary = require("cloudinary").v2;
 const Post = require("../models/Post");
+const SavedPost = require("../models/SavedPost");
 const Message = require("../models/Message");
 const messageController = require("../controllers/messageController");
 const GroupConversation = require("../models/GroupConversation");
@@ -13,9 +14,15 @@ const groupController = require("../controllers/groupController");
 const User = require("../models/User");
 const adminControlController = require("../controllers/adminControlController");
 const { forgotPassword } = require("../controllers/authController");
-const { updatePost } = require("../controllers/postController");
+const {
+    updatePost,
+    undoRepost,
+    deleteComment
+} = require("../controllers/postController");
 const jwt = require("jsonwebtoken");
 const messageUpload = require("../middleware/messageUpload");
+const { matchesAllowedImageContent, validateHomeImageContent } =
+    require("../middleware/imageContentValidation");
 
 const TEST_USER_ID = "507f1f77bcf86cd799439011";
 const OTHER_USER_ID = "507f191e810c19729de860ea";
@@ -71,6 +78,30 @@ test("a photo post remains valid", () => {
     });
 
     assert.equal(post.validateSync(), undefined);
+});
+
+test("Home upload validation checks image signatures and rejects spoofed media", () => {
+    const png = Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+        0x00, 0x00, 0x00, 0x00
+    ]);
+    assert.equal(matchesAllowedImageContent({ mimetype: "image/png", buffer: png }), true);
+    assert.equal(matchesAllowedImageContent({
+        mimetype: "image/jpeg",
+        buffer: Buffer.from("RIFF0000WEBP")
+    }), false);
+    assert.equal(matchesAllowedImageContent({
+        mimetype: "image/jpeg",
+        buffer: Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d])
+    }), false);
+
+    const response = makeResponse();
+    let continued = false;
+    validateHomeImageContent({
+        files: [{ mimetype: "image/jpeg", buffer: Buffer.from("not a jpeg") }]
+    }, response, () => { continued = true; });
+    assert.equal(response.statusCode, 400);
+    assert.equal(continued, false);
 });
 
 test("post owners can edit captions and audience", async () => {
@@ -192,6 +223,85 @@ test("post owners cannot edit community posts, reposts, or reels", async () => {
         }
 
         assert.equal(saveCalls, 0);
+    } finally {
+        Post.findById = originalFindById;
+    }
+});
+
+test("users can undo only their own repost and the original post remains untouched", async () => {
+    const originalFindOne = Post.findOne;
+    const originalDeleteOne = Post.deleteOne;
+    const originalSavedDeleteMany = SavedPost.deleteMany;
+    let deletedPostFilter;
+    let deletedSavedFilter;
+    Post.findOne = filter => {
+        assert.deepEqual(filter, { author: TEST_USER_ID, originalPost: OTHER_USER_ID });
+        return Promise.resolve({ _id: "507f191e810c19729de860eb" });
+    };
+    Post.deleteOne = async filter => { deletedPostFilter = filter; };
+    SavedPost.deleteMany = async filter => { deletedSavedFilter = filter; };
+
+    try {
+        const response = makeResponse();
+        await undoRepost({
+            params: { id: OTHER_USER_ID },
+            user: { id: TEST_USER_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(deletedPostFilter, {
+            _id: "507f191e810c19729de860eb",
+            author: TEST_USER_ID
+        });
+        assert.deepEqual(deletedSavedFilter, {
+            post: "507f191e810c19729de860eb",
+            user: TEST_USER_ID
+        });
+    } finally {
+        Post.findOne = originalFindOne;
+        Post.deleteOne = originalDeleteOne;
+        SavedPost.deleteMany = originalSavedDeleteMany;
+    }
+});
+
+test("comment deletion is limited to its author or an administrator", async () => {
+    const originalFindById = Post.findById;
+    const comment = {
+        _id: "507f191e810c19729de860eb",
+        user: OTHER_USER_ID,
+        text: "A comment"
+    };
+    const post = {
+        _id: TEST_USER_ID,
+        author: TEST_USER_ID,
+        visibility: "public",
+        community: null,
+        comments: [comment],
+        async save() {}
+    };
+    Post.findById = () => ({
+        select() {
+            return Promise.resolve(post);
+        }
+    });
+
+    try {
+        const forbiddenResponse = makeResponse();
+        await deleteComment({
+            params: { id: TEST_USER_ID, commentId: comment._id },
+            user: { id: TEST_USER_ID, role: "user" }
+        }, forbiddenResponse);
+        assert.equal(forbiddenResponse.statusCode, 403);
+        assert.equal(post.comments.length, 1);
+
+        const adminResponse = makeResponse();
+        await deleteComment({
+            params: { id: TEST_USER_ID, commentId: comment._id },
+            user: { id: "507f1f77bcf86cd799439012", role: "admin" }
+        }, adminResponse);
+        assert.equal(adminResponse.statusCode, 200);
+        assert.equal(adminResponse.body.commentCount, 0);
+        assert.equal(post.comments.length, 0);
     } finally {
         Post.findById = originalFindById;
     }

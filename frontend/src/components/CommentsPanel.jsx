@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaTimes, FaPaperPlane } from "react-icons/fa";
+import { FaTimes, FaPaperPlane, FaTrash } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
+import { useApp } from "../context/AppContext";
 
 const CommentsPanel = ({ postId, onCount, onClose }) => {
+    const { user } = useApp();
+    const currentUserId = String(user?._id || user?.id || "");
 
     const [comments, setComments] = useState([]);
     const [text, setText] = useState("");
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
+    const [error, setError] = useState("");
 
     useEffect(() => {
 
@@ -20,6 +24,7 @@ const CommentsPanel = ({ postId, onCount, onClose }) => {
                 if (alive) setComments(res.data?.data || []);
             } catch (e) {
                 console.error("Load comments error:", e);
+                if (alive) setError(e.response?.data?.message || "Could not load comments.");
             } finally {
                 if (alive) setLoading(false);
             }
@@ -42,13 +47,26 @@ const CommentsPanel = ({ postId, onCount, onClose }) => {
             const res = await api.post(`/posts/${postId}/comments`, { text: value });
             setComments(prev => [...prev, res.data.data]);
             setText("");
+            setError("");
             if (onCount) onCount(res.data.commentCount);
         } catch (e) {
-            alert(e.response?.data?.message || "Could not add comment.");
+            setError(e.response?.data?.message || "Could not add comment.");
         } finally {
             setSending(false);
         }
 
+    };
+
+    const deleteComment = async comment => {
+        if (!window.confirm("Delete this comment?")) return;
+        setError("");
+        try {
+            const response = await api.delete(`/posts/${postId}/comments/${comment._id}`);
+            setComments(previous => previous.filter(item => item._id !== comment._id));
+            if (onCount) onCount(response.data.commentCount);
+        } catch (deleteError) {
+            setError(deleteError.response?.data?.message || "Could not delete comment.");
+        }
     };
 
     return (
@@ -66,8 +84,9 @@ const CommentsPanel = ({ postId, onCount, onClose }) => {
             <div className="comments-list">
 
                 {loading && <p className="comments-empty">Loading...</p>}
+                {error && <p className="comments-error" role="alert">{error}</p>}
 
-                {!loading && comments.length === 0 && (
+                {!loading && !error && comments.length === 0 && (
                     <p className="comments-empty">No comments yet. Be the first!</p>
                 )}
 
@@ -82,6 +101,16 @@ const CommentsPanel = ({ postId, onCount, onClose }) => {
                             <Link to={`/user/${c.user?._id}`}><b>{c.user?.name || "User"}</b></Link>
                             <span>{c.text}</span>
                         </div>
+                        {(String(c.user?._id || c.user) === currentUserId || user?.role === "admin") && (
+                            <button
+                                type="button"
+                                className="comment-delete"
+                                aria-label={`Delete comment by ${c.user?.name || "User"}`}
+                                onClick={() => deleteComment(c)}
+                            >
+                                <FaTrash />
+                            </button>
+                        )}
                     </div>
                 ))}
 
