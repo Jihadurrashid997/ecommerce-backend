@@ -50,6 +50,7 @@ test("camera permission failure offers image upload and sends only after confirm
     const { container } = render(
         <MessengerScanner onClose={onClose} onSend={onSend} />
     );
+    fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
 
     expect(await screen.findByRole("alert"))
         .toHaveTextContent("Choose an image to scan instead.");
@@ -98,6 +99,7 @@ test("scanner stops camera tracks when closed", async () => {
             : null;
     };
     render(<ScannerHarness />);
+    fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
 
     expect(await screen.findByRole("button", { name: "Capture page" }))
         .toBeEnabled();
@@ -135,6 +137,7 @@ test("camera capture produces an image preview before sending", async () => {
     };
     render(<ScannerHarness />);
     const video = await screen.findByLabelText("Camera preview");
+    fireEvent.click(screen.getByRole("button", { name: "Open camera" }));
     await waitFor(() => {
         expect(screen.getByRole("button", { name: "Capture page" })).toBeEnabled();
     });
@@ -153,4 +156,25 @@ test("camera capture produces an image preview before sending", async () => {
     expect(onSend.mock.calls[0][0].type).toBe("image/jpeg");
     expect(onSend.mock.calls[0][0].name).toMatch(/^messenger-capture-/);
     expect(onClose).toHaveBeenCalled();
+});
+
+test("selecting an image runs the scan without requesting camera access", async () => {
+    const getUserMedia = jest.fn();
+    Object.defineProperty(navigator, "mediaDevices", {
+        configurable: true,
+        value: { getUserMedia }
+    });
+    const image = new File(["page"], "page.png", { type: "image/png" });
+    const { container } = render(
+        <MessengerScanner onClose={jest.fn()} onSend={jest.fn()} />
+    );
+
+    fireEvent.change(container.querySelector('input[type="file"]'), {
+        target: { files: [image] }
+    });
+
+    await screen.findByRole("img", { name: "Captured document page" });
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(processDocumentImage.mock.calls[0][0]).toBe(image);
+    expect(processDocumentImage.mock.calls[0][1]).toBe("enhanced");
 });
