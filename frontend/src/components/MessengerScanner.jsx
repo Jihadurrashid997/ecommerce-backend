@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FaCamera, FaRedo, FaTimes, FaUpload } from "react-icons/fa";
+import { processDocumentImage } from "./MessengerDocumentImage";
 import "./MessengerScanner.css";
 
 const MAX_SCAN_SIZE = 10 * 1024 * 1024;
@@ -15,6 +16,9 @@ const MessengerScanner = ({ onClose, onSend }) => {
     const [stream, setStream] = useState(null);
     const [preview, setPreview] = useState(null);
     const [previewUrl, setPreviewUrl] = useState("");
+    const [sourceFile, setSourceFile] = useState(null);
+    const [filterMode, setFilterMode] = useState("enhanced");
+    const [processing, setProcessing] = useState(false);
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
 
@@ -78,6 +82,34 @@ const MessengerScanner = ({ onClose, onSend }) => {
     }, [preview]);
 
     useEffect(() => {
+        if (!sourceFile) return undefined;
+
+        let cancelled = false;
+        setProcessing(true);
+        setError("");
+        setPreview(null);
+        processDocumentImage(sourceFile, filterMode)
+            .then(processedFile => {
+                if (!cancelled) setPreview(processedFile);
+            })
+            .catch(processingError => {
+                if (!cancelled) {
+                    setError(
+                        processingError.message ||
+                            "The document image could not be prepared."
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setProcessing(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [sourceFile, filterMode]);
+
+    useEffect(() => {
         const handleEscape = event => {
             if (event.key === "Escape" && !busy) onClose();
         };
@@ -115,7 +147,7 @@ const MessengerScanner = ({ onClose, onSend }) => {
                 setError("The scanned image is too large to send (10MB maximum).");
                 return;
             }
-            setPreview(new File([blob], `messenger-scan-${Date.now()}.jpg`, {
+            setSourceFile(new File([blob], `messenger-capture-${Date.now()}.jpg`, {
                 type: "image/jpeg"
             }));
             releaseCamera();
@@ -136,7 +168,7 @@ const MessengerScanner = ({ onClose, onSend }) => {
             return;
         }
         releaseCamera();
-        setPreview(image);
+        setSourceFile(image);
         setError("");
     };
 
@@ -176,6 +208,10 @@ const MessengerScanner = ({ onClose, onSend }) => {
                 <p>Capture a page or choose an existing image. Nothing is sent until you confirm.</p>
                 {previewUrl ? (
                     <img className="messenger-scanner-preview" src={previewUrl} alt="Captured document page" />
+                ) : sourceFile ? (
+                    <p className="messenger-scanner-processing" role="status">
+                        {processing ? "Detecting page edges and enhancing text…" : "Preparing preview…"}
+                    </p>
                 ) : (
                     <video
                         ref={videoRef}
@@ -187,6 +223,26 @@ const MessengerScanner = ({ onClose, onSend }) => {
                         style={{ display: stream ? "block" : "none" }}
                     />
                 )}
+                {sourceFile && (
+                    <div className="messenger-scanner-filters" aria-label="Scan enhancement">
+                        <button
+                            type="button"
+                            aria-pressed={filterMode === "enhanced"}
+                            disabled={processing || busy}
+                            onClick={() => setFilterMode("enhanced")}
+                        >
+                            Auto enhance
+                        </button>
+                        <button
+                            type="button"
+                            aria-pressed={filterMode === "original"}
+                            disabled={processing || busy}
+                            onClick={() => setFilterMode("original")}
+                        >
+                            Original
+                        </button>
+                    </div>
+                )}
                 {error && <p className="messenger-scanner-error" role="alert">{error}</p>}
                 <label className="messenger-scanner-file">
                     <FaUpload aria-hidden="true" />
@@ -194,21 +250,26 @@ const MessengerScanner = ({ onClose, onSend }) => {
                     <input type="file" accept="image/*" capture="environment" onChange={selectImage} />
                 </label>
                 <footer>
-                    {preview ? (
+                    {sourceFile ? (
                         <>
                             <button
                                 type="button"
                                 className="messenger-scanner-secondary"
                                 disabled={busy}
                                 onClick={() => {
+                                    setSourceFile(null);
                                     setPreview(null);
                                     void startCamera();
                                 }}
                             >
                                 <FaRedo aria-hidden="true" /> Retake
                             </button>
-                            <button type="button" disabled={busy} onClick={sendScan}>
-                                {busy ? "Sending…" : "Confirm and send"}
+                            <button
+                                type="button"
+                                disabled={busy || processing || !preview}
+                                onClick={sendScan}
+                            >
+                                {busy ? "Sending…" : processing ? "Preparing…" : "Confirm and send"}
                             </button>
                         </>
                     ) : (

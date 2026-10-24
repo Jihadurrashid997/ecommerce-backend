@@ -54,6 +54,40 @@
     color: #b42318;
 }
 
+.messenger-scanner-processing {
+    padding: 28px 12px;
+    color: #475467;
+    text-align: center;
+}
+
+.messenger-scanner-filters {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.messenger-scanner-filters button {
+    min-height: 38px;
+    padding: 0 14px;
+    border: 1px solid #d0d5dd;
+    border-radius: 999px;
+    background: #fff;
+    color: #344054;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.messenger-scanner-filters button[aria-pressed="true"] {
+    border-color: #0866ff;
+    background: #eff6ff;
+    color: #0866ff;
+}
+
+.messenger-scanner-filters button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 .messenger-scanner-file {
     display: inline-flex;
     width: fit-content;
