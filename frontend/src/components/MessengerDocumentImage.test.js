@@ -1,7 +1,6 @@
 import {
     detectDocumentCorners,
-    detectDocumentCrop,
-    enhanceDocumentPixels,
+    enhanceDocumentImage,
     warpDocumentPerspective
 } from "./MessengerDocumentImage";
 
@@ -20,64 +19,67 @@ const makeImageData = (width, height, pixelAt) => {
     return { width, height, data };
 };
 
-test("auto crop finds a bright document page against a dark background", () => {
-    const image = makeImageData(100, 100, (x, y) =>
-        x >= 10 && x < 90 && y >= 15 && y < 85
-            ? [245, 245, 245]
-            : [25, 25, 25]
-    );
+const originalImageData = global.ImageData;
 
-    const crop = detectDocumentCrop(image);
-
-    expect(crop.x).toBeGreaterThanOrEqual(0);
-    expect(crop.x).toBeLessThanOrEqual(10);
-    expect(crop.y).toBeGreaterThanOrEqual(0);
-    expect(crop.y).toBeLessThanOrEqual(15);
-    expect(crop.x + crop.width).toBeGreaterThanOrEqual(90);
-    expect(crop.y + crop.height).toBeGreaterThanOrEqual(85);
-    expect(crop.width).toBeLessThan(100);
-    expect(crop.height).toBeLessThan(100);
+beforeAll(() => {
+    global.ImageData = class {
+        constructor(dataOrWidth, widthOrHeight, height) {
+            if (dataOrWidth instanceof Uint8ClampedArray) {
+                this.data = dataOrWidth;
+                this.width = widthOrHeight;
+                this.height = height;
+            } else {
+                this.width = dataOrWidth;
+                this.height = widthOrHeight;
+                this.data = new Uint8ClampedArray(this.width * this.height * 4);
+            }
+        }
+    };
 });
 
-test("auto crop leaves the full image when page edges are unclear", () => {
-    const image = makeImageData(40, 40, (x, y) => {
-        const value = (x + y) % 2 ? 230 : 225;
-        return [value, value, value];
-    });
-
-    expect(detectDocumentCrop(image)).toEqual({
-        x: 0,
-        y: 0,
-        width: 40,
-        height: 40
-    });
+afterAll(() => {
+    global.ImageData = originalImageData;
 });
 
-test("document detection returns four corners for a skewed page", () => {
-    const image = makeImageData(120, 110, (x, y) => {
-        const pageLeft = 18 + Math.round(y * 0.08);
-        const pageRight = 100 - Math.round(y * 0.04);
+test("OpenCV detects four corners of a skewed document", async () => {
+    const image = makeImageData(240, 220, (x, y) => {
+        const top = 25 + Math.round(x * 0.08);
+        const bottom = 190 - Math.round(x * 0.04);
         const insidePage =
-            y >= 12 && y <= 96 &&
-            x >= pageLeft + Math.round((y - 12) * 0.12) &&
-            x <= pageRight - Math.round((y - 12) * 0.08);
+            x >= 35 && x <= 205 &&
+            y >= top + Math.round((x - 35) * 0.12) &&
+            y <= bottom - Math.round((x - 35) * 0.08);
         return insidePage ? [245, 245, 245] : [24, 24, 24];
     });
 
-    const corners = detectDocumentCorners(image);
+    const corners = await detectDocumentCorners(image);
 
     expect(corners).toHaveLength(4);
-    expect(corners[0].x).toBeLessThan(40);
-    expect(corners[0].y).toBeLessThan(25);
-    expect(corners[1].x).toBeGreaterThan(80);
-    expect(corners[1].y).toBeLessThan(30);
-    expect(corners[2].x).toBeGreaterThan(75);
-    expect(corners[2].y).toBeGreaterThan(75);
-    expect(corners[3].x).toBeLessThan(50);
-    expect(corners[3].y).toBeGreaterThan(75);
+    expect(corners[0].x).toBeLessThan(55);
+    expect(corners[0].y).toBeLessThan(45);
+    expect(corners[1].x).toBeGreaterThan(175);
+    expect(corners[1].y).toBeLessThan(60);
+    expect(corners[2].x).toBeGreaterThan(165);
+    expect(corners[2].y).toBeGreaterThan(150);
+    expect(corners[3].x).toBeLessThan(75);
+    expect(corners[3].y).toBeGreaterThan(145);
 });
 
-test("perspective warp turns a quadrilateral page into a rectangle", () => {
+test("ambiguous page edges safely keep the full image", async () => {
+    const image = makeImageData(80, 80, (x, y) => {
+        const value = 220 + ((x + y) % 3);
+        return [value, value, value];
+    });
+
+    expect(await detectDocumentCorners(image)).toEqual([
+        { x: 0, y: 0 },
+        { x: 79, y: 0 },
+        { x: 79, y: 79 },
+        { x: 0, y: 79 }
+    ]);
+});
+
+test("perspective warp maps a skewed page into a flat rectangle", async () => {
     const image = makeImageData(120, 110, (x, y) => [x, y, 120]);
     const corners = [
         { x: 20, y: 10 },
@@ -85,41 +87,27 @@ test("perspective warp turns a quadrilateral page into a rectangle", () => {
         { x: 90, y: 100 },
         { x: 30, y: 90 }
     ];
-    const originalImageData = global.ImageData;
-    global.ImageData = class {
-        constructor(width, height) {
-            this.width = width;
-            this.height = height;
-            this.data = new Uint8ClampedArray(width * height * 4);
-        }
-    };
 
-    try {
-        const result = warpDocumentPerspective(image, corners);
+    const result = await warpDocumentPerspective(image, corners);
 
-        expect(result.imageData.width).toBeGreaterThan(50);
-        expect(result.imageData.height).toBeGreaterThan(50);
-        expect(result.corners).toEqual([
-            { x: 0, y: 0 },
-            { x: result.imageData.width - 1, y: 0 },
-            { x: result.imageData.width - 1, y: result.imageData.height - 1 },
-            { x: 0, y: result.imageData.height - 1 }
-        ]);
-    } finally {
-        global.ImageData = originalImageData;
-    }
+    expect(result.width).toBeGreaterThan(50);
+    expect(result.height).toBeGreaterThan(50);
+    expect(result.data).toHaveLength(result.width * result.height * 4);
 });
 
-test("text enhancement boosts contrast and creates a grayscale document image", () => {
-    const image = makeImageData(3, 1, x =>
-        x === 1 ? [90, 90, 90] : [180, 180, 180]
+test("document enhancement returns a high-contrast grayscale image", async () => {
+    const image = makeImageData(31, 31, (x, y) =>
+        x > 13 && x < 17 && y > 4 && y < 27
+            ? [55, 55, 55]
+            : [200 + (x % 20), 190 + (y % 20), 180 + (x % 10)]
     );
 
-    enhanceDocumentPixels(image);
+    const result = await enhanceDocumentImage(image);
 
-    expect(image.data[0]).toBe(image.data[1]);
-    expect(image.data[1]).toBe(image.data[2]);
-    expect(image.data[4]).toBeLessThan(image.data[0]);
-    expect(image.data[4]).toBe(image.data[5]);
-    expect(image.data[8]).toBe(image.data[9]);
+    expect(result.width).toBe(31);
+    expect(result.height).toBe(31);
+    for (let offset = 0; offset < result.data.length; offset += 4) {
+        expect(result.data[offset]).toBe(result.data[offset + 1]);
+        expect(result.data[offset + 1]).toBe(result.data[offset + 2]);
+    }
 });

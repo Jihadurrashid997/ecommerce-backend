@@ -1,386 +1,259 @@
 const MAX_DIMENSION = 1800;
+const DETECTION_DIMENSION = 720;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+let openCvPromise;
 
-const luminance = (red, green, blue) =>
-    red * 0.299 + green * 0.587 + blue * 0.114;
-
-const calculateOtsuThreshold = histogram => {
-    const total = histogram.reduce((sum, count) => sum + count, 0);
-    let weightedTotal = 0;
-    for (let value = 0; value < histogram.length; value += 1) {
-        weightedTotal += value * histogram[value];
-    }
-
-    let backgroundWeight = 0;
-    let backgroundTotal = 0;
-    let maximumVariance = 0;
-    let threshold = -1;
-    for (let value = 0; value < histogram.length; value += 1) {
-        backgroundWeight += histogram[value];
-        if (backgroundWeight === 0) continue;
-        const foregroundWeight = total - backgroundWeight;
-        if (foregroundWeight === 0) break;
-        backgroundTotal += value * histogram[value];
-        const backgroundMean = backgroundTotal / backgroundWeight;
-        const foregroundMean = (weightedTotal - backgroundTotal) / foregroundWeight;
-        const variance =
-            backgroundWeight * foregroundWeight *
-            (backgroundMean - foregroundMean) ** 2;
-        if (variance > maximumVariance) {
-            maximumVariance = variance;
-            threshold = value;
-        }
-    }
-    return threshold;
-};
-
-const averageLuminance = (imageData, xStart, yStart, xEnd, yEnd) => {
-    const { data, width } = imageData;
-    let total = 0;
-    let count = 0;
-    for (let y = yStart; y < yEnd; y += 1) {
-        for (let x = xStart; x < xEnd; x += 1) {
-            const offset = (y * width + x) * 4;
-            total += luminance(data[offset], data[offset + 1], data[offset + 2]);
-            count += 1;
-        }
-    }
-    return total / Math.max(1, count);
-};
-
-const crossProduct = (origin, first, second) =>
-    (first.x - origin.x) * (second.y - origin.y) -
-    (first.y - origin.y) * (second.x - origin.x);
-
-const convexHull = points => {
-    if (points.length < 4) return points;
-    points.sort((first, second) =>
-        first.x === second.x ? first.y - second.y : first.x - second.x
-    );
-    const lower = [];
-    for (const point of points) {
-        while (
-            lower.length >= 2 &&
-            crossProduct(lower[lower.length - 2], lower[lower.length - 1], point) <= 0
-        ) {
-            lower.pop();
-        }
-        lower.push(point);
-    }
-    const upper = [];
-    for (let index = points.length - 1; index >= 0; index -= 1) {
-        const point = points[index];
-        while (
-            upper.length >= 2 &&
-            crossProduct(upper[upper.length - 2], upper[upper.length - 1], point) <= 0
-        ) {
-            upper.pop();
-        }
-        upper.push(point);
-    }
-    lower.pop();
-    upper.pop();
-    return lower.concat(upper);
-};
-
-const largestComponent = (mask, width, height) => {
-    const visited = new Uint8Array(mask.length);
-    const queue = new Int32Array(mask.length);
-    let largest = null;
-    for (let index = 0; index < mask.length; index += 1) {
-        if (!mask[index] || visited[index]) continue;
-        let head = 0;
-        let tail = 0;
-        queue[tail++] = index;
-        visited[index] = 1;
-        const component = [];
-        while (head < tail) {
-            const current = queue[head++];
-            component.push(current);
-            const x = current % width;
-            const neighbors = [
-                x > 0 ? current - 1 : -1,
-                x + 1 < width ? current + 1 : -1,
-                current >= width ? current - width : -1,
-                current + width < width * height ? current + width : -1
-            ];
-            for (const neighbor of neighbors) {
-                if (neighbor >= 0 && mask[neighbor] && !visited[neighbor]) {
-                    visited[neighbor] = 1;
-                    queue[tail++] = neighbor;
-                }
+const getOpenCv = () => {
+    if (!openCvPromise) {
+        openCvPromise = import("@techstark/opencv-js").then(async module => {
+            const runtime = module.default || module;
+            if (runtime && typeof runtime.then === "function") {
+                return runtime;
             }
-        }
-        if (!largest || component.length > largest.length) largest = component;
+            if (runtime?.Mat) return runtime;
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(
+                    () => reject(new Error("Document scanner image engine did not initialize.")),
+                    30000
+                );
+                runtime.onRuntimeInitialized = () => {
+                    clearTimeout(timeout);
+                    resolve(runtime);
+                };
+                runtime.onAbort = () => {
+                    clearTimeout(timeout);
+                    reject(new Error("Document scanner image engine failed to initialize."));
+                };
+            });
+        });
     }
-    return largest || [];
+    return openCvPromise;
 };
+
+const identityCorners = (width, height) => [
+    { x: 0, y: 0 },
+    { x: width - 1, y: 0 },
+    { x: width - 1, y: height - 1 },
+    { x: 0, y: height - 1 }
+];
 
 const orderCorners = points => {
-    const topLeft = points.reduce((best, point) =>
-        point.x + point.y < best.x + best.y ? point : best
+    const center = points.reduce(
+        (sum, point) => ({ x: sum.x + point.x / 4, y: sum.y + point.y / 4 }),
+        { x: 0, y: 0 }
     );
-    const topRight = points.reduce((best, point) =>
-        point.x - point.y > best.x - best.y ? point : best
+    const ordered = [...points].sort(
+        (first, second) =>
+            Math.atan2(first.y - center.y, first.x - center.x) -
+            Math.atan2(second.y - center.y, second.x - center.x)
     );
-    const bottomRight = points.reduce((best, point) =>
-        point.x + point.y > best.x + best.y ? point : best
+    const topLeftIndex = ordered.reduce(
+        (best, point, index) =>
+            point.x + point.y < ordered[best].x + ordered[best].y ? index : best,
+        0
     );
-    const bottomLeft = points.reduce((best, point) =>
-        point.x - point.y < best.x - best.y ? point : best
-    );
-    if (new Set([topLeft, topRight, bottomRight, bottomLeft]).size !== 4) return null;
-    return [topLeft, topRight, bottomRight, bottomLeft];
-};
-
-export const detectDocumentCorners = imageData => {
-    const { data, width, height } = imageData;
-    const identityCorners = [
-        { x: 0, y: 0 },
-        { x: width - 1, y: 0 },
-        { x: width - 1, y: height - 1 },
-        { x: 0, y: height - 1 }
+    return [
+        ...ordered.slice(topLeftIndex),
+        ...ordered.slice(0, topLeftIndex)
     ];
-    const histogram = new Uint32Array(256);
-    for (let pixel = 0; pixel < width * height; pixel += 1) {
-        const offset = pixel * 4;
-        histogram[Math.round(luminance(data[offset], data[offset + 1], data[offset + 2]))] += 1;
-    }
-    const threshold = calculateOtsuThreshold(histogram);
-    if (threshold < 0) return identityCorners;
-
-    const cornerSize = Math.max(2, Math.round(Math.min(width, height) * 0.04));
-    const cornerLightness = (
-        averageLuminance(imageData, 0, 0, cornerSize, cornerSize) +
-        averageLuminance(imageData, width - cornerSize, 0, width, cornerSize) +
-        averageLuminance(imageData, 0, height - cornerSize, cornerSize, height) +
-        averageLuminance(imageData, width - cornerSize, height - cornerSize, width, height)
-    ) / 4;
-    const centerLightness = averageLuminance(
-        imageData,
-        Math.floor(width * 0.4),
-        Math.floor(height * 0.4),
-        Math.ceil(width * 0.6),
-        Math.ceil(height * 0.6)
-    );
-    const separation = centerLightness - cornerLightness;
-    if (Math.abs(separation) < 28) return identityCorners;
-    const cutoff = Math.max(0, Math.min(255, (centerLightness + cornerLightness) / 2));
-    const mask = new Uint8Array(width * height);
-    for (let pixel = 0; pixel < mask.length; pixel += 1) {
-        const offset = pixel * 4;
-        const value = luminance(data[offset], data[offset + 1], data[offset + 2]);
-        mask[pixel] = separation > 0 ? value >= cutoff : value <= cutoff ? 1 : 0;
-    }
-
-    const component = largestComponent(mask, width, height);
-    if (component.length < width * height * 0.3 || component.length > width * height * 0.98) {
-        return identityCorners;
-    }
-    const foreground = new Uint8Array(mask.length);
-    component.forEach(index => {
-        foreground[index] = 1;
-    });
-    const boundary = [];
-    for (const index of component) {
-        const x = index % width;
-        const y = Math.floor(index / width);
-        if (
-            x === 0 || x === width - 1 || y === 0 || y === height - 1 ||
-            !foreground[index - 1] || !foreground[index + 1] ||
-            !foreground[index - width] || !foreground[index + width]
-        ) {
-            boundary.push({ x, y });
-        }
-    }
-    const hull = convexHull(boundary);
-    if (hull.length < 4) return identityCorners;
-    const corners = orderCorners(hull);
-    if (!corners) return identityCorners;
-
-    const [topLeft, topRight, bottomRight, bottomLeft] = corners;
-    const polygonArea = Math.abs(
-        topLeft.x * topRight.y - topRight.x * topLeft.y +
-        topRight.x * bottomRight.y - bottomRight.x * topRight.y +
-        bottomRight.x * bottomLeft.y - bottomLeft.x * bottomRight.y +
-        bottomLeft.x * topLeft.y - topLeft.x * bottomLeft.y
-    ) / 2;
-    if (polygonArea < width * height * 0.3) return identityCorners;
-    return corners;
 };
 
-const solveLinearSystem = (matrix, values) => {
-    const size = values.length;
-    const rows = matrix.map((row, index) => [...row, values[index]]);
-    for (let column = 0; column < size; column += 1) {
-        let pivot = column;
-        for (let row = column + 1; row < size; row += 1) {
-            if (Math.abs(rows[row][column]) > Math.abs(rows[pivot][column])) pivot = row;
-        }
-        if (Math.abs(rows[pivot][column]) < 1e-10) return null;
-        [rows[column], rows[pivot]] = [rows[pivot], rows[column]];
-        const divisor = rows[column][column];
-        for (let cell = column; cell <= size; cell += 1) rows[column][cell] /= divisor;
-        for (let row = 0; row < size; row += 1) {
-            if (row === column) continue;
-            const factor = rows[row][column];
-            for (let cell = column; cell <= size; cell += 1) {
-                rows[row][cell] -= factor * rows[column][cell];
+const getContourCandidates = (cv, binary, imageArea, best) => {
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+    try {
+        cv.findContours(
+            binary,
+            contours,
+            hierarchy,
+            cv.RETR_LIST,
+            cv.CHAIN_APPROX_SIMPLE
+        );
+        for (let index = 0; index < contours.size(); index += 1) {
+            const contour = contours.get(index);
+            const perimeter = cv.arcLength(contour, true);
+            if (!perimeter) {
+                contour.delete();
+                continue;
             }
-        }
-    }
-    return rows.map(row => row[size]);
-};
-
-const createPerspectiveTransform = (corners, outputWidth, outputHeight) => {
-    const destination = [
-        [0, 0],
-        [outputWidth - 1, 0],
-        [outputWidth - 1, outputHeight - 1],
-        [0, outputHeight - 1]
-    ];
-    const matrix = [];
-    const values = [];
-    corners.forEach((point, index) => {
-        const [x, y] = destination[index];
-        matrix.push([x, y, 1, 0, 0, 0, -point.x * x, -point.x * y]);
-        values.push(point.x);
-        matrix.push([0, 0, 0, x, y, 1, -point.y * x, -point.y * y]);
-        values.push(point.y);
-    });
-    const coefficients = solveLinearSystem(matrix, values);
-    return coefficients && [...coefficients, 1];
-};
-
-export const warpDocumentPerspective = (imageData, corners) => {
-    const [topLeft, topRight, bottomRight, bottomLeft] = corners;
-    const length = (first, second) =>
-        Math.hypot(second.x - first.x, second.y - first.y);
-    const width = Math.max(length(topLeft, topRight), length(bottomLeft, bottomRight));
-    const height = Math.max(length(topLeft, bottomLeft), length(topRight, bottomRight));
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(width, height));
-    const outputWidth = Math.max(1, Math.round(width * scale));
-    const outputHeight = Math.max(1, Math.round(height * scale));
-    const transform = createPerspectiveTransform(corners, outputWidth, outputHeight);
-    if (!transform) {
-        return { imageData, corners: [
-            { x: 0, y: 0 },
-            { x: imageData.width - 1, y: 0 },
-            { x: imageData.width - 1, y: imageData.height - 1 },
-            { x: 0, y: imageData.height - 1 }
-        ] };
-    }
-
-    const output = new ImageData(outputWidth, outputHeight);
-    const [a, b, c, d, e, f, g, h, i] = transform;
-    const { width: sourceWidth, height: sourceHeight, data: source } = imageData;
-    for (let y = 0; y < outputHeight; y += 1) {
-        for (let x = 0; x < outputWidth; x += 1) {
-            const denominator = g * x + h * y + i;
-            const sourceX = (a * x + b * y + c) / denominator;
-            const sourceY = (d * x + e * y + f) / denominator;
-            const left = Math.max(0, Math.min(sourceWidth - 1, Math.floor(sourceX)));
-            const top = Math.max(0, Math.min(sourceHeight - 1, Math.floor(sourceY)));
-            const right = Math.min(sourceWidth - 1, left + 1);
-            const bottom = Math.min(sourceHeight - 1, top + 1);
-            const mixX = Math.max(0, Math.min(1, sourceX - left));
-            const mixY = Math.max(0, Math.min(1, sourceY - top));
-            const destination = (y * outputWidth + x) * 4;
-            for (let channel = 0; channel < 4; channel += 1) {
-                const topLeftValue = source[(top * sourceWidth + left) * 4 + channel];
-                const topRightValue = source[(top * sourceWidth + right) * 4 + channel];
-                const bottomLeftValue = source[(bottom * sourceWidth + left) * 4 + channel];
-                const bottomRightValue = source[(bottom * sourceWidth + right) * 4 + channel];
-                const topValue = topLeftValue + (topRightValue - topLeftValue) * mixX;
-                const bottomValue = bottomLeftValue + (bottomRightValue - bottomLeftValue) * mixX;
-                output.data[destination + channel] =
-                    topValue + (bottomValue - topValue) * mixY;
-            }
-        }
-    }
-    return {
-        imageData: output,
-        corners: [
-            { x: 0, y: 0 },
-            { x: outputWidth - 1, y: 0 },
-            { x: outputWidth - 1, y: outputHeight - 1 },
-            { x: 0, y: outputHeight - 1 }
-        ]
-    };
-};
-
-export const detectDocumentCrop = imageData => {
-    const corners = detectDocumentCorners(imageData);
-    const x = Math.min(...corners.map(point => point.x));
-    const y = Math.min(...corners.map(point => point.y));
-    const right = Math.max(...corners.map(point => point.x));
-    const bottom = Math.max(...corners.map(point => point.y));
-    return { x, y, width: right - x + 1, height: bottom - y + 1 };
-};
-
-export const enhanceDocumentPixels = imageData => {
-    const { data, width, height } = imageData;
-    const histogram = new Uint32Array(256);
-    const luminances = new Uint8Array(width * height);
-
-    for (let pixel = 0; pixel < luminances.length; pixel += 1) {
-        const offset = pixel * 4;
-        const value = Math.round(luminance(data[offset], data[offset + 1], data[offset + 2]));
-        luminances[pixel] = value;
-        histogram[value] += 1;
-    }
-
-    const lowTarget = Math.floor(luminances.length * 0.02);
-    const highTarget = Math.ceil(luminances.length * 0.98);
-    let cumulative = 0;
-    let low = 0;
-    let high = 255;
-    for (let value = 0; value < 256; value += 1) {
-        cumulative += histogram[value];
-        if (cumulative >= lowTarget) {
-            low = value;
-            break;
-        }
-    }
-    cumulative = 0;
-    for (let value = 0; value < 256; value += 1) {
-        cumulative += histogram[value];
-        if (cumulative >= highTarget) {
-            high = value;
-            break;
-        }
-    }
-
-    const contrastRange = Math.max(48, high - low);
-    const stretched = luminances.map(value =>
-        Math.max(0, Math.min(255, ((value - low) * 255) / contrastRange))
-    );
-
-    for (let y = 0; y < height; y += 1) {
-        for (let x = 0; x < width; x += 1) {
-            const index = y * width + x;
-            let neighborhood = 0;
-            let samples = 0;
-            for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
-                for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
-                    const sampleX = Math.max(0, Math.min(width - 1, x + offsetX));
-                    const sampleY = Math.max(0, Math.min(height - 1, y + offsetY));
-                    neighborhood += stretched[sampleY * width + sampleX];
-                    samples += 1;
+            const approximation = new cv.Mat();
+            try {
+                cv.approxPolyDP(contour, approximation, perimeter * 0.02, true);
+                const area = Math.abs(cv.contourArea(contour));
+                if (
+                    approximation.rows === 4 &&
+                    area >= imageArea * 0.2 &&
+                    area <= imageArea * 0.995 &&
+                    cv.isContourConvex(approximation) &&
+                    area > best.area
+                ) {
+                    const points = [];
+                    for (let point = 0; point < 4; point += 1) {
+                        points.push({
+                            x: approximation.data32S[point * 2],
+                            y: approximation.data32S[point * 2 + 1]
+                        });
+                    }
+                    best.area = area;
+                    best.corners = orderCorners(points);
                 }
+            } finally {
+                approximation.delete();
+                contour.delete();
             }
-            const sharpened = Math.max(
-                0,
-                Math.min(255, stretched[index] + (stretched[index] - neighborhood / samples) * 0.35)
-            );
-            const value = Math.round(sharpened);
-            const pixel = index * 4;
-            data[pixel] = value;
-            data[pixel + 1] = value;
-            data[pixel + 2] = value;
         }
+    } finally {
+        binary.delete();
+        contours.delete();
+        hierarchy.delete();
     }
-    return imageData;
+};
+
+export const detectDocumentCorners = async imageData => {
+    const cv = await getOpenCv();
+    const { width, height } = imageData;
+    const source = new cv.Mat(height, width, cv.CV_8UC4);
+    const gray = new cv.Mat();
+    const blurred = new cv.Mat();
+    const edges = new cv.Mat();
+    const closedEdges = new cv.Mat();
+    const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(5, 5));
+    const best = { area: 0, corners: identityCorners(width, height) };
+
+    try {
+        source.data.set(imageData.data);
+        cv.cvtColor(source, gray, cv.COLOR_RGBA2GRAY);
+        cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0);
+        const imageArea = width * height;
+
+        for (const [lower, upper] of [[25, 75], [45, 135], [70, 210]]) {
+            cv.Canny(blurred, edges, lower, upper);
+            cv.morphologyEx(edges, closedEdges, cv.MORPH_CLOSE, kernel);
+            getContourCandidates(cv, closedEdges.clone(), imageArea, best);
+        }
+
+        const binary = new cv.Mat();
+        const inverse = new cv.Mat();
+        try {
+            cv.threshold(
+                blurred,
+                binary,
+                0,
+                255,
+                cv.THRESH_BINARY | cv.THRESH_OTSU
+            );
+            getContourCandidates(cv, binary.clone(), imageArea, best);
+            cv.bitwise_not(binary, inverse);
+            getContourCandidates(cv, inverse.clone(), imageArea, best);
+        } finally {
+            binary.delete();
+            inverse.delete();
+        }
+        return best.corners;
+    } finally {
+        source.delete();
+        gray.delete();
+        blurred.delete();
+        edges.delete();
+        closedEdges.delete();
+        kernel.delete();
+    }
+};
+
+export const warpDocumentPerspective = async (imageData, corners) => {
+    const cv = await getOpenCv();
+    const [topLeft, topRight, bottomRight, bottomLeft] = corners;
+    const sideLength = (first, second) =>
+        Math.hypot(second.x - first.x, second.y - first.y);
+    const targetWidth = Math.max(
+        sideLength(topLeft, topRight),
+        sideLength(bottomLeft, bottomRight)
+    );
+    const targetHeight = Math.max(
+        sideLength(topLeft, bottomLeft),
+        sideLength(topRight, bottomRight)
+    );
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(targetWidth, targetHeight));
+    const width = Math.max(1, Math.round(targetWidth * scale));
+    const height = Math.max(1, Math.round(targetHeight * scale));
+    const source = new cv.Mat(imageData.height, imageData.width, cv.CV_8UC4);
+    const destination = new cv.Mat();
+    const sourcePoints = cv.matFromArray(
+        4, 1, cv.CV_32FC2, corners.flatMap(point => [point.x, point.y])
+    );
+    const destinationPoints = cv.matFromArray(
+        4,
+        1,
+        cv.CV_32FC2,
+        [0, 0, width - 1, 0, width - 1, height - 1, 0, height - 1]
+    );
+    const transform = cv.getPerspectiveTransform(sourcePoints, destinationPoints);
+
+    try {
+        source.data.set(imageData.data);
+        cv.warpPerspective(
+            source,
+            destination,
+            transform,
+            new cv.Size(width, height),
+            cv.INTER_CUBIC,
+            cv.BORDER_REPLICATE
+        );
+        return new ImageData(
+            new Uint8ClampedArray(destination.data),
+            destination.cols,
+            destination.rows
+        );
+    } finally {
+        source.delete();
+        destination.delete();
+        sourcePoints.delete();
+        destinationPoints.delete();
+        transform.delete();
+    }
+};
+
+export const enhanceDocumentImage = async imageData => {
+    const cv = await getOpenCv();
+    const source = new cv.Mat(imageData.height, imageData.width, cv.CV_8UC4);
+    const gray = new cv.Mat();
+    const corrected = new cv.Mat();
+    const filtered = new cv.Mat();
+    const thresholded = new cv.Mat();
+    const rgba = new cv.Mat();
+
+    try {
+        source.data.set(imageData.data);
+        cv.cvtColor(source, gray, cv.COLOR_RGBA2GRAY);
+        cv.equalizeHist(gray, corrected);
+        const blockSize = Math.max(
+            3,
+            Math.min(41, Math.min(imageData.width, imageData.height) | 1)
+        );
+        cv.adaptiveThreshold(
+            corrected,
+            thresholded,
+            255,
+            cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv.THRESH_BINARY,
+            blockSize,
+            11
+        );
+        cv.medianBlur(thresholded, filtered, 3);
+        cv.cvtColor(filtered, rgba, cv.COLOR_GRAY2RGBA);
+        return new ImageData(
+            new Uint8ClampedArray(rgba.data),
+            rgba.cols,
+            rgba.rows
+        );
+    } finally {
+        source.delete();
+        gray.delete();
+        corrected.delete();
+        filtered.delete();
+        thresholded.delete();
+        rgba.delete();
+    }
 };
 
 const loadImage = file => new Promise((resolve, reject) => {
@@ -397,54 +270,91 @@ const loadImage = file => new Promise((resolve, reject) => {
     image.src = url;
 });
 
-export const processDocumentImage = async (file, mode = "enhanced") => {
+export const processDocumentImage = async (
+    file,
+    mode = "enhanced",
+    manualCorners = null
+) => {
     const image = await loadImage(file);
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight));
+    const scale = Math.min(
+        1,
+        MAX_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight)
+    );
     const width = Math.max(1, Math.round(image.naturalWidth * scale));
     const height = Math.max(1, Math.round(image.naturalHeight * scale));
     const sourceCanvas = document.createElement("canvas");
     sourceCanvas.width = width;
     sourceCanvas.height = height;
     const sourceContext = sourceCanvas.getContext("2d", { willReadFrequently: true });
-    if (!sourceContext) throw new Error("This browser could not prepare the scanned image.");
+    if (!sourceContext) {
+        throw new Error("This browser could not prepare the scanned image.");
+    }
     sourceContext.drawImage(image, 0, 0, width, height);
 
-    const detectionScale = Math.min(1, 480 / Math.max(width, height));
-    const detectionWidth = Math.max(1, Math.round(width * detectionScale));
-    const detectionHeight = Math.max(1, Math.round(height * detectionScale));
+    const detectionScale = Math.min(
+        1,
+        DETECTION_DIMENSION / Math.max(width, height)
+    );
     const detectionCanvas = document.createElement("canvas");
-    detectionCanvas.width = detectionWidth;
-    detectionCanvas.height = detectionHeight;
-    const detectionContext = detectionCanvas.getContext("2d", { willReadFrequently: true });
-    if (!detectionContext) throw new Error("This browser could not detect the document page.");
-    detectionContext.drawImage(sourceCanvas, 0, 0, detectionWidth, detectionHeight);
-    const detectedCorners = detectDocumentCorners(
-        detectionContext.getImageData(0, 0, detectionWidth, detectionHeight)
+    detectionCanvas.width = Math.max(1, Math.round(width * detectionScale));
+    detectionCanvas.height = Math.max(1, Math.round(height * detectionScale));
+    const detectionContext = detectionCanvas.getContext("2d", {
+        willReadFrequently: true
+    });
+    if (!detectionContext) {
+        throw new Error("This browser could not detect the document page.");
+    }
+    detectionContext.drawImage(
+        sourceCanvas,
+        0,
+        0,
+        detectionCanvas.width,
+        detectionCanvas.height
+    );
+
+    const detectedCorners = manualCorners || await detectDocumentCorners(
+        detectionContext.getImageData(
+            0,
+            0,
+            detectionCanvas.width,
+            detectionCanvas.height
+        )
     );
     const corners = detectedCorners.map(point => ({
-        x: Math.max(0, Math.min(width - 1, point.x / detectionScale)),
-        y: Math.max(0, Math.min(height - 1, point.y / detectionScale))
+        x: Math.max(
+            0,
+            Math.min(width - 1, manualCorners ? point.x : point.x / detectionScale)
+        ),
+        y: Math.max(
+            0,
+            Math.min(height - 1, manualCorners ? point.y : point.y / detectionScale)
+        )
     }));
-    const warped = warpDocumentPerspective(
+    let output = await warpDocumentPerspective(
         sourceContext.getImageData(0, 0, width, height),
         corners
     );
+    if (mode === "enhanced") output = await enhanceDocumentImage(output);
+
     const canvas = document.createElement("canvas");
-    canvas.width = warped.imageData.width;
-    canvas.height = warped.imageData.height;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
+    canvas.width = output.width;
+    canvas.height = output.height;
+    const context = canvas.getContext("2d");
     if (!context) throw new Error("This browser could not prepare the scanned image.");
-    context.putImageData(warped.imageData, 0, 0);
-
-    if (mode === "enhanced") {
-        const pixels = context.getImageData(0, 0, warped.imageData.width, warped.imageData.height);
-        context.putImageData(enhanceDocumentPixels(pixels), 0, 0);
+    context.putImageData(output, 0, 0);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    if (!blob) {
+        throw new Error("The scanned image could not be prepared. Please try again.");
     }
-
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.9));
-    if (!blob) throw new Error("The scanned image could not be prepared. Please try again.");
     if (blob.size > MAX_FILE_SIZE) {
         throw new Error("The scanned image is too large to send (10MB maximum).");
     }
-    return new File([blob], `messenger-scan-${Date.now()}.jpg`, { type: "image/jpeg" });
+    return {
+        file: new File([blob], `messenger-scan-${Date.now()}.jpg`, {
+            type: "image/jpeg"
+        }),
+        corners,
+        width,
+        height
+    };
 };
