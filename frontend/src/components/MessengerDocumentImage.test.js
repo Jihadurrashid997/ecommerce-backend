@@ -1,4 +1,5 @@
 import {
+    createBlackAndWhiteDocumentImage,
     detectDocumentCorners,
     enhanceDocumentImage,
     warpDocumentPerspective
@@ -95,14 +96,37 @@ test("perspective warp maps a skewed page into a flat rectangle", async () => {
     expect(result.data).toHaveLength(result.width * result.height * 4);
 });
 
-test("document enhancement returns a high-contrast grayscale image", async () => {
+test("document enhancement evens out lighting while preserving color", async () => {
+    const image = makeImageData(101, 61, (x, y) => {
+        const paper = 130 + Math.round(x * 0.8);
+        return x > 48 && x < 53 && y > 5 && y < 56
+            ? [165, 55, 45]
+            : [paper, paper, paper];
+    });
+
+    const result = await enhanceDocumentImage(image);
+
+    expect(result.width).toBe(101);
+    expect(result.height).toBe(61);
+    const pixelAt = (x, y) => [
+        ...result.data.slice((y * result.width + x) * 4, (y * result.width + x) * 4 + 3)
+    ];
+    const leftPaper = pixelAt(20, 30);
+    const rightPaper = pixelAt(80, 30);
+    expect(Math.abs(leftPaper[0] - rightPaper[0])).toBeLessThan(30);
+    const coloredInk = pixelAt(50, 30);
+    expect(coloredInk[0]).toBeGreaterThan(coloredInk[1]);
+    expect(coloredInk[1]).toBeGreaterThan(coloredInk[2]);
+});
+
+test("black-and-white mode returns a grayscale scan", async () => {
     const image = makeImageData(31, 31, (x, y) =>
         x > 13 && x < 17 && y > 4 && y < 27
             ? [55, 55, 55]
             : [200 + (x % 20), 190 + (y % 20), 180 + (x % 10)]
     );
 
-    const result = await enhanceDocumentImage(image);
+    const result = await createBlackAndWhiteDocumentImage(image);
 
     expect(result.width).toBe(31);
     expect(result.height).toBe(31);

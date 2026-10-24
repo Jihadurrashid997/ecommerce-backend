@@ -216,22 +216,68 @@ export const warpDocumentPerspective = async (imageData, corners) => {
 export const enhanceDocumentImage = async imageData => {
     const cv = await getOpenCv();
     const source = new cv.Mat(imageData.height, imageData.width, cv.CV_8UC4);
+    const lab = new cv.Mat();
+    const channels = new cv.MatVector();
+    const background = new cv.Mat();
+    const normalized = new cv.Mat();
+    const balanced = new cv.Mat();
+    const rgba = new cv.Mat();
+    let lightness;
+
+    try {
+        source.data.set(imageData.data);
+        cv.cvtColor(source, lab, cv.COLOR_RGBA2Lab);
+        cv.split(lab, channels);
+        lightness = channels.get(0);
+        const blurSize = Math.max(
+            3,
+            Math.min(101, (Math.min(imageData.width, imageData.height) * 0.07) | 1)
+        );
+        cv.GaussianBlur(
+            lightness,
+            background,
+            new cv.Size(blurSize, blurSize),
+            0
+        );
+        cv.divide(lightness, background, normalized, 220, cv.CV_8U);
+        cv.addWeighted(normalized, 0.85, lightness, 0.15, 0, balanced);
+        channels.set(0, balanced);
+        cv.merge(channels, lab);
+        cv.cvtColor(lab, rgba, cv.COLOR_Lab2RGBA);
+        return new ImageData(
+            new Uint8ClampedArray(rgba.data),
+            rgba.cols,
+            rgba.rows
+        );
+    } finally {
+        source.delete();
+        lab.delete();
+        lightness?.delete();
+        channels.delete();
+        background.delete();
+        normalized.delete();
+        balanced.delete();
+        rgba.delete();
+    }
+};
+
+export const createBlackAndWhiteDocumentImage = async imageData => {
+    const cv = await getOpenCv();
+    const source = new cv.Mat(imageData.height, imageData.width, cv.CV_8UC4);
     const gray = new cv.Mat();
-    const corrected = new cv.Mat();
-    const filtered = new cv.Mat();
     const thresholded = new cv.Mat();
+    const filtered = new cv.Mat();
     const rgba = new cv.Mat();
 
     try {
         source.data.set(imageData.data);
         cv.cvtColor(source, gray, cv.COLOR_RGBA2GRAY);
-        cv.equalizeHist(gray, corrected);
         const blockSize = Math.max(
             3,
             Math.min(41, Math.min(imageData.width, imageData.height) | 1)
         );
         cv.adaptiveThreshold(
-            corrected,
+            gray,
             thresholded,
             255,
             cv.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -249,9 +295,8 @@ export const enhanceDocumentImage = async imageData => {
     } finally {
         source.delete();
         gray.delete();
-        corrected.delete();
-        filtered.delete();
         thresholded.delete();
+        filtered.delete();
         rgba.delete();
     }
 };
@@ -335,6 +380,7 @@ export const processDocumentImage = async (
         corners
     );
     if (mode === "enhanced") output = await enhanceDocumentImage(output);
+    if (mode === "blackwhite") output = await createBlackAndWhiteDocumentImage(output);
 
     const canvas = document.createElement("canvas");
     canvas.width = output.width;
@@ -342,7 +388,7 @@ export const processDocumentImage = async (
     const context = canvas.getContext("2d");
     if (!context) throw new Error("This browser could not prepare the scanned image.");
     context.putImageData(output, 0, 0);
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.95));
     if (!blob) {
         throw new Error("The scanned image could not be prepared. Please try again.");
     }
