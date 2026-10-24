@@ -204,3 +204,16 @@ test("owners can remove their post for everyone", async () => {
     expect(onDeleted).toHaveBeenCalledWith("post-1");
     confirm.mockRestore();
 });
+
+test("a post can be reposted and undone", async () => {
+    api.post.mockResolvedValue({ data: { success: true } });
+    api.delete.mockResolvedValue({ data: { success: true } });
+    render(<PostCard post={post} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Repost" }));
+    expect(await screen.findByRole("button", { name: "Undo repost" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Undo repost" }));
+
+    await waitFor(() => expect(api.delete).toHaveBeenCalledWith("/posts/post-1/repost"));
+    expect(await screen.findByRole("button", { name: "Repost" })).toBeVisible();
+});

@@ -9,6 +9,7 @@ const {
     reelUpload,
     handle
 } = require("../middleware/postUpload");
+const { validateHomeImageContent } = require("../middleware/imageContentValidation");
 
 const {
     createPost,
@@ -21,11 +22,13 @@ const {
     getSavedPosts,
     setSavedPost,
     repostPost,
+    undoRepost,
     getUserPosts,
     toggleLike,
     setReaction,
     getComments,
     addComment,
+    deleteComment,
     addView,
     deletePost
 } = require("../controllers/postController");
@@ -43,9 +46,10 @@ router.post(
     "/community/:communityId",
     auth(),
     handle(postUpload, "photos"),
+    validateHomeImageContent,
     createPost
 );
-router.post("/", auth(), handle(postUpload, "photos"), createPost);
+router.post("/", auth(), handle(postUpload, "photos"), validateHomeImageContent, createPost);
 
 // Reels
 router.get("/reels", auth(), getReels);
@@ -61,9 +65,11 @@ router.get("/:id", auth(), getPost);
 router.put("/:id/saved", auth(), setSavedPost);
 router.put("/:id/reaction", auth(), setReaction);
 router.post("/:id/repost", auth(), repostPost);
+router.delete("/:id/repost", auth(), undoRepost);
 router.post("/:id/like", auth(), toggleLike);
 router.get("/:id/comments", auth(), getComments);
 router.post("/:id/comments", auth(), addComment);
+router.delete("/:id/comments/:commentId", auth(), deleteComment);
 router.post("/:id/view", auth(), addView);
 router.delete("/:id", auth(), deletePost);
 

@@ -33,6 +33,12 @@ jest.mock("../context/AppContext", () => ({
 
 jest.mock("../components/PostCard", () => ({ post }) => <article>{post.caption}</article>);
 
+jest.mock("../components/MessengerStories", () => ({ allowVideo, home }) => (
+    <section aria-label={home ? "Stories" : "Messenger statuses"} data-video-upload={allowVideo}>
+        <button type="button" aria-label={home ? "Add story" : "Add status"}>Add</button>
+    </section>
+));
+
 beforeEach(() => {
     jest.clearAllMocks();
     loadHomeDraft.mockResolvedValue(null);
@@ -85,6 +91,14 @@ test("new feed posts include the selected audience and reset to public", async (
     expect(api.post.mock.calls[0][1].get("visibility")).toBe("followers");
     await waitFor(() => expect(audience).toHaveValue("public"));
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
+});
+
+test("Home includes a story bar configured to allow photo-only story uploads", async () => {
+    render(<Home />);
+    const stories = await screen.findByRole("region", { name: "Stories" });
+    expect(stories).toHaveAttribute("data-video-upload", "false");
+    expect(screen.getByRole("button", { name: "Add story" })).toBeVisible();
+    expect(screen.getByPlaceholderText("What's worth sharing today?")).toBeVisible();
 });
 
 test("photo uploads send the selected image and show upload progress", async () => {
@@ -290,7 +304,7 @@ test("loads additional feed posts using the next cursor", async () => {
         return Promise.resolve({
             data: feedRequest === 1
                 ? { data: [post("post-1", "First post")], nextCursor: "cursor-1" }
-                : { data: [post("post-2", "Second post")], nextCursor: null }
+                : { data: [post("post-1", "First post"), post("post-2", "Second post")], nextCursor: null }
         });
     });
 
@@ -300,6 +314,7 @@ test("loads additional feed posts using the next cursor", async () => {
     fireEvent.click(screen.getByRole("button", { name: /Discover more/ }));
 
     expect(await screen.findByText("Second post")).toBeVisible();
+    expect(screen.getAllByText("First post")).toHaveLength(1);
     expect(api.get).toHaveBeenLastCalledWith("/posts/feed", {
         params: { scope: "for-you", before: "cursor-1" }
     });

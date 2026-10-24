@@ -14,6 +14,7 @@ import api, { getUploadUrl } from "../services/api";
 import { clearHomeDraft, loadHomeDraft, saveHomeDraft } from "../services/homeDraft";
 import { useApp } from "../context/AppContext";
 import PostCard from "../components/PostCard";
+import MessengerStories from "../components/MessengerStories";
 import "../styles/Social.css";
 
 const MAX_PHOTOS = 5;
@@ -24,6 +25,7 @@ const Home = () => {
 
     const fileRef = useRef(null);
     const followingRequestRef = useRef(0);
+    const feedRequestRef = useRef(0);
     const draftSaveRequestRef = useRef(0);
     const userId = String(user?._id || user?.id || "");
 
@@ -59,6 +61,7 @@ const Home = () => {
     );
 
     const load = useCallback(async (before = null, scope = feedScope) => {
+        const requestId = before ? feedRequestRef.current : ++feedRequestRef.current;
 
         try {
 
@@ -71,15 +74,30 @@ const Home = () => {
                 }
             });
 
-            setPosts(prev => before ? [...prev, ...res.data.data] : (res.data.data || []));
+            if (requestId !== feedRequestRef.current) return;
+            const incomingPosts = res.data.data || [];
+            setPosts(previous => {
+                const seen = new Set();
+                const combined = before ? [...previous, ...incomingPosts] : incomingPosts;
+                return combined.filter(post => {
+                    const id = String(post._id);
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            });
             setCursor(res.data.nextCursor || null);
             setError("");
 
         } catch (e) {
-            setError(e.response?.data?.message || "Could not load the feed.");
+            if (requestId === feedRequestRef.current) {
+                setError(e.response?.data?.message || "Could not load the feed.");
+            }
         } finally {
-            setLoading(false);
-            setLoadingMore(false);
+            if (requestId === feedRequestRef.current) {
+                setLoading(false);
+                setLoadingMore(false);
+            }
         }
 
     }, [feedScope]);
@@ -324,6 +342,8 @@ const Home = () => {
                 </aside>
 
                 <div className="home-feed-column">
+                    <MessengerStories active currentUser={user} allowVideo={false} home />
+
                     <section className="home-following-strip">
                         <div className="home-following-intro">
                             <span className="home-strip-orb"><FaUsers /></span>
@@ -459,7 +479,21 @@ const Home = () => {
                         <button className={feedScope === "following" ? "active" : ""} onClick={() => setFeedScope("following")} type="button">Following <span>{following.length}</span></button>
                     </div>
 
-                    {loading && <p className="social-note">Finding something good for you...</p>}
+                    {loading && (
+                        <>
+                            <p className="social-note">Finding something good for you...</p>
+                            <div className="home-feed-skeletons" aria-hidden="true">
+                                {[0, 1].map(item => (
+                                    <div className="home-feed-skeleton" key={item}>
+                                        <span className="home-skeleton-avatar" />
+                                        <span className="home-skeleton-line" />
+                                        <span className="home-skeleton-line short" />
+                                        <span className="home-skeleton-content" />
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
 
                     {error && <div className="home-error"><p>{error}</p><button type="button" onClick={() => load(null, feedScope)}>Try again</button></div>}
 

@@ -152,6 +152,34 @@ test("public statuses can be viewed without following the owner", async () => {
     assert.equal(res.body.data.viewedByMe, true);
 });
 
+test("a blocked account cannot view a public status directly", async () => {
+    const story = makeStory({ audience: "public" });
+    User.findById = id => ({
+        select: () => ({
+            lean: async () => String(id) === USER_ID
+                ? { following: [], blockedUsers: [new mongoose.Types.ObjectId(FOLLOWER_ID)] }
+                : { following: [], blockedUsers: [] }
+        })
+    });
+    Story.findOne = () => ({
+        populate: async () => story
+    });
+    Story.updateOne = async () => {
+        throw new Error("Blocked viewers must not be recorded.");
+    };
+
+    const res = makeResponse();
+    await require("../controllers/storyController").markStoryViewed(
+        {
+            params: { id: STORY_ID },
+            user: { id: FOLLOWER_ID }
+        },
+        res
+    );
+
+    assert.equal(res.statusCode, 404);
+});
+
 test("expired statuses remain queued for cleanup when media deletion fails", async () => {
     const story = {
         media: {

@@ -34,6 +34,7 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
     const [likeCount, setLikeCount] = useState(post.likeCount);
     const [reactionCounts, setReactionCounts] = useState(post.reactionCounts || {});
     const [saved, setSaved] = useState(Boolean(post.isSavedByMe));
+    const [reposted, setReposted] = useState(Boolean(post.isRepostedByMe));
     const [commentCount, setCommentCount] = useState(post.commentCount);
     const [showComments, setShowComments] = useState(false);
     const [slide, setSlide] = useState(0);
@@ -55,6 +56,9 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
             visibility: post.visibility || "public"
         });
     }, [post.caption, post.visibility]);
+    useEffect(() => {
+        setReposted(Boolean(post.isRepostedByMe));
+    }, [post.isRepostedByMe]);
     const photoUrls = (post.media || []).map(media => getUploadUrl(media.url));
     const closeMediaViewer = useCallback(() => {
         setViewerSlide(null);
@@ -107,9 +111,23 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
     const repost = async () => {
         try {
             await api.post(`/posts/${post._id}/repost`);
+            setReposted(true);
             setShareMessage("Post reposted.");
         } catch (error) {
             setShareMessage(error.response?.data?.message || "Could not repost this post.");
+        }
+    };
+
+    const undoRepost = async () => {
+        try {
+            await api.delete(`/posts/${post._id}/repost`);
+            setReposted(false);
+            setShareMessage("Repost removed.");
+            if (post.originalPost && String(author._id) === myId && onDeleted) {
+                onDeleted(post._id);
+            }
+        } catch (error) {
+            setPostError(error.response?.data?.message || "Could not remove your repost.");
         }
     };
 
@@ -229,9 +247,15 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
                                 {canDelete && (
                                     <button type="button" onClick={() => {
                                         setPostMenuOpen(false);
-                                        remove();
+                                        if (post.originalPost && String(author._id) === myId) {
+                                            undoRepost();
+                                        } else {
+                                            remove();
+                                        }
                                     }}>
-                                        <FaTrash /> Remove post
+                                        {post.originalPost && String(author._id) === myId
+                                            ? <><FaRetweet /> Undo repost</>
+                                            : <><FaTrash /> Remove post</>}
                                     </button>
                                 )}
                             </div>
@@ -357,8 +381,8 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
 
                 {post.kind === "post" && !post.originalPost && !post.community &&
                     (!post.visibility || post.visibility === "public") && (
-                        <button type="button" onClick={repost} aria-label="Repost">
-                            <FaRetweet /> Repost
+                        <button type="button" onClick={reposted ? undoRepost : repost} aria-label={reposted ? "Undo repost" : "Repost"}>
+                            <FaRetweet /> {reposted ? "Undo repost" : "Repost"}
                         </button>
                     )}
 
@@ -390,7 +414,7 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
                     }}
                     myId={myId}
                     createdAt={post.createdAt}
-                    caption={post.caption}
+                    caption={postContent.caption}
                     liked={liked}
                     likeCount={likeCount}
                     commentCount={commentCount}

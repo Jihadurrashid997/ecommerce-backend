@@ -26,23 +26,26 @@ const canViewStory = async (story, userId) => {
     if (ownerId === String(userId)) {
         return true;
     }
-    if (story.audience === "public") {
-        return true;
-    }
 
-    const owner = await User.findById(ownerId).select("following blockedUsers").lean();
-    const viewer = await User.findById(userId).select("blockedUsers").lean();
+    const [owner, viewer] = await Promise.all([
+        User.findById(ownerId).select("following blockedUsers").lean(),
+        User.findById(userId).select("blockedUsers").lean()
+    ]);
+    if (!owner || !viewer) return false;
+
+    const ownerBlockedViewer = (owner.blockedUsers || []).some(
+        id => String(id) === String(userId)
+    );
+    const viewerBlockedOwner = (viewer.blockedUsers || []).some(
+        id => String(id) === ownerId
+    );
+    if (ownerBlockedViewer || viewerBlockedOwner) return false;
+    if (story.audience === "public") return true;
+
     const followsOwner = (viewer?.following || []).some(
         id => String(id) === ownerId
     );
-    const ownerBlockedViewer = (owner?.blockedUsers || []).some(
-        id => String(id) === String(userId)
-    );
-    const viewerBlockedOwner = (viewer?.blockedUsers || []).some(
-        id => String(id) === ownerId
-    );
-
-    return followsOwner && !ownerBlockedViewer && !viewerBlockedOwner;
+    return followsOwner;
 };
 
 exports.createStory = async (req, res) => {
