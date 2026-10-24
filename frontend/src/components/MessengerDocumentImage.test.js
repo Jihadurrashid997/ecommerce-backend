@@ -1,4 +1,9 @@
-import { detectDocumentCrop, enhanceDocumentPixels } from "./MessengerDocumentImage";
+import {
+    detectDocumentCorners,
+    detectDocumentCrop,
+    enhanceDocumentPixels,
+    warpDocumentPerspective
+} from "./MessengerDocumentImage";
 
 const makeImageData = (width, height, pixelAt) => {
     const data = new Uint8ClampedArray(width * height * 4);
@@ -46,6 +51,63 @@ test("auto crop leaves the full image when page edges are unclear", () => {
         width: 40,
         height: 40
     });
+});
+
+test("document detection returns four corners for a skewed page", () => {
+    const image = makeImageData(120, 110, (x, y) => {
+        const pageLeft = 18 + Math.round(y * 0.08);
+        const pageRight = 100 - Math.round(y * 0.04);
+        const insidePage =
+            y >= 12 && y <= 96 &&
+            x >= pageLeft + Math.round((y - 12) * 0.12) &&
+            x <= pageRight - Math.round((y - 12) * 0.08);
+        return insidePage ? [245, 245, 245] : [24, 24, 24];
+    });
+
+    const corners = detectDocumentCorners(image);
+
+    expect(corners).toHaveLength(4);
+    expect(corners[0].x).toBeLessThan(40);
+    expect(corners[0].y).toBeLessThan(25);
+    expect(corners[1].x).toBeGreaterThan(80);
+    expect(corners[1].y).toBeLessThan(30);
+    expect(corners[2].x).toBeGreaterThan(75);
+    expect(corners[2].y).toBeGreaterThan(75);
+    expect(corners[3].x).toBeLessThan(50);
+    expect(corners[3].y).toBeGreaterThan(75);
+});
+
+test("perspective warp turns a quadrilateral page into a rectangle", () => {
+    const image = makeImageData(120, 110, (x, y) => [x, y, 120]);
+    const corners = [
+        { x: 20, y: 10 },
+        { x: 100, y: 20 },
+        { x: 90, y: 100 },
+        { x: 30, y: 90 }
+    ];
+    const originalImageData = global.ImageData;
+    global.ImageData = class {
+        constructor(width, height) {
+            this.width = width;
+            this.height = height;
+            this.data = new Uint8ClampedArray(width * height * 4);
+        }
+    };
+
+    try {
+        const result = warpDocumentPerspective(image, corners);
+
+        expect(result.imageData.width).toBeGreaterThan(50);
+        expect(result.imageData.height).toBeGreaterThan(50);
+        expect(result.corners).toEqual([
+            { x: 0, y: 0 },
+            { x: result.imageData.width - 1, y: 0 },
+            { x: result.imageData.width - 1, y: result.imageData.height - 1 },
+            { x: 0, y: result.imageData.height - 1 }
+        ]);
+    } finally {
+        global.ImageData = originalImageData;
+    }
 });
 
 test("text enhancement boosts contrast and creates a grayscale document image", () => {

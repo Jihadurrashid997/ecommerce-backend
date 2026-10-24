@@ -213,7 +213,9 @@ const MessengerScanner = ({ onClose, onSend }) => {
                     <img className="messenger-scanner-preview" src={previewUrl} alt="Captured document page" />
                 ) : sourceFile ? (
                     <p className="messenger-scanner-processing" role="status">
-                        {processing ? "Detecting page edges and enhancing text…" : "Preparing preview…"}
+                        {processing
+                            ? "Finding page corners, straightening, and enhancing text…"
+                            : "Preparing preview…"}
                     </p>
                 ) : (
                     <>
