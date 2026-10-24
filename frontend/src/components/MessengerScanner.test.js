@@ -63,6 +63,13 @@ test("camera permission failure offers image upload and sends only after confirm
         .toHaveAttribute("src", "blob:scan-preview");
     expect(processDocumentImage.mock.calls[0][0]).toBe(image);
     expect(processDocumentImage.mock.calls[0][1]).toBe("enhanced");
+    fireEvent.click(screen.getByRole("button", { name: "B&W" }));
+    await waitFor(() => {
+        const lastCall = processDocumentImage.mock.calls[
+            processDocumentImage.mock.calls.length - 1
+        ];
+        expect(lastCall[1]).toBe("blackwhite");
+    });
     fireEvent.click(screen.getByRole("button", { name: "Original" }));
     await waitFor(() => {
         const lastCall = processDocumentImage.mock.calls[

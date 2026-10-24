@@ -346,7 +346,7 @@ const MessengerScanner = ({ onClose, onSend }) => {
                 ) : sourceFile ? (
                     <p className="messenger-scanner-processing" role="status">
                         {processing
-                            ? "Finding page corners, straightening, and enhancing text…"
+                            ? "Finding page corners, straightening, and balancing the page…"
                             : "Preparing preview…"}
                     </p>
                 ) : (
@@ -375,7 +375,15 @@ const MessengerScanner = ({ onClose, onSend }) => {
                             disabled={processing || busy}
                             onClick={() => setFilterMode("enhanced")}
                         >
-                            Auto enhance
+                            Enhance
+                        </button>
+                        <button
+                            type="button"
+                            aria-pressed={filterMode === "blackwhite"}
+                            disabled={processing || busy}
+                            onClick={() => setFilterMode("blackwhite")}
+                        >
+                            B&amp;W
                         </button>
                         <button
                             type="button"
