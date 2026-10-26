@@ -400,27 +400,20 @@ export const getUserMedia =
         }
 
 
+        const audioConstraints =
+            audio
+                ? {
+                      echoCancellation: true,
+
+                      noiseSuppression: true,
+
+                      autoGainControl: true
+                  }
+                : false;
+
         const constraints = {
 
-            audio:
-                audio
-                    ? {
-                          echoCancellation:
-                              true,
-
-                          noiseSuppression:
-                              true,
-
-                          autoGainControl:
-                              true,
-
-                          channelCount:
-                              1,
-
-                          sampleRate:
-                              48000
-                      }
-                    : false,
+            audio: audioConstraints,
 
 
             video:
@@ -483,7 +476,7 @@ export const getUserMedia =
                     .mediaDevices
                     .getUserMedia({
 
-                        audio: true,
+                        audio: audioConstraints,
 
                         video:
                             video
