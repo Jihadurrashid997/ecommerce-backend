@@ -2499,18 +2499,31 @@ onTrack:
         remoteTracksRef.current =
             updatedTracks;
 
-        const freshStream =
-            new MediaStream(
-                updatedTracks
+        const refreshRemoteStream = () => {
+            if (
+                !event.track ||
+                !(remoteTracksRef.current || []).includes(event.track)
+            ) {
+                return;
+            }
+
+            const freshStream = new MediaStream(
+                remoteTracksRef.current || []
             );
 
-        remoteStreamRef.current =
-            freshStream;
+            remoteStreamRef.current = freshStream;
+            setRemoteStream(freshStream);
+        };
 
+        if (!alreadyHasTrack) {
+            event.track?.addEventListener(
+                "unmute",
+                refreshRemoteStream,
+                { once: true }
+            );
+        }
 
-        setRemoteStream(
-            freshStream
-        );
+        refreshRemoteStream();
 
 
         console.log(
@@ -2521,9 +2534,9 @@ onTrack:
             ),
             {
                 audioTracks:
-                    freshStream.getAudioTracks().length,
+                    remoteStreamRef.current?.getAudioTracks().length || 0,
                 videoTracks:
-                    freshStream.getVideoTracks().length
+                    remoteStreamRef.current?.getVideoTracks().length || 0
             }
         );
 
