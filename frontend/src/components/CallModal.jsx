@@ -13,10 +13,11 @@ import {
     FiPhoneOff,
     FiPhone,
     FiVolume2,
-    FiRefreshCw
+    FiRefreshCw,
+    FiMoreHorizontal,
+    FiMonitor
 } from "react-icons/fi";
 import CallAudioOutputSelector from "./CallAudioOutputSelector";
-
 
 const CallModal = ({
     visible,
@@ -29,10 +30,14 @@ const CallModal = ({
     remoteStream = null,
     callDuration = 0,
     cameraFacing = "user",
+    cameraEnabled = false,
+    sharingScreen = false,
     onAccept,
     onReject,
     onEnd,
-    onSwitchCamera
+    onSwitchCamera,
+    onToggleVideo,
+    onShareScreen
 }) => {
 
     const localVideoRef =
@@ -53,12 +58,25 @@ const CallModal = ({
     const [playbackBlocked, setPlaybackBlocked] =
         useState(false);
 
+    const [audioOutputOpen, setAudioOutputOpen] =
+        useState(false);
+
+    const [moreOpen, setMoreOpen] =
+        useState(false);
+
+    const [controlError, setControlError] =
+        useState("");
+
     const isIncoming =
         mode === "incoming";
 
     const isActiveCall =
         mode === "accepted" ||
         mode === "connected";
+
+    const isConnectedCall =
+        mode === "connected" ||
+        status === "connected";
 
     const isVideo =
         type === "video";
@@ -68,11 +86,30 @@ const CallModal = ({
             ?.getVideoTracks()
             .some(track => track.readyState === "live");
 
+    const hasLocalVideo =
+        localStream
+            ?.getVideoTracks()
+            .some(track => track.readyState === "live");
+
+    const displayIsVideo =
+        isVideo || hasRemoteVideo || hasLocalVideo;
+
+    const runCallAction = async action => {
+        setControlError("");
+        try {
+            await action();
+        } catch (error) {
+            setControlError(
+                error?.message || "That call control could not be used."
+            );
+        }
+    };
+
     const playRemoteMedia =
         useCallback(
             async () => {
                 const elements = [
-                    isVideo ? remoteVideoRef.current : null,
+                    hasRemoteVideo ? remoteVideoRef.current : null,
                     remoteAudioRef.current
                 ].filter(Boolean);
 
@@ -86,7 +123,7 @@ const CallModal = ({
                     setPlaybackBlocked(true);
                 }
             },
-            [isVideo]
+            [hasRemoteVideo]
         );
 
 
@@ -101,11 +138,7 @@ const CallModal = ({
         const video =
             localVideoRef.current;
 
-        if (
-            !video ||
-            !localStream ||
-            !isVideo
-        ) {
+        if (!video || !localStream || !hasLocalVideo) {
             return;
         }
 
@@ -141,7 +174,7 @@ const CallModal = ({
 
     }, [
         localStream,
-        isVideo
+        hasLocalVideo
     ]);
 
 
@@ -161,9 +194,11 @@ const CallModal = ({
         const video = remoteVideoRef.current;
         const audio = remoteAudioRef.current;
 
-        if (isVideo && video) {
+        if (video && hasRemoteVideo) {
             video.srcObject = remoteStream;
             video.muted = true;
+        } else if (video) {
+            video.srcObject = null;
         }
 
         if (audio) {
@@ -195,7 +230,7 @@ const CallModal = ({
 
     }, [
         remoteStream,
-        isVideo,
+        hasRemoteVideo,
         playRemoteMedia
     ]);
 
@@ -223,14 +258,15 @@ const CallModal = ({
                     remoteAudioRef.current;
 
 
-                if (
-                    isVideo &&
-                    video
-                ) {
+                if (video && hasRemoteVideo) {
 
                     video.srcObject =
                         remoteStream;
                     video.muted = true;
+
+                } else if (video) {
+
+                    video.srcObject = null;
 
                 }
 
@@ -261,7 +297,7 @@ const CallModal = ({
 
     }, [
         remoteStream,
-        isVideo,
+        hasRemoteVideo,
         playRemoteMedia
     ]);
 
@@ -291,21 +327,20 @@ const CallModal = ({
             );
 
 
-        localStream
-            .getVideoTracks()
-            .forEach(
-                track => {
-
-                    track.enabled =
-                        !cameraOff;
-
-                }
-            );
+        if (isVideo) {
+            localStream
+                .getVideoTracks()
+                .forEach(track => {
+                    track.enabled = sharingScreen || !cameraOff;
+                });
+        }
 
     }, [
         localStream,
+        isVideo,
         muted,
-        cameraOff
+        cameraOff,
+        sharingScreen
     ]);
 
 
@@ -548,31 +583,57 @@ const CallModal = ({
                     REMOTE VIDEO
                 ================================================= */}
 
-                {isVideo &&
-                hasRemoteVideo ? (
+                {hasRemoteVideo ? (
 
-                    <video
-                        ref={
-                            remoteVideoRef
-                        }
-                        autoPlay
-                        playsInline
-                        controls={false}
-                        muted
-                        onLoadedMetadata={event => {
+                    <>
+                        <video
+                            ref={
+                                remoteVideoRef
+                            }
+                            autoPlay
+                            playsInline
+                            controls={false}
+                            muted
+                            onLoadedMetadata={event => {
 
-                            event.currentTarget
-                                .play()
-                                .catch(() => {});
+                                event.currentTarget
+                                    .play()
+                                    .catch(() => {});
 
-                        }}
-                        style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            background: "#000"
-                        }}
-                    />
+                            }}
+                            style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                                background: "#000"
+                            }}
+                        />
+                        <div
+                            aria-label="Call details"
+                            style={{
+                                position: "absolute",
+                                top: 20,
+                                left: 20,
+                                right: 20,
+                                zIndex: 2,
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: 12,
+                                padding: "10px 14px",
+                                borderRadius: 14,
+                                background: "rgba(0,0,0,.48)",
+                                backdropFilter: "blur(10px)"
+                            }}
+                        >
+                            <span>{callerName}</span>
+                            {isConnectedCall && (
+                                <span aria-label="Call duration">
+                                    {formatTime()}
+                                </span>
+                            )}
+                        </div>
+                    </>
 
                 ) : (
 
@@ -655,7 +716,7 @@ const CallModal = ({
                             {isIncoming
 
                                 ? `Incoming ${
-                                      isVideo
+                                      displayIsVideo
                                           ? "video"
                                           : "voice"
                                   } call`
@@ -663,7 +724,7 @@ const CallModal = ({
                                 : isActiveCall
 
                                     ? `${
-                                          isVideo
+                                          displayIsVideo
                                               ? "Video"
                                               : "Voice"
                                       } call`
@@ -677,7 +738,7 @@ const CallModal = ({
                         </p>
 
 
-                        {isActiveCall && (
+                        {isConnectedCall && (
 
                             <span
                                 style={{
@@ -727,7 +788,7 @@ const CallModal = ({
                     LOCAL VIDEO
                 ================================================= */}
 
-                {isVideo &&
+                {hasLocalVideo &&
                 localStream && (
 
                     <video
@@ -902,6 +963,83 @@ const CallModal = ({
                             <button
                                 type="button"
                                 onClick={() =>
+                                    setAudioOutputOpen(value => !value)
+                                }
+                                aria-label="Audio"
+                                aria-expanded={audioOutputOpen}
+                                title="Audio output"
+                                style={{
+                                    width: 52,
+                                    height: 52,
+                                    border: "none",
+                                    borderRadius: "50%",
+                                    background: audioOutputOpen
+                                        ? "#374151"
+                                        : "rgba(255,255,255,.16)",
+                                    color: "#fff",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
+                                }}
+                            >
+                                <FiVolume2 size={21} />
+                            </button>
+
+                            {(isVideo || onToggleVideo) && (
+                                <button
+                                    type="button"
+                                    onClick={() => onToggleVideo
+                                        ? runCallAction(onToggleVideo)
+                                        : setCameraOff(value => !value)
+                                    }
+                                    aria-label={onToggleVideo
+                                        ? cameraEnabled
+                                            ? "Turn camera off"
+                                            : "Turn camera on"
+                                        : cameraOff
+                                            ? "Turn camera on"
+                                            : "Turn camera off"
+                                    }
+                                    disabled={Boolean(onToggleVideo) && !isConnectedCall}
+                                    aria-pressed={onToggleVideo
+                                        ? cameraEnabled
+                                        : !cameraOff
+                                    }
+                                    title="Video"
+                                    style={{
+                                        width: 52,
+                                        height: 52,
+                                        border: "none",
+                                        borderRadius: "50%",
+                                        background: (onToggleVideo
+                                            ? cameraEnabled
+                                            : !cameraOff)
+                                            ? "#374151"
+                                            : "rgba(255,255,255,.16)",
+                                        color: "#fff",
+                                        cursor: onToggleVideo && !isConnectedCall
+                                            ? "not-allowed"
+                                            : "pointer",
+                                        opacity: onToggleVideo && !isConnectedCall
+                                            ? 0.55
+                                            : 1,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
+                                    }}
+                                >
+                                    {(onToggleVideo
+                                        ? !cameraEnabled
+                                        : cameraOff)
+                                        ? <FiVideoOff size={21} />
+                                        : <FiVideo size={21} />}
+                                </button>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={() =>
                                     setMuted(
                                         value =>
                                             !value
@@ -942,93 +1080,65 @@ const CallModal = ({
                                 )}
                             </button>
 
+                            <button
+                                type="button"
+                                onClick={() => setMoreOpen(value => !value)}
+                                aria-label="More"
+                                aria-expanded={moreOpen}
+                                title="More call options"
+                                style={{
+                                    width: 52,
+                                    height: 52,
+                                    border: "none",
+                                    borderRadius: "50%",
+                                    background: moreOpen
+                                        ? "#374151"
+                                        : "rgba(255,255,255,.16)",
+                                    color: "#fff",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
+                                }}
+                            >
+                                <FiMoreHorizontal size={21} />
+                            </button>
 
-                            {isVideo && (
-
+                            {onShareScreen && (
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        setCameraOff(
-                                            value =>
-                                                !value
-                                        )
+                                    onClick={() => runCallAction(onShareScreen)}
+                                    aria-label={sharingScreen
+                                        ? "Stop screen sharing"
+                                        : "Share screen"
                                     }
-                                    aria-label={
-                                        cameraOff
-                                            ? "Turn camera on"
-                                            : "Turn camera off"
+                                    aria-pressed={sharingScreen}
+                                    disabled={!isConnectedCall}
+                                    title={sharingScreen
+                                        ? "Stop screen sharing"
+                                        : "Share screen"
                                     }
                                     style={{
                                         width: 52,
                                         height: 52,
                                         border: "none",
-                                        borderRadius:
-                                            "50%",
-                                        background:
-                                            cameraOff
-                                                ? "#374151"
-                                                : "rgba(255,255,255,.16)",
+                                        borderRadius: "50%",
+                                        background: sharingScreen
+                                            ? "#374151"
+                                            : "rgba(255,255,255,.16)",
                                         color: "#fff",
-                                        cursor:
-                                            "pointer",
-                                        display:
-                                            "flex",
-                                        alignItems:
-                                            "center",
-                                        justifyContent:
-                                            "center"
+                                        cursor: !isConnectedCall
+                                            ? "not-allowed"
+                                            : "pointer",
+                                        opacity: !isConnectedCall ? 0.55 : 1,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
                                     }}
                                 >
-                                    {cameraOff ? (
-                                        <FiVideoOff
-                                            size={21}
-                                        />
-                                    ) : (
-                                        <FiVideo
-                                            size={21}
-                                        />
-                                    )}
+                                    <FiMonitor size={21} />
                                 </button>
-
                             )}
-
-
-                            {isVideo &&
-                            !cameraOff && (
-
-                                <button
-                                    type="button"
-                                    onClick={
-                                        handleSwitchCamera
-                                    }
-                                    aria-label="Switch camera"
-                                    title="Switch camera"
-                                    style={{
-                                        width: 52,
-                                        height: 52,
-                                        border: "none",
-                                        borderRadius:
-                                            "50%",
-                                        background:
-                                            "rgba(255,255,255,.16)",
-                                        color: "#fff",
-                                        cursor:
-                                            "pointer",
-                                        display:
-                                            "flex",
-                                        alignItems:
-                                            "center",
-                                        justifyContent:
-                                            "center"
-                                    }}
-                                >
-                                    <FiRefreshCw
-                                        size={21}
-                                    />
-                                </button>
-
-                            )}
-
 
                             <button
                                 type="button"
@@ -1066,8 +1176,73 @@ const CallModal = ({
 
                 </div>
 
+                {controlError && (
+                    <p
+                        role="alert"
+                        style={{
+                            position: "absolute",
+                            zIndex: 5,
+                            left: 16,
+                            right: 16,
+                            bottom: 112,
+                            margin: 0,
+                            padding: 10,
+                            borderRadius: 10,
+                            background: "rgba(127,29,29,.95)",
+                            color: "#fff",
+                            textAlign: "center"
+                        }}
+                    >
+                        {controlError}
+                    </p>
+                )}
+
+                {moreOpen && isActiveCall && (
+                    <div
+                        role="menu"
+                        aria-label="More call options"
+                        style={{
+                            position: "absolute",
+                            zIndex: 5,
+                            right: 18,
+                            bottom: 112,
+                            minWidth: 190,
+                            padding: 12,
+                            borderRadius: 12,
+                            background: "#111827",
+                            boxShadow: "0 8px 30px rgba(0,0,0,.4)"
+                        }}
+                    >
+                        <p role="status" style={{ margin: "4px 8px 10px" }}>
+                            {muted ? "Microphone muted" : "Microphone on"}
+                        </p>
+                        {cameraEnabled && onSwitchCamera && !sharingScreen && (
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => runCallAction(handleSwitchCamera)}
+                                style={{
+                                    display: "flex",
+                                    width: "100%",
+                                    gap: 8,
+                                    alignItems: "center",
+                                    padding: 8,
+                                    border: 0,
+                                    borderRadius: 8,
+                                    background: "rgba(255,255,255,.12)",
+                                    color: "#fff",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                <FiRefreshCw aria-hidden="true" />
+                                Switch camera
+                            </button>
+                        )}
+                    </div>
+                )}
+
                 <CallAudioOutputSelector
-                    active={isActiveCall}
+                    active={isActiveCall && audioOutputOpen}
                     audioElementRef={remoteAudioRef}
                 />
 

@@ -64,6 +64,41 @@ test("switches to the requested rear camera and preserves the microphone track",
     expect(result.facingMode).toBe("environment");
 });
 
+test("uses the negotiated video transceiver during an audio call upgrade", async () => {
+    const microphone = createTrack("audio");
+    const frontCamera = createTrack("video", "user");
+    const rearCamera = createTrack("video", "environment");
+    const stream = new TestMediaStream([microphone, frontCamera]);
+    const sender = {
+        track: null,
+        replaceTrack: jest.fn(async track => {
+            sender.track = track;
+        })
+    };
+    const mediaDevices = {
+        getUserMedia: jest.fn().mockResolvedValue(
+            new TestMediaStream([rearCamera])
+        )
+    };
+
+    const result = await switchCameraStream({
+        stream,
+        peer: {
+            getSenders: () => [sender],
+            getTransceivers: () => [{
+                receiver: { track: { kind: "video" } },
+                sender
+            }]
+        },
+        facingMode: "user",
+        mediaDevices
+    });
+
+    expect(sender.replaceTrack).toHaveBeenCalledWith(rearCamera);
+    expect(result.stream.getAudioTracks()).toEqual([microphone]);
+    expect(result.stream.getVideoTracks()).toEqual([rearCamera]);
+});
+
 test("restores the previous camera when switching to the rear camera fails", async () => {
     const microphone = createTrack("audio");
     const frontCamera = createTrack("video", "user");

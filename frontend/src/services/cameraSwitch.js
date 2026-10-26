@@ -52,7 +52,10 @@ export const switchCameraStream = async ({
     const nextFacingMode = facingMode === "user" ? "environment" : "user";
     const audioTracks = stream.getAudioTracks();
     const sender = peer?.getSenders()
-        .find(item => item.track?.kind === "video");
+        .find(item => item.track?.kind === "video") ||
+        peer?.getTransceivers()
+            .find(item => item.receiver?.track?.kind === "video")
+            ?.sender;
 
     currentVideoTrack.stop();
 
