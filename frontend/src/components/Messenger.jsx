@@ -44,8 +44,7 @@ import {
     FaPlus,
     FaUserPlus,
     FaMapMarkerAlt,
-    FaClock,
-    FaCamera
+    FaClock
 } from "react-icons/fa";
 
 import api, {
@@ -94,6 +93,10 @@ import {
 } from "../services/webrtc";
 import { switchCameraStream } from "../services/cameraSwitch";
 import {
+    addDirectCallVideoTransceiver,
+    replaceDirectCallVideoTrack
+} from "../services/directCallMedia";
+import {
     createClientMessageId,
     getQueuedMessages,
     queueMessage,
@@ -112,7 +115,6 @@ import CallModal from "./CallModal";
 import GroupCallModal from "./GroupCallModal";
 import MessengerStories from "./MessengerStories";
 import MessengerDeviceSettings from "./MessengerDeviceSettings";
-import MessengerScanner from "./MessengerScanner";
 import CallLogMessage from "./CallLogMessage";
 import VerifiedBadge from "./VerifiedBadge";
 import VoiceMessagePlayer, {
@@ -486,6 +488,12 @@ const Messenger = ({ isActive = true }) => {
         useRef(null);
 
     const localStreamRef =
+        useRef(null);
+
+    const cameraStreamRef =
+        useRef(null);
+
+    const screenStreamRef =
         useRef(null);
 
     const remoteStreamRef =
@@ -1206,9 +1214,6 @@ const Messenger = ({ isActive = true }) => {
     const [showEmoji, setShowEmoji] =
         useState(false);
 
-    const [showScanner, setShowScanner] =
-        useState(false);
-
     const [showBackgrounds, setShowBackgrounds] =
         useState(false);
 
@@ -1603,6 +1608,12 @@ const Messenger = ({ isActive = true }) => {
 
     const [callDuration, setCallDuration] =
         useState(0);
+
+    const [sharingScreen, setSharingScreen] =
+        useState(false);
+
+    const [cameraEnabled, setCameraEnabled] =
+        useState(false);
 
     const [localStream, setLocalStream] =
         useState(null);
@@ -2360,11 +2371,25 @@ useEffect(() => {
                 );
 
                 stopMediaStream(
+                    cameraStreamRef.current
+                );
+
+                stopMediaStream(
+                    screenStreamRef.current
+                );
+
+                stopMediaStream(
                     remoteStreamRef.current
                 );
 
 
                 localStreamRef.current =
+                    null;
+
+                cameraStreamRef.current =
+                    null;
+
+                screenStreamRef.current =
                     null;
 
                 remoteStreamRef.current =
@@ -2378,6 +2403,9 @@ useEffect(() => {
 
 
                 setLocalStream(null);
+
+                setSharingScreen(false);
+                setCameraEnabled(false);
 
                 setRemoteStream(null);
 
@@ -2622,6 +2650,11 @@ onTrack:
 
         });
 
+        addDirectCallVideoTransceiver(
+            peer,
+            localStreamRef.current
+        );
+
         peerRef.current =
             peer;
 
@@ -2747,6 +2780,17 @@ const startCall =
 
                 localStreamRef.current =
                     stream;
+
+                cameraStreamRef.current =
+                    stream.getVideoTracks().length
+                        ? new MediaStream(stream.getVideoTracks())
+                        : null;
+
+                setCameraEnabled(
+                    stream.getVideoTracks().some(
+                        track => track.readyState === "live"
+                    )
+                );
 
                 setLocalStream(
                     stream
@@ -2881,11 +2925,17 @@ const switchCamera =
                     facingMode: cameraFacing
                 });
                 localStreamRef.current = result.stream;
+                cameraStreamRef.current = new MediaStream(
+                    result.stream.getVideoTracks()
+                );
                 setLocalStream(result.stream);
                 setCameraFacing(result.facingMode);
             } catch (error) {
                 if (error.restoredStream) {
                     localStreamRef.current = error.restoredStream;
+                    cameraStreamRef.current = new MediaStream(
+                        error.restoredStream.getVideoTracks()
+                    );
                     setLocalStream(error.restoredStream);
                 } else if (error.restoreError) {
                     console.error(
@@ -2907,6 +2957,148 @@ const switchCamera =
         [
             cameraFacing
         ]
+    );
+
+const replaceCallVideoTrack =
+    useCallback(
+        async track => {
+            await replaceDirectCallVideoTrack(
+                peerRef.current,
+                track
+            );
+
+            const audioTracks =
+                localStreamRef.current?.getAudioTracks() || [];
+            const previewStream = new MediaStream([
+                ...audioTracks,
+                ...(track ? [track] : [])
+            ]);
+
+            localStreamRef.current = previewStream;
+            setLocalStream(previewStream);
+        },
+        []
+    );
+
+const toggleCallVideo =
+    useCallback(
+        async () => {
+            if (callStateRef.current?.status !== "connected") {
+                throw new Error("Wait until the call is connected before turning on video.");
+            }
+
+            if (cameraStreamRef.current) {
+                stopMediaStream(cameraStreamRef.current);
+                cameraStreamRef.current = null;
+                setCameraEnabled(false);
+
+                if (!screenStreamRef.current) {
+                    await replaceCallVideoTrack(null);
+                }
+                return;
+            }
+
+            const stream = await getUserMedia({
+                audio: false,
+                video: true,
+                facingMode: cameraFacing
+            });
+            const track = stream.getVideoTracks()[0];
+
+            if (!track) {
+                stopMediaStream(stream);
+                throw new Error("The camera did not provide a video track.");
+            }
+
+            cameraStreamRef.current = stream;
+            setCameraEnabled(true);
+            try {
+                if (!screenStreamRef.current) {
+                    await replaceCallVideoTrack(track);
+                }
+            } catch (error) {
+                stopMediaStream(stream);
+                cameraStreamRef.current = null;
+                setCameraEnabled(false);
+                throw error;
+            }
+        },
+        [cameraFacing, replaceCallVideoTrack]
+    );
+
+const stopScreenSharing =
+    useCallback(
+        async () => {
+            const screenStream = screenStreamRef.current;
+            if (!screenStream) return;
+
+            screenStreamRef.current = null;
+            screenStream.getTracks().forEach(track => track.stop());
+
+            const cameraTrack =
+                cameraStreamRef.current?.getVideoTracks()
+                    .find(track => track.readyState === "live") || null;
+            try {
+                await replaceCallVideoTrack(cameraTrack);
+            } finally {
+                setSharingScreen(false);
+            }
+        },
+        [replaceCallVideoTrack]
+    );
+
+const toggleScreenSharing =
+    useCallback(
+        async () => {
+            if (screenStreamRef.current) {
+                await stopScreenSharing();
+                return;
+            }
+
+            if (callStateRef.current?.status !== "connected") {
+                throw new Error("Wait until the call is connected before sharing your screen.");
+            }
+
+            const getDisplayMedia =
+                navigator.mediaDevices?.getDisplayMedia;
+            if (typeof getDisplayMedia !== "function") {
+                throw new Error("Screen sharing is not supported by this browser or device.");
+            }
+
+            const stream = await getDisplayMedia.call(
+                navigator.mediaDevices,
+                { video: true, audio: false }
+            );
+            const track = stream.getVideoTracks()[0];
+            if (!track) {
+                stopMediaStream(stream);
+                throw new Error("The selected screen did not provide a video track.");
+            }
+
+            screenStreamRef.current = stream;
+            try {
+                await replaceCallVideoTrack(track);
+                setSharingScreen(true);
+                if (track.readyState === "ended") {
+                    await stopScreenSharing();
+                } else {
+                    track.addEventListener(
+                        "ended",
+                        () => {
+                            stopScreenSharing().catch(error => {
+                                console.error("Could not stop screen sharing:", error);
+                            });
+                        },
+                        { once: true }
+                    );
+                }
+            } catch (error) {
+                screenStreamRef.current = null;
+                stopMediaStream(stream);
+                throw error;
+            }
+        },
+        [replaceCallVideoTrack, stopScreenSharing]
     );
 
 /* =====================================================
@@ -2939,6 +3131,17 @@ const acceptCall =
 
                 localStreamRef.current =
                     stream;
+
+                cameraStreamRef.current =
+                    stream.getVideoTracks().length
+                        ? new MediaStream(stream.getVideoTracks())
+                        : null;
+
+                setCameraEnabled(
+                    stream.getVideoTracks().some(
+                        track => track.readyState === "live"
+                    )
+                );
 
                 setLocalStream(
                     stream
@@ -4031,12 +4234,7 @@ const onCallAccepted =
             const offer =
                 await peer.createOffer({
                     offerToReceiveAudio: true,
-
-                    offerToReceiveVideo:
-                        (
-                            call.type ||
-                            data?.type
-                        ) === "video"
+                    offerToReceiveVideo: true
                 });
 
             await peer.setLocalDescription(
@@ -6564,23 +6762,6 @@ const onCallMissed =
             id: saved._id || saved.id,
             createdAt: saved.createdAt || new Date().toISOString()
         });
-    };
-
-    const sendScannedImage = async file => {
-        if (!selectedUser || isConversationBlocked) {
-            throw new Error("This conversation cannot receive attachments.");
-        }
-        try {
-            await sendAttachmentFile(file);
-            showMessengerToast("Scanned image sent.");
-        } catch (error) {
-            showMessengerToast(
-                error.response?.data?.message ||
-                    error.message ||
-                    "The scanned image could not be sent."
-            );
-            throw error;
-        }
     };
 
     const handleFile = async event => {
@@ -10505,20 +10686,6 @@ const onCallMissed =
 
                                 <button
                                     type="button"
-                                    title="Scan a document"
-                                    aria-label="Scan a document"
-                                    disabled={
-                                        !selectedUser ||
-                                        isConversationBlocked
-                                    }
-                                    onClick={() => setShowScanner(true)}
-                                >
-                                    <FaCamera />
-                                </button>
-
-
-                                <button
-                                    type="button"
                                     title="Share approximate location"
                                     aria-label="Share approximate location"
                                     disabled={
@@ -11091,6 +11258,14 @@ const onCallMissed =
         remoteStream
     }
 
+    cameraEnabled={
+        cameraEnabled
+    }
+
+    sharingScreen={
+        sharingScreen
+    }
+
     callDuration={
         callDuration
     }
@@ -11110,14 +11285,15 @@ const onCallMissed =
     onSwitchCamera={
         switchCamera
     }
-/>
 
-{showScanner && (
-    <MessengerScanner
-        onClose={() => setShowScanner(false)}
-        onSend={sendScannedImage}
-    />
-)}
+    onToggleVideo={
+        toggleCallVideo
+    }
+
+    onShareScreen={
+        toggleScreenSharing
+    }
+/>
 
 {deleteConfirmation && (
     <div
