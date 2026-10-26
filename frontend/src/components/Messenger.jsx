@@ -1600,6 +1600,15 @@ const Messenger = ({ isActive = true }) => {
     callStateRef.current =
         callState;
 
+    useEffect(() => {
+        if (
+            callState?.mode !== "incoming" ||
+            callState?.status !== "ringing"
+        ) {
+            stopCallRingtone();
+        }
+    }, [callState?.mode, callState?.status]);
+
     const [activeGroupCall, setActiveGroupCall] =
         useState(null);
 
@@ -4187,6 +4196,8 @@ const onCallRinging =
 const onCallAccepted =
     async data => {
 
+        stopCallRingtone();
+
         try {
 
             const call =
@@ -4314,6 +4325,8 @@ const onCallAccepted =
 
 const onCallConnected =
     data => {
+    stopCallRingtone();
+
     const current = callRef.current || callStateRef.current;
     if (
         !current ||
