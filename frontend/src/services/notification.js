@@ -9,6 +9,8 @@ const CALL_SOUND_URL =
 
 let messageAudio = null;
 let callAudio = null;
+let callRingtoneGeneration = 0;
+let activeCallRingtoneGeneration = 0;
 
 
 /* =========================================================
@@ -89,12 +91,29 @@ export const playCallRingtone =
 
             const sound =
                 getCallAudio();
+            const generation =
+                ++callRingtoneGeneration;
+
+            activeCallRingtoneGeneration =
+                generation;
 
             sound.currentTime = 0;
 
             sound.loop = true;
 
             await sound.play();
+
+            if (
+                generation !==
+                callRingtoneGeneration
+            ) {
+                if (!activeCallRingtoneGeneration) {
+                    sound.pause();
+                    sound.currentTime = 0;
+                }
+
+                return false;
+            }
 
             return true;
 
@@ -112,6 +131,9 @@ export const playCallRingtone =
 
 export const stopCallRingtone =
     () => {
+
+        callRingtoneGeneration += 1;
+        activeCallRingtoneGeneration = 0;
 
         if (!callAudio) {
             return;
@@ -380,6 +402,9 @@ export const cleanupNotificationAudio =
 
         callAudio =
             null;
+
+        callRingtoneGeneration += 1;
+        activeCallRingtoneGeneration = 0;
     };
 
 

@@ -2,7 +2,8 @@ import {
     cleanupNotificationAudio,
     showIncomingCallNotification,
     showMessageNotification,
-    showMissedCallNotification
+    showMissedCallNotification,
+    stopCallRingtone
 } from "./notification";
 
 let audioInstances;
@@ -103,6 +104,34 @@ test("stops the ringtone and shows a browser notification for a missed call", as
             tag: "jr-store-missed-call"
         }
     );
+});
+
+test("keeps an in-flight ringtone from restarting after the call is answered", async () => {
+    let resolvePlayback;
+    window.Audio = jest.fn((url) => {
+        const audio = {
+            currentTime: 0,
+            loop: false,
+            preload: "",
+            src: url,
+            play: jest.fn(() => new Promise(resolve => {
+                resolvePlayback = resolve;
+            })),
+            pause: jest.fn()
+        };
+        audioInstances.push(audio);
+        return audio;
+    });
+
+    const incomingNotification =
+        showIncomingCallNotification({ callerName: "Alex" });
+
+    stopCallRingtone();
+    resolvePlayback();
+    await incomingNotification;
+
+    expect(audioInstances[0].pause).toHaveBeenCalled();
+    expect(audioInstances[0].currentTime).toBe(0);
 });
 
 test("does not play or notify when message notifications are disabled", async () => {

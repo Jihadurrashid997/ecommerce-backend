@@ -33,9 +33,9 @@ test("requests echo reduction without forcing device-specific audio formats", as
 
     expect(getUserMediaMock).toHaveBeenCalledWith({
         audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true }
         },
         video: false
     });
@@ -65,9 +65,9 @@ test("preserves echo reduction when retrying overconstrained call media", async 
 
     expect(getUserMediaMock).toHaveBeenNthCalledWith(2, {
         audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: true }
         },
         video: {
             facingMode: { ideal: "environment" }

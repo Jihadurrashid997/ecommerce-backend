@@ -403,11 +403,17 @@ export const getUserMedia =
         const audioConstraints =
             audio
                 ? {
-                      echoCancellation: true,
+                      echoCancellation: {
+                          ideal: true
+                      },
 
-                      noiseSuppression: true,
+                      noiseSuppression: {
+                          ideal: true
+                      },
 
-                      autoGainControl: true
+                      autoGainControl: {
+                          ideal: true
+                      }
                   }
                 : false;
 
