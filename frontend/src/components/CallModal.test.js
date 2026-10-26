@@ -112,6 +112,46 @@ test("keeps the caller name and connected timer visible over remote video", () =
     expect(screen.getByLabelText("Call duration")).toHaveTextContent("01:33");
 });
 
+test("rebinds remote media when the remote stream is refreshed", async () => {
+    const videoTrack = { readyState: "live" };
+    const initialStream = {
+        getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+    };
+    const refreshedStream = {
+        getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+    };
+    const play = jest.spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+    const { rerender } = render(
+        <CallModal
+            visible
+            type="audio"
+            mode="connected"
+            remoteStream={initialStream}
+        />
+    );
+
+    rerender(
+        <CallModal
+            visible
+            type="audio"
+            mode="connected"
+            remoteStream={refreshedStream}
+        />
+    );
+
+    await waitFor(() => {
+        expect(play).toHaveBeenCalled();
+        expect(document.querySelector("video").srcObject).toBe(refreshedStream);
+    });
+});
+
 test("keeps mute, end-call, and audio-output controls on an active voice call", () => {
     const audioTrack = { enabled: true };
     const localStream = {
