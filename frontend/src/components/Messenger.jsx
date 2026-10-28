@@ -44,7 +44,8 @@ import {
     FaPlus,
     FaUserPlus,
     FaMapMarkerAlt,
-    FaClock
+    FaClock,
+    FaCamera
 } from "react-icons/fa";
 
 import api, {
@@ -115,6 +116,7 @@ import CallModal from "./CallModal";
 import GroupCallModal from "./GroupCallModal";
 import MessengerStories from "./MessengerStories";
 import MessengerDeviceSettings from "./MessengerDeviceSettings";
+import MessengerDocumentScanner from "./MessengerDocumentScanner";
 import CallLogMessage from "./CallLogMessage";
 import VerifiedBadge from "./VerifiedBadge";
 import VoiceMessagePlayer, {
@@ -1212,6 +1214,9 @@ const Messenger = ({ isActive = true }) => {
         useState(false);
 
     const [showEmoji, setShowEmoji] =
+        useState(false);
+
+    const [showDocumentScanner, setShowDocumentScanner] =
         useState(false);
 
     const [showBackgrounds, setShowBackgrounds] =
@@ -10719,6 +10724,19 @@ const onCallMissed =
 
                                 <button
                                     type="button"
+                                    title="Scan one document photo"
+                                    aria-label="Scan one document photo"
+                                    disabled={
+                                        !selectedUser ||
+                                        isConversationBlocked
+                                    }
+                                    onClick={() => setShowDocumentScanner(true)}
+                                >
+                                    <FaCamera />
+                                </button>
+
+                                <button
+                                    type="button"
                                     title="Share approximate location"
                                     aria-label="Share approximate location"
                                     disabled={
@@ -11488,6 +11506,12 @@ const onCallMissed =
 
 )}
 
+{showDocumentScanner && (
+    <MessengerDocumentScanner
+        onClose={() => setShowDocumentScanner(false)}
+        onSend={sendAttachmentFile}
+    />
+)}
 
         </div>
     );
