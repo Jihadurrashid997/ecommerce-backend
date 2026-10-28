@@ -505,6 +505,15 @@ const Messenger = ({ isActive = true }) => {
     const pendingCandidatesRef =
         useRef([]);
 
+    const creatingDirectCallOfferRef =
+        useRef(false);
+
+    const pendingDirectCallOfferRef =
+        useRef(false);
+
+    const requestDirectCallOfferRef =
+        useRef(null);
+
     const callRef =
         useRef(null);
 
@@ -2734,6 +2743,55 @@ onTrack:
     ]
 );
 
+const requestDirectCallOffer =
+    useCallback(
+        async () => {
+            const call =
+                callRef.current ||
+                callStateRef.current;
+            const peer =
+                peerRef.current;
+
+            if (
+                !call ||
+                getId(call.callerId) !== getId(currentUserRef.current) ||
+                !peer ||
+                peer.signalingState === "closed"
+            ) {
+                return;
+            }
+
+            if (
+                creatingDirectCallOfferRef.current ||
+                peer.signalingState !== "stable"
+            ) {
+                pendingDirectCallOfferRef.current = true;
+                return;
+            }
+
+            creatingDirectCallOfferRef.current = true;
+            pendingDirectCallOfferRef.current = false;
+
+            try {
+                const offer = await peer.createOffer();
+                await peer.setLocalDescription(offer);
+
+                socket.emit("webrtc-offer", {
+                    receiverId: getId(call.receiverId),
+                    callerId: getId(currentUserRef.current),
+                    roomId: call.roomId,
+                    offer
+                });
+            } finally {
+                creatingDirectCallOfferRef.current = false;
+            }
+        },
+        []
+    );
+
+requestDirectCallOfferRef.current =
+    requestDirectCallOffer;
+
 /* =====================================================
    START CALL
 ===================================================== */
@@ -3005,6 +3063,38 @@ const replaceCallVideoTrack =
 
             localStreamRef.current = previewStream;
             setLocalStream(previewStream);
+
+            const call =
+                callRef.current ||
+                callStateRef.current;
+            const callerId =
+                getId(call?.callerId);
+            const receiverId =
+                getId(call?.receiverId);
+            const userId =
+                getId(currentUserRef.current);
+
+            if (
+                callerId &&
+                receiverId &&
+                userId === callerId
+            ) {
+                await requestDirectCallOfferRef.current?.();
+            } else if (
+                callerId &&
+                receiverId &&
+                userId === receiverId
+            ) {
+                socket.emit(
+                    "request-direct-call-renegotiation",
+                    {
+                        callerId,
+                        receiverId,
+                        roomId: call.roomId,
+                        callId: call.callId
+                    }
+                );
+            }
         },
         []
     );
@@ -4195,6 +4285,31 @@ const onCallRinging =
 
     };
 
+const onDirectCallRenegotiationRequested =
+    data => {
+        const call =
+            callRef.current ||
+            callStateRef.current;
+
+        if (
+            !call ||
+            call.status !== "connected" ||
+            call.roomId !== data?.roomId ||
+            getId(call.callerId) !== getId(currentUserRef.current) ||
+            getId(data?.callerId) !== getId(call.callerId) ||
+            getId(data?.receiverId) !== getId(call.receiverId)
+        ) {
+            return;
+        }
+
+        requestDirectCallOfferRef.current?.().catch(error => {
+            console.error(
+                "Could not renegotiate the direct call video:",
+                error
+            );
+        });
+    };
+
         
 /* -------------------------------------------------
    CALL ACCEPTED
@@ -4262,36 +4377,7 @@ const onCallAccepted =
 
             }
 
-            const offer =
-                await peer.createOffer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: true
-                });
-
-            await peer.setLocalDescription(
-                offer
-            );
-
-            socket.emit(
-                "webrtc-offer",
-                {
-
-                    receiverId,
-
-                    callerId:
-                        currentUserId,
-
-                    roomId,
-
-                    type:
-                        call.type ||
-                        data?.type ||
-                        "audio",
-
-                    offer
-
-                }
-            );
+            await requestDirectCallOfferRef.current?.();
 
             const acceptedCall = {
 
@@ -4585,6 +4671,10 @@ const onAnswer =
 
                 }
 
+            }
+
+            if (pendingDirectCallOfferRef.current) {
+                await requestDirectCallOfferRef.current?.();
             }
 
         } catch (error) {
@@ -4901,6 +4991,11 @@ const onCallMissed =
         );
 
         socket.on(
+            "direct-call-renegotiation-requested",
+            onDirectCallRenegotiationRequested
+        );
+
+        socket.on(
             "call-accepted",
             onCallAccepted
         );
@@ -5031,6 +5126,11 @@ const onCallMissed =
             socket.off(
                 "call-ringing",
                 onCallRinging
+            );
+
+            socket.off(
+                "direct-call-renegotiation-requested",
+                onDirectCallRenegotiationRequested
             );
 
             socket.off(
