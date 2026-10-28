@@ -82,6 +82,19 @@ const CallModal = ({
     const isVideo =
         type === "video";
 
+    useEffect(() => {
+        if (visible) {
+            return;
+        }
+
+        setMuted(false);
+        setCameraOff(type !== "video");
+        setPlaybackBlocked(false);
+        setAudioOutputOpen(false);
+        setMoreOpen(false);
+        setControlError("");
+    }, [visible, type]);
+
     const hasRemoteVideo =
         remoteStream
             ?.getVideoTracks()

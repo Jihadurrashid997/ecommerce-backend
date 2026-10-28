@@ -9,17 +9,11 @@ export const addDirectCallVideoTransceiver = (peer, stream) => {
     );
 };
 
-export const replaceDirectCallVideoTrack = async (peer, track) => {
+export const ensureDirectCallVideoTransceiver = peer => {
     const videoTransceivers = (peer?.getTransceivers() || [])
         .filter(
             transceiver =>
                 transceiver.receiver?.track?.kind === "video"
-        );
-    const hasNegotiatedDirection =
-        videoTransceivers.some(
-            transceiver =>
-                transceiver.currentDirection !== null &&
-                transceiver.currentDirection !== undefined
         );
     const videoTransceiver =
         videoTransceivers.find(
@@ -30,15 +24,33 @@ export const replaceDirectCallVideoTrack = async (peer, track) => {
             transceiver =>
                 transceiver.currentDirection?.includes("send")
         ) ||
-        (!hasNegotiatedDirection &&
-            videoTransceivers.find(
-                transceiver =>
-                    transceiver.direction?.includes("send")
-            ));
+        videoTransceivers.find(
+            transceiver =>
+                transceiver.currentDirection == null &&
+                transceiver.direction?.includes("send")
+        ) ||
+        videoTransceivers.find(
+            transceiver =>
+                transceiver.currentDirection !== "stopped" &&
+                transceiver.sender
+        );
 
-    if (!videoTransceiver?.sender) {
+    if (videoTransceiver?.sender) {
+        if (!videoTransceiver.direction?.includes("send")) {
+            videoTransceiver.direction = "sendrecv";
+        }
+        return videoTransceiver;
+    }
+
+    if (!peer || typeof peer.addTransceiver !== "function") {
         throw new Error("Video is not available in this call.");
     }
+
+    return peer.addTransceiver("video", { direction: "sendrecv" });
+};
+
+export const replaceDirectCallVideoTrack = async (peer, track) => {
+    const videoTransceiver = ensureDirectCallVideoTransceiver(peer);
 
     if (track) {
         track.enabled = true;

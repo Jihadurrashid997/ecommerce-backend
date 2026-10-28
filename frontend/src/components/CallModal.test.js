@@ -186,6 +186,49 @@ test("keeps mute, end-call, and audio-output controls on an active voice call", 
     expect(screen.getByRole("status")).toHaveTextContent("Device audio");
 });
 
+test("resets call controls before the next call", () => {
+    const firstTrack = { enabled: true };
+    const firstStream = {
+        getAudioTracks: () => [firstTrack],
+        getVideoTracks: () => []
+    };
+    const { rerender } = render(
+        <CallModal
+            visible
+            type="audio"
+            mode="connected"
+            localStream={firstStream}
+        />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Mute" }));
+    expect(firstTrack.enabled).toBe(false);
+
+    rerender(
+        <CallModal
+            visible={false}
+            type="audio"
+            mode="connected"
+        />
+    );
+    const nextTrack = { enabled: true };
+    const nextStream = {
+        getAudioTracks: () => [nextTrack],
+        getVideoTracks: () => []
+    };
+    rerender(
+        <CallModal
+            visible
+            type="audio"
+            mode="connected"
+            localStream={nextStream}
+        />
+    );
+
+    expect(screen.getByRole("button", { name: "Mute" })).toBeInTheDocument();
+    expect(nextTrack.enabled).toBe(true);
+});
+
 test("exposes video and screen-share controls on a connected voice call", async () => {
     const onToggleVideo = jest.fn().mockResolvedValue(undefined);
     const onShareScreen = jest.fn().mockResolvedValue(undefined);
