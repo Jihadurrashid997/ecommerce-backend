@@ -456,52 +456,43 @@ export const getUserMedia =
         };
 
 
-        try {
+        const mediaRequests = [constraints];
 
-            return await navigator
-                .mediaDevices
-                .getUserMedia(
-                    constraints
-                );
-
-        } catch (error) {
-
-            /*
-            Some devices reject advanced
-            audio constraints. Retry with
-            simple constraints.
-            */
-
-            if (
-                audio &&
-                error?.name ===
-                    "OverconstrainedError"
-            ) {
-
-                return navigator
-                    .mediaDevices
-                    .getUserMedia({
-
-                        audio: audioConstraints,
-
-                        video:
-                            video
-                                ? {
-                                      facingMode: {
-                                          ideal:
-                                              facingMode
-                                      }
-                                  }
-                                : false
-
-                    });
-
-            }
-
-
-            throw error;
-
+        if (video) {
+            mediaRequests.push({
+                audio: audioConstraints,
+                video: {
+                    facingMode: {
+                        ideal: facingMode
+                    }
+                }
+            });
+            mediaRequests.push({
+                audio: audioConstraints,
+                video: true
+            });
+        } else if (audio) {
+            mediaRequests.push({
+                audio: true,
+                video: false
+            });
         }
+
+        let lastError;
+        for (const mediaConstraints of mediaRequests) {
+            try {
+                return await navigator
+                    .mediaDevices
+                    .getUserMedia(mediaConstraints);
+            } catch (error) {
+                lastError = error;
+                if (error?.name !== "OverconstrainedError") {
+                    throw error;
+                }
+            }
+        }
+
+        throw lastError;
 
     };
 

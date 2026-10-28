@@ -45,7 +45,7 @@ test("shows the caller name on an incoming call", () => {
     );
 
     expect(screen.getByText("Snoopy")).toBeInTheDocument();
-    expect(screen.getByText("Snoopy is calling...")).toBeInTheDocument();
+    expect(screen.getByText("Incoming voice call")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Accept call" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reject call" })).toBeInTheDocument();
 });
