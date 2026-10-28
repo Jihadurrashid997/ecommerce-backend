@@ -18,6 +18,7 @@ import {
     FiMonitor
 } from "react-icons/fi";
 import CallAudioOutputSelector from "./CallAudioOutputSelector";
+import "./CallModal.css";
 
 const CallModal = ({
     visible,
@@ -534,12 +535,11 @@ const CallModal = ({
                 position: "fixed",
                 inset: 0,
                 zIndex: 99999,
-                background:
-                    "rgba(0,0,0,.88)",
+                background: "#0b141a",
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))"
+                alignItems: "stretch",
+                justifyContent: "stretch",
+                padding: 0
             }}
         >
 
@@ -550,6 +550,7 @@ const CallModal = ({
                 autoPlay
                 playsInline
                 preload="auto"
+                className="messenger-call-remote-audio"
                 style={{
                     position: "absolute",
                     width: 1,
@@ -561,6 +562,7 @@ const CallModal = ({
 
 
             <div
+                className="messenger-call-stage"
                 style={{
                     width:
                         "min(560px,100%)",
@@ -587,6 +589,7 @@ const CallModal = ({
 
                     <>
                         <video
+                            className="messenger-call-remote-video"
                             ref={
                                 remoteVideoRef
                             }
@@ -609,6 +612,7 @@ const CallModal = ({
                             }}
                         />
                         <div
+                            className="messenger-call-details"
                             aria-label="Call details"
                             style={{
                                 position: "absolute",
@@ -638,6 +642,7 @@ const CallModal = ({
                 ) : (
 
                     <div
+                        className="messenger-call-profile"
                         style={{
                             width: "100%",
                             height: "100%",
@@ -762,6 +767,7 @@ const CallModal = ({
                 {playbackBlocked && remoteStream && (
                     <button
                         type="button"
+                        className="messenger-call-playback-button"
                         onClick={playRemoteMedia}
                         aria-label="Enable call audio and video"
                         style={{
@@ -792,6 +798,7 @@ const CallModal = ({
                 localStream && (
 
                     <video
+                        className="messenger-call-local-video"
                         ref={
                             localVideoRef
                         }
@@ -826,51 +833,12 @@ const CallModal = ({
                     INCOMING HEADER
                 ================================================= */}
 
-                {isIncoming && (
-
-                    <div
-                        style={{
-                            position:
-                                "absolute",
-                            top: 20,
-                            left: 20,
-                            right: 20,
-                            textAlign:
-                                "center",
-                            padding: 12,
-                            borderRadius: 14,
-                            background:
-                                "rgba(0,0,0,.35)",
-                            backdropFilter:
-                                "blur(10px)"
-                        }}
-                    >
-
-                        <FiVolume2
-                            size={22}
-                        />
-
-                        <div
-                            style={{
-                                marginTop: 6,
-                                fontWeight: 700
-                            }}
-                        >
-                            {callerName}
-                            {" "}
-                            is calling...
-                        </div>
-
-                    </div>
-
-                )}
-
-
                 {/* =================================================
                     CONTROLS
                 ================================================= */}
 
                 <div
+                    className="messenger-call-controls"
                     style={{
                         position:
                             "absolute",
@@ -895,6 +863,7 @@ const CallModal = ({
 
                             <button
                                 type="button"
+                                className="messenger-call-control messenger-call-reject"
                                 onClick={
                                     handleReject
                                 }
@@ -926,6 +895,7 @@ const CallModal = ({
 
                             <button
                                 type="button"
+                                className="messenger-call-control messenger-call-accept"
                                 onClick={
                                     handleAccept
                                 }
@@ -962,6 +932,7 @@ const CallModal = ({
 
                             <button
                                 type="button"
+                                className="messenger-call-control"
                                 onClick={() =>
                                     setAudioOutputOpen(value => !value)
                                 }
@@ -989,6 +960,7 @@ const CallModal = ({
                             {(isVideo || onToggleVideo) && (
                                 <button
                                     type="button"
+                                    className="messenger-call-control"
                                     onClick={() => onToggleVideo
                                         ? runCallAction(onToggleVideo)
                                         : setCameraOff(value => !value)
@@ -1039,6 +1011,7 @@ const CallModal = ({
 
                             <button
                                 type="button"
+                                className="messenger-call-control"
                                 onClick={() =>
                                     setMuted(
                                         value =>
@@ -1082,6 +1055,7 @@ const CallModal = ({
 
                             <button
                                 type="button"
+                                className="messenger-call-control"
                                 onClick={() => setMoreOpen(value => !value)}
                                 aria-label="More"
                                 aria-expanded={moreOpen}
@@ -1107,6 +1081,7 @@ const CallModal = ({
                             {onShareScreen && (
                                 <button
                                     type="button"
+                                    className="messenger-call-control"
                                     onClick={() => runCallAction(onShareScreen)}
                                     aria-label={sharingScreen
                                         ? "Stop screen sharing"
@@ -1142,6 +1117,7 @@ const CallModal = ({
 
                             <button
                                 type="button"
+                                className="messenger-call-control messenger-call-end"
                                 onClick={
                                     handleEnd
                                 }
@@ -1178,6 +1154,7 @@ const CallModal = ({
 
                 {controlError && (
                     <p
+                        className="messenger-call-error"
                         role="alert"
                         style={{
                             position: "absolute",
@@ -1199,6 +1176,7 @@ const CallModal = ({
 
                 {moreOpen && isActiveCall && (
                     <div
+                        className="messenger-call-more-menu"
                         role="menu"
                         aria-label="More call options"
                         style={{

@@ -1,0 +1,227 @@
+.messenger-call-modal {
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    padding: 0 !important;
+    background: #0b141a !important;
+}
+
+.messenger-call-stage {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    border-radius: 0 !important;
+    background:
+        radial-gradient(ellipse at 50% 40%, #1b303a 0%, #111b21 58%, #0b141a 100%) !important;
+    box-shadow: none !important;
+}
+
+.messenger-call-remote-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #05090b;
+}
+
+.messenger-call-details {
+    top: max(20px, env(safe-area-inset-top)) !important;
+    left: max(20px, env(safe-area-inset-left)) !important;
+    right: max(20px, env(safe-area-inset-right)) !important;
+    min-height: 48px;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px !important;
+    background: rgba(11, 20, 26, 0.72) !important;
+    backdrop-filter: blur(18px);
+}
+
+.messenger-call-profile {
+    color: #f4f7f8;
+    background: transparent;
+}
+
+.messenger-call-profile h2 {
+    font-size: clamp(24px, 4vw, 36px);
+    letter-spacing: -0.035em;
+}
+
+.messenger-call-profile p {
+    font-size: 16px;
+    color: rgba(235, 242, 245, 0.72);
+}
+
+.messenger-call-local-video {
+    top: max(20px, env(safe-area-inset-top)) !important;
+    right: max(20px, env(safe-area-inset-right)) !important;
+    width: clamp(112px, 19vw, 220px) !important;
+    height: clamp(148px, 24vw, 292px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.28) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.36);
+}
+
+.messenger-call-controls {
+    left: 50% !important;
+    right: auto !important;
+    bottom: max(24px, env(safe-area-inset-bottom)) !important;
+    width: max-content;
+    max-width: calc(100% - 28px);
+    box-sizing: border-box;
+    gap: clamp(8px, 2vw, 14px) !important;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 28px;
+    background: rgba(31, 45, 54, 0.88);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.38);
+    backdrop-filter: blur(20px);
+    transform: translateX(-50%);
+}
+
+.messenger-call-control {
+    flex: 0 0 54px;
+    width: 54px !important;
+    height: 54px !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    border-radius: 50% !important;
+    background: #34434c !important;
+    color: #f5f7f8 !important;
+    transition: background 140ms ease, transform 140ms ease;
+}
+
+.messenger-call-control:hover:not(:disabled) {
+    background: #465862 !important;
+    transform: translateY(-2px);
+}
+
+.messenger-call-control[aria-pressed="true"] {
+    background: #087f72 !important;
+}
+
+.messenger-call-control:disabled {
+    opacity: 0.48 !important;
+}
+
+.messenger-call-control.messenger-call-end,
+.messenger-call-control.messenger-call-reject {
+    flex-basis: 62px;
+    width: 62px !important;
+    height: 62px !important;
+    background: #e5484d !important;
+}
+
+.messenger-call-control.messenger-call-accept {
+    flex-basis: 62px;
+    width: 62px !important;
+    height: 62px !important;
+    background: #1fa855 !important;
+}
+
+.messenger-call-control.messenger-call-end:hover,
+.messenger-call-control.messenger-call-reject:hover {
+    background: #f05b60 !important;
+}
+
+.messenger-call-control.messenger-call-accept:hover {
+    background: #2abb65 !important;
+}
+
+.messenger-call-playback-button {
+    left: 50% !important;
+    padding: 13px 20px !important;
+    border-radius: 999px !important;
+    background: #087f72 !important;
+    transform: translate(-50%, -50%);
+}
+
+.messenger-call-error {
+    right: 16px !important;
+    bottom: 116px !important;
+    left: 16px !important;
+    width: fit-content;
+    max-width: min(520px, calc(100% - 32px));
+    margin: 0 auto !important;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 175, 175, 0.24);
+    border-radius: 14px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.messenger-call-more-menu {
+    right: max(18px, env(safe-area-inset-right)) !important;
+    bottom: 112px !important;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px !important;
+    background: rgba(20, 31, 38, 0.96) !important;
+    backdrop-filter: blur(20px);
+}
+
+.messenger-call-modal .call-audio-output-control,
+.messenger-call-modal .call-audio-output-hint {
+    bottom: max(104px, calc(env(safe-area-inset-bottom) + 88px)) !important;
+}
+
+@media (max-width: 560px) {
+    .messenger-call-details {
+        top: max(16px, env(safe-area-inset-top)) !important;
+        left: 16px !important;
+        right: 16px !important;
+    }
+
+    .messenger-call-local-video {
+        top: max(82px, calc(env(safe-area-inset-top) + 70px)) !important;
+        right: 16px !important;
+        width: 112px !important;
+        height: 148px !important;
+        border-radius: 16px !important;
+    }
+
+    .messenger-call-controls {
+        bottom: max(18px, env(safe-area-inset-bottom)) !important;
+        max-width: calc(100% - 20px);
+        gap: 8px !important;
+        padding: 10px;
+        border-radius: 24px;
+    }
+
+    .messenger-call-control {
+        flex-basis: 48px;
+        width: 48px !important;
+        height: 48px !important;
+    }
+
+    .messenger-call-control.messenger-call-end,
+    .messenger-call-control.messenger-call-reject,
+    .messenger-call-control.messenger-call-accept {
+        flex-basis: 56px;
+        width: 56px !important;
+        height: 56px !important;
+    }
+
+    .messenger-call-error {
+        bottom: 104px !important;
+    }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+    .messenger-call-profile img,
+    .messenger-call-profile > div {
+        width: 88px !important;
+        height: 88px !important;
+    }
+
+    .messenger-call-profile h2 {
+        margin-top: 12px !important;
+        font-size: 23px;
+    }
+
+    .messenger-call-controls {
+        bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    }
+
+    .messenger-call-local-video {
+        width: 124px !important;
+        height: 92px !important;
+    }
+}
