@@ -95,6 +95,7 @@ import {
 import { switchCameraStream } from "../services/cameraSwitch";
 import {
     addDirectCallVideoTransceiver,
+    ensureDirectCallVideoTransceiver,
     replaceDirectCallVideoTrack
 } from "../services/directCallMedia";
 import {
@@ -2778,6 +2779,7 @@ const requestDirectCallOffer =
             pendingDirectCallOfferRef.current = false;
 
             try {
+                ensureDirectCallVideoTransceiver(peer);
                 const offer = await peer.createOffer();
                 await peer.setLocalDescription(offer);
 
