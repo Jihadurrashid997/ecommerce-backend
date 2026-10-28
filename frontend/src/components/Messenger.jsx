@@ -2484,26 +2484,28 @@ onTrack:
          * <video>/<audio> element.
          */
 
+        const eventTracks =
+            (event.streams || []).flatMap(
+                stream => stream.getTracks()
+            );
+        if (event.track) {
+            eventTracks.push(event.track);
+        }
+
         const existingTracks =
             remoteTracksRef.current ||
             [];
 
-        const alreadyHasTrack =
-            event.track &&
-            existingTracks.some(
+        const updatedTracks = [
+            ...existingTracks,
+            ...eventTracks.filter(
                 track =>
-                    track.id ===
-                    event.track.id
-            );
-
-        const updatedTracks =
-            event.track &&
-            !alreadyHasTrack
-                ? [
-                      ...existingTracks,
-                      event.track
-                  ]
-                : existingTracks;
+                    !existingTracks.some(
+                        existingTrack =>
+                            existingTrack.id === track.id
+                    )
+            )
+        ];
 
         remoteTracksRef.current =
             updatedTracks;
@@ -2524,7 +2526,12 @@ onTrack:
             setRemoteStream(freshStream);
         };
 
-        if (!alreadyHasTrack) {
+        if (
+            event.track &&
+            !existingTracks.some(
+                track => track.id === event.track.id
+            )
+        ) {
             event.track?.addEventListener(
                 "unmute",
                 refreshRemoteStream,

@@ -15,7 +15,7 @@ test("pre-negotiates a sendrecv video transceiver for voice calls", () => {
 
     expect(peer.addTransceiver).toHaveBeenCalledWith(
         "video",
-        { direction: "sendrecv" }
+        { direction: "sendrecv", streams: [stream] }
     );
 });
 

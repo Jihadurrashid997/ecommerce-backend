@@ -4,7 +4,7 @@ export const addDirectCallVideoTransceiver = (peer, stream) => {
         videoTrack || "video",
         {
             direction: "sendrecv",
-            ...(videoTrack && { streams: [stream] })
+            ...(stream && { streams: [stream] })
         }
     );
 };
