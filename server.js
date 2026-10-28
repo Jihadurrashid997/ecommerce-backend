@@ -2009,6 +2009,59 @@ socket.on(
 
 
 /* =========================================================
+   DIRECT CALL VIDEO RENEGOTIATION REQUEST
+========================================================= */
+
+socket.on(
+    "request-direct-call-renegotiation",
+    payload => {
+        const roomId =
+            payload?.roomId
+                ? String(payload.roomId).toLowerCase()
+                : null;
+        const callerId =
+            normalizeId(payload?.callerId)?.toLowerCase();
+        const receiverId =
+            normalizeId(payload?.receiverId)?.toLowerCase();
+        const call =
+            roomId
+                ? getCall(roomId)
+                : null;
+
+        if (
+            !roomId ||
+            !callerId ||
+            !receiverId ||
+            !call ||
+            call.status !== "accepted" ||
+            (payload?.callId && payload.callId !== call.callId) ||
+            !canHandleDirectCall({
+                call,
+                roomId,
+                socketUserId: socket.userId,
+                callerId,
+                receiverId,
+                role: "receiver"
+            })
+        ) {
+            return;
+        }
+
+        sendToUser(
+            callerId,
+            "direct-call-renegotiation-requested",
+            {
+                roomId,
+                callerId,
+                receiverId,
+                callId: call.callId
+            }
+        );
+    }
+);
+
+
+/* =========================================================
    WEBRTC OFFER
 ========================================================= */
 

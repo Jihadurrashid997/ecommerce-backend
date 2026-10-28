@@ -116,6 +116,31 @@ test("call signaling is limited to the expected authenticated participant and ro
     );
 });
 
+test("only the authenticated receiver can request a direct-call renegotiation", () => {
+    assert.equal(
+        canHandleDirectCall({
+            call,
+            roomId: ROOM_ID,
+            socketUserId: RECEIVER,
+            callerId: CALLER,
+            receiverId: RECEIVER,
+            role: "receiver"
+        }),
+        true
+    );
+    assert.equal(
+        canHandleDirectCall({
+            call,
+            roomId: ROOM_ID,
+            socketUserId: CALLER,
+            callerId: CALLER,
+            receiverId: RECEIVER,
+            role: "receiver"
+        }),
+        false
+    );
+});
+
 test("direct call room validation rejects invalid and self-call participants", () => {
     assert.equal(
         isCanonicalDirectCallRoom(ROOM_ID, CALLER, RECEIVER),
