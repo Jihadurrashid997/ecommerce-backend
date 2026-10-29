@@ -1,5 +1,7 @@
 const MAX_SOURCE_DIMENSION = 2200;
-const MAX_OUTPUT_BYTES = 9 * 1024 * 1024;
+const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
+const MAX_SCANNED_PDF_BYTES = 500 * 1024 * 1024;
+const PDF_PAGE_SIZE = { width: 595.28, height: 841.89 };
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -276,6 +278,89 @@ const canvasToBlob = (canvas, type, quality) => new Promise((resolve, reject) =>
     }, type, quality);
 });
 
+const loadImageForPdf = file => new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => resolve({ image, objectUrl });
+    image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("A scanned page could not be opened while creating the PDF."));
+    };
+    image.src = objectUrl;
+});
+
+const optimizePdfPage = async (file, maxBytes) => {
+    const { image, objectUrl } = await loadImageForPdf(file);
+    try {
+        for (const maxDimension of [1800, 1500, 1200, 1000]) {
+            const scale = Math.min(
+                1,
+                maxDimension / Math.max(image.naturalWidth, image.naturalHeight)
+            );
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+            canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+            canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+
+            for (const quality of [0.82, 0.7, 0.58, 0.48]) {
+                const blob = await canvasToBlob(canvas, "image/jpeg", quality);
+                if (blob.size <= maxBytes) {
+                    return new Uint8Array(await blob.arrayBuffer());
+                }
+            }
+        }
+        throw new Error(
+            "The PDF is too large to send. Remove some pages or use a smaller scan."
+        );
+    } finally {
+        URL.revokeObjectURL(objectUrl);
+    }
+};
+
+export const createScannedPdf = async pages => {
+    if (!Array.isArray(pages) || pages.length === 0) {
+        throw new Error("Scan at least one page before creating a PDF.");
+    }
+
+    const { PDFDocument } = await import("pdf-lib");
+    const pdf = await PDFDocument.create();
+    const maxPageBytes = Math.floor(MAX_SCANNED_PDF_BYTES / pages.length);
+    for (const file of pages) {
+        if (!file.type.startsWith("image/")) {
+            throw new Error("A scanned page is not a supported image.");
+        }
+        const jpegBytes = await optimizePdfPage(file, maxPageBytes);
+        const image = await pdf.embedJpg(jpegBytes);
+        const landscape = image.width > image.height;
+        const pageWidth = landscape ? PDF_PAGE_SIZE.height : PDF_PAGE_SIZE.width;
+        const pageHeight = landscape ? PDF_PAGE_SIZE.width : PDF_PAGE_SIZE.height;
+        const scale = Math.min(
+            pageWidth / image.width,
+            pageHeight / image.height
+        );
+        const width = image.width * scale;
+        const height = image.height * scale;
+        const page = pdf.addPage([pageWidth, pageHeight]);
+        page.drawImage(image, {
+            x: (pageWidth - width) / 2,
+            y: (pageHeight - height) / 2,
+            width,
+            height
+        });
+    }
+
+    const bytes = await pdf.save();
+    if (bytes.length > MAX_SCANNED_PDF_BYTES) {
+        throw new Error(
+            "The PDF exceeds Messenger's 500 MB attachment limit. Remove some pages and try again."
+        );
+    }
+    return new File([bytes], `messenger-scan-${Date.now()}.pdf`, {
+        type: "application/pdf",
+        lastModified: Date.now()
+    });
+};
+
 export const processDocumentImage = async (
     source,
     normalizedCorners,
@@ -390,12 +475,12 @@ export const processDocumentImage = async (
 
     let quality = 0.92;
     let blob = await canvasToBlob(resultCanvas, "image/jpeg", quality);
-    while (blob.size > MAX_OUTPUT_BYTES && quality > 0.65) {
-        quality -= 0.08;
+    while (blob.size > MAX_OUTPUT_BYTES && quality > 0.44) {
+        quality = Math.max(0.4, quality - 0.08);
         blob = await canvasToBlob(resultCanvas, "image/jpeg", quality);
     }
     if (blob.size > MAX_OUTPUT_BYTES) {
-        throw new Error("The scanned image is too large to send. Crop it closer and try again.");
+        throw new Error("This page is too large to process. Crop it closer and try again.");
     }
     return new File([blob], `scan-${Date.now()}.jpg`, {
         type: "image/jpeg",

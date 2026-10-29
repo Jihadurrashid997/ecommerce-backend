@@ -1,5 +1,13 @@
+jest.mock("pdf-lib", () => ({
+    PDFDocument: {
+        create: jest.fn()
+    }
+}));
+
+import { PDFDocument } from "pdf-lib";
 import {
     analyzeDocumentImage,
+    createScannedPdf,
     detectDocumentCorners,
     getDefaultDocumentCorners
 } from "./documentScanner";
@@ -56,5 +64,65 @@ describe("document scanner image analysis", () => {
         expect(corners[2].y).toBeGreaterThan(0.7);
         expect(corners[3].x).toBeLessThan(0.3);
         expect(corners[3].y).toBeGreaterThan(0.7);
+    });
+});
+
+describe("multi-page scanned PDFs", () => {
+    beforeEach(() => {
+        PDFDocument.create.mockReset();
+        const pdfPage = { drawImage: jest.fn() };
+        PDFDocument.create.mockResolvedValue({
+            addPage: jest.fn(() => pdfPage),
+            embedJpg: jest.fn(async () => ({ width: 10, height: 20 })),
+            save: jest.fn(async () => new Uint8Array([37, 80, 68, 70]))
+        });
+
+        URL.createObjectURL = jest.fn(() => "blob:scan-page");
+        URL.revokeObjectURL = jest.fn();
+        global.Image = class {
+            naturalWidth = 10;
+            naturalHeight = 20;
+
+            set src(_value) {
+                this.onload();
+            }
+        };
+        jest.spyOn(document, "createElement").mockImplementation(tagName => {
+            if (tagName !== "canvas") {
+                return document.createElementNS("http://www.w3.org/1999/xhtml", tagName);
+            }
+            return {
+                width: 0,
+                height: 0,
+                getContext: () => ({ drawImage: jest.fn() }),
+                toBlob: callback => callback({
+                    size: 3,
+                    arrayBuffer: async () => new Uint8Array([255, 216, 255]).buffer
+                })
+            };
+        });
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    test("requires at least one scanned page", async () => {
+        await expect(createScannedPdf([])).rejects.toThrow(
+            "Scan at least one page before creating a PDF."
+        );
+    });
+
+    test("creates a PDF page for every scanned image", async () => {
+        const pdf = await createScannedPdf([
+            { type: "image/jpeg" },
+            { type: "image/jpeg" }
+        ]);
+        const document = await PDFDocument.create.mock.results[0].value;
+
+        expect(pdf.type).toBe("application/pdf");
+        expect(pdf.name).toMatch(/^messenger-scan-.*\.pdf$/);
+        expect(document.addPage).toHaveBeenCalledTimes(2);
+        expect(document.embedJpg).toHaveBeenCalledTimes(2);
     });
 });

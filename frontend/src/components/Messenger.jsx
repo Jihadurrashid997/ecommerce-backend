@@ -45,7 +45,7 @@ import {
     FaUserPlus,
     FaMapMarkerAlt,
     FaClock,
-    FaCamera
+    FaRegFileAlt
 } from "react-icons/fa";
 
 import api, {
@@ -70,7 +70,8 @@ import {
     restoreMessengerIdentity,
     encryptMessengerMediaFile,
     decryptMessengerMediaFile,
-    getEncryptedMediaMetadata
+    getEncryptedMediaMetadata,
+    MAX_MESSENGER_ATTACHMENT_BYTES
 } from "../services/messengerEncryption";
 import {
     createLocationMessage,
@@ -6793,8 +6794,8 @@ const onCallMissed =
         if (!selectedUser || !user) {
             throw new Error("Choose a conversation before sending an attachment.");
         }
-        if (file.size > 10 * 1024 * 1024) {
-            throw new Error("Files must be 10MB or smaller.");
+        if (file.size > MAX_MESSENGER_ATTACHMENT_BYTES) {
+            throw new Error("Files must be 500MB or smaller.");
         }
 
         const target = selectedUser;
@@ -10826,15 +10827,20 @@ const onCallMissed =
 
                                 <button
                                     type="button"
-                                    title="Scan one document photo"
-                                    aria-label="Scan one document photo"
+                                    className="messenger-scan-button"
+                                    title="Scan pages to PDF"
+                                    aria-label="Scan pages to PDF"
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked
                                     }
                                     onClick={() => setShowDocumentScanner(true)}
                                 >
-                                    <FaCamera />
+                                    <span className="messenger-scan-icon" aria-hidden="true">
+                                        <FaRegFileAlt />
+                                        <i />
+                                        <small>SCAN</small>
+                                    </span>
                                 </button>
 
                                 <button
