@@ -59,6 +59,9 @@ const CallModal = ({
     const [playbackBlocked, setPlaybackBlocked] =
         useState(false);
 
+    const playbackBlockedRef =
+        useRef(false);
+
     const [audioOutputOpen, setAudioOutputOpen] =
         useState(false);
 
@@ -82,6 +85,37 @@ const CallModal = ({
     const isVideo =
         type === "video";
 
+    const [remoteVideoAvailable, setRemoteVideoAvailable] =
+        useState(false);
+
+    useEffect(() => {
+        const videoTracks = remoteStream?.getVideoTracks() || [];
+        const updateVideoAvailability = () => {
+            setRemoteVideoAvailable(
+                videoTracks.some(
+                    track =>
+                        track.readyState === "live" &&
+                        !track.muted
+                )
+            );
+        };
+
+        updateVideoAvailability();
+        videoTracks.forEach(track => {
+            track.addEventListener?.("mute", updateVideoAvailability);
+            track.addEventListener?.("unmute", updateVideoAvailability);
+            track.addEventListener?.("ended", updateVideoAvailability);
+        });
+
+        return () => {
+            videoTracks.forEach(track => {
+                track.removeEventListener?.("mute", updateVideoAvailability);
+                track.removeEventListener?.("unmute", updateVideoAvailability);
+                track.removeEventListener?.("ended", updateVideoAvailability);
+            });
+        };
+    }, [remoteStream]);
+
     useEffect(() => {
         if (visible) {
             return;
@@ -89,16 +123,14 @@ const CallModal = ({
 
         setMuted(false);
         setCameraOff(type !== "video");
+        playbackBlockedRef.current = false;
         setPlaybackBlocked(false);
         setAudioOutputOpen(false);
         setMoreOpen(false);
         setControlError("");
     }, [visible, type]);
 
-    const hasRemoteVideo =
-        remoteStream
-            ?.getVideoTracks()
-            .some(track => track.readyState === "live");
+    const hasRemoteVideo = remoteVideoAvailable;
 
     const hasLocalVideo =
         localStream
@@ -131,10 +163,16 @@ const CallModal = ({
                     await Promise.all(
                         elements.map(element => element.play())
                     );
-                    setPlaybackBlocked(false);
+                    if (playbackBlockedRef.current) {
+                        playbackBlockedRef.current = false;
+                        setPlaybackBlocked(false);
+                    }
                 } catch (error) {
                     console.warn("Remote media playback needs user interaction:", error);
-                    setPlaybackBlocked(true);
+                    if (!playbackBlockedRef.current) {
+                        playbackBlockedRef.current = true;
+                        setPlaybackBlocked(true);
+                    }
                 }
             },
             [hasRemoteVideo]
