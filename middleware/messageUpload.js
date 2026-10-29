@@ -1,4 +1,11 @@
 const multer = require("multer");
+const crypto = require("crypto");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const MAX_MESSAGE_ATTACHMENT_BYTES = 500 * 1024 * 1024;
+const MAX_ENCRYPTED_ATTACHMENT_BYTES = MAX_MESSAGE_ATTACHMENT_BYTES + 16;
+const uploadTempDirectory = path.join(os.tmpdir(), "e-top-messenger-attachments");
 /*
 =========================================================
 CHAT ATTACHMENT UPLOAD
@@ -88,13 +95,13 @@ const hasBytes = (buffer, bytes, offset = 0) =>
     buffer.length >= offset + bytes.length &&
     buffer.subarray(offset, offset + bytes.length).equals(Buffer.from(bytes));
 
-const isIsoMedia = (buffer, brands) => {
+const isIsoMedia = (buffer, brands, totalSize = buffer.length) => {
     if (buffer.length < 12 || buffer.toString("ascii", 4, 8) !== "ftyp") {
         return false;
     }
     const boxSize = buffer.readUInt32BE(0);
-    if (boxSize < 16 || boxSize > buffer.length) return false;
-    for (let offset = 8; offset + 4 <= boxSize; offset += 4) {
+    if (boxSize < 16 || boxSize > totalSize) return false;
+    for (let offset = 8; offset + 4 <= Math.min(boxSize, buffer.length); offset += 4) {
         if (brands.includes(buffer.toString("ascii", offset, offset + 4))) {
             return true;
         }
@@ -102,7 +109,7 @@ const isIsoMedia = (buffer, brands) => {
     return false;
 };
 
-const matchesFileContent = (mimeType, buffer) => {
+const matchesFileContent = (mimeType, buffer, totalSize = buffer.length) => {
     if (!Buffer.isBuffer(buffer) || buffer.length === 0) return false;
 
     if (mimeType === "application/octet-stream") {
@@ -127,7 +134,8 @@ const matchesFileContent = (mimeType, buffer) => {
             buffer,
             mimeType === "image/heic"
                 ? ["heic", "heix", "hevc", "hevx"]
-                : ["mif1", "msf1", "heif", "heim", "heis", "hevm", "hevs"]
+                : ["mif1", "msf1", "heif", "heim", "heis", "hevm", "hevs"],
+            totalSize
         );
     }
     if (mimeType === "application/pdf") {
@@ -192,45 +200,90 @@ const matchesFileContent = (mimeType, buffer) => {
         return isIsoMedia(buffer, [
             "M4A ", "M4B ", "isom", "iso2", "mp41", "mp42",
             "3gp4", "3gp5", "3g2a", "3g2b"
-        ]);
+        ], totalSize);
     }
     if (
         mimeType === "video/mp4" ||
         mimeType === "video/quicktime" ||
         mimeType === "video/3gpp"
     ) {
-        return isIsoMedia(buffer, ["isom", "iso2", "mp41", "mp42", "avc1", "qt  ", "3gp4", "3gp5"]);
+        return isIsoMedia(
+            buffer,
+            ["isom", "iso2", "mp41", "mp42", "avc1", "qt  ", "3gp4", "3gp5"],
+            totalSize
+        );
     }
     return false;
+};
+
+const hasNoNullBytes = async filePath => {
+    for await (const chunk of fs.createReadStream(filePath)) {
+        if (chunk.includes(0)) return false;
+    }
+    return true;
+};
+
+const matchesUploadedFile = async file => {
+    if (file.buffer) {
+        const mimeType = String(file.mimetype || "")
+            .split(";")[0]
+            .trim()
+            .toLowerCase();
+        return matchesFileContent(mimeType, file.buffer, file.size);
+    }
+
+    if (!file.path || !file.size) return false;
+    const header = Buffer.alloc(Math.min(file.size, 4096));
+    const handle = await fs.promises.open(file.path, "r");
+    try {
+        const { bytesRead } = await handle.read(header, 0, header.length, 0);
+        const prefix = header.subarray(0, bytesRead);
+        const mimeType = String(file.mimetype || "")
+            .split(";")[0]
+            .trim()
+            .toLowerCase();
+        if (mimeType === "text/plain") {
+            return hasNoNullBytes(file.path);
+        }
+        return matchesFileContent(mimeType, prefix, file.size);
+    } finally {
+        await handle.close();
+    }
 };
 
 const validateMessageFileContent = (req, res, next) => {
     const file = req.file;
     if (!file) return next();
 
-    const mimeType = String(file.mimetype || "")
-        .split(";")[0]
-        .trim()
-        .toLowerCase();
-    if (!matchesFileContent(mimeType, file.buffer)) {
-        return res.status(400).json({
-            success: false,
-            message: "The uploaded file content does not match its supported file type."
-        });
-    }
-    return next();
+    matchesUploadedFile(file).then(matches => {
+        if (!matches) {
+            return res.status(400).json({
+                success: false,
+                message: "The uploaded file content does not match its supported file type."
+            });
+        }
+        return next();
+    }).catch(next);
 };
 
 const upload = multer({
 
-    storage: multer.memoryStorage(),
+    storage: multer.diskStorage({
+        destination: (_req, _file, callback) => {
+            fs.mkdir(uploadTempDirectory, { recursive: true }, error =>
+                callback(error, uploadTempDirectory)
+            );
+        },
+        filename: (_req, _file, callback) =>
+            callback(null, crypto.randomUUID())
+    }),
 
     fileFilter,
 
     limits: {
 
-        // A 10MB client file gains a 16-byte AES-GCM tag.
-        fileSize: 10 * 1024 * 1024 + 16
+        // Encrypted client files gain a 16-byte AES-GCM tag.
+        fileSize: MAX_ENCRYPTED_ATTACHMENT_BYTES
 
     }
 
@@ -239,5 +292,18 @@ const upload = multer({
 upload.fileFilter = fileFilter;
 upload.validateContent = validateMessageFileContent;
 upload.matchesFileContent = matchesFileContent;
+upload.maxFileSize = MAX_MESSAGE_ATTACHMENT_BYTES;
+upload.tempDirectory = uploadTempDirectory;
+upload.cleanup = (req, res, next) => {
+    res.once("finish", () => {
+        if (!req.file?.path) return;
+        fs.promises.unlink(req.file.path).catch(error => {
+            if (error.code !== "ENOENT") {
+                console.error("MESSENGER TEMP UPLOAD CLEANUP ERROR:", error);
+            }
+        });
+    });
+    next();
+};
 
 module.exports = upload;
