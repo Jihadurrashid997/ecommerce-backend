@@ -3192,8 +3192,13 @@ const toggleScreenSharing =
 
             const getDisplayMedia =
                 navigator.mediaDevices?.getDisplayMedia;
-            if (typeof getDisplayMedia !== "function") {
-                throw new Error("Screen sharing is not supported by this browser or device.");
+            if (
+                typeof getDisplayMedia !== "function" ||
+                !window.isSecureContext
+            ) {
+                throw new Error(
+                    "Screen sharing requires a supported browser on HTTPS or localhost."
+                );
             }
 
             const stream = await getDisplayMedia.call(
@@ -4586,20 +4591,19 @@ const onOffer =
                 }
             );
 
+            const existingCall =
+                callRef.current ||
+                callStateRef.current ||
+                {};
+            const isAlreadyConnected =
+                existingCall.status === "connected" ||
+                existingCall.mode === "connected";
             const acceptedCall = {
-
-                ...(callRef.current || {}),
+                ...existingCall,
                 ...data,
-
-                mode:
-                    "accepted",
-
-                status:
-                    "accepted",
-
-                accepted:
-                    true
-
+                mode: isAlreadyConnected ? "connected" : "accepted",
+                status: isAlreadyConnected ? "connected" : "accepted",
+                accepted: true
             };
 
             callRef.current =
