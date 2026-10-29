@@ -160,3 +160,54 @@ test("large path-backed Messenger uploads use Cloudinary chunked streaming", asy
         }
     }
 });
+
+test("PDF download URLs use Cloudinary's signed raw-file download API", () => {
+    const previousEnvironment = {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        apiSecret: process.env.CLOUDINARY_API_SECRET
+    };
+    const originalPrivateDownloadUrl = cloudinary.utils.private_download_url;
+    let downloadOptions;
+
+    process.env.CLOUDINARY_CLOUD_NAME = "test-cloud";
+    process.env.CLOUDINARY_API_KEY = "test-key";
+    process.env.CLOUDINARY_API_SECRET = "test-secret";
+    cloudinary.utils.private_download_url = (publicId, format, options) => {
+        downloadOptions = { publicId, format, ...options };
+        return "https://api.cloudinary.example/signed-download";
+    };
+
+    try {
+        const { getPrivateDownloadUrl } = require("../services/mediaStorage");
+        const url = getPrivateDownloadUrl(
+            "etop/messenger/scan.pdf",
+            "messenger-scan.pdf"
+        );
+
+        assert.equal(url, "https://api.cloudinary.example/signed-download");
+        assert.equal(downloadOptions.publicId, "etop/messenger/scan");
+        assert.equal(downloadOptions.format, "pdf");
+        assert.equal(downloadOptions.resource_type, "raw");
+        assert.equal(downloadOptions.type, "upload");
+        assert.equal(downloadOptions.attachment, true);
+        assert.ok(downloadOptions.expires_at > Math.floor(Date.now() / 1000));
+    } finally {
+        cloudinary.utils.private_download_url = originalPrivateDownloadUrl;
+        if (previousEnvironment.cloudName === undefined) {
+            delete process.env.CLOUDINARY_CLOUD_NAME;
+        } else {
+            process.env.CLOUDINARY_CLOUD_NAME = previousEnvironment.cloudName;
+        }
+        if (previousEnvironment.apiKey === undefined) {
+            delete process.env.CLOUDINARY_API_KEY;
+        } else {
+            process.env.CLOUDINARY_API_KEY = previousEnvironment.apiKey;
+        }
+        if (previousEnvironment.apiSecret === undefined) {
+            delete process.env.CLOUDINARY_API_SECRET;
+        } else {
+            process.env.CLOUDINARY_API_SECRET = previousEnvironment.apiSecret;
+        }
+    }
+});

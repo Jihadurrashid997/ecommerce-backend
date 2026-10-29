@@ -8093,42 +8093,34 @@ const onCallMissed =
 
         };
 
-    const handlePdfAttachmentOpen = async (event, url, filename) => {
+    const handlePdfAttachmentOpen = async (event, messageId, filename) => {
         event.preventDefault();
         const pdfWindow = window.open("about:blank", "_blank");
         if (pdfWindow) pdfWindow.opener = null;
 
         try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`PDF download failed (${response.status}).`);
+            if (!messageId) {
+                throw new Error("This PDF message is missing its download ID.");
             }
-
-            const blob = await response.blob();
-            await assertValidPdfBlob(blob);
-            const blobUrl = window.URL.createObjectURL(
-                new Blob([blob], { type: "application/pdf" })
+            const response = await api.get(
+                `/messages/${encodeURIComponent(messageId)}/attachment-download`
             );
-
+            const downloadUrl = getUploadUrl(response.data?.downloadUrl || "");
+            if (!downloadUrl) {
+                throw new Error("The server did not provide a PDF download URL.");
+            }
             if (pdfWindow && !pdfWindow.closed) {
-                pdfWindow.location.replace(blobUrl);
+                pdfWindow.location.replace(downloadUrl);
             } else {
-                const link = document.createElement("a");
-                link.href = blobUrl;
-                link.download = filename || "document.pdf";
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
+                window.location.assign(downloadUrl);
             }
-            window.setTimeout(
-                () => window.URL.revokeObjectURL(blobUrl),
-                60000
-            );
         } catch (error) {
             pdfWindow?.close();
             console.error("PDF attachment open error:", error);
             showMessengerToast(
-                error.message || "The PDF is empty or could not be opened."
+                error.response?.data?.message ||
+                    error.message ||
+                    "The PDF could not be opened."
             );
         }
     };
@@ -10289,7 +10281,7 @@ const onCallMissed =
                                                                     ? event =>
                                                                         handlePdfAttachmentOpen(
                                                                             event,
-                                                                            fileUrl,
+                                                                            getMessageId(item),
                                                                             fileName
                                                                         )
                                                                     : event =>

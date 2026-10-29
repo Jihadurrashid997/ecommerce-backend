@@ -16,6 +16,7 @@ const {
     saveEncryptionKeyBackup,
     getEncryptionKeyBackup,
     getConversation,
+    getAttachmentDownload,
     getRecentConversations,
     markSeen,
     getUnreadCount,
@@ -134,6 +135,12 @@ router.get(
     "/conversation/:userId",
     auth(),
     getConversation
+);
+
+router.get(
+    "/:id/attachment-download",
+    auth(),
+    getAttachmentDownload
 );
 
 

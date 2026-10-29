@@ -159,6 +159,30 @@ const saveFile = async (file, folder = "etop") => {
 
 };
 
+const getPrivateDownloadUrl = (publicId, fileName) => {
+    const cld = getCloudinary();
+    if (!cld || !publicId) {
+        throw new Error("Cloudinary is not configured for this attachment.");
+    }
+
+    const extension = path.extname(path.basename(fileName || "")).slice(1).toLowerCase();
+    if (!/^[a-z0-9]{1,10}$/.test(extension)) {
+        throw new Error("The attachment does not have a supported file extension.");
+    }
+
+    const normalizedPublicId = publicId.replace(/\.[a-z0-9]{1,10}$/i, "");
+    return cld.utils.private_download_url(
+        normalizedPublicId,
+        extension,
+        {
+            resource_type: "raw",
+            type: "upload",
+            attachment: true,
+            expires_at: Math.floor(Date.now() / 1000) + 5 * 60
+        }
+    );
+};
+
 const deleteFile = async media => {
 
     try {
@@ -213,5 +237,6 @@ const deleteFile = async media => {
 module.exports = {
     isCloudinaryConfigured,
     saveFile,
+    getPrivateDownloadUrl,
     deleteFile
 };
