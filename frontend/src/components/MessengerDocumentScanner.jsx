@@ -59,6 +59,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
     const [processing, setProcessing] = useState(false);
     const [sending, setSending] = useState(false);
     const [creatingPdf, setCreatingPdf] = useState(false);
+    const [batchProgress, setBatchProgress] = useState("");
     const [pages, setPages] = useState([]);
     const [error, setError] = useState("");
 
@@ -263,6 +264,72 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
         if (stage === "preview") processScan();
     }, [stage, processScan]);
 
+    const choosePhotos = async event => {
+        const files = Array.from(event.target.files || []);
+        event.target.value = "";
+        if (files.length === 0) return;
+        if (files.length + pages.length > MAX_PAGES) {
+            setError(`Choose no more than ${MAX_PAGES - pages.length} more photos.`);
+            return;
+        }
+        if (files.some(file => !file.type.startsWith("image/"))) {
+            setError("Choose image files only.");
+            return;
+        }
+
+        setError("");
+        setCreatingPdf(true);
+        setBatchProgress("");
+        try {
+            const processedPages = [];
+            for (let index = 0; index < files.length; index += 1) {
+                setBatchProgress(`Scanning photo ${index + 1} of ${files.length}…`);
+                const { image, objectUrl } = await loadImage(files[index]);
+                try {
+                    const analysisCanvas = document.createElement("canvas");
+                    const scale = Math.min(
+                        1,
+                        640 / Math.max(image.naturalWidth, image.naturalHeight)
+                    );
+                    analysisCanvas.width = Math.round(image.naturalWidth * scale);
+                    analysisCanvas.height = Math.round(image.naturalHeight * scale);
+                    const context = analysisCanvas.getContext("2d", {
+                        willReadFrequently: true
+                    });
+                    context.drawImage(image, 0, 0, analysisCanvas.width, analysisCanvas.height);
+                    const imageData = context.getImageData(
+                        0,
+                        0,
+                        analysisCanvas.width,
+                        analysisCanvas.height
+                    );
+                    const corners = detectDocumentCorners(imageData);
+                    processedPages.push(
+                        await processDocumentImage(image, corners, "enhanced", 0)
+                    );
+                } finally {
+                    URL.revokeObjectURL(objectUrl);
+                }
+            }
+
+            setBatchProgress("Creating PDF…");
+            const pdfFile = await createScannedPdf([
+                ...pages.map(page => page.file),
+                ...processedPages
+            ]);
+            setCreatingPdf(false);
+            setSending(true);
+            await onSend(pdfFile);
+            onClose();
+        } catch (photoError) {
+            setError(photoError.message || "Could not scan the selected photos.");
+            setCreatingPdf(false);
+            setSending(false);
+        } finally {
+            setBatchProgress("");
+        }
+    };
+
     const choosePhoto = async event => {
         const file = event.target.files?.[0];
         event.target.value = "";
@@ -402,7 +469,11 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
             className="document-scanner-overlay"
             role="presentation"
             onMouseDown={event => {
-                if (event.target === event.currentTarget && !sending) onClose();
+                if (
+                    event.target === event.currentTarget &&
+                    !creatingPdf &&
+                    !sending
+                ) onClose();
             }}
         >
             <section
@@ -428,7 +499,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                         type="button"
                         aria-label="Close document scanner"
                         onClick={onClose}
-                        disabled={sending}
+                        disabled={creatingPdf || sending}
                     >
                         <FaTimes />
                     </button>
@@ -450,12 +521,13 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                         Retry camera
                                     </button>
                                     <label className="document-scanner-secondary-button">
-                                        Choose one photo
+                                        Choose photos
                                         <input
                                             type="file"
                                             accept="image/*"
-                                            capture="environment"
-                                            onChange={choosePhoto}
+                                            multiple
+                                            disabled={creatingPdf || sending}
+                                            onChange={choosePhotos}
                                         />
                                     </label>
                                 </div>
@@ -616,6 +688,9 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                         </>
                     )}
 
+                    {batchProgress && (
+                        <p className="document-scanner-note" role="status">{batchProgress}</p>
+                    )}
                     {error && <p className="document-scanner-error" role="alert">{error}</p>}
                 </div>
 
@@ -638,10 +713,24 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                         <input
                                             type="file"
                                             accept="image/*"
-                                            disabled={pages.length >= MAX_PAGES}
+                                            disabled={creatingPdf || sending}
                                             onChange={choosePhoto}
                                         />
-                                        Choose photo
+                                        Choose one photo
+                                    </label>
+                                    <label className="document-scanner-gallery-button document-scanner-secondary-button">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            disabled={
+                                                pages.length >= MAX_PAGES ||
+                                                creatingPdf ||
+                                                sending
+                                            }
+                                            onChange={choosePhotos}
+                                        />
+                                        Choose up to 100 photos
                                     </label>
                                 </div>
                             )}
@@ -652,7 +741,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                         className="document-scanner-shutter"
                                         type="button"
                                         onClick={capturePhoto}
-                                        disabled={pages.length >= MAX_PAGES}
+                                        disabled={pages.length >= MAX_PAGES || creatingPdf || sending}
                                         aria-label="Capture one document photo"
                                     >
                                         <FaCamera />

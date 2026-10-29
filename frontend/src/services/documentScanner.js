@@ -350,6 +350,12 @@ export const createScannedPdf = async pages => {
     }
 
     const bytes = await pdf.save();
+    if (
+        bytes.length < 10 ||
+        String.fromCharCode(...bytes.subarray(0, 5)) !== "%PDF-"
+    ) {
+        throw new Error("The scan could not be exported as a valid PDF.");
+    }
     if (bytes.length > MAX_SCANNED_PDF_BYTES) {
         throw new Error(
             "The PDF exceeds Messenger's 500 MB attachment limit. Remove some pages and try again."

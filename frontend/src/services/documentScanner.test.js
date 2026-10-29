@@ -74,7 +74,9 @@ describe("multi-page scanned PDFs", () => {
         PDFDocument.create.mockResolvedValue({
             addPage: jest.fn(() => pdfPage),
             embedJpg: jest.fn(async () => ({ width: 10, height: 20 })),
-            save: jest.fn(async () => new Uint8Array([37, 80, 68, 70]))
+            save: jest.fn(async () => new Uint8Array([
+                37, 80, 68, 70, 45, 49, 46, 55, 10, 37, 37, 69, 79, 70
+            ]))
         });
 
         URL.createObjectURL = jest.fn(() => "blob:scan-page");
@@ -124,5 +126,28 @@ describe("multi-page scanned PDFs", () => {
         expect(pdf.name).toMatch(/^messenger-scan-.*\.pdf$/);
         expect(document.addPage).toHaveBeenCalledTimes(2);
         expect(document.embedJpg).toHaveBeenCalledTimes(2);
+    });
+
+    test("creates a PDF containing all 100 selected pages", async () => {
+        const pdf = await createScannedPdf(
+            Array.from({ length: 100 }, () => ({ type: "image/jpeg" }))
+        );
+        const document = await PDFDocument.create.mock.results[0].value;
+
+        expect(pdf.type).toBe("application/pdf");
+        expect(document.addPage).toHaveBeenCalledTimes(100);
+        expect(document.embedJpg).toHaveBeenCalledTimes(100);
+    });
+
+    test("rejects output that does not contain a PDF signature", async () => {
+        PDFDocument.create.mockResolvedValue({
+            addPage: jest.fn(() => ({ drawImage: jest.fn() })),
+            embedJpg: jest.fn(async () => ({ width: 10, height: 20 })),
+            save: jest.fn(async () => new Uint8Array([1, 2, 3, 4]))
+        });
+
+        await expect(createScannedPdf([{ type: "image/jpeg" }])).rejects.toThrow(
+            "The scan could not be exported as a valid PDF."
+        );
     });
 });
