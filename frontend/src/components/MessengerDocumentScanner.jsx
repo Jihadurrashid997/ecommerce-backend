@@ -331,15 +331,17 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
             }}
         >
             <section
-                className="document-scanner"
+                className={`document-scanner document-scanner--${stage}`}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="document-scanner-title"
             >
                 <header className="document-scanner-header">
-                    <div>
-                        <h2 id="document-scanner-title">Scan one photo</h2>
-                        <p>Capture and clean up one document image before sending.</p>
+                    <div className="document-scanner-heading">
+                        <span className="document-scanner-kicker">MESSENGER SCANNER</span>
+                        <h2 id="document-scanner-title">
+                            {stage === "camera" ? "Scan document" : stage === "crop" ? "Adjust document" : "Review scan"}
+                        </h2>
                     </div>
                     <button
                         type="button"
@@ -377,7 +379,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                     </label>
                                 </div>
                             ) : (
-                                <div className="document-scanner-camera-frame">
+                                <div className="document-scanner-camera-frame document-scanner-viewfinder">
                                     <video
                                         ref={videoRef}
                                         autoPlay
@@ -385,13 +387,21 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                         playsInline
                                         aria-label="Document scanner camera preview"
                                     />
-                                    <span className="document-scanner-frame-guide" aria-hidden="true" />
+                                    <div className="document-scanner-live-label">
+                                        <span /> LIVE SCAN
+                                    </div>
+                                    <div className="document-scanner-frame-guide" aria-hidden="true">
+                                        <i />
+                                        <i />
+                                        <i />
+                                        <i />
+                                    </div>
+                                    <p className="document-scanner-camera-hint">
+                                        Align the page inside the frame
+                                    </p>
                                 </div>
                             )}
-                            {cameraNote && <p className="document-scanner-note">{cameraNote}</p>}
-                            <p className="document-scanner-note">
-                                Camera capture stays on this device until you choose to send the single processed image.
-                            </p>
+                            {cameraNote && <p className="document-scanner-camera-note">{cameraNote}</p>}
                         </>
                     )}
 
@@ -487,22 +497,26 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                     {stage === "camera" && (
                         <>
                             {!cameraError && (
-                                <button
-                                    className="document-scanner-primary"
-                                    type="button"
-                                    onClick={capturePhoto}
-                                >
-                                    <FaCamera /> Capture one photo
-                                </button>
-                            )}
-                            {!cameraError && (
-                                <label className="document-scanner-secondary-button">
-                                    Choose photo
+                                <label className="document-scanner-gallery-button document-scanner-secondary-button">
                                     <input
                                         type="file"
                                         accept="image/*"
                                         onChange={choosePhoto}
                                     />
+                                    Choose photo
+                                </label>
+                            )}
+                            {!cameraError && (
+                                <label className="document-scanner-shutter-wrap">
+                                    <span>Capture one page</span>
+                                    <button
+                                        className="document-scanner-shutter"
+                                        type="button"
+                                        onClick={capturePhoto}
+                                        aria-label="Capture one document photo"
+                                    >
+                                        <FaCamera />
+                                    </button>
                                 </label>
                             )}
                         </>
