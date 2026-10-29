@@ -51,10 +51,13 @@ export const ensureDirectCallVideoTransceiver = peer => {
 
 export const replaceDirectCallVideoTrack = async (peer, track) => {
     const videoTransceiver = ensureDirectCallVideoTransceiver(peer);
+    const requiresNegotiation =
+        !videoTransceiver.currentDirection?.includes("send");
 
     if (track) {
         track.enabled = true;
     }
 
     await videoTransceiver.sender.replaceTrack(track || null);
+    return requiresNegotiation;
 };

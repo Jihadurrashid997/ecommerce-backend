@@ -58,6 +58,57 @@ test("replaces the negotiated voice-call video sender when camera state changes"
     expect(sender.replaceTrack).toHaveBeenNthCalledWith(2, null);
 });
 
+test("replaces a pre-negotiated video track without renegotiating", async () => {
+    const sender = {
+        track: null,
+        replaceTrack: jest.fn().mockResolvedValue(undefined)
+    };
+    const peer = {
+        getTransceivers: () => [{
+            receiver: { track: { kind: "video" } },
+            sender,
+            currentDirection: "sendrecv",
+            direction: "sendrecv"
+        }]
+    };
+
+    await expect(
+        replaceDirectCallVideoTrack(peer, { kind: "video" })
+    ).resolves.toBe(false);
+    expect(sender.replaceTrack).toHaveBeenCalledTimes(1);
+});
+
+test("checks negotiation on the selected send-capable video section", async () => {
+    const receiveOnlySender = {
+        replaceTrack: jest.fn().mockResolvedValue(undefined)
+    };
+    const sendReceiveSender = {
+        replaceTrack: jest.fn().mockResolvedValue(undefined)
+    };
+    const peer = {
+        getTransceivers: () => [
+            {
+                receiver: { track: { kind: "video" } },
+                sender: receiveOnlySender,
+                currentDirection: "recvonly",
+                direction: "sendrecv"
+            },
+            {
+                receiver: { track: { kind: "video" } },
+                sender: sendReceiveSender,
+                currentDirection: "sendrecv",
+                direction: "sendrecv"
+            }
+        ]
+    };
+
+    await expect(
+        replaceDirectCallVideoTrack(peer, { kind: "video" })
+    ).resolves.toBe(false);
+    expect(receiveOnlySender.replaceTrack).not.toHaveBeenCalled();
+    expect(sendReceiveSender.replaceTrack).toHaveBeenCalledTimes(1);
+});
+
 test("adds a sendrecv video transceiver when an existing call has no video section", async () => {
     const sender = {
         replaceTrack: jest.fn().mockResolvedValue(undefined)
@@ -74,7 +125,9 @@ test("adds a sendrecv video transceiver when an existing call has no video secti
     };
     const track = { kind: "video" };
 
-    await replaceDirectCallVideoTrack(peer, track);
+    await expect(
+        replaceDirectCallVideoTrack(peer, track)
+    ).resolves.toBe(true);
 
     expect(peer.addTransceiver).toHaveBeenCalledWith(
         "video",
@@ -144,7 +197,9 @@ test("enables sending on an existing receive-only video transceiver", async () =
     };
     const peer = { getTransceivers: () => [transceiver] };
 
-    await replaceDirectCallVideoTrack(peer, { kind: "video" });
+    await expect(
+        replaceDirectCallVideoTrack(peer, { kind: "video" })
+    ).resolves.toBe(true);
 
     expect(transceiver.direction).toBe("sendrecv");
     expect(sender.replaceTrack).toHaveBeenCalledWith(
