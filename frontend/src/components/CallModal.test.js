@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import CallModal from "./CallModal";
 
 test("offers a user playback action when the browser blocks remote media", async () => {
@@ -110,6 +110,57 @@ test("keeps the caller name and connected timer visible over remote video", () =
 
     expect(screen.getByLabelText("Call details")).toHaveTextContent("Snoopy");
     expect(screen.getByLabelText("Call duration")).toHaveTextContent("01:33");
+});
+
+test("shows the remote caller profile when their video is muted and restores video when unmuted", async () => {
+    const videoTrack = new EventTarget();
+    Object.assign(videoTrack, {
+        kind: "video",
+        readyState: "live",
+        muted: false
+    });
+    const remoteStream = {
+        getVideoTracks: () => [videoTrack],
+        getAudioTracks: () => [],
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+    };
+    jest.spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+
+    const { container } = render(
+        <CallModal
+            visible
+            type="audio"
+            mode="connected"
+            callerName="Snoopy"
+            remoteStream={remoteStream}
+        />
+    );
+
+    expect(await screen.findByLabelText("Call details"))
+        .toHaveTextContent("Snoopy");
+
+    await act(async () => {
+        videoTrack.muted = true;
+        fireEvent(videoTrack, new Event("mute"));
+        await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(await screen.findByText("Snoopy")).toBeInTheDocument();
+    expect(container.querySelector(".messenger-call-remote-video"))
+        .not.toBeInTheDocument();
+
+    await act(async () => {
+        videoTrack.muted = false;
+        fireEvent(videoTrack, new Event("unmute"));
+        await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() => {
+        expect(container.querySelector(".messenger-call-remote-video"))
+            .toBeInTheDocument();
+    });
 });
 
 test("rebinds remote media when the remote stream is refreshed", async () => {

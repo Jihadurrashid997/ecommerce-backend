@@ -78,6 +78,39 @@ test("replaces a pre-negotiated video track without renegotiating", async () => 
     expect(sender.replaceTrack).toHaveBeenCalledTimes(1);
 });
 
+test("allows both connected peers to enable their cameras independently", async () => {
+    const makePeer = () => {
+        const sender = {
+            replaceTrack: jest.fn().mockResolvedValue(undefined)
+        };
+        return {
+            sender,
+            peer: {
+                getTransceivers: () => [{
+                    receiver: { track: { kind: "video" } },
+                    sender,
+                    currentDirection: "sendrecv",
+                    direction: "sendrecv"
+                }]
+            }
+        };
+    };
+    const first = makePeer();
+    const second = makePeer();
+    const firstCamera = { kind: "video" };
+    const secondCamera = { kind: "video" };
+
+    await expect(
+        replaceDirectCallVideoTrack(first.peer, firstCamera)
+    ).resolves.toBe(false);
+    await expect(
+        replaceDirectCallVideoTrack(second.peer, secondCamera)
+    ).resolves.toBe(false);
+
+    expect(first.sender.replaceTrack).toHaveBeenCalledWith(firstCamera);
+    expect(second.sender.replaceTrack).toHaveBeenCalledWith(secondCamera);
+});
+
 test("checks negotiation on the selected send-capable video section", async () => {
     const receiveOnlySender = {
         replaceTrack: jest.fn().mockResolvedValue(undefined)
