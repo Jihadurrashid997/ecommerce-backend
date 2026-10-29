@@ -8026,6 +8026,12 @@ const onCallMissed =
                 const response =
                     await fetch(url);
 
+                if (!response.ok) {
+                    throw new Error(
+                        `Attachment download failed (${response.status}).`
+                    );
+                }
+
                 const blob =
                     await response.blob();
 
@@ -8054,8 +8060,9 @@ const onCallMissed =
 
                 link.remove();
 
-                window.URL.revokeObjectURL(
-                    blobUrl
+                window.setTimeout(
+                    () => window.URL.revokeObjectURL(blobUrl),
+                    60000
                 );
 
             } catch (error) {
@@ -9920,6 +9927,13 @@ const onCallMissed =
                                             fileUrl &&
                                             fileType.startsWith("video/");
 
+                                        const isPdfFile =
+                                            fileUrl &&
+                                            (
+                                                fileType === "application/pdf" ||
+                                                /\.pdf$/i.test(fileName)
+                                            );
+
 
                                         const attachmentKey =
                                             getMessageId(
@@ -10223,19 +10237,19 @@ const onCallMissed =
                                                                 href={
                                                                     fileUrl
                                                                 }
-                                                                download={
-                                                                    fileName
-                                                                }
-                                                                onClick={
-                                                                    event =>
+                                                                target={isPdfFile ? "_blank" : undefined}
+                                                                rel={isPdfFile ? "noopener noreferrer" : undefined}
+                                                                download={isPdfFile ? undefined : fileName}
+                                                                onClick={isPdfFile
+                                                                    ? undefined
+                                                                    : event =>
                                                                         handleAttachmentDownload(
                                                                             event,
                                                                             fileUrl,
                                                                             fileName
-                                                                        )
-                                                                }
+                                                                        )}
                                                                 className="message-attachment-file"
-                                                                title="Click to download"
+                                                                title={isPdfFile ? "Open PDF" : "Click to download"}
                                                             >
                                                                 <FaPaperclip />
                                                                 <span>

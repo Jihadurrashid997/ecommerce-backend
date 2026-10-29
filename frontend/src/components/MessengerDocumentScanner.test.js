@@ -166,7 +166,7 @@ describe("MessengerDocumentScanner", () => {
         render(<MessengerDocumentScanner onClose={onClose} onSend={onSend} />);
 
         const choosePage = async pageName => {
-            fireEvent.change(screen.getByLabelText("Choose photo"), {
+            fireEvent.change(screen.getByLabelText("Choose one photo"), {
                 target: {
                     files: [new File([pageName], `${pageName}.jpg`, { type: "image/jpeg" })]
                 }
@@ -208,5 +208,37 @@ describe("MessengerDocumentScanner", () => {
             );
             expect(onClose).toHaveBeenCalledTimes(1);
         });
+    });
+
+    test("automatically scans up to 100 selected photos into one sent PDF", async () => {
+        const onClose = jest.fn();
+        const onSend = jest.fn(async () => {});
+        const photos = Array.from({ length: 100 }, (_, index) =>
+            new File([`photo-${index}`], `photo-${index}.jpg`, {
+                type: "image/jpeg"
+            })
+        );
+        render(<MessengerDocumentScanner onClose={onClose} onSend={onSend} />);
+
+        fireEvent.change(screen.getByLabelText("Choose up to 100 photos"), {
+            target: { files: photos }
+        });
+
+        await waitFor(() => {
+            expect(processDocumentImage).toHaveBeenCalledTimes(100);
+            expect(createScannedPdf).toHaveBeenCalledTimes(1);
+            expect(createScannedPdf.mock.calls[0][0]).toHaveLength(100);
+            expect(onSend).toHaveBeenCalledWith(
+                expect.objectContaining({ type: "application/pdf" })
+            );
+            expect(onClose).toHaveBeenCalledTimes(1);
+        });
+        expect(processDocumentImage).toHaveBeenNthCalledWith(
+            1,
+            expect.any(Image),
+            expect.any(Array),
+            "enhanced",
+            0
+        );
     });
 });
