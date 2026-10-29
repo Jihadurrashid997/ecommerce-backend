@@ -73,6 +73,7 @@ import {
     getEncryptedMediaMetadata,
     MAX_MESSENGER_ATTACHMENT_BYTES
 } from "../services/messengerEncryption";
+import { assertValidPdfBlob } from "../services/messengerAttachments";
 import {
     createLocationMessage,
     parseLocationMessage
@@ -334,6 +335,9 @@ const EncryptedMediaAttachment = ({ url, media, own }) => {
                 media
             );
             const blob = new Blob([plaintext], { type: media.fileType });
+            if (media.fileType === "application/pdf") {
+                await assertValidPdfBlob(blob);
+            }
             setObjectUrl(window.URL.createObjectURL(blob));
         } catch (loadError) {
             console.error("Encrypted Messenger attachment error:", loadError);
@@ -395,11 +399,15 @@ const EncryptedMediaAttachment = ({ url, media, own }) => {
         );
     }
 
+    const isPdf = media.fileType === "application/pdf";
     return (
         <a
             href={objectUrl}
-            download={media.fileName}
+            target={isPdf ? "_blank" : undefined}
+            rel={isPdf ? "noopener noreferrer" : undefined}
+            download={isPdf ? undefined : media.fileName}
             className="message-attachment-file"
+            title={isPdf ? "Open PDF" : "Download attachment"}
         >
             <FaPaperclip />
             <span>{media.fileName}</span>
@@ -8202,6 +8210,46 @@ const onCallMissed =
 
         };
 
+    const handlePdfAttachmentOpen = async (event, url, filename) => {
+        event.preventDefault();
+        const pdfWindow = window.open("about:blank", "_blank");
+        if (pdfWindow) pdfWindow.opener = null;
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`PDF download failed (${response.status}).`);
+            }
+
+            const blob = await response.blob();
+            await assertValidPdfBlob(blob);
+            const blobUrl = window.URL.createObjectURL(
+                new Blob([blob], { type: "application/pdf" })
+            );
+
+            if (pdfWindow && !pdfWindow.closed) {
+                pdfWindow.location.replace(blobUrl);
+            } else {
+                const link = document.createElement("a");
+                link.href = blobUrl;
+                link.download = filename || "document.pdf";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            }
+            window.setTimeout(
+                () => window.URL.revokeObjectURL(blobUrl),
+                60000
+            );
+        } catch (error) {
+            pdfWindow?.close();
+            console.error("PDF attachment open error:", error);
+            showMessengerToast(
+                error.message || "The PDF is empty or could not be opened."
+            );
+        }
+    };
+
 
     /*
      * "Last seen just now" / "5 minutes ago" / "Yesterday
@@ -10354,11 +10402,13 @@ const onCallMissed =
                                                                 href={
                                                                     fileUrl
                                                                 }
-                                                                target={isPdfFile ? "_blank" : undefined}
-                                                                rel={isPdfFile ? "noopener noreferrer" : undefined}
-                                                                download={isPdfFile ? undefined : fileName}
                                                                 onClick={isPdfFile
-                                                                    ? undefined
+                                                                    ? event =>
+                                                                        handlePdfAttachmentOpen(
+                                                                            event,
+                                                                            fileUrl,
+                                                                            fileName
+                                                                        )
                                                                     : event =>
                                                                         handleAttachmentDownload(
                                                                             event,
