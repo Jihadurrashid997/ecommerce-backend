@@ -7,6 +7,7 @@ const GroupConversation = require("../models/GroupConversation");
 const {
     isCloudinaryConfigured,
     saveFile,
+    getPrivateDownloadUrl,
     deleteFile
 } = require("../services/mediaStorage");
 
@@ -947,6 +948,68 @@ exports.getConversation = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Unable to load conversation."
+        });
+    }
+};
+
+exports.getAttachmentDownload = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const message = await Message.findById(req.params.id)
+            .select(
+                "sender receiver groupId fileUrl fileName fileType filePublicId deletedFor isDeleted"
+            )
+            .lean();
+
+        if (
+            !message ||
+            message.isDeleted ||
+            message.deletedFor?.some(id => String(id) === String(userId))
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Attachment not found."
+            });
+        }
+
+        if (!(await canAccessMessage(message, userId))) {
+            return res.status(403).json({
+                success: false,
+                message: "You cannot access this attachment."
+            });
+        }
+
+        if (
+            message.fileType !== "application/pdf" &&
+            !/\.pdf$/i.test(message.fileName || "")
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "This attachment is not a PDF."
+            });
+        }
+
+        if (!message.fileUrl) {
+            return res.status(404).json({
+                success: false,
+                message: "PDF file is unavailable."
+            });
+        }
+
+        const downloadUrl =
+            isCloudinaryConfigured() && message.filePublicId
+                ? getPrivateDownloadUrl(message.filePublicId, message.fileName)
+                : message.fileUrl;
+
+        return res.status(200).json({
+            success: true,
+            downloadUrl
+        });
+    } catch (error) {
+        console.error("GET MESSAGE ATTACHMENT DOWNLOAD ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to prepare this PDF download."
         });
     }
 };
