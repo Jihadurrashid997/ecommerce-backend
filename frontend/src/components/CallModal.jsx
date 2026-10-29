@@ -88,30 +88,41 @@ const CallModal = ({
     const [remoteVideoAvailable, setRemoteVideoAvailable] =
         useState(false);
 
-    useEffect(() => {
-        const videoTracks = remoteStream?.getVideoTracks() || [];
-        const updateVideoAvailability = () => {
-            setRemoteVideoAvailable(
-                videoTracks.some(
+    const hasRemoteVideoTrack =
+        remoteStream
+            ?.getVideoTracks()
+            .some(track => track.readyState === "live") || false;
+
+    const updateRemoteVideoAvailability = useCallback(
+        event => {
+            const video = event.currentTarget;
+            const hasVideoFrame =
+                video.videoWidth > 0 &&
+                video.videoHeight > 0 &&
+                (remoteStream?.getVideoTracks() || []).some(
                     track =>
                         track.readyState === "live" &&
                         !track.muted
-                )
-            );
-        };
+                );
 
-        updateVideoAvailability();
+            setRemoteVideoAvailable(hasVideoFrame);
+        },
+        [remoteStream]
+    );
+
+    useEffect(() => {
+        const videoTracks = remoteStream?.getVideoTracks() || [];
+        setRemoteVideoAvailable(false);
+        const hideRemoteVideo = () => setRemoteVideoAvailable(false);
         videoTracks.forEach(track => {
-            track.addEventListener?.("mute", updateVideoAvailability);
-            track.addEventListener?.("unmute", updateVideoAvailability);
-            track.addEventListener?.("ended", updateVideoAvailability);
+            track.addEventListener?.("mute", hideRemoteVideo);
+            track.addEventListener?.("ended", hideRemoteVideo);
         });
 
         return () => {
             videoTracks.forEach(track => {
-                track.removeEventListener?.("mute", updateVideoAvailability);
-                track.removeEventListener?.("unmute", updateVideoAvailability);
-                track.removeEventListener?.("ended", updateVideoAvailability);
+                track.removeEventListener?.("mute", hideRemoteVideo);
+                track.removeEventListener?.("ended", hideRemoteVideo);
             });
         };
     }, [remoteStream]);
@@ -155,7 +166,7 @@ const CallModal = ({
         useCallback(
             async () => {
                 const elements = [
-                    hasRemoteVideo ? remoteVideoRef.current : null,
+                    hasRemoteVideoTrack ? remoteVideoRef.current : null,
                     remoteAudioRef.current
                 ].filter(Boolean);
 
@@ -175,7 +186,7 @@ const CallModal = ({
                     }
                 }
             },
-            [hasRemoteVideo]
+            [hasRemoteVideoTrack]
         );
 
 
@@ -246,7 +257,7 @@ const CallModal = ({
         const video = remoteVideoRef.current;
         const audio = remoteAudioRef.current;
 
-        if (video && hasRemoteVideo) {
+        if (video && hasRemoteVideoTrack) {
             video.srcObject = remoteStream;
             video.muted = true;
         } else if (video) {
@@ -282,7 +293,7 @@ const CallModal = ({
 
     }, [
         remoteStream,
-        hasRemoteVideo,
+        hasRemoteVideoTrack,
         playRemoteMedia
     ]);
 
@@ -310,7 +321,7 @@ const CallModal = ({
                     remoteAudioRef.current;
 
 
-                if (video && hasRemoteVideo) {
+                if (video && hasRemoteVideoTrack) {
 
                     video.srcObject =
                         remoteStream;
@@ -349,7 +360,7 @@ const CallModal = ({
 
     }, [
         remoteStream,
-        hasRemoteVideo,
+        hasRemoteVideoTrack,
         playRemoteMedia
     ]);
 
@@ -636,9 +647,7 @@ const CallModal = ({
                     REMOTE VIDEO
                 ================================================= */}
 
-                {hasRemoteVideo ? (
-
-                    <>
+                {hasRemoteVideoTrack && (
                         <video
                             className="messenger-call-remote-video"
                             ref={
@@ -649,19 +658,24 @@ const CallModal = ({
                             controls={false}
                             muted
                             onLoadedMetadata={event => {
-
                                 event.currentTarget
                                     .play()
                                     .catch(() => {});
-
                             }}
+                            onLoadedData={updateRemoteVideoAvailability}
+                            onPlaying={updateRemoteVideoAvailability}
+                            onResize={updateRemoteVideoAvailability}
                             style={{
                                 width: "100%",
                                 height: "100%",
                                 objectFit: "cover",
-                                background: "#000"
+                                background: "#000",
+                                visibility: hasRemoteVideo ? "visible" : "hidden"
                             }}
                         />
+                )}
+
+                {hasRemoteVideo && (
                         <div
                             className="messenger-call-details"
                             aria-label="Call details"
@@ -688,10 +702,9 @@ const CallModal = ({
                                 </span>
                             )}
                         </div>
-                    </>
+                )}
 
-                ) : (
-
+                {!hasRemoteVideo && (
                     <div
                         className="messenger-call-profile"
                         style={{
@@ -810,9 +823,7 @@ const CallModal = ({
                             </span>
 
                         )}
-
                     </div>
-
                 )}
 
                 {playbackBlocked && remoteStream && (

@@ -108,6 +108,13 @@ test("keeps the caller name and connected timer visible over remote video", () =
         />
     );
 
+    const remoteVideo = document.querySelector(".messenger-call-remote-video");
+    Object.defineProperties(remoteVideo, {
+        videoWidth: { configurable: true, value: 640 },
+        videoHeight: { configurable: true, value: 360 }
+    });
+    fireEvent.loadedData(remoteVideo);
+
     expect(screen.getByLabelText("Call details")).toHaveTextContent("Snoopy");
     expect(screen.getByLabelText("Call duration")).toHaveTextContent("01:33");
 });
@@ -138,6 +145,21 @@ test("shows the remote caller profile when their video is muted and restores vid
         />
     );
 
+    const remoteVideo = container.querySelector(".messenger-call-remote-video");
+    expect(container.querySelector(".messenger-call-profile"))
+        .toHaveTextContent("Snoopy");
+    expect(remoteVideo.style.visibility).toBe("hidden");
+
+    fireEvent.loadedData(remoteVideo);
+    expect(container.querySelector(".messenger-call-profile"))
+        .toHaveTextContent("Snoopy");
+    expect(remoteVideo.style.visibility).toBe("hidden");
+
+    Object.defineProperties(remoteVideo, {
+        videoWidth: { configurable: true, value: 640 },
+        videoHeight: { configurable: true, value: 360 }
+    });
+    fireEvent.loadedData(remoteVideo);
     expect(await screen.findByLabelText("Call details"))
         .toHaveTextContent("Snoopy");
 
@@ -148,8 +170,7 @@ test("shows the remote caller profile when their video is muted and restores vid
     });
 
     expect(await screen.findByText("Snoopy")).toBeInTheDocument();
-    expect(container.querySelector(".messenger-call-remote-video"))
-        .not.toBeInTheDocument();
+    expect(remoteVideo.style.visibility).toBe("hidden");
 
     await act(async () => {
         videoTrack.muted = false;
@@ -157,9 +178,11 @@ test("shows the remote caller profile when their video is muted and restores vid
         await new Promise(resolve => setTimeout(resolve, 0));
     });
 
+    expect(container.querySelector(".messenger-call-profile"))
+        .toHaveTextContent("Snoopy");
+    fireEvent.loadedData(remoteVideo);
     await waitFor(() => {
-        expect(container.querySelector(".messenger-call-remote-video"))
-            .toBeInTheDocument();
+        expect(remoteVideo.style.visibility).toBe("visible");
     });
 });
 
