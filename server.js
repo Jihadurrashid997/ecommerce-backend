@@ -337,6 +337,9 @@ const onlineUsers =
 const activeCalls =
     new Map();
 
+const callDisconnectTimers =
+    new Map();
+
 /* =========================================================
    CALL TIMEOUT
 
@@ -345,6 +348,9 @@ const activeCalls =
 
 const CALL_RING_TIMEOUT =
     45000;
+
+const CALL_DISCONNECT_GRACE =
+    30000;
 
 /* =========================================================
    NORMALIZE ID
@@ -592,6 +598,14 @@ const clearCall =
             return;
         }
 
+        const disconnectTimer =
+            callDisconnectTimers.get(String(roomId));
+
+        if (disconnectTimer) {
+            clearTimeout(disconnectTimer.timer);
+            callDisconnectTimers.delete(String(roomId));
+        }
+
         activeCalls.delete(
             String(roomId)
         );
@@ -667,6 +681,25 @@ io.on(
                     id,
                     socket.id
                 );
+
+                for (const [roomId, call] of activeCalls.entries()) {
+                    if (
+                        call.callerId !== id &&
+                        call.receiverId !== id
+                    ) {
+                        continue;
+                    }
+
+                    const disconnectTimer =
+                        callDisconnectTimers.get(roomId);
+
+                    if (disconnectTimer?.userId === id) {
+                        clearTimeout(disconnectTimer.timer);
+                        callDisconnectTimers.delete(roomId);
+                    }
+
+                    socket.join(roomId);
+                }
 
                 io.emit(
                     "online-users",
@@ -2054,7 +2087,8 @@ socket.on(
                 roomId,
                 callerId,
                 receiverId,
-                callId: call.callId
+                callId: call.callId,
+                iceRestart: payload?.iceRestart === true
             }
         );
     }
@@ -2349,35 +2383,51 @@ socket.on(
                                     ? call.receiverId
                                     : call.callerId;
 
-                            sendToUser(
-                                otherUser,
-                                "call-ended",
-                                {
+                            const existingTimer =
+                                callDisconnectTimers.get(roomId);
 
-                                    ...call,
+                            if (existingTimer) {
+                                clearTimeout(existingTimer.timer);
+                            }
 
-                                    roomId,
+                            const timer = setTimeout(() => {
+                                const pendingDisconnect =
+                                    callDisconnectTimers.get(roomId);
 
-                                    endedBy:
-                                        socket.userId,
-
-                                    status:
-                                        "ended",
-
-                                    reason:
-                                        "disconnect",
-
-                                    duration:
-                                        getConnectedCallDuration(call),
-
-                                    timestamp:
-                                        Date.now()
-
+                                if (pendingDisconnect?.timer !== timer) {
+                                    return;
                                 }
-                            );
 
-                            clearCall(
-                                roomId
+                                callDisconnectTimers.delete(roomId);
+
+                                const activeCall = getCall(roomId);
+                                if (activeCall?.callId !== call.callId) {
+                                    return;
+                                }
+
+                                sendToUser(
+                                    otherUser,
+                                    "call-ended",
+                                    {
+                                        ...activeCall,
+                                        roomId,
+                                        endedBy: socket.userId,
+                                        status: "ended",
+                                        reason: "disconnect",
+                                        duration: getConnectedCallDuration(activeCall),
+                                        timestamp: Date.now()
+                                    }
+                                );
+
+                                clearCall(roomId);
+                            }, CALL_DISCONNECT_GRACE);
+
+                            callDisconnectTimers.set(
+                                roomId,
+                                {
+                                    userId: socket.userId,
+                                    timer
+                                }
                             );
 
                         }

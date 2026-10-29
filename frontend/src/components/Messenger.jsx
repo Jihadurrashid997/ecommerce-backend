@@ -515,7 +515,19 @@ const Messenger = ({ isActive = true }) => {
     const pendingDirectCallOfferRef =
         useRef(false);
 
+    const pendingDirectCallIceRestartRef =
+        useRef(false);
+
+    const callRecoveryTimerRef =
+        useRef(null);
+
+    const callRecoveryRequestedRef =
+        useRef(false);
+
     const requestDirectCallOfferRef =
+        useRef(null);
+
+    const requestDirectCallIceRestartRef =
         useRef(null);
 
     const callRef =
@@ -2426,6 +2438,16 @@ useEffect(() => {
                 pendingCandidatesRef.current =
                     [];
 
+                if (callRecoveryTimerRef.current) {
+                    clearTimeout(callRecoveryTimerRef.current);
+                    callRecoveryTimerRef.current = null;
+                }
+
+                callRecoveryRequestedRef.current = false;
+                pendingDirectCallOfferRef.current = false;
+                pendingDirectCallIceRestartRef.current = false;
+                creatingDirectCallOfferRef.current = false;
+
 
                 setLocalStream(null);
 
@@ -2455,6 +2477,38 @@ useEffect(() => {
     const createPeer =
         useCallback(
             (receiverId) => {
+
+                const attemptIceRecovery = connection => {
+                    if (
+                        !connection ||
+                        callRef.current?.status !== "connected" ||
+                        callRecoveryRequestedRef.current
+                    ) {
+                        return;
+                    }
+
+                    callRecoveryRequestedRef.current = true;
+                    Promise.resolve(
+                        requestDirectCallIceRestartRef.current?.()
+                    ).catch(error => {
+                        console.error("Could not restart the direct call connection:", error);
+                    });
+
+                    if (callRecoveryTimerRef.current) {
+                        clearTimeout(callRecoveryTimerRef.current);
+                    }
+
+                    callRecoveryTimerRef.current = setTimeout(() => {
+                        callRecoveryTimerRef.current = null;
+
+                        if (
+                            peerRef.current === connection &&
+                            connection.connectionState !== "connected"
+                        ) {
+                            endCallRef.current?.();
+                        }
+                    }, 20000);
+                };
 
                 const peer =
                     createPeerConnection({
@@ -2575,7 +2629,7 @@ onTrack:
     },
                         
         onConnectionStateChange:
-            state => {
+            (state, connection) => {
 
                 console.log(
                     "📞 WebRTC connection state:",
@@ -2585,6 +2639,11 @@ onTrack:
                 if (
                     state === "connected"
                 ) {
+                    if (callRecoveryTimerRef.current) {
+                        clearTimeout(callRecoveryTimerRef.current);
+                        callRecoveryTimerRef.current = null;
+                    }
+                    callRecoveryRequestedRef.current = false;
 
                     const connectedAt =
                         callRef.current?.connectedAt ||
@@ -2624,9 +2683,9 @@ onTrack:
                 ) {
 
                     console.warn(
-                        "⚠️ WebRTC temporarily disconnected"
+                        "WebRTC temporarily disconnected; attempting ICE recovery."
                     );
-
+                    attemptIceRecovery(connection);
                     return;
                 }
 
@@ -2635,35 +2694,9 @@ onTrack:
                 ) {
 
                     console.error(
-                        "❌ WebRTC connection failed"
+                        "WebRTC connection failed; attempting ICE recovery."
                     );
-
-                    setTimeout(
-                        () => {
-
-                            if (
-                                peerRef.current &&
-                                peerRef.current
-                                    .connectionState ===
-                                "failed"
-                            ) {
-
-                                /*
-                                 * Always call through the ref so we
-                                 * run the CURRENT endCall (current
-                                 * callState / cleanupCall), not a
-                                 * stale copy captured when this
-                                 * peer connection was first created.
-                                 */
-
-                                endCallRef.current?.();
-
-                            }
-
-                        },
-                        5000
-                    );
-
+                    attemptIceRecovery(connection);
                     return;
                 }
 
@@ -2690,6 +2723,7 @@ onTrack:
                     console.error(
                         "WebRTC could not find a network path. A dedicated TURN relay may be required."
                     );
+                    attemptIceRecovery(peerRef.current);
                 }
             }
 
@@ -2752,7 +2786,7 @@ onTrack:
 
 const requestDirectCallOffer =
     useCallback(
-        async () => {
+        async ({ iceRestart = false } = {}) => {
             const call =
                 callRef.current ||
                 callStateRef.current;
@@ -2773,15 +2807,20 @@ const requestDirectCallOffer =
                 peer.signalingState !== "stable"
             ) {
                 pendingDirectCallOfferRef.current = true;
+                pendingDirectCallIceRestartRef.current =
+                    pendingDirectCallIceRestartRef.current || iceRestart;
                 return;
             }
 
             creatingDirectCallOfferRef.current = true;
             pendingDirectCallOfferRef.current = false;
+            pendingDirectCallIceRestartRef.current = false;
 
             try {
                 ensureDirectCallVideoTransceiver(peer);
-                const offer = await peer.createOffer();
+                const offer = await peer.createOffer(
+                    iceRestart ? { iceRestart: true } : undefined
+                );
                 await peer.setLocalDescription(offer);
 
                 socket.emit("webrtc-offer", {
@@ -2799,6 +2838,45 @@ const requestDirectCallOffer =
 
 requestDirectCallOfferRef.current =
     requestDirectCallOffer;
+
+const requestDirectCallIceRestart =
+    useCallback(
+        () => {
+            const call =
+                callRef.current ||
+                callStateRef.current;
+            const currentUserId =
+                getId(currentUserRef.current);
+
+            if (
+                !call ||
+                call.status !== "connected" ||
+                !call.roomId
+            ) {
+                return Promise.resolve();
+            }
+
+            if (getId(call.callerId) === currentUserId) {
+                return requestDirectCallOfferRef.current?.({
+                    iceRestart: true
+                }) || Promise.resolve();
+            }
+
+            socket.emit("request-direct-call-renegotiation", {
+                callerId: getId(call.callerId),
+                receiverId: getId(call.receiverId),
+                roomId: call.roomId,
+                callId: call.callId,
+                iceRestart: true
+            });
+
+            return Promise.resolve();
+        },
+        []
+    );
+
+requestDirectCallIceRestartRef.current =
+    requestDirectCallIceRestart;
 
 /* =====================================================
    START CALL
@@ -3191,15 +3269,14 @@ const toggleScreenSharing =
                 throw new Error("Wait until the call is connected before sharing your screen.");
             }
 
-            const getDisplayMedia =
-                navigator.mediaDevices?.getDisplayMedia;
-            if (
-                typeof getDisplayMedia !== "function" ||
-                !window.isSecureContext
-            ) {
+            const getDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
+            if (typeof getDisplayMedia !== "function") {
                 throw new Error(
-                    "Screen sharing requires a supported browser on HTTPS or localhost."
+                    "This browser does not support screen sharing. Many mobile browsers do not provide screen capture; try a supported desktop browser."
                 );
+            }
+            if (!window.isSecureContext) {
+                throw new Error("Screen sharing requires HTTPS or localhost.");
             }
 
             const stream = await getDisplayMedia.call(
@@ -3528,7 +3605,32 @@ const acceptCall =
                     currentId
                 );
 
-            };
+            const activeCall =
+                callRef.current ||
+                callStateRef.current;
+
+            if (
+                activeCall?.status === "connected" &&
+                activeCall.roomId
+            ) {
+                socket.emit("join-room", activeCall.roomId);
+
+                if (
+                    peerRef.current &&
+                    peerRef.current.connectionState !== "connected"
+                ) {
+                    Promise.resolve(
+                        requestDirectCallIceRestartRef.current?.()
+                    ).catch(error => {
+                        console.error(
+                            "Could not restore the direct call after reconnecting:",
+                            error
+                        );
+                    });
+                }
+            }
+
+        };
 
 
         const onOnlineUsers =
@@ -4320,7 +4422,9 @@ const onDirectCallRenegotiationRequested =
             return;
         }
 
-        requestDirectCallOfferRef.current?.().catch(error => {
+        requestDirectCallOfferRef.current?.({
+            iceRestart: data?.iceRestart === true
+        }).catch(error => {
             console.error(
                 "Could not renegotiate the direct call video:",
                 error
@@ -4691,7 +4795,11 @@ const onAnswer =
             }
 
             if (pendingDirectCallOfferRef.current) {
-                await requestDirectCallOfferRef.current?.();
+                const iceRestart =
+                    pendingDirectCallIceRestartRef.current;
+                await requestDirectCallOfferRef.current?.({
+                    iceRestart
+                });
             }
 
         } catch (error) {
