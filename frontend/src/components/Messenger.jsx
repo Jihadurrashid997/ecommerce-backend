@@ -3056,10 +3056,11 @@ const switchCamera =
 const replaceCallVideoTrack =
     useCallback(
         async track => {
-            await replaceDirectCallVideoTrack(
-                peerRef.current,
-                track
-            );
+            const requiresNegotiation =
+                await replaceDirectCallVideoTrack(
+                    peerRef.current,
+                    track
+                );
 
             const audioTracks =
                 localStreamRef.current?.getAudioTracks() || [];
@@ -3070,6 +3071,10 @@ const replaceCallVideoTrack =
 
             localStreamRef.current = previewStream;
             setLocalStream(previewStream);
+
+            if (!requiresNegotiation) {
+                return;
+            }
 
             const call =
                 callRef.current ||
