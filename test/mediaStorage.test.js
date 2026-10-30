@@ -54,12 +54,16 @@ test("voice uploads use durable Cloudinary audio storage and delete as video res
             buffer: Buffer.from("voice-data"),
             mimetype: "audio/webm",
             originalname: "voice-note.webm"
-        }, "etop/messenger");
+        }, "etop/messenger", {
+            deliveryType: "authenticated"
+        });
 
         assert.equal(uploadedBytes, "voice-data");
         assert.equal(uploadOptions.resource_type, "video");
         assert.equal(uploadOptions.folder, "etop/messenger");
+        assert.equal(uploadOptions.type, "authenticated");
         assert.equal(saved.type, "audio");
+        assert.equal(saved.deliveryType, "authenticated");
         assert.equal(saved.url, "https://media.example/voice.webm");
 
         await deleteFile(saved);
@@ -161,7 +165,7 @@ test("large path-backed Messenger uploads use Cloudinary chunked streaming", asy
     }
 });
 
-test("PDF download URLs use Cloudinary's signed raw-file download API", () => {
+test("attachment download URLs use Cloudinary's signed delivery API", () => {
     const previousEnvironment = {
         cloudName: process.env.CLOUDINARY_CLOUD_NAME,
         apiKey: process.env.CLOUDINARY_API_KEY,
@@ -182,16 +186,75 @@ test("PDF download URLs use Cloudinary's signed raw-file download API", () => {
         const { getPrivateDownloadUrl } = require("../services/mediaStorage");
         const url = getPrivateDownloadUrl(
             "etop/messenger/scan.pdf",
-            "messenger-scan.pdf"
+            "messenger-scan.pdf",
+            {
+                mediaType: "raw",
+                mimeType: "application/pdf",
+                deliveryType: "authenticated",
+                attachment: true
+            }
         );
 
         assert.equal(url, "https://api.cloudinary.example/signed-download");
         assert.equal(downloadOptions.publicId, "etop/messenger/scan");
         assert.equal(downloadOptions.format, "pdf");
         assert.equal(downloadOptions.resource_type, "raw");
-        assert.equal(downloadOptions.type, "upload");
+        assert.equal(downloadOptions.type, "authenticated");
         assert.equal(downloadOptions.attachment, true);
         assert.ok(downloadOptions.expires_at > Math.floor(Date.now() / 1000));
+    } finally {
+        cloudinary.utils.private_download_url = originalPrivateDownloadUrl;
+        if (previousEnvironment.cloudName === undefined) {
+            delete process.env.CLOUDINARY_CLOUD_NAME;
+        } else {
+            process.env.CLOUDINARY_CLOUD_NAME = previousEnvironment.cloudName;
+        }
+        if (previousEnvironment.apiKey === undefined) {
+            delete process.env.CLOUDINARY_API_KEY;
+        } else {
+            process.env.CLOUDINARY_API_KEY = previousEnvironment.apiKey;
+        }
+        if (previousEnvironment.apiSecret === undefined) {
+            delete process.env.CLOUDINARY_API_SECRET;
+        } else {
+            process.env.CLOUDINARY_API_SECRET = previousEnvironment.apiSecret;
+        }
+    }
+});
+
+test("image and video attachment URLs retain their Cloudinary resource types", () => {
+    const previousEnvironment = {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        apiSecret: process.env.CLOUDINARY_API_SECRET
+    };
+    const originalPrivateDownloadUrl = cloudinary.utils.private_download_url;
+    const calls = [];
+    process.env.CLOUDINARY_CLOUD_NAME = "test-cloud";
+    process.env.CLOUDINARY_API_KEY = "test-key";
+    process.env.CLOUDINARY_API_SECRET = "test-secret";
+    cloudinary.utils.private_download_url = (publicId, format, options) => {
+        calls.push({ publicId, format, ...options });
+        return "https://api.cloudinary.example/signed-download";
+    };
+
+    try {
+        const { getPrivateDownloadUrl } = require("../services/mediaStorage");
+        getPrivateDownloadUrl("etop/messenger/photo", "photo.jpg", {
+            mediaType: "image",
+            mimeType: "image/jpeg",
+            deliveryType: "authenticated"
+        });
+        getPrivateDownloadUrl("etop/messenger/clip", "clip.mp4", {
+            mediaType: "video",
+            mimeType: "video/mp4",
+            deliveryType: "authenticated"
+        });
+
+        assert.equal(calls[0].resource_type, "image");
+        assert.equal(calls[0].type, "authenticated");
+        assert.equal(calls[1].resource_type, "video");
+        assert.equal(calls[1].type, "authenticated");
     } finally {
         cloudinary.utils.private_download_url = originalPrivateDownloadUrl;
         if (previousEnvironment.cloudName === undefined) {

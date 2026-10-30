@@ -1623,6 +1623,8 @@ test("authorized users can restore legacy local voice messages to Cloudinary", a
     const originalFindById = Message.findById;
     const originalUpdateMany = Message.updateMany;
     const originalUploadStream = cloudinary.uploader.upload_stream;
+    const originalPrivateDownloadUrl =
+        cloudinary.utils.private_download_url;
     const previousEnvironment = {
         cloudName: process.env.CLOUDINARY_CLOUD_NAME,
         apiKey: process.env.CLOUDINARY_API_KEY,
@@ -1643,6 +1645,13 @@ test("authorized users can restore legacy local voice messages to Cloudinary", a
     };
     const response = makeResponse();
     let updatedFields;
+    cloudinary.utils.private_download_url = (publicId, format, options) => {
+        assert.equal(publicId, "etop/messenger/restored");
+        assert.equal(format, "webm");
+        assert.equal(options.resource_type, "video");
+        assert.equal(options.type, "authenticated");
+        return "https://media.example/signed-restored.webm";
+    };
 
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, "legacy-voice-data");
@@ -1660,6 +1669,7 @@ test("authorized users can restore legacy local voice messages to Cloudinary", a
                 try {
                     assert.equal(Buffer.concat(chunks).toString(), "legacy-voice-data");
                     assert.equal(options.resource_type, "video");
+                    assert.equal(options.type, "authenticated");
                     callback(null, {
                         secure_url: "https://media.example/restored.webm",
                         public_id: "etop/messenger/restored"
@@ -1688,14 +1698,19 @@ test("authorized users can restore legacy local voice messages to Cloudinary", a
         );
 
         assert.equal(response.statusCode, 200);
-        assert.equal(response.body.data.fileUrl, "https://media.example/restored.webm");
+        assert.equal(
+            response.body.data.fileUrl,
+            "https://media.example/signed-restored.webm"
+        );
         assert.equal(updatedFields.filePublicId, "etop/messenger/restored");
         assert.equal(updatedFields.fileStorageType, "audio");
+        assert.equal(updatedFields.fileDeliveryType, "authenticated");
         await assert.rejects(fs.access(filePath), { code: "ENOENT" });
     } finally {
         Message.findById = originalFindById;
         Message.updateMany = originalUpdateMany;
         cloudinary.uploader.upload_stream = originalUploadStream;
+        cloudinary.utils.private_download_url = originalPrivateDownloadUrl;
         if (previousEnvironment.cloudName === undefined) {
             delete process.env.CLOUDINARY_CLOUD_NAME;
         } else {

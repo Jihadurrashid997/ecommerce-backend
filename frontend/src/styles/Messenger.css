@@ -2466,6 +2466,26 @@
     padding: 2px 0 10px;
 }
 
+.messenger-pagination-button {
+    display: block;
+    width: calc(100% - 32px);
+    min-height: 36px;
+    margin: 8px 16px;
+    border: 1px solid #e1def2;
+    border-radius: 10px;
+    color: #6554c0;
+    background: #f7f6ff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.messenger-pagination-button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
 .messenger-list-heading {
     min-height: 34px;
     padding: 0 20px 0 24px;

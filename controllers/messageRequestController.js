@@ -35,7 +35,8 @@ const clearRequestContent = {
         fileName: "",
         fileType: "",
         filePublicId: "",
-        fileStorageType: ""
+        fileStorageType: "",
+        fileDeliveryType: "upload"
     }
 };
 
@@ -190,7 +191,9 @@ exports.createMessageRequest = async (req, res) => {
         }
 
         if (file) {
-            uploadedMedia = await saveFile(file, "etop/messenger-requests");
+            uploadedMedia = await saveFile(file, "etop/messenger-requests", {
+                deliveryType: "authenticated"
+            });
         }
 
         const session = await mongoose.startSession();
@@ -288,7 +291,8 @@ exports.createMessageRequest = async (req, res) => {
                               fileName: file.originalname || "",
                               fileType: file.mimetype || "",
                               filePublicId: uploadedMedia.publicId,
-                              fileStorageType: uploadedMedia.type
+                              fileStorageType: uploadedMedia.type,
+                              fileDeliveryType: uploadedMedia.deliveryType
                           }
                         : {})
                 };
@@ -509,7 +513,8 @@ exports.acceptMessageRequest = async (req, res) => {
                 fileName: request.fileName,
                 fileType: request.fileType,
                 filePublicId: request.filePublicId,
-                fileStorageType: request.fileStorageType
+                fileStorageType: request.fileStorageType,
+                fileDeliveryType: request.fileDeliveryType
             };
             const [created] = await Message.create(
                 [messageDocument],

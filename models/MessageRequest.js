@@ -1,4 +1,26 @@
 const mongoose = require("mongoose");
+const {
+    isCloudinaryConfigured,
+    getPrivateDownloadUrl
+} = require("../services/mediaStorage");
+
+const transformAttachmentUrl = (_document, value) => {
+    if (value.filePublicId) {
+        value.fileUrl = isCloudinaryConfigured()
+            ? getPrivateDownloadUrl(
+                value.filePublicId,
+                value.fileName,
+                {
+                    mediaType: value.fileStorageType,
+                    mimeType: value.fileType,
+                    deliveryType: value.fileDeliveryType || "upload",
+                    attachment: value.fileType === "application/pdf"
+                }
+            )
+            : "";
+    }
+    return value;
+};
 
 const messageRequestSchema = new mongoose.Schema(
     {
@@ -45,6 +67,11 @@ const messageRequestSchema = new mongoose.Schema(
             enum: ["", "image", "video", "audio", "raw"],
             default: ""
         },
+        fileDeliveryType: {
+            type: String,
+            enum: ["upload", "private", "authenticated"],
+            default: "upload"
+        },
         status: {
             type: String,
             enum: ["pending", "accepted", "deleted", "blocked"],
@@ -61,7 +88,11 @@ const messageRequestSchema = new mongoose.Schema(
             index: true
         }
     },
-    { timestamps: true }
+    {
+        timestamps: true,
+        toJSON: { transform: transformAttachmentUrl },
+        toObject: { transform: transformAttachmentUrl }
+    }
 );
 
 messageRequestSchema.index(

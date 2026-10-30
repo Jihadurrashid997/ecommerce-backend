@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const GroupConversation = require("../models/GroupConversation");
 const GroupCallKey = require("../models/GroupCallKey");
+const LiveLocationShare = require("../models/LiveLocationShare");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
@@ -85,6 +86,43 @@ const notifyMembers = (req, groupId, memberIds) => {
     [...new Set(memberIds.map(String))].forEach(memberId => {
         io.to(`user:${memberId}`).emit("group-updated", {
             groupId: String(groupId)
+        });
+    });
+};
+
+const revokeGroupLiveLocations = async (
+    req,
+    groupId,
+    memberIds,
+    senderId = null
+) => {
+    const filter = { groupId };
+    if (senderId) {
+        filter.sender = senderId;
+    }
+
+    const shares = await LiveLocationShare.find(filter)
+        .select("_id")
+        .lean();
+    if (!shares.length) {
+        return;
+    }
+
+    await LiveLocationShare.deleteMany({
+        _id: { $in: shares.map(share => share._id) }
+    });
+
+    const io = req.app?.get?.("io");
+    if (!io) {
+        return;
+    }
+
+    const uniqueMemberIds = [...new Set(memberIds.map(String))];
+    shares.forEach(share => {
+        uniqueMemberIds.forEach(memberId => {
+            io.to(`user:${memberId}`).emit("live-location-stopped", {
+                shareId: String(share._id)
+            });
         });
     });
 };
@@ -296,17 +334,43 @@ exports.setGroupEncryption = async (req, res) => {
 exports.listGroups = async (req, res) => {
     try {
         const userId = getUserId(req);
+        const page = Number(req.query?.page ?? 1);
+        const requestedLimit = Number(req.query?.limit ?? 50);
+        if (
+            !Number.isSafeInteger(page) ||
+            page < 1 ||
+            !Number.isSafeInteger(requestedLimit) ||
+            requestedLimit < 1
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Page and limit must be positive integers."
+            });
+        }
+        const limit = Math.min(requestedLimit, 100);
+        const skip = (page - 1) * limit;
+        if (!Number.isSafeInteger(skip)) {
+            return res.status(400).json({
+                success: false,
+                message: "Page is too large."
+            });
+        }
         const groups = await groupPopulation(
             GroupConversation.find({
                 participants: userId
-            }).sort({ updatedAt: -1 })
+            })
+                .sort({ updatedAt: -1, _id: -1 })
+                .skip(skip)
+                .limit(limit + 1)
         );
+        const hasMore = groups.length > limit;
+        const pageGroups = groups.slice(0, limit);
 
-        const unreadRows = groups.length
+        const unreadRows = pageGroups.length
             ? await Message.aggregate([
                   {
                       $match: {
-                          groupId: { $in: groups.map(group => group._id) },
+                          groupId: { $in: pageGroups.map(group => group._id) },
                           sender: { $ne: new mongoose.Types.ObjectId(String(userId)) },
                           readBy: { $ne: new mongoose.Types.ObjectId(String(userId)) }
                       }
@@ -325,10 +389,13 @@ exports.listGroups = async (req, res) => {
 
         return res.json({
             success: true,
-            data: groups.map(group => ({
+            data: pageGroups.map(group => ({
                 ...serializeGroup(group),
                 unreadCount: unreadByGroup.get(String(group._id)) || 0
-            }))
+            })),
+            page,
+            limit,
+            hasMore
         });
     } catch (error) {
         console.error("LIST GROUPS ERROR:", error);
@@ -682,7 +749,7 @@ exports.getGroupMessages = async (req, res) => {
             )
             .populate({
                 path: "replyTo",
-                select: "message fileUrl fileName fileType sender createdAt isEncrypted",
+                select: "message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType sender createdAt isEncrypted",
                 populate: {
                     path: "sender",
                     select: "name username fullName displayName"
@@ -1378,6 +1445,13 @@ exports.removeGroupMember = async (req, res) => {
         );
         group.admins = group.admins.filter(
             id => String(id) !== String(userId)
+        );
+
+        await revokeGroupLiveLocations(
+            req,
+            groupId,
+            previousMemberIds,
+            group.participants.length ? userId : null
         );
 
         if (String(group.createdBy) === String(userId) &&

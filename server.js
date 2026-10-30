@@ -1039,7 +1039,7 @@ io.on(
                                   "name username fullName displayName isVerified"
                               ).populate({
                                   path: "replyTo",
-                                  select: "message fileUrl fileName fileType sender createdAt",
+                                  select: "message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType sender createdAt",
                                   populate: {
                                       path: "sender",
                                       select: "name username fullName displayName"
@@ -1141,7 +1141,7 @@ io.on(
                         )
                         .populate({
                             path: "replyTo",
-                            select: "message fileUrl fileName fileType sender createdAt",
+                            select: "message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType sender createdAt",
                             populate: {
                                 path: "sender",
                                 select: "name username fullName displayName firstName"
@@ -1149,7 +1149,7 @@ io.on(
                         })
                         .populate({
                             path: "forwardedFrom",
-                            select: "message fileUrl fileName fileType sender createdAt",
+                            select: "message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType sender createdAt",
                             populate: {
                                 path: "sender",
                                 select: "name username fullName displayName firstName"
