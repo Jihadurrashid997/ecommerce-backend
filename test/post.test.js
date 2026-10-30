@@ -3,6 +3,7 @@ const test = require("node:test");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
+const { Writable } = require("node:stream");
 const cloudinary = require("cloudinary").v2;
 const Post = require("../models/Post");
 const SavedPost = require("../models/SavedPost");
@@ -1648,16 +1649,28 @@ test("authorized users can restore legacy local voice messages to Cloudinary", a
     process.env.CLOUDINARY_CLOUD_NAME = "test-cloud";
     process.env.CLOUDINARY_API_KEY = "test-key";
     process.env.CLOUDINARY_API_SECRET = "test-secret";
-    cloudinary.uploader.upload_stream = (options, callback) => ({
-        end: buffer => {
-            assert.equal(buffer.toString(), "legacy-voice-data");
-            assert.equal(options.resource_type, "video");
-            callback(null, {
-                secure_url: "https://media.example/restored.webm",
-                public_id: "etop/messenger/restored"
-            });
-        }
-    });
+    cloudinary.uploader.upload_stream = (options, callback) => {
+        const chunks = [];
+        return new Writable({
+            write(chunk, encoding, done) {
+                chunks.push(chunk);
+                done();
+            },
+            final(done) {
+                try {
+                    assert.equal(Buffer.concat(chunks).toString(), "legacy-voice-data");
+                    assert.equal(options.resource_type, "video");
+                    callback(null, {
+                        secure_url: "https://media.example/restored.webm",
+                        public_id: "etop/messenger/restored"
+                    });
+                    done();
+                } catch (error) {
+                    done(error);
+                }
+            }
+        });
+    };
     Message.findById = async () => message;
     Message.updateMany = async (filter, update) => {
         assert.equal(filter.fileUrl, `/uploads/${filename}`);

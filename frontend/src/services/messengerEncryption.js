@@ -7,6 +7,8 @@ const KEY_STORAGE_PREFIX = "jr-messenger-e2ee-v1:";
 const KEY_BACKUP_ITERATIONS = 600000;
 const KEY_BACKUP_VERSION = 1;
 const KEY_BACKUP_KDF = "PBKDF2-SHA-256";
+export const MAX_MESSENGER_ATTACHMENT_BYTES = 500 * 1024 * 1024;
+const MAX_ENCRYPTED_ATTACHMENT_BYTES = MAX_MESSENGER_ATTACHMENT_BYTES + 16;
 const ECDH_ALGORITHM = {
     name: "ECDH",
     namedCurve: "P-256"
@@ -155,9 +157,9 @@ export const encryptMessengerMediaFile = async file => {
     if (
         !file ||
         typeof file.arrayBuffer !== "function" ||
-        file.size > 10 * 1024 * 1024
+        file.size > MAX_MESSENGER_ATTACHMENT_BYTES
     ) {
-        throw new Error("Choose a file smaller than 10MB to encrypt.");
+        throw new Error("Choose a file that is 500MB or smaller to encrypt.");
     }
 
     const subtle = getSubtleCrypto();
@@ -201,7 +203,7 @@ export const decryptMessengerMediaFile = async (encryptedBytes, metadata) => {
         encryptedBytes instanceof Uint8Array
             ? encryptedBytes
             : new Uint8Array(encryptedBytes);
-    if (bytes.length < 16 || bytes.length > 10 * 1024 * 1024 + 16) {
+    if (bytes.length < 16 || bytes.length > MAX_ENCRYPTED_ATTACHMENT_BYTES) {
         throw new Error("The encrypted attachment size is invalid.");
     }
 

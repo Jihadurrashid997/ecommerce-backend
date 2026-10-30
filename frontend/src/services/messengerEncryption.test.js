@@ -11,6 +11,7 @@ import {
     encryptMessengerMediaFile,
     decryptMessengerMediaFile,
     getEncryptedMediaMetadata,
+    MAX_MESSENGER_ATTACHMENT_BYTES,
     encryptGroupMessageText,
     decryptGroupMessageRecord,
     getSafetyCode,
@@ -31,6 +32,15 @@ beforeAll(() => {
 
 beforeEach(() => {
     window.localStorage.clear();
+});
+
+test("end-to-end media encryption enforces the 500MB attachment limit", async () => {
+    await expect(encryptMessengerMediaFile({
+        name: "large-scan.pdf",
+        type: "application/pdf",
+        size: MAX_MESSENGER_ATTACHMENT_BYTES + 1,
+        arrayBuffer: jest.fn()
+    })).rejects.toThrow("Choose a file that is 500MB or smaller to encrypt.");
 });
 
 test("one-to-one ECDH keys encrypt text that only the matching peer can decrypt", async () => {

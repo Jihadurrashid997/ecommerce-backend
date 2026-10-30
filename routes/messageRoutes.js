@@ -16,6 +16,7 @@ const {
     saveEncryptionKeyBackup,
     getEncryptionKeyBackup,
     getConversation,
+    getAttachmentDownload,
     getRecentConversations,
     markSeen,
     getUnreadCount,
@@ -70,7 +71,7 @@ const handleUpload =
                         success: false,
                         message:
                             error.code === "LIMIT_FILE_SIZE"
-                                ? "File is too large (max 10MB)."
+                                ? `File is too large (max ${Math.round(messageUpload.maxFileSize / (1024 * 1024))}MB).`
                                 : `Upload error: ${error.message}`
                     });
 
@@ -109,6 +110,7 @@ const handleUpload =
 router.post(
     "/send",
     auth(),
+    messageUpload.cleanup,
     handleUpload,
     messageUpload.validateContent,
     sendMessage
@@ -147,6 +149,12 @@ router.get(
     "/conversation/:userId",
     auth(),
     getConversation
+);
+
+router.get(
+    "/:id/attachment-download",
+    auth(),
+    getAttachmentDownload
 );
 
 

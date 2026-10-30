@@ -1,19 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
     FaCamera,
-    FaCheck,
+    FaFilePdf,
     FaRedo,
     FaTimes,
+    FaTrash,
     FaUndo
 } from "react-icons/fa";
 import {
     analyzeDocumentImage,
     detectDocumentCorners,
     getDefaultDocumentCorners,
+    createScannedPdf,
     processDocumentImage
 } from "../services/documentScanner";
 
 const MAX_CAMERA_DIMENSION = 2200;
+const MAX_PAGES = 100;
 const FILTERS = [
     { id: "original", label: "Original" },
     { id: "enhanced", label: "Enhanced color" },
@@ -38,6 +41,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
     const streamRef = useRef(null);
     const sourceUrlRef = useRef("");
     const previewUrlRef = useRef("");
+    const pagesRef = useRef([]);
     const processingIdRef = useRef(0);
     const dragIndexRef = useRef(null);
     const [stage, setStage] = useState("camera");
@@ -54,6 +58,9 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
     const [scanUrl, setScanUrl] = useState("");
     const [processing, setProcessing] = useState(false);
     const [sending, setSending] = useState(false);
+    const [creatingPdf, setCreatingPdf] = useState(false);
+    const [batchProgress, setBatchProgress] = useState("");
+    const [pages, setPages] = useState([]);
     const [error, setError] = useState("");
 
     const stopCamera = useCallback(() => {
@@ -141,13 +148,22 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
         }
     }, [stage]);
 
+    useEffect(() => {
+        pagesRef.current = pages;
+    }, [pages]);
+
     useEffect(() => () => {
         processingIdRef.current += 1;
         if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
         if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        pagesRef.current.forEach(page => URL.revokeObjectURL(page.url));
     }, []);
 
     const capturePhoto = async () => {
+        if (pages.length >= MAX_PAGES) {
+            setError(`You can scan up to ${MAX_PAGES} pages in one PDF.`);
+            return;
+        }
         const video = videoRef.current;
         if (!video?.videoWidth || !video?.videoHeight) {
             setError("Wait for the camera preview to become ready.");
@@ -248,10 +264,80 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
         if (stage === "preview") processScan();
     }, [stage, processScan]);
 
+    const choosePhotos = async event => {
+        const files = Array.from(event.target.files || []);
+        event.target.value = "";
+        if (files.length === 0) return;
+        if (files.length + pages.length > MAX_PAGES) {
+            setError(`Choose no more than ${MAX_PAGES - pages.length} more photos.`);
+            return;
+        }
+        if (files.some(file => !file.type.startsWith("image/"))) {
+            setError("Choose image files only.");
+            return;
+        }
+
+        setError("");
+        setCreatingPdf(true);
+        setBatchProgress("");
+        try {
+            const processedPages = [];
+            for (let index = 0; index < files.length; index += 1) {
+                setBatchProgress(`Scanning photo ${index + 1} of ${files.length}…`);
+                const { image, objectUrl } = await loadImage(files[index]);
+                try {
+                    const analysisCanvas = document.createElement("canvas");
+                    const scale = Math.min(
+                        1,
+                        640 / Math.max(image.naturalWidth, image.naturalHeight)
+                    );
+                    analysisCanvas.width = Math.round(image.naturalWidth * scale);
+                    analysisCanvas.height = Math.round(image.naturalHeight * scale);
+                    const context = analysisCanvas.getContext("2d", {
+                        willReadFrequently: true
+                    });
+                    context.drawImage(image, 0, 0, analysisCanvas.width, analysisCanvas.height);
+                    const imageData = context.getImageData(
+                        0,
+                        0,
+                        analysisCanvas.width,
+                        analysisCanvas.height
+                    );
+                    const corners = detectDocumentCorners(imageData);
+                    processedPages.push(
+                        await processDocumentImage(image, corners, "enhanced", 0)
+                    );
+                } finally {
+                    URL.revokeObjectURL(objectUrl);
+                }
+            }
+
+            setBatchProgress("Creating PDF…");
+            const pdfFile = await createScannedPdf([
+                ...pages.map(page => page.file),
+                ...processedPages
+            ]);
+            setCreatingPdf(false);
+            setSending(true);
+            await onSend(pdfFile);
+            onClose();
+        } catch (photoError) {
+            setError(photoError.message || "Could not scan the selected photos.");
+            setCreatingPdf(false);
+            setSending(false);
+        } finally {
+            setBatchProgress("");
+        }
+    };
+
     const choosePhoto = async event => {
         const file = event.target.files?.[0];
         event.target.value = "";
         if (!file) return;
+        if (pages.length >= MAX_PAGES) {
+            setError(`You can scan up to ${MAX_PAGES} pages in one PDF.`);
+            return;
+        }
         if (!file.type.startsWith("image/")) {
             setError("Choose an image file.");
             return;
@@ -276,6 +362,8 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
             const imageData = context.getImageData(0, 0, analysisCanvas.width, analysisCanvas.height);
             setQuality(analyzeDocumentImage(imageData));
             setCorners(detectDocumentCorners(imageData));
+            setFilter("enhanced");
+            setRotation(0);
             setStage("crop");
             setError("");
         } catch (photoError) {
@@ -293,20 +381,74 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
         ));
     };
 
-    const sendScan = async () => {
-        if (!scanFile || processing || sending) return;
-        setSending(true);
+    const clearCurrentPage = () => {
+        if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        sourceUrlRef.current = "";
+        previewUrlRef.current = "";
+        imageRef.current = null;
+        setSourceFile(null);
+        setScanFile(null);
+        setScanUrl("");
+        setQuality(null);
+        setError("");
+    };
+
+    const addCurrentPage = nextStage => {
+        if (!scanFile || processing || pages.length >= MAX_PAGES) return;
+        const page = {
+            id: `${Date.now()}-${pages.length}`,
+            file: scanFile,
+            url: URL.createObjectURL(scanFile)
+        };
+        setPages(previous => [...previous, page]);
+        clearCurrentPage();
+        if (nextStage === "camera") {
+            setStage("camera");
+            setCameraRetry(value => value + 1);
+        } else {
+            setStage("pages");
+        }
+    };
+
+    const reorderPage = (index, offset) => {
+        setPages(previous => {
+            const target = index + offset;
+            if (target < 0 || target >= previous.length) return previous;
+            const reordered = [...previous];
+            [reordered[index], reordered[target]] = [
+                reordered[target],
+                reordered[index]
+            ];
+            return reordered;
+        });
+    };
+
+    const removePage = index => {
+        const page = pages[index];
+        if (!page) return;
+        URL.revokeObjectURL(page.url);
+        setPages(previous => previous.filter(item => item.id !== page.id));
+    };
+
+    const createPdfAndSend = async () => {
+        if (pages.length === 0 || creatingPdf || sending) return;
+        setCreatingPdf(true);
         setError("");
         try {
-            await onSend(scanFile);
+            const pdfFile = await createScannedPdf(pages.map(page => page.file));
+            setSending(true);
+            await onSend(pdfFile);
             onClose();
-        } catch (sendError) {
+        } catch (pdfError) {
             setError(
-                sendError.response?.data?.message ||
-                sendError.message ||
-                "Could not send this scan."
+                pdfError.response?.data?.message ||
+                pdfError.message ||
+                "Could not create or send this PDF."
             );
             setSending(false);
+        } finally {
+            setCreatingPdf(false);
         }
     };
 
@@ -327,7 +469,11 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
             className="document-scanner-overlay"
             role="presentation"
             onMouseDown={event => {
-                if (event.target === event.currentTarget && !sending) onClose();
+                if (
+                    event.target === event.currentTarget &&
+                    !creatingPdf &&
+                    !sending
+                ) onClose();
             }}
         >
             <section
@@ -340,14 +486,20 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                     <div className="document-scanner-heading">
                         <span className="document-scanner-kicker">MESSENGER SCANNER</span>
                         <h2 id="document-scanner-title">
-                            {stage === "camera" ? "Scan document" : stage === "crop" ? "Adjust document" : "Review scan"}
+                            {stage === "camera"
+                                ? "Scan document"
+                                : stage === "crop"
+                                    ? "Adjust document"
+                                    : stage === "preview"
+                                        ? "Review page"
+                                        : "Review PDF"}
                         </h2>
                     </div>
                     <button
                         type="button"
                         aria-label="Close document scanner"
                         onClick={onClose}
-                        disabled={sending}
+                        disabled={creatingPdf || sending}
                     >
                         <FaTimes />
                     </button>
@@ -369,12 +521,13 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                         Retry camera
                                     </button>
                                     <label className="document-scanner-secondary-button">
-                                        Choose one photo
+                                        Choose photos
                                         <input
                                             type="file"
                                             accept="image/*"
-                                            capture="environment"
-                                            onChange={choosePhoto}
+                                            multiple
+                                            disabled={creatingPdf || sending}
+                                            onChange={choosePhotos}
                                         />
                                     </label>
                                 </div>
@@ -490,6 +643,54 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                         </>
                     )}
 
+                    {stage === "pages" && (
+                        <>
+                            <p className="document-scanner-pages-hint">
+                                {pages.length} {pages.length === 1 ? "page is" : "pages are"} ready. Reorder or remove pages before creating your PDF.
+                            </p>
+                            <div className="document-scanner-page-list">
+                                {pages.map((page, index) => (
+                                    <article className="document-scanner-page" key={page.id}>
+                                        <img src={page.url} alt={`Scanned page ${index + 1}`} />
+                                        <div className="document-scanner-page-number">
+                                            Page {index + 1}
+                                        </div>
+                                        <div className="document-scanner-page-actions">
+                                            <button
+                                                type="button"
+                                                aria-label={`Move page ${index + 1} up`}
+                                                disabled={index === 0 || creatingPdf || sending}
+                                                onClick={() => reorderPage(index, -1)}
+                                            >
+                                                ↑
+                                            </button>
+                                            <button
+                                                type="button"
+                                                aria-label={`Move page ${index + 1} down`}
+                                                disabled={index === pages.length - 1 || creatingPdf || sending}
+                                                onClick={() => reorderPage(index, 1)}
+                                            >
+                                                ↓
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="document-scanner-page-remove"
+                                                aria-label={`Remove page ${index + 1}`}
+                                                disabled={creatingPdf || sending}
+                                                onClick={() => removePage(index)}
+                                            >
+                                                <FaTrash />
+                                            </button>
+                                        </div>
+                                    </article>
+                                ))}
+                            </div>
+                        </>
+                    )}
+
+                    {batchProgress && (
+                        <p className="document-scanner-note" role="status">{batchProgress}</p>
+                    )}
                     {error && <p className="document-scanner-error" role="alert">{error}</p>}
                 </div>
 
@@ -497,22 +698,50 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                     {stage === "camera" && (
                         <>
                             {!cameraError && (
-                                <label className="document-scanner-gallery-button document-scanner-secondary-button">
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={choosePhoto}
-                                    />
-                                    Choose photo
-                                </label>
+                                <div className="document-scanner-camera-options">
+                                    {pages.length > 0 && (
+                                        <button
+                                            className="document-scanner-pages-link"
+                                            type="button"
+                                            onClick={() => setStage("pages")}
+                                        >
+                                            <FaFilePdf />
+                                            <span>{pages.length} {pages.length === 1 ? "page" : "pages"}<small>Review PDF</small></span>
+                                        </button>
+                                    )}
+                                    <label className="document-scanner-gallery-button document-scanner-secondary-button">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            disabled={creatingPdf || sending}
+                                            onChange={choosePhoto}
+                                        />
+                                        Choose one photo
+                                    </label>
+                                    <label className="document-scanner-gallery-button document-scanner-secondary-button">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            disabled={
+                                                pages.length >= MAX_PAGES ||
+                                                creatingPdf ||
+                                                sending
+                                            }
+                                            onChange={choosePhotos}
+                                        />
+                                        Choose up to 100 photos
+                                    </label>
+                                </div>
                             )}
                             {!cameraError && (
                                 <label className="document-scanner-shutter-wrap">
-                                    <span>Capture one page</span>
+                                    <span>{pages.length}/{MAX_PAGES} pages</span>
                                     <button
                                         className="document-scanner-shutter"
                                         type="button"
                                         onClick={capturePhoto}
+                                        disabled={pages.length >= MAX_PAGES || creatingPdf || sending}
                                         aria-label="Capture one document photo"
                                     >
                                         <FaCamera />
@@ -527,11 +756,10 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                 className="document-scanner-secondary-button"
                                 type="button"
                                 onClick={() => {
-                                    setSourceFile(null);
+                                    clearCurrentPage();
                                     setCameraError("");
                                     setCameraRetry(value => value + 1);
                                     setStage("camera");
-                                    setError("");
                                 }}
                             >
                                 Retake photo
@@ -581,12 +809,44 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                 Adjust corners
                             </button>
                             <button
+                                className="document-scanner-secondary-button"
+                                type="button"
+                                disabled={!scanFile || processing || sending || pages.length >= MAX_PAGES}
+                                onClick={() => addCurrentPage("camera")}
+                            >
+                                Add page
+                            </button>
+                            <button
                                 className="document-scanner-primary"
                                 type="button"
-                                disabled={!scanFile || processing || sending}
-                                onClick={sendScan}
+                                disabled={!scanFile || processing || sending || pages.length >= MAX_PAGES}
+                                onClick={() => addCurrentPage("pages")}
                             >
-                                <FaCheck /> {sending ? "Sending…" : "Send one scan"}
+                                <FaFilePdf /> Review PDF
+                            </button>
+                        </>
+                    )}
+                    {stage === "pages" && (
+                        <>
+                            <button
+                                className="document-scanner-secondary-button"
+                                type="button"
+                                disabled={pages.length >= MAX_PAGES || creatingPdf || sending}
+                                onClick={() => {
+                                    setStage("camera");
+                                    setCameraRetry(value => value + 1);
+                                    setError("");
+                                }}
+                            >
+                                <FaCamera /> Add page
+                            </button>
+                            <button
+                                className="document-scanner-primary"
+                                type="button"
+                                disabled={pages.length === 0 || creatingPdf || sending}
+                                onClick={createPdfAndSend}
+                            >
+                                <FaFilePdf /> {creatingPdf ? "Creating PDF…" : sending ? "Sending PDF…" : "Create & send PDF"}
                             </button>
                         </>
                     )}

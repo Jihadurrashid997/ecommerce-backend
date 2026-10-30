@@ -45,7 +45,7 @@ import {
     FaUserPlus,
     FaMapMarkerAlt,
     FaClock,
-    FaCamera
+    FaRegFileAlt
 } from "react-icons/fa";
 
 import api, {
@@ -70,8 +70,10 @@ import {
     restoreMessengerIdentity,
     encryptMessengerMediaFile,
     decryptMessengerMediaFile,
-    getEncryptedMediaMetadata
+    getEncryptedMediaMetadata,
+    MAX_MESSENGER_ATTACHMENT_BYTES
 } from "../services/messengerEncryption";
+import { assertValidPdfBlob } from "../services/messengerAttachments";
 import {
     createLocationMessage,
     parseLocationMessage
@@ -333,6 +335,9 @@ const EncryptedMediaAttachment = ({ url, media, own }) => {
                 media
             );
             const blob = new Blob([plaintext], { type: media.fileType });
+            if (media.fileType === "application/pdf") {
+                await assertValidPdfBlob(blob);
+            }
             setObjectUrl(window.URL.createObjectURL(blob));
         } catch (loadError) {
             console.error("Encrypted Messenger attachment error:", loadError);
@@ -394,11 +399,15 @@ const EncryptedMediaAttachment = ({ url, media, own }) => {
         );
     }
 
+    const isPdf = media.fileType === "application/pdf";
     return (
         <a
             href={objectUrl}
-            download={media.fileName}
+            target={isPdf ? "_blank" : undefined}
+            rel={isPdf ? "noopener noreferrer" : undefined}
+            download={isPdf ? undefined : media.fileName}
             className="message-attachment-file"
+            title={isPdf ? "Open PDF" : "Download attachment"}
         >
             <FaPaperclip />
             <span>{media.fileName}</span>
@@ -7754,8 +7763,8 @@ const onCallMissed =
         if (!selectedUser || !user) {
             throw new Error("Choose a conversation before sending an attachment.");
         }
-        if (file.size > 10 * 1024 * 1024) {
-            throw new Error("Files must be 10MB or smaller.");
+        if (file.size > MAX_MESSENGER_ATTACHMENT_BYTES) {
+            throw new Error("Files must be 500MB or smaller.");
         }
 
         const target = selectedUser;
@@ -9023,6 +9032,12 @@ const onCallMissed =
                 const response =
                     await fetch(url);
 
+                if (!response.ok) {
+                    throw new Error(
+                        `Attachment download failed (${response.status}).`
+                    );
+                }
+
                 const blob =
                     await response.blob();
 
@@ -9051,8 +9066,9 @@ const onCallMissed =
 
                 link.remove();
 
-                window.URL.revokeObjectURL(
-                    blobUrl
+                window.setTimeout(
+                    () => window.URL.revokeObjectURL(blobUrl),
+                    60000
                 );
 
             } catch (error) {
@@ -9074,6 +9090,38 @@ const onCallMissed =
             }
 
         };
+
+    const handlePdfAttachmentOpen = async (event, messageId, filename) => {
+        event.preventDefault();
+        const pdfWindow = window.open("about:blank", "_blank");
+        if (pdfWindow) pdfWindow.opener = null;
+
+        try {
+            if (!messageId) {
+                throw new Error("This PDF message is missing its download ID.");
+            }
+            const response = await api.get(
+                `/messages/${encodeURIComponent(messageId)}/attachment-download`
+            );
+            const downloadUrl = getUploadUrl(response.data?.downloadUrl || "");
+            if (!downloadUrl) {
+                throw new Error("The server did not provide a PDF download URL.");
+            }
+            if (pdfWindow && !pdfWindow.closed) {
+                pdfWindow.location.replace(downloadUrl);
+            } else {
+                window.location.assign(downloadUrl);
+            }
+        } catch (error) {
+            pdfWindow?.close();
+            console.error("PDF attachment open error:", error);
+            showMessengerToast(
+                error.response?.data?.message ||
+                    error.message ||
+                    "The PDF could not be opened."
+            );
+        }
+    };
 
 
     /*
@@ -11058,6 +11106,13 @@ const onCallMissed =
                                             fileUrl &&
                                             fileType.startsWith("video/");
 
+                                        const isPdfFile =
+                                            fileUrl &&
+                                            (
+                                                fileType === "application/pdf" ||
+                                                /\.pdf$/i.test(fileName)
+                                            );
+
 
                                         const attachmentKey =
                                             getMessageId(
@@ -11361,19 +11416,21 @@ const onCallMissed =
                                                                 href={
                                                                     fileUrl
                                                                 }
-                                                                download={
-                                                                    fileName
-                                                                }
-                                                                onClick={
-                                                                    event =>
+                                                                onClick={isPdfFile
+                                                                    ? event =>
+                                                                        handlePdfAttachmentOpen(
+                                                                            event,
+                                                                            getMessageId(item),
+                                                                            fileName
+                                                                        )
+                                                                    : event =>
                                                                         handleAttachmentDownload(
                                                                             event,
                                                                             fileUrl,
                                                                             fileName
-                                                                        )
-                                                                }
+                                                                        )}
                                                                 className="message-attachment-file"
-                                                                title="Click to download"
+                                                                title={isPdfFile ? "Open PDF" : "Click to download"}
                                                             >
                                                                 <FaPaperclip />
                                                                 <span>
@@ -11965,15 +12022,20 @@ const onCallMissed =
 
                                 <button
                                     type="button"
-                                    title="Scan one document photo"
-                                    aria-label="Scan one document photo"
+                                    className="messenger-scan-button"
+                                    title="Scan pages to PDF"
+                                    aria-label="Scan pages to PDF"
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked
                                     }
                                     onClick={() => setShowDocumentScanner(true)}
                                 >
-                                    <FaCamera />
+                                    <span className="messenger-scan-icon" aria-hidden="true">
+                                        <FaRegFileAlt />
+                                        <i />
+                                        <small>SCAN</small>
+                                    </span>
                                 </button>
 
                                 <button

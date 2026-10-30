@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { Readable } = require("stream");
 
 /*
 =========================================================
@@ -55,7 +56,7 @@ const getCloudinary = () => {
 const uploadDir = path.join(__dirname, "..", "uploads");
 
 /*
- * Saves one multer memory file.
+ * Saves one multer file from a buffer or temporary disk path.
  * Returns { url, type, publicId, duration }
  */
 const saveFile = async (file, folder = "etop") => {
@@ -77,25 +78,38 @@ const saveFile = async (file, folder = "etop") => {
         : "";
 
     const cld = getCloudinary();
+    const fileSize = file.size ?? file.buffer?.length ?? 0;
+    const createInputStream = () =>
+        file.path
+            ? fs.createReadStream(file.path)
+            : Readable.from([file.buffer]);
 
     if (cld) {
         const publicId =
             crypto.randomUUID() + (type === "raw" ? safeExtension || ".bin" : "");
 
         const result = await new Promise((resolve, reject) => {
+            const options = {
+                folder,
+                public_id: publicId,
+                resource_type: resourceType
+            };
+            const callback = (error, uploaded) =>
+                error ? reject(error) : resolve(uploaded);
+            const uploadStream = fileSize > 20 * 1024 * 1024
+                ? cld.uploader.upload_chunked_stream(
+                    { ...options, chunk_size: 20 * 1024 * 1024 },
+                    callback
+                )
+                : cld.uploader.upload_stream(options, callback);
+            const inputStream = createInputStream();
 
-            const stream = cld.uploader.upload_stream(
-                {
-                    folder,
-                    public_id: publicId,
-                    resource_type: resourceType
-                },
-                (error, uploaded) =>
-                    error ? reject(error) : resolve(uploaded)
-            );
-
-            stream.end(file.buffer);
-
+            inputStream.once("error", error => {
+                uploadStream.destroy(error);
+                reject(error);
+            });
+            uploadStream.once("error", reject);
+            inputStream.pipe(uploadStream);
         });
 
         return {
@@ -127,10 +141,14 @@ const saveFile = async (file, folder = "etop") => {
     const filename =
         `${Date.now()}-${crypto.randomBytes(6).toString("hex")}${ext}`;
 
-    await fs.promises.writeFile(
-        path.join(uploadDir, filename),
-        file.buffer
-    );
+    const destination = path.join(uploadDir, filename);
+    if (file.path) {
+        await fs.promises.copyFile(file.path, destination);
+    } else if (file.buffer) {
+        await fs.promises.writeFile(destination, file.buffer);
+    } else {
+        throw new Error("Uploaded media has no readable file content.");
+    }
 
     return {
         url: `/uploads/${filename}`,
@@ -139,6 +157,30 @@ const saveFile = async (file, folder = "etop") => {
         duration: 0
     };
 
+};
+
+const getPrivateDownloadUrl = (publicId, fileName) => {
+    const cld = getCloudinary();
+    if (!cld || !publicId) {
+        throw new Error("Cloudinary is not configured for this attachment.");
+    }
+
+    const extension = path.extname(path.basename(fileName || "")).slice(1).toLowerCase();
+    if (!/^[a-z0-9]{1,10}$/.test(extension)) {
+        throw new Error("The attachment does not have a supported file extension.");
+    }
+
+    const normalizedPublicId = publicId.replace(/\.[a-z0-9]{1,10}$/i, "");
+    return cld.utils.private_download_url(
+        normalizedPublicId,
+        extension,
+        {
+            resource_type: "raw",
+            type: "upload",
+            attachment: true,
+            expires_at: Math.floor(Date.now() / 1000) + 5 * 60
+        }
+    );
 };
 
 const deleteFile = async media => {
@@ -195,5 +237,6 @@ const deleteFile = async media => {
 module.exports = {
     isCloudinaryConfigured,
     saveFile,
+    getPrivateDownloadUrl,
     deleteFile
 };
