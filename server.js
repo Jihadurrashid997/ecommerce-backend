@@ -12,8 +12,17 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const isDatabaseReady = require("./services/databaseHealth");
 const {
-    canJoinDirectConversationRoom
+    canJoinDirectConversationRoom,
+    getDirectRoomParticipants
 } = require("./services/socketRoomAccess");
+const {
+    canAccessDirectConversation,
+    getDirectMessagePermission
+} = require("./services/messengerConversationAccess");
+const {
+    canViewPresence,
+    getVisibleOnlineUserIds
+} = require("./services/messengerPresence");
 const {
     canHandleDirectCall,
     canStartDirectCall,
@@ -367,6 +376,10 @@ const normalizeId =
             typeof value === "object"
         ) {
 
+            if (typeof value.toHexString === "function") {
+                return value.toHexString();
+            }
+
             return (
                 String(
                     value._id ||
@@ -545,6 +558,132 @@ const sendToUser =
 
     };
 
+const loadPresenceUsers = userIds =>
+    User.find({
+        _id: { $in: [...new Set(userIds.map(normalizeId).filter(Boolean))] }
+    })
+        .select("_id accountVisibility following blockedUsers")
+        .lean();
+
+const getOnlineConversationPeers = async onlineUserIds => {
+    const userObjectIds = onlineUserIds
+        .filter(userId => mongoose.Types.ObjectId.isValid(userId))
+        .map(userId => new mongoose.Types.ObjectId(userId));
+    if (!userObjectIds.length) {
+        return new Map();
+    }
+    const pairs = await Message.aggregate([
+        {
+            $match: {
+                sender: { $in: userObjectIds },
+                receiver: { $in: userObjectIds }
+            }
+        },
+        {
+            $group: {
+                _id: {
+                    sender: "$sender",
+                    receiver: "$receiver"
+                }
+            }
+        }
+    ]);
+
+    const peersByUser = new Map();
+    for (const pair of pairs) {
+        const senderId = normalizeId(pair._id.sender);
+        const receiverId = normalizeId(pair._id.receiver);
+        if (!senderId || !receiverId) {
+            continue;
+        }
+
+        if (!peersByUser.has(senderId)) {
+            peersByUser.set(senderId, new Set());
+        }
+        if (!peersByUser.has(receiverId)) {
+            peersByUser.set(receiverId, new Set());
+        }
+        peersByUser.get(senderId).add(receiverId);
+        peersByUser.get(receiverId).add(senderId);
+    }
+
+    return peersByUser;
+};
+
+const broadcastOnlineUsers = async () => {
+    const onlineUserIds = getOnlineUsers();
+    if (!onlineUserIds.length) {
+        return;
+    }
+
+    const [users, peersByUser] = await Promise.all([
+        loadPresenceUsers(onlineUserIds),
+        getOnlineConversationPeers(onlineUserIds)
+    ]);
+    for (const viewerId of onlineUserIds) {
+        sendToUser(
+            viewerId,
+            "online-users",
+            getVisibleOnlineUserIds({
+                viewerId,
+                onlineUserIds,
+                users,
+                existingConversationPeers: [
+                    ...(peersByUser.get(viewerId) || [])
+                ]
+            })
+        );
+    }
+};
+
+const broadcastLastSeen = async (userId, lastSeen) => {
+    const viewerIds = getOnlineUsers();
+    if (!viewerIds.length) {
+        return;
+    }
+
+    const users = await loadPresenceUsers([...viewerIds, userId]);
+    const subject = users.find(
+        user => normalizeId(user._id) === normalizeId(userId)
+    );
+    if (!subject) {
+        return;
+    }
+
+    for (const viewerId of viewerIds) {
+        const viewer = users.find(
+            user => normalizeId(user._id) === normalizeId(viewerId)
+        );
+        if (!viewer) {
+            continue;
+        }
+
+        let hasExistingConversation = false;
+        if (
+            subject.accountVisibility === "private" &&
+            !canViewPresence(viewer, subject)
+        ) {
+            hasExistingConversation = Boolean(
+                await Message.exists({
+                    $or: [
+                        { sender: viewerId, receiver: userId },
+                        { sender: userId, receiver: viewerId }
+                    ]
+                })
+            );
+        }
+
+        if (canViewPresence(viewer, subject, hasExistingConversation)) {
+            sendToUser(viewerId, "user-last-seen", {
+                userId: normalizeId(userId),
+                lastSeen: lastSeen.getTime()
+            });
+        }
+    }
+};
+
+app.set("refreshPresence", () => broadcastOnlineUsers());
+
 /* =========================================================
    CALL HELPERS
 ========================================================= */
@@ -701,10 +840,9 @@ io.on(
                     socket.join(roomId);
                 }
 
-                io.emit(
-                    "online-users",
-                    getOnlineUsers()
-                );
+                void broadcastOnlineUsers().catch(error => {
+                    console.error("Broadcast online users error:", error);
+                });
 
                 console.log(
                     "User online:",
@@ -754,6 +892,25 @@ io.on(
                     )
                 ) {
                     return;
+                } else {
+                    const participants = getDirectRoomParticipants(roomId);
+                    const peerId = participants.find(
+                        id => id !== String(socket.userId).toLowerCase()
+                    );
+
+                    try {
+                        if (!await canAccessDirectConversation({
+                            User,
+                            Message,
+                            userId: socket.userId,
+                            peerId
+                        })) {
+                            return;
+                        }
+                    } catch (error) {
+                        console.error("Direct room conversation access check error:", error);
+                        return;
+                    }
                 }
 
                 socket.join(
@@ -1011,6 +1168,22 @@ io.on(
                     return;
                 }
 
+                let permission;
+                try {
+                    permission = await getDirectMessagePermission({
+                        User,
+                        Message,
+                        senderId,
+                        recipientId: receiverId
+                    });
+                } catch (error) {
+                    console.error("Direct message socket permission check error:", error);
+                    return;
+                }
+                if (!permission.canSendMessage) {
+                    return;
+                }
+
                 const roomId = [senderId, receiverId].sort().join("_");
                 const message = {
                     ...storedMessage.toObject(),
@@ -1116,6 +1289,32 @@ io.on(
                         console.error("Group typing membership check error:", error);
                         return;
                     }
+                } else if (
+                    !canJoinDirectConversationRoom(
+                        payload.roomId,
+                        socket.userId
+                    )
+                ) {
+                    return;
+                } else {
+                    const participants = getDirectRoomParticipants(payload.roomId);
+                    const peerId = participants.find(
+                        id => id !== String(socket.userId).toLowerCase()
+                    );
+                    try {
+                        const permission = await getDirectMessagePermission({
+                            User,
+                            Message,
+                            senderId: socket.userId,
+                            recipientId: peerId
+                        });
+                        if (!permission.canSendMessage) {
+                            return;
+                        }
+                    } catch (error) {
+                        console.error("Direct typing conversation access check error:", error);
+                        return;
+                    }
                 }
 
                 socket
@@ -1167,6 +1366,32 @@ io.on(
                         console.error("Group stop-typing membership check error:", error);
                         return;
                     }
+                } else if (
+                    !canJoinDirectConversationRoom(
+                        payload.roomId,
+                        socket.userId
+                    )
+                ) {
+                    return;
+                } else {
+                    const participants = getDirectRoomParticipants(payload.roomId);
+                    const peerId = participants.find(
+                        id => id !== String(socket.userId).toLowerCase()
+                    );
+                    try {
+                        const permission = await getDirectMessagePermission({
+                            User,
+                            Message,
+                            senderId: socket.userId,
+                            recipientId: peerId
+                        });
+                        if (!permission.canSendMessage) {
+                            return;
+                        }
+                    } catch (error) {
+                        console.error("Direct stop-typing conversation access check error:", error);
+                        return;
+                    }
                 }
 
                 socket
@@ -1209,6 +1434,16 @@ io.on(
                 }
 
                 try {
+                    const permission = await getDirectMessagePermission({
+                        User,
+                        Message,
+                        senderId: receiverId,
+                        recipientId: senderId
+                    });
+                    if (!permission.canSendMessage) {
+                        return;
+                    }
+
                     const message = await Message.findOneAndUpdate(
                         {
                             _id: messageId,
@@ -1332,6 +1567,19 @@ io.on(
                         return;
                     }
 
+                    const peerId = actorId === senderId
+                        ? receiverId
+                        : senderId;
+                    const permission = await getDirectMessagePermission({
+                        User,
+                        Message,
+                        senderId: actorId,
+                        recipientId: peerId
+                    });
+                    if (!permission.canSendMessage) {
+                        return;
+                    }
+
                     const message = storedMessage.toObject();
                     const event = { message };
 
@@ -1397,10 +1645,10 @@ socket.on(
         try {
             [caller, receiver] = await Promise.all([
                 User.findById(callerId)
-                    .select("blockedUsers")
+                    .select("blockedUsers following accountVisibility")
                     .lean(),
                 User.findById(receiverId)
-                    .select("blockedUsers")
+                    .select("blockedUsers following accountVisibility")
                     .lean()
             ]);
         } catch (error) {
@@ -1418,6 +1666,40 @@ socket.on(
         }
 
         if (!caller || !receiver) {
+            sendToUser(callerId, "call-rejected", {
+                callId,
+                roomId,
+                callerId,
+                receiverId,
+                type: callType,
+                status: "rejected",
+                reason: "unavailable"
+            });
+            return;
+        }
+
+        try {
+            if (!await canAccessDirectConversation({
+                User,
+                Message,
+                userId: callerId,
+                peerId: receiverId,
+                userDocument: caller,
+                peerDocument: receiver
+            })) {
+                sendToUser(callerId, "call-rejected", {
+                    callId,
+                    roomId,
+                    callerId,
+                    receiverId,
+                    type: callType,
+                    status: "rejected",
+                    reason: "not-connected"
+                });
+                return;
+            }
+        } catch (error) {
+            console.error("Direct call conversation access check error:", error);
             sendToUser(callerId, "call-rejected", {
                 callId,
                 roomId,
@@ -2467,22 +2749,18 @@ socket.on(
                         }
                     );
 
-                    io.emit(
-                        "user-last-seen",
-                        {
-                            userId:
-                                socket.userId,
-                            lastSeen:
-                                lastSeen.getTime()
-                        }
-                    );
+                    void broadcastLastSeen(
+                        socket.userId,
+                        lastSeen
+                    ).catch(error => {
+                        console.error("Broadcast last seen error:", error);
+                    });
 
                 }
 
-                io.emit(
-                    "online-users",
-                    getOnlineUsers()
-                );
+                void broadcastOnlineUsers().catch(error => {
+                    console.error("Broadcast online users error:", error);
+                });
 
             }
         );

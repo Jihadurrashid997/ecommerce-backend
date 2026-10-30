@@ -1,8 +1,11 @@
 const mongoose = require("mongoose");
+const fs = require("node:fs/promises");
+const path = require("node:path");
 const GroupConversation = require("../models/GroupConversation");
 const GroupCallKey = require("../models/GroupCallKey");
 const Message = require("../models/Message");
 const User = require("../models/User");
+const { saveFile, deleteFile } = require("../services/mediaStorage");
 const {
     AccessToken,
     RoomServiceClient
@@ -14,6 +17,8 @@ const getUserId = req =>
     req.user?.userId ||
     null;
 
+const UPLOADS_DIRECTORY = path.resolve(__dirname, "..", "uploads");
+
 const isValidObjectId = id =>
     mongoose.Types.ObjectId.isValid(id);
 
@@ -22,6 +27,27 @@ const groupPopulation = query =>
         .populate("participants", "name username fullName displayName profileImage avatar")
         .populate("admins", "name username fullName displayName")
         .populate("createdBy", "name username fullName displayName");
+
+const serializeGroup = group => {
+    if (!group) {
+        return null;
+    }
+
+    const data = typeof group.toObject === "function"
+        ? group.toObject()
+        : group;
+    const safeData = { ...data };
+    delete safeData.groupPhotoPublicId;
+    delete safeData.groupPhotoStorageType;
+    delete safeData.groupPhotoType;
+
+    return {
+        ...safeData,
+        groupPhoto: data.groupPhoto
+            ? `/groups/${String(data._id)}/photo`
+            : ""
+    };
+};
 
 const findMemberGroup = (groupId, userId) =>
     GroupConversation.findOne({
@@ -254,9 +280,9 @@ exports.setGroupEncryption = async (req, res) => {
 
         return res.json({
             success: true,
-            data: await groupPopulation(
+            data: serializeGroup(await groupPopulation(
                 GroupConversation.findById(group._id)
-            )
+            ))
         });
     } catch (error) {
         console.error("SET GROUP ENCRYPTION ERROR:", error);
@@ -300,7 +326,7 @@ exports.listGroups = async (req, res) => {
         return res.json({
             success: true,
             data: groups.map(group => ({
-                ...group.toObject(),
+                ...serializeGroup(group),
                 unreadCount: unreadByGroup.get(String(group._id)) || 0
             }))
         });
@@ -372,13 +398,227 @@ exports.createGroup = async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            data: populated
+            data: serializeGroup(populated)
         });
     } catch (error) {
         console.error("CREATE GROUP ERROR:", error);
         return res.status(500).json({
             success: false,
             message: "Unable to create group."
+        });
+    }
+};
+
+exports.updateGroupDetails = async (req, res) => {
+    let uploadedPhoto;
+    try {
+        const userId = getUserId(req);
+        const { groupId } = req.params;
+        if (!isValidObjectId(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID."
+            });
+        }
+
+        const group = await findMemberGroup(groupId, userId);
+        if (!group) {
+            return res.status(404).json({
+                success: false,
+                message: "Group not found."
+            });
+        }
+        if (!group.admins.some(id => String(id) === String(userId))) {
+            return res.status(403).json({
+                success: false,
+                message: "Only group admins can update group details."
+            });
+        }
+
+        const hasName = Object.hasOwn(req.body || {}, "name");
+        const hasDescription = Object.hasOwn(req.body || {}, "description");
+        const removePhoto =
+            req.body?.removePhoto === true ||
+            req.body?.removePhoto === "true";
+
+        if (
+            (hasName &&
+                (typeof req.body.name !== "string" ||
+                    !req.body.name.trim() ||
+                    req.body.name.trim().length > 80)) ||
+            (hasDescription &&
+                (typeof req.body.description !== "string" ||
+                    req.body.description.trim().length > 500)) ||
+            (removePhoto && req.file) ||
+            (!hasName &&
+                !hasDescription &&
+                !removePhoto &&
+                !req.file)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Provide a valid group name, description, photo, or photo removal."
+            });
+        }
+
+        const previousPhoto = {
+            url: group.groupPhoto,
+            publicId: group.groupPhotoPublicId,
+            type: group.groupPhotoStorageType
+        };
+        if (hasName) {
+            group.name = req.body.name.trim();
+        }
+        if (hasDescription) {
+            group.description = req.body.description.trim();
+        }
+        if (req.file) {
+            uploadedPhoto = await saveFile(req.file, "etop/group-photos");
+            group.groupPhoto = uploadedPhoto.url;
+            group.groupPhotoPublicId = uploadedPhoto.publicId;
+            group.groupPhotoStorageType = uploadedPhoto.type;
+            group.groupPhotoType = req.file.mimetype;
+        } else if (removePhoto) {
+            group.groupPhoto = "";
+            group.groupPhotoPublicId = "";
+            group.groupPhotoStorageType = "";
+            group.groupPhotoType = "";
+        }
+
+        await group.save();
+        const photoChanged = Boolean(req.file || removePhoto);
+        if (req.file) {
+            uploadedPhoto = null;
+        }
+        if (
+            photoChanged &&
+            (previousPhoto.url || previousPhoto.publicId)
+        ) {
+            const removed = await deleteFile(previousPhoto);
+            if (!removed) {
+                console.error("Previous group photo cleanup failed.", {
+                    groupId: String(group._id)
+                });
+            }
+        }
+
+        notifyMembers(req, group._id, group.participants);
+        return res.json({
+            success: true,
+            data: serializeGroup(await groupPopulation(
+                GroupConversation.findById(group._id)
+            ))
+        });
+    } catch (error) {
+        if (uploadedPhoto) {
+            await deleteFile(uploadedPhoto);
+        }
+        console.error("UPDATE GROUP DETAILS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to update group details."
+        });
+    }
+};
+
+exports.getGroupPhoto = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { groupId } = req.params;
+        if (!isValidObjectId(groupId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid group ID."
+            });
+        }
+
+        const group = await findMemberGroup(groupId, userId)
+            .select("groupPhoto groupPhotoType");
+        if (!group || !group.groupPhoto) {
+            return res.status(404).json({
+                success: false,
+                message: "Group photo not found."
+            });
+        }
+
+        const contentType = String(group.groupPhotoType || "").toLowerCase();
+        if (!contentType.startsWith("image/")) {
+            return res.status(404).json({
+                success: false,
+                message: "Group photo not found."
+            });
+        }
+
+        let photo;
+        if (group.groupPhoto.startsWith("/uploads/")) {
+            const filename = path.resolve(
+                UPLOADS_DIRECTORY,
+                path.basename(group.groupPhoto)
+            );
+            if (!filename.startsWith(`${UPLOADS_DIRECTORY}${path.sep}`)) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Group photo not found."
+                });
+            }
+            photo = await fs.readFile(filename);
+        } else {
+            const photoUrl = new URL(group.groupPhoto);
+            const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+            if (
+                photoUrl.protocol !== "https:" ||
+                photoUrl.hostname !== "res.cloudinary.com" ||
+                !cloudName ||
+                !photoUrl.pathname.startsWith(`/${cloudName}/`)
+            ) {
+                return res.status(502).json({
+                    success: false,
+                    message: "Group photo storage is unavailable."
+                });
+            }
+
+            const upstream = await fetch(photoUrl, { redirect: "error" });
+            if (!upstream.ok) {
+                return res.status(502).json({
+                    success: false,
+                    message: "Group photo storage is unavailable."
+                });
+            }
+            const upstreamType = String(
+                upstream.headers.get("content-type") || ""
+            ).toLowerCase();
+            if (!upstreamType.startsWith("image/")) {
+                return res.status(502).json({
+                    success: false,
+                    message: "Group photo storage returned an invalid file."
+                });
+            }
+            photo = Buffer.from(await upstream.arrayBuffer());
+            if (photo.length > 5 * 1024 * 1024) {
+                return res.status(413).json({
+                    success: false,
+                    message: "Group photo is too large."
+                });
+            }
+        }
+
+        res.set({
+            "Cache-Control": "private, no-store",
+            "Content-Type": contentType,
+            "X-Content-Type-Options": "nosniff"
+        });
+        return res.send(photo);
+    } catch (error) {
+        if (error.code === "ENOENT") {
+            return res.status(404).json({
+                success: false,
+                message: "Group photo not found."
+            });
+        }
+        console.error("GET GROUP PHOTO ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load group photo."
         });
     }
 };
@@ -1081,9 +1321,9 @@ exports.addGroupMembers = async (req, res) => {
 
         return res.json({
             success: true,
-            data: await groupPopulation(
+            data: serializeGroup(await groupPopulation(
                 GroupConversation.findById(group._id)
-            )
+            ))
         });
     } catch (error) {
         console.error("ADD GROUP MEMBERS ERROR:", error);
@@ -1180,9 +1420,9 @@ exports.removeGroupMember = async (req, res) => {
 
         return res.json({
             success: true,
-            data: await groupPopulation(
+            data: serializeGroup(await groupPopulation(
                 GroupConversation.findById(group._id)
-            )
+            ))
         });
     } catch (error) {
         console.error("REMOVE GROUP MEMBER ERROR:", error);

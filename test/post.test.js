@@ -484,6 +484,8 @@ test("message client IDs make offline retries idempotent", async () => {
 
 test("direct conversation history returns the requested page and indicates older messages", async () => {
     const originalFind = Message.find;
+    const originalExists = Message.exists;
+    const originalUserFindById = User.findById;
     const newest = { _id: "newest" };
     const older = { _id: "older" };
     const extra = { _id: "extra" };
@@ -519,6 +521,19 @@ test("direct conversation history returns the requested page and indicates older
         });
         return query;
     };
+    Message.exists = async () => ({ _id: "existing-message" });
+    User.findById = id => ({
+        select() {
+            return {
+                lean: async () => ({
+                    _id: id,
+                    accountVisibility: "private",
+                    following: [],
+                    blockedUsers: []
+                })
+            };
+        }
+    });
 
     try {
         await messageController.getConversation(
@@ -537,14 +552,20 @@ test("direct conversation history returns the requested page and indicates older
         assert.equal(response.body.hasMore, true);
     } finally {
         Message.find = originalFind;
+        Message.exists = originalExists;
+        User.findById = originalUserFindById;
     }
 });
 
 test("direct conversation history rejects invalid pagination", async () => {
     const originalFind = Message.find;
+    const originalExists = Message.exists;
     const response = makeResponse();
     Message.find = () => {
         throw new Error("Invalid pagination must not query messages.");
+    };
+    Message.exists = () => {
+        throw new Error("Invalid pagination must not check conversation access.");
     };
 
     try {
@@ -561,11 +582,99 @@ test("direct conversation history rejects invalid pagination", async () => {
         assert.equal(response.body.success, false);
     } finally {
         Message.find = originalFind;
+        Message.exists = originalExists;
+    }
+});
+
+test("direct conversation history denies users without a follow or prior messages", async () => {
+    const originals = {
+        userFindById: User.findById,
+        messageExists: Message.exists,
+        messageFind: Message.find
+    };
+    const response = makeResponse();
+    User.findById = id => ({
+        select: () => ({
+            lean: async () => ({
+                _id: id,
+                accountVisibility: "private",
+                following: [],
+                blockedUsers: []
+            })
+        })
+    });
+    Message.exists = async () => null;
+    Message.find = () => {
+        throw new Error("Unauthorized history must not be queried.");
+    };
+
+    try {
+        await messageController.getConversation(
+            {
+                user: { id: TEST_USER_ID },
+                params: { userId: OTHER_USER_ID },
+                query: {}
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 403);
+        assert.match(response.body.message, /privacy settings/i);
+    } finally {
+        User.findById = originals.userFindById;
+        Message.exists = originals.messageExists;
+        Message.find = originals.messageFind;
+    }
+});
+
+test("direct messages to an unapproved Private account require a Message Request", async () => {
+    const originals = {
+        userFindById: User.findById,
+        messageExists: Message.exists,
+        messageCreate: Message.create
+    };
+    const response = makeResponse();
+    User.findById = id => ({
+        select: async () => ({
+            _id: id,
+            accountVisibility: "private",
+            blockedUsers: [],
+            following: []
+        })
+    });
+    Message.exists = async () => null;
+    Message.create = async () => {
+        throw new Error("Unauthorized message must not be stored.");
+    };
+
+    try {
+        await messageController.sendMessage(
+            {
+                user: { id: TEST_USER_ID },
+                body: {
+                    receiver: OTHER_USER_ID,
+                    message: "Unauthorized first contact"
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 403);
+        assert.equal(response.body.code, "MESSAGE_REQUEST_REQUIRED");
+        assert.match(response.body.message, /Message Request/i);
+    } finally {
+        User.findById = originals.userFindById;
+        Message.exists = originals.messageExists;
+        Message.create = originals.messageCreate;
     }
 });
 
 test("editing and deleting a direct message broadcasts updates to both participants", async () => {
-    const originalFindById = Message.findById;
+    const originals = {
+        messageFindById: Message.findById,
+        messageExists: Message.exists,
+        userFindById: User.findById
+    };
     const message = {
         _id: OTHER_USER_ID,
         sender: TEST_USER_ID,
@@ -592,6 +701,18 @@ test("editing and deleting a direct message broadcasts updates to both participa
             ? Promise.resolve(message)
             : query;
     };
+    Message.exists = async () => ({ _id: OTHER_USER_ID });
+    User.findById = id => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({
+            _id: id,
+            accountVisibility: "public",
+            following: [],
+            blockedUsers: []
+        })
+    });
 
     try {
         await messageController.editMessage(
@@ -647,7 +768,9 @@ test("editing and deleting a direct message broadcasts updates to both participa
         assert.equal(events[0].payload.message.isEdited, true);
         assert.equal(events[2].payload.message.isDeleted, true);
     } finally {
-        Message.findById = originalFindById;
+        Message.findById = originals.messageFindById;
+        Message.exists = originals.messageExists;
+        User.findById = originals.userFindById;
     }
 });
 
@@ -790,12 +913,16 @@ test("delete for everyone removes an unshared local attachment", async () => {
 test("call log endpoint saves a typed call record visible to both participants", async () => {
     const originalFindById = Message.findById;
     const originalFindOneAndUpdate = Message.findOneAndUpdate;
+    const originalMessageExists = Message.exists;
     const originalUserFindById = User.findById;
     const callId = "ac4c9a16-f2c3-4b45-a7b9-81419fe52266";
     let savedMessage;
     User.findById = id => ({
         select: () => ({
-            lean: async () => ({ _id: id })
+            lean: async () => ({
+                _id: id,
+                following: [id === TEST_USER_ID ? OTHER_USER_ID : TEST_USER_ID]
+            })
         })
     });
     Message.findOneAndUpdate = async (filter, update, options) => {
@@ -816,6 +943,7 @@ test("call log endpoint saves a typed call record visible to both participants",
         };
         return savedMessage;
     };
+    Message.exists = async () => null;
     Message.findById = () => makeMessageQuery(savedMessage);
 
     try {
@@ -866,6 +994,7 @@ test("call log endpoint saves a typed call record visible to both participants",
     } finally {
         Message.findById = originalFindById;
         Message.findOneAndUpdate = originalFindOneAndUpdate;
+        Message.exists = originalMessageExists;
         User.findById = originalUserFindById;
     }
 });
@@ -873,11 +1002,15 @@ test("call log endpoint saves a typed call record visible to both participants",
 test("direct call logs cannot reuse a group-call identifier", async () => {
     const originalMessageFindOneAndUpdate = Message.findOneAndUpdate;
     const originalMessageFindOne = Message.findOne;
+    const originalMessageExists = Message.exists;
     const originalUserFindById = User.findById;
     const callId = randomUUID();
     User.findById = id => ({
         select: () => ({
-            lean: async () => ({ _id: id })
+            lean: async () => ({
+                _id: id,
+                following: [id === TEST_USER_ID ? OTHER_USER_ID : TEST_USER_ID]
+            })
         })
     });
     Message.findOneAndUpdate = async () => {
@@ -885,6 +1018,7 @@ test("direct call logs cannot reuse a group-call identifier", async () => {
         error.code = 11000;
         throw error;
     };
+    Message.exists = async () => null;
     Message.findOne = async () => ({
         callId,
         sender: TEST_USER_ID,
@@ -913,13 +1047,18 @@ test("direct call logs cannot reuse a group-call identifier", async () => {
     } finally {
         Message.findOneAndUpdate = originalMessageFindOneAndUpdate;
         Message.findOne = originalMessageFindOne;
+        Message.exists = originalMessageExists;
         User.findById = originalUserFindById;
     }
 });
 
 test("marking a conversation seen notifies the sender for the changed messages", async () => {
-    const originalFind = Message.find;
-    const originalUpdateMany = Message.updateMany;
+    const originals = {
+        messageFind: Message.find,
+        messageExists: Message.exists,
+        updateMany: Message.updateMany,
+        userFindById: User.findById
+    };
     const events = [];
     const response = makeResponse();
     const unseenMessages = [
@@ -953,6 +1092,18 @@ test("marking a conversation seen notifies the sender for the changed messages",
         });
         return { modifiedCount: unseenMessages.length };
     };
+    Message.exists = async () => ({ _id: "existing-message" });
+    User.findById = id => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({
+            _id: id,
+            accountVisibility: "public",
+            following: [],
+            blockedUsers: []
+        })
+    });
 
     try {
         await messageController.markSeen(
@@ -987,8 +1138,10 @@ test("marking a conversation seen notifies the sender for the changed messages",
             }
         ]);
     } finally {
-        Message.find = originalFind;
-        Message.updateMany = originalUpdateMany;
+        Message.find = originals.messageFind;
+        Message.exists = originals.messageExists;
+        Message.updateMany = originals.updateMany;
+        User.findById = originals.userFindById;
     }
 });
 
@@ -1347,6 +1500,7 @@ test("encrypted group attachments store only opaque ciphertext metadata", async 
 
 test("unencrypted direct messages cannot upload opaque ciphertext files", async () => {
     const originalUserFindById = User.findById;
+    const originalMessageExists = Message.exists;
     const publicKey = JSON.stringify({
         kty: "EC",
         crv: "P-256",
@@ -1355,12 +1509,15 @@ test("unencrypted direct messages cannot upload opaque ciphertext files", async 
     });
     const response = makeResponse();
 
-    User.findById = () => ({
+    User.findById = id => ({
         select: async () => ({
             blockedUsers: [],
+            _id: id,
+            following: [id === TEST_USER_ID ? OTHER_USER_ID : TEST_USER_ID],
             messengerEncryptionPublicKey: publicKey
         })
     });
+    Message.exists = async () => null;
 
     try {
         await messageController.sendMessage(
@@ -1384,6 +1541,7 @@ test("unencrypted direct messages cannot upload opaque ciphertext files", async 
         assert.match(response.body.message, /opaque ciphertext/i);
     } finally {
         User.findById = originalUserFindById;
+        Message.exists = originalMessageExists;
     }
 });
 
@@ -1391,6 +1549,7 @@ test("encrypted direct messages accept client-encrypted opaque files", async () 
     const originalUserFindById = User.findById;
     const originalMessageCreate = Message.create;
     const originalMessageFindById = Message.findById;
+    const originalMessageExists = Message.exists;
     const publicKey = JSON.stringify({
         kty: "EC",
         crv: "P-256",
@@ -1404,9 +1563,11 @@ test("encrypted direct messages accept client-encrypted opaque files", async () 
         createdAt: new Date().toISOString()
     };
 
-    User.findById = () => ({
+    User.findById = id => ({
         select: async () => ({
             blockedUsers: [],
+            _id: id,
+            following: [id === TEST_USER_ID ? OTHER_USER_ID : TEST_USER_ID],
             messengerEncryptionPublicKey: publicKey
         })
     });
@@ -1416,6 +1577,7 @@ test("encrypted direct messages accept client-encrypted opaque files", async () 
     };
     Message.findById = () =>
         makeMessageQuery({ ...created, ...storedMessage });
+    Message.exists = async () => null;
 
     try {
         await messageController.sendMessage(
@@ -1452,6 +1614,7 @@ test("encrypted direct messages accept client-encrypted opaque files", async () 
         User.findById = originalUserFindById;
         Message.create = originalMessageCreate;
         Message.findById = originalMessageFindById;
+        Message.exists = originalMessageExists;
     }
 });
 

@@ -19,6 +19,7 @@ const ProfileSocial = ({ userId, isSelf = false }) => {
 
     const [stats, setStats] = useState(null);
     const [following, setFollowing] = useState(false);
+    const [followRequestPending, setFollowRequestPending] = useState(false);
     const [followBusy, setFollowBusy] = useState(false);
 
     const [tab, setTab] = useState("post");
@@ -41,6 +42,7 @@ const ProfileSocial = ({ userId, isSelf = false }) => {
                 if (!alive) return;
                 setStats(res.data);
                 setFollowing(Boolean(res.data.isFollowing));
+                setFollowRequestPending(Boolean(res.data.isFollowRequestPending));
             } catch (e) {
                 console.error("Social stats error:", e);
             }
@@ -94,6 +96,7 @@ const ProfileSocial = ({ userId, isSelf = false }) => {
             const res = await api.post(`/users/follow/${userId}`);
 
             setFollowing(res.data.isFollowing);
+            setFollowRequestPending(Boolean(res.data.isFollowRequestPending));
             setStats(prev => prev && { ...prev, followersCount: res.data.followersCount });
 
         } catch (e) {
@@ -144,9 +147,17 @@ const ProfileSocial = ({ userId, isSelf = false }) => {
                     type="button"
                     className={`follow-btn ${following ? "on" : ""}`}
                     onClick={toggleFollow}
-                    disabled={followBusy}
+                    disabled={followBusy || Boolean(stats?.isBlocked)}
                 >
-                    {following ? "Following" : "Follow"}
+                    {stats?.isBlocked
+                        ? "Unavailable"
+                        : following
+                        ? "Following"
+                        : followRequestPending
+                            ? "Requested"
+                            : stats?.accountVisibility === "private"
+                                ? "Request to follow"
+                                : "Follow"}
                 </button>
             )}
 

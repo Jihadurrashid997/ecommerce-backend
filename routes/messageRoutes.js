@@ -26,6 +26,20 @@ const {
     migrateMessageAttachment,
     createCallLog
 } = require("../controllers/messageController");
+const {
+    createMessageRequest,
+    getMessageRequests,
+    acceptMessageRequest,
+    deleteMessageRequest,
+    blockMessageRequestSender,
+    reportMessageRequest
+} = require("../controllers/messageRequestController");
+const {
+    startLiveLocation,
+    updateLiveLocation,
+    stopLiveLocation,
+    getLiveLocations
+} = require("../controllers/liveLocationController");
 
 
 const multer =
@@ -209,6 +223,68 @@ router.post(
     "/call-log",
     auth(),
     createCallLog
+);
+
+router.post(
+    "/requests",
+    auth(),
+    handleUpload,
+    messageUpload.validateContent,
+    createMessageRequest
+);
+
+router.get(
+    "/live-locations",
+    auth(),
+    getLiveLocations
+);
+
+router.post(
+    "/live-locations",
+    auth(),
+    startLiveLocation
+);
+
+router.patch(
+    "/live-locations/:shareId",
+    auth(),
+    updateLiveLocation
+);
+
+router.delete(
+    "/live-locations/:shareId",
+    auth(),
+    stopLiveLocation
+);
+
+router.get(
+    "/requests",
+    auth(),
+    getMessageRequests
+);
+
+router.post(
+    "/requests/:id/accept",
+    auth(),
+    acceptMessageRequest
+);
+
+router.delete(
+    "/requests/:id",
+    auth(),
+    deleteMessageRequest
+);
+
+router.post(
+    "/requests/:id/block",
+    auth(),
+    blockMessageRequestSender
+);
+
+router.post(
+    "/requests/:id/report",
+    auth(),
+    reportMessageRequest
 );
 
 router.post(

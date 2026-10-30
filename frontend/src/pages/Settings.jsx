@@ -7,6 +7,7 @@ import "../styles/Settings.css";
 
 const DEFAULT_SETTINGS = {
     theme: "dark",
+    accountVisibility: "public",
     notifications: {
         follows: true,
         posts: true,
@@ -19,6 +20,7 @@ const Settings = () => {
     const { theme, setTheme, user } = useApp();
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
     const [blockedUsers, setBlockedUsers] = useState([]);
+    const [followRequests, setFollowRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState("");
     const [error, setError] = useState("");
@@ -30,14 +32,16 @@ const Settings = () => {
         try {
             setLoading(true);
             setError("");
-            const [settingsResponse, blockedResponse] = await Promise.all([
+            const [settingsResponse, blockedResponse, followRequestsResponse] = await Promise.all([
                 api.get("/users/settings"),
-                api.get("/users/blocked")
+                api.get("/users/blocked"),
+                api.get("/users/follow-requests")
             ]);
             const nextSettings = settingsResponse.data.settings;
             setSettings(nextSettings);
             setTheme(nextSettings.theme);
             setBlockedUsers(blockedResponse.data.users || []);
+            setFollowRequests(followRequestsResponse.data.requests || []);
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not load your settings.");
         } finally {
@@ -99,6 +103,24 @@ const Settings = () => {
             setNotice(`${blockedUser.name || "User"} was unblocked.`);
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not unblock this user.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const respondToFollowRequest = async (request, action) => {
+        const requesterId = request.user._id;
+        try {
+            setBusy(`follow-${requesterId}`);
+            setError("");
+            setNotice("");
+            await api.post(`/users/follow-requests/${requesterId}/respond`, { action });
+            setFollowRequests(previous => previous.filter(item =>
+                String(item.user._id) !== String(requesterId)
+            ));
+            setNotice(action === "accept" ? "Follow request accepted." : "Follow request declined.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not update this follow request.");
         } finally {
             setBusy("");
         }
@@ -171,8 +193,68 @@ const Settings = () => {
             <section className="settings-card">
                 <div className="settings-section-heading">
                     <FaUserSlash />
-                    <div><h2>Privacy</h2><p>Review accounts you have blocked. Blocking controls are also available on user profiles.</p></div>
+                    <div><h2>Privacy</h2><p>Control who can follow and start conversations with you.</p></div>
                 </div>
+                <div className="settings-account-visibility">
+                    <b>Account visibility</b>
+                    <p>Public accounts can receive messages from any E Top user. Private accounts receive new direct messages only from approved followers; others can send a Message Request.</p>
+                    <div className="settings-choice-row">
+                        <label>
+                            <input
+                                type="radio"
+                                name="accountVisibility"
+                                checked={settings.accountVisibility === "public"}
+                                disabled={busy === "settings"}
+                                onChange={() => saveSettings({ accountVisibility: "public" })}
+                            />
+                            Public
+                        </label>
+                        <label>
+                            <input
+                                type="radio"
+                                name="accountVisibility"
+                                checked={settings.accountVisibility === "private"}
+                                disabled={busy === "settings"}
+                                onChange={() => saveSettings({ accountVisibility: "private" })}
+                            />
+                            Private
+                        </label>
+                    </div>
+                </div>
+                <div className="settings-follow-requests">
+                    <h3>Follow requests</h3>
+                    {followRequests.length ? (
+                        <div className="settings-blocked-list">
+                            {followRequests.map(request => (
+                                <div className="settings-blocked-user" key={request.user._id}>
+                                    <span className="settings-avatar">
+                                        {request.user.profileImage
+                                            ? <img src={getUploadUrl(request.user.profileImage)} alt="" />
+                                            : (request.user.name || "U").charAt(0).toUpperCase()}
+                                    </span>
+                                    <b>{request.user.name || "E Top user"}</b>
+                                    <button
+                                        type="button"
+                                        disabled={Boolean(busy)}
+                                        onClick={() => respondToFollowRequest(request, "accept")}
+                                    >
+                                        {busy === `follow-${request.user._id}` ? "Saving..." : "Accept"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="settings-secondary-button"
+                                        disabled={Boolean(busy)}
+                                        onClick={() => respondToFollowRequest(request, "reject")}
+                                    >
+                                        Decline
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : <p className="settings-empty">You have no pending follow requests.</p>}
+                </div>
+                <div className="settings-follow-requests">
+                    <h3>Blocked accounts</h3>
                 {blockedUsers.length ? (
                     <div className="settings-blocked-list">
                         {blockedUsers.map(blockedUser => (
@@ -190,6 +272,7 @@ const Settings = () => {
                         ))}
                     </div>
                 ) : <p className="settings-empty">You have not blocked anyone.</p>}
+                </div>
             </section>
 
             <section className="settings-card">
