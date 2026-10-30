@@ -267,6 +267,7 @@ test("acceptance promotes request content and attachments into the existing Mess
         fileType: "image/jpeg",
         filePublicId: "media-id",
         fileStorageType: "image",
+        fileDeliveryType: "authenticated",
         createdAt: new Date("2026-01-01T00:00:00.000Z")
     };
     let promotedMessage;
@@ -299,6 +300,10 @@ test("acceptance promotes request content and attachments into the existing Mess
         assert.equal(promotedMessage.fileName, originalRequest.fileName);
         assert.equal(promotedMessage.fileType, originalRequest.fileType);
         assert.equal(promotedMessage.filePublicId, originalRequest.filePublicId);
+        assert.equal(
+            promotedMessage.fileDeliveryType,
+            originalRequest.fileDeliveryType
+        );
         assert.equal(promotedMessage.createdAt, originalRequest.createdAt);
     } finally {
         state.restore();

@@ -12826,6 +12826,18 @@ const onCallMissed =
         remoteStream
     }
 
+    peerConnection={
+        peerRef.current
+    }
+
+    callRole={
+        getId(callState?.callerId) === currentUserId
+            ? "caller"
+            : getId(callState?.receiverId) === currentUserId
+                ? "receiver"
+                : "unknown"
+    }
+
     cameraEnabled={
         cameraEnabled
     }

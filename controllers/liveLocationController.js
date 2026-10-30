@@ -44,12 +44,13 @@ const emitToMembers = (req, memberIds, event, payload) => {
 const getSharePermission = async share => {
     if (share.groupId) {
         const group = await GroupConversation.findOne({
-            _id: share.groupId,
-            participants: share.sender
+            _id: share.groupId
         }).select("participants").lean();
-        return group
-            ? { allowed: true, memberIds: group.participants.map(String) }
-            : { allowed: false, memberIds: [] };
+        const memberIds = (group?.participants || []).map(String);
+        return {
+            allowed: memberIds.includes(String(share.sender)),
+            memberIds
+        };
     }
 
     const permission = await getDirectMessagePermission({
@@ -285,7 +286,7 @@ exports.getLiveLocations = async (req, res) => {
             const group = await GroupConversation.findOne({
                 _id: groupId,
                 participants: userId
-            }).select("_id");
+            }).select("_id participants").lean();
             if (!group) {
                 return res.status(404).json({
                     success: false,
@@ -294,6 +295,7 @@ exports.getLiveLocations = async (req, res) => {
             }
             shares = await LiveLocationShare.find({
                 groupId,
+                sender: { $in: group.participants },
                 expiresAt: { $gt: new Date() }
             }).lean();
         } else {
@@ -322,6 +324,14 @@ exports.getLiveLocations = async (req, res) => {
             const permission = await getSharePermission(share);
             if (permission.allowed) {
                 permittedShares.push(serializeShare(share));
+            } else {
+                await LiveLocationShare.deleteOne({ _id: share._id });
+                emitToMembers(
+                    req,
+                    permission.memberIds,
+                    "live-location-stopped",
+                    { shareId: String(share._id) }
+                );
             }
         }
 

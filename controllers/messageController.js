@@ -117,7 +117,7 @@ const populateMessage = (query) =>
         )
         .populate({
             path: "replyTo",
-            select: "message fileUrl fileName fileType sender createdAt isEncrypted",
+            select: "message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType sender createdAt isEncrypted",
             populate: {
                 path: "sender",
                 select: "name username fullName displayName firstName"
@@ -125,7 +125,7 @@ const populateMessage = (query) =>
         })
         .populate({
             path: "forwardedFrom",
-            select: "message fileUrl fileName fileType sender createdAt isEncrypted",
+            select: "message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType sender createdAt isEncrypted",
             populate: {
                 path: "sender",
                 select: "name username fullName displayName firstName"
@@ -552,7 +552,7 @@ exports.sendMessage = async (req, res) => {
                         )
                         .populate({
                             path: "replyTo",
-                            select: "message fileUrl fileName fileType sender createdAt isEncrypted",
+                            select: "message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType sender createdAt isEncrypted",
                             populate: {
                                 path: "sender",
                                 select: "name username fullName displayName firstName"
@@ -580,12 +580,15 @@ exports.sendMessage = async (req, res) => {
             };
 
             if (file) {
-                const media = await saveFile(file, "etop/messenger");
+                const media = await saveFile(file, "etop/messenger", {
+                    deliveryType: "authenticated"
+                });
                 messageData.fileUrl = media.url;
                 messageData.fileName = file.originalname;
                 messageData.fileType = file.mimetype;
                 messageData.filePublicId = media.publicId;
                 messageData.fileStorageType = media.type;
+                messageData.fileDeliveryType = media.deliveryType;
             }
 
             const replyTo = req.body?.replyTo;
@@ -619,7 +622,7 @@ exports.sendMessage = async (req, res) => {
                 )
                 .populate({
                     path: "replyTo",
-                    select: "message fileUrl fileName fileType sender createdAt isEncrypted",
+                    select: "message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType sender createdAt isEncrypted",
                     populate: {
                         path: "sender",
                         select: "name username fullName displayName firstName"
@@ -651,7 +654,7 @@ exports.sendMessage = async (req, res) => {
 
             forwardSource = await Message.findById(forwardedFromId)
                 .select(
-                    "sender receiver groupId message fileUrl fileName fileType filePublicId fileStorageType isDeleted"
+                    "sender receiver groupId message fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType isDeleted"
                 );
 
             if (!forwardSource || forwardSource.isDeleted) {
@@ -817,12 +820,15 @@ exports.sendMessage = async (req, res) => {
 
         if (file) {
 
-            const media = await saveFile(file, "etop/messenger");
+            const media = await saveFile(file, "etop/messenger", {
+                deliveryType: "authenticated"
+            });
             messageData.fileUrl = media.url;
             messageData.fileName = file.originalname;
             messageData.fileType = file.mimetype;
             messageData.filePublicId = media.publicId;
             messageData.fileStorageType = media.type;
+            messageData.fileDeliveryType = media.deliveryType;
 
         }
 
@@ -864,6 +870,8 @@ exports.sendMessage = async (req, res) => {
                     forwardSource.filePublicId || "";
                 messageData.fileStorageType =
                     forwardSource.fileStorageType || "";
+                messageData.fileDeliveryType =
+                    forwardSource.fileDeliveryType || "upload";
             }
 
         }
@@ -994,7 +1002,7 @@ exports.getAttachmentDownload = async (req, res) => {
         const userId = getUserId(req);
         const message = await Message.findById(req.params.id)
             .select(
-                "sender receiver groupId fileUrl fileName fileType filePublicId deletedFor isDeleted"
+                "sender receiver groupId fileUrl fileName fileType filePublicId fileStorageType fileDeliveryType deletedFor isDeleted"
             )
             .lean();
 
@@ -1016,26 +1024,32 @@ exports.getAttachmentDownload = async (req, res) => {
             });
         }
 
-        if (
-            message.fileType !== "application/pdf" &&
-            !/\.pdf$/i.test(message.fileName || "")
-        ) {
-            return res.status(400).json({
+        if (!message.fileUrl && !message.filePublicId) {
+            return res.status(404).json({
                 success: false,
-                message: "This attachment is not a PDF."
+                message: "Attachment is unavailable."
             });
         }
 
-        if (!message.fileUrl) {
-            return res.status(404).json({
+        if (message.filePublicId && !isCloudinaryConfigured()) {
+            return res.status(503).json({
                 success: false,
-                message: "PDF file is unavailable."
+                message: "Private attachment delivery is temporarily unavailable."
             });
         }
 
         const downloadUrl =
             isCloudinaryConfigured() && message.filePublicId
-                ? getPrivateDownloadUrl(message.filePublicId, message.fileName)
+                ? getPrivateDownloadUrl(
+                    message.filePublicId,
+                    message.fileName,
+                    {
+                        mediaType: message.fileStorageType,
+                        mimeType: message.fileType,
+                        deliveryType: message.fileDeliveryType,
+                        attachment: message.fileType === "application/pdf"
+                    }
+                )
                 : message.fileUrl;
 
         return res.status(200).json({
@@ -1046,7 +1060,7 @@ exports.getAttachmentDownload = async (req, res) => {
         console.error("GET MESSAGE ATTACHMENT DOWNLOAD ERROR:", error);
         return res.status(500).json({
             success: false,
-            message: "Unable to prepare this PDF download."
+            message: "Unable to prepare this attachment."
         });
     }
 };
@@ -1627,6 +1641,7 @@ exports.deleteMessage = async (req, res) => {
         message.fileType = "";
         message.filePublicId = "";
         message.fileStorageType = "";
+        message.fileDeliveryType = "upload";
         message.reactions = [];
 
         await message.save();
@@ -1750,9 +1765,19 @@ exports.migrateMessageAttachment = async (req, res) => {
             return res.json({
                 success: true,
                 data: {
-                    fileUrl: message.fileUrl,
+                    fileUrl: getPrivateDownloadUrl(
+                        message.filePublicId,
+                        message.fileName,
+                        {
+                            mediaType: message.fileStorageType,
+                            mimeType: message.fileType,
+                            deliveryType: message.fileDeliveryType,
+                            attachment: false
+                        }
+                    ),
                     filePublicId: message.filePublicId,
-                    fileStorageType: message.fileStorageType
+                    fileStorageType: message.fileStorageType,
+                    fileDeliveryType: message.fileDeliveryType
                 }
             });
         }
@@ -1799,7 +1824,9 @@ exports.migrateMessageAttachment = async (req, res) => {
             buffer,
             mimetype: message.fileType,
             originalname: message.fileName || path.basename(legacyPath)
-        }, "etop/messenger");
+        }, "etop/messenger", {
+            deliveryType: "authenticated"
+        });
 
         try {
             const updateResult = await Message.updateMany(
@@ -1811,7 +1838,8 @@ exports.migrateMessageAttachment = async (req, res) => {
                     $set: {
                         fileUrl: media.url,
                         filePublicId: media.publicId,
-                        fileStorageType: media.type
+                        fileStorageType: media.type,
+                        fileDeliveryType: media.deliveryType
                     }
                 }
             );
@@ -1825,9 +1853,19 @@ exports.migrateMessageAttachment = async (req, res) => {
                     return res.json({
                         success: true,
                         data: {
-                            fileUrl: latestMessage.fileUrl,
+                            fileUrl: getPrivateDownloadUrl(
+                                latestMessage.filePublicId,
+                                latestMessage.fileName,
+                                {
+                                    mediaType: latestMessage.fileStorageType,
+                                    mimeType: latestMessage.fileType,
+                                    deliveryType: latestMessage.fileDeliveryType,
+                                    attachment: false
+                                }
+                            ),
                             filePublicId: latestMessage.filePublicId,
-                            fileStorageType: latestMessage.fileStorageType
+                            fileStorageType: latestMessage.fileStorageType,
+                            fileDeliveryType: latestMessage.fileDeliveryType
                         }
                     });
                 }
@@ -1852,9 +1890,19 @@ exports.migrateMessageAttachment = async (req, res) => {
         return res.json({
             success: true,
             data: {
-                fileUrl: media.url,
+                fileUrl: getPrivateDownloadUrl(
+                    media.publicId,
+                    message.fileName || path.basename(legacyPath),
+                    {
+                        mediaType: media.type,
+                        mimeType: message.fileType,
+                        deliveryType: media.deliveryType,
+                        attachment: false
+                    }
+                ),
                 filePublicId: media.publicId,
-                fileStorageType: media.type
+                fileStorageType: media.type,
+                fileDeliveryType: media.deliveryType
             }
         });
     } catch (error) {

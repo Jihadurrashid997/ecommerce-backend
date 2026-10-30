@@ -46,6 +46,7 @@ LiveLocationShareSchema.index(
     { sender: 1, recipient: 1, groupId: 1 },
     { unique: true }
 );
+LiveLocationShareSchema.index({ groupId: 1, sender: 1 });
 
 module.exports = mongoose.model(
     "LiveLocationShare",

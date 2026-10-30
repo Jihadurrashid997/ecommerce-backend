@@ -57,9 +57,13 @@ const uploadDir = path.join(__dirname, "..", "uploads");
 
 /*
  * Saves one multer file from a buffer or temporary disk path.
- * Returns { url, type, publicId, duration }
+ * Returns { url, type, publicId, deliveryType, duration }
  */
-const saveFile = async (file, folder = "etop") => {
+const saveFile = async (
+    file,
+    folder = "etop",
+    { deliveryType = "upload" } = {}
+) => {
     const mimeType = String(file.mimetype || "").toLowerCase();
     const type = mimeType.startsWith("image/")
         ? "image"
@@ -92,7 +96,8 @@ const saveFile = async (file, folder = "etop") => {
             const options = {
                 folder,
                 public_id: publicId,
-                resource_type: resourceType
+                resource_type: resourceType,
+                type: deliveryType
             };
             const callback = (error, uploaded) =>
                 error ? reject(error) : resolve(uploaded);
@@ -116,6 +121,7 @@ const saveFile = async (file, folder = "etop") => {
             url: result.secure_url,
             type,
             publicId: result.public_id,
+            deliveryType,
             duration: Math.round(result.duration || 0)
         };
 
@@ -154,30 +160,81 @@ const saveFile = async (file, folder = "etop") => {
         url: `/uploads/${filename}`,
         type,
         publicId: "",
+        deliveryType: "upload",
         duration: 0
     };
 
 };
 
-const getPrivateDownloadUrl = (publicId, fileName) => {
+const getPrivateDownloadUrl = (
+    publicId,
+    fileName,
+    {
+        mediaType = "",
+        mimeType = "",
+        deliveryType = "upload",
+        attachment = false
+    } = {}
+) => {
     const cld = getCloudinary();
     if (!cld || !publicId) {
         throw new Error("Cloudinary is not configured for this attachment.");
     }
 
-    const extension = path.extname(path.basename(fileName || "")).slice(1).toLowerCase();
+    const normalizedMimeType = String(mimeType || "").toLowerCase();
+    const extensionByMimeType = {
+        "application/pdf": "pdf",
+        "application/octet-stream": "bin",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "image/webp": "webp",
+        "video/mp4": "mp4",
+        "video/webm": "webm",
+        "audio/mpeg": "mp3",
+        "audio/mp4": "m4a",
+        "audio/ogg": "ogg",
+        "audio/wav": "wav",
+        "audio/webm": "webm"
+    };
+    const extension =
+        path.extname(path.basename(fileName || "")).slice(1).toLowerCase() ||
+        extensionByMimeType[normalizedMimeType] ||
+        "";
     if (!/^[a-z0-9]{1,10}$/.test(extension)) {
         throw new Error("The attachment does not have a supported file extension.");
     }
 
     const normalizedPublicId = publicId.replace(/\.[a-z0-9]{1,10}$/i, "");
+    const resourceType =
+        mediaType === "video" || mediaType === "audio"
+            ? "video"
+            : mediaType === "raw"
+                ? "raw"
+                : mediaType === "image"
+                    ? "image"
+                    : normalizedMimeType.startsWith("video/")
+                        ? "video"
+                        : normalizedMimeType.startsWith("audio/")
+                            ? "video"
+                            : normalizedMimeType === "application/pdf" ||
+                                normalizedMimeType === "application/octet-stream"
+                                ? "raw"
+                                : "image";
+    const allowedDeliveryTypes = new Set([
+        "upload",
+        "private",
+        "authenticated"
+    ]);
     return cld.utils.private_download_url(
         normalizedPublicId,
         extension,
         {
-            resource_type: "raw",
-            type: "upload",
-            attachment: true,
+            resource_type: resourceType,
+            type: allowedDeliveryTypes.has(deliveryType)
+                ? deliveryType
+                : "upload",
+            attachment,
             expires_at: Math.floor(Date.now() / 1000) + 5 * 60
         }
     );

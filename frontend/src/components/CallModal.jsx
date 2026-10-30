@@ -15,9 +15,11 @@ import {
     FiVolume2,
     FiRefreshCw,
     FiMoreHorizontal,
-    FiMonitor
+    FiMonitor,
+    FiClipboard
 } from "react-icons/fi";
 import CallAudioOutputSelector from "./CallAudioOutputSelector";
+import { collectWebRtcDiagnostics } from "../services/webrtcDiagnostics";
 import "./CallModal.css";
 
 const CallModal = ({
@@ -29,6 +31,8 @@ const CallModal = ({
     callerAvatar = "",
     localStream = null,
     remoteStream = null,
+    peerConnection = null,
+    callRole = "unknown",
     callDuration = 0,
     cameraFacing = "user",
     cameraEnabled = false,
@@ -69,6 +73,9 @@ const CallModal = ({
         useState(false);
 
     const [controlError, setControlError] =
+        useState("");
+
+    const [diagnosticsStatus, setDiagnosticsStatus] =
         useState("");
 
     const isIncoming =
@@ -139,6 +146,7 @@ const CallModal = ({
         setAudioOutputOpen(false);
         setMoreOpen(false);
         setControlError("");
+        setDiagnosticsStatus("");
     }, [visible, type]);
 
     const hasRemoteVideo = remoteVideoAvailable;
@@ -158,6 +166,30 @@ const CallModal = ({
         } catch (error) {
             setControlError(
                 error?.message || "That call control could not be used."
+            );
+        }
+    };
+
+    const copyCallDiagnostics = async () => {
+        setControlError("");
+        setDiagnosticsStatus("");
+        try {
+            const diagnostics = await collectWebRtcDiagnostics({
+                peer: peerConnection,
+                role: callRole,
+                localStream,
+                remoteStream,
+                localVideo: localVideoRef.current,
+                remoteVideo: remoteVideoRef.current
+            });
+            await navigator.clipboard.writeText(
+                JSON.stringify(diagnostics, null, 2)
+            );
+            setDiagnosticsStatus("Privacy-safe diagnostics copied.");
+        } catch (error) {
+            setControlError(
+                error?.message ||
+                "Could not collect or copy call diagnostics."
             );
         }
     };
@@ -1277,6 +1309,31 @@ const CallModal = ({
                                 <FiRefreshCw aria-hidden="true" />
                                 Switch camera
                             </button>
+                        )}
+                        <button
+                            type="button"
+                            role="menuitem"
+                            onClick={copyCallDiagnostics}
+                            style={{
+                                display: "flex",
+                                width: "100%",
+                                gap: 8,
+                                alignItems: "center",
+                                padding: 8,
+                                border: 0,
+                                borderRadius: 8,
+                                background: "rgba(255,255,255,.12)",
+                                color: "#fff",
+                                cursor: "pointer"
+                            }}
+                        >
+                            <FiClipboard aria-hidden="true" />
+                            Copy call diagnostics
+                        </button>
+                        {diagnosticsStatus && (
+                            <p role="status" style={{ margin: "8px 8px 2px" }}>
+                                {diagnosticsStatus}
+                            </p>
                         )}
                     </div>
                 )}

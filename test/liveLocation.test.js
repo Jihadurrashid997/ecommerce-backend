@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const GroupConversation = require("../models/GroupConversation");
 const LiveLocationShare = require("../models/LiveLocationShare");
 const Message = require("../models/Message");
 const User = require("../models/User");
@@ -254,4 +255,111 @@ test("live location shares have automatic expiry and one record per sender and c
         ),
         true
     );
+    assert.equal(
+        indexes.some(([keys]) =>
+            keys.groupId === 1 && keys.sender === 1
+        ),
+        true
+    );
+});
+
+test("group live-location reads exclude senders who are no longer members", async () => {
+    const originals = {
+        groupFindOne: GroupConversation.findOne,
+        shareFind: LiveLocationShare.find
+    };
+    let shareFilter;
+    GroupConversation.findOne = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({
+            _id: SHARE_ID,
+            participants: [RECIPIENT_ID]
+        })
+    });
+    LiveLocationShare.find = filter => {
+        shareFilter = filter;
+        return { lean: async () => [] };
+    };
+
+    try {
+        const response = makeResponse();
+        await controller.getLiveLocations(
+            {
+                user: { id: RECIPIENT_ID },
+                query: { groupId: SHARE_ID }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(shareFilter.sender, { $in: [RECIPIENT_ID] });
+        assert.equal(shareFilter.groupId, SHARE_ID);
+        assert.deepEqual(response.body.data, []);
+    } finally {
+        GroupConversation.findOne = originals.groupFindOne;
+        LiveLocationShare.find = originals.shareFind;
+    }
+});
+
+test("an active group share is deleted and stopped when its sender loses membership", async () => {
+    const originals = {
+        groupFindOne: GroupConversation.findOne,
+        shareUpdate: LiveLocationShare.findOneAndUpdate,
+        shareDelete: LiveLocationShare.deleteOne
+    };
+    let deletedFilter;
+    const events = [];
+    GroupConversation.findOne = () => ({
+        select() {
+            return this;
+        },
+        lean: async () => ({ participants: [RECIPIENT_ID] })
+    });
+    LiveLocationShare.findOneAndUpdate = async () => ({
+        _id: SHARE_ID,
+        sender: SENDER_ID,
+        recipient: null,
+        groupId: RECIPIENT_ID,
+        latitude: 23.7,
+        longitude: 90.4,
+        expiresAt: new Date(Date.now() + 60_000),
+        updatedAt: new Date()
+    });
+    LiveLocationShare.deleteOne = async filter => {
+        deletedFilter = filter;
+    };
+
+    try {
+        const response = makeResponse();
+        await controller.updateLiveLocation(
+            {
+                user: { id: SENDER_ID },
+                params: { shareId: SHARE_ID },
+                body: { latitude: 23.8, longitude: 90.5 },
+                app: {
+                    get: () => ({
+                        to: room => ({
+                            emit: (event, payload) =>
+                                events.push({ room, event, payload })
+                        })
+                    })
+                }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 403);
+        assert.deepEqual(deletedFilter, { _id: SHARE_ID });
+        assert.deepEqual(events, [{
+            room: `user:${RECIPIENT_ID}`,
+            event: "live-location-stopped",
+            payload: { shareId: SHARE_ID }
+        }]);
+    } finally {
+        GroupConversation.findOne = originals.groupFindOne;
+        LiveLocationShare.findOneAndUpdate = originals.shareUpdate;
+        LiveLocationShare.deleteOne = originals.shareDelete;
+    }
 });

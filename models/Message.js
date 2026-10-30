@@ -1,5 +1,27 @@
 const mongoose =
     require("mongoose");
+const {
+    isCloudinaryConfigured,
+    getPrivateDownloadUrl
+} = require("../services/mediaStorage");
+
+const transformAttachmentUrl = (_document, value) => {
+    if (value.filePublicId) {
+        value.fileUrl = isCloudinaryConfigured()
+            ? getPrivateDownloadUrl(
+                value.filePublicId,
+                value.fileName,
+                {
+                    mediaType: value.fileStorageType,
+                    mimeType: value.fileType,
+                    deliveryType: value.fileDeliveryType || "upload",
+                    attachment: value.fileType === "application/pdf"
+                }
+            )
+            : "";
+    }
+    return value;
+};
 
 
 const MessageSchema =
@@ -214,6 +236,12 @@ const MessageSchema =
 
             },
 
+            fileDeliveryType: {
+                type: String,
+                enum: ["upload", "private", "authenticated"],
+                default: "upload"
+            },
+
 
             isSeen: {
 
@@ -321,7 +349,13 @@ const MessageSchema =
 
         {
             timestamps:
-                true
+                true,
+            toJSON: {
+                transform: transformAttachmentUrl
+            },
+            toObject: {
+                transform: transformAttachmentUrl
+            }
         }
 
     );
