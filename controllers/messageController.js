@@ -1238,56 +1238,96 @@ exports.getRecentConversations = async (req, res) => {
             });
         }
 
-        const messages = await Message.find({
-            deletedFor: { $ne: currentUser },
-            $or: [
-                { sender: currentUser },
-                { receiver: currentUser }
-            ]
-        })
-            .sort({ createdAt: -1 })
-            .limit(2000)
-            .lean();
-
-        const conversationMap = new Map();
-
-        for (const item of messages) {
-            const senderId = String(
-                item.sender?._id || item.sender || ""
-            );
-
-            const receiverId = String(
-                item.receiver?._id || item.receiver || ""
-            );
-
-            const currentId = String(currentUser);
-
-            const otherUserId =
-                senderId === currentId
-                    ? receiverId
-                    : senderId;
-
-            if (!otherUserId) continue;
-
-            if (otherUserId === currentId) continue;
-
-            // Because messages are already sorted newest first,
-            // the first message for a user is their latest message.
-            if (!conversationMap.has(otherUserId)) {
-                conversationMap.set(otherUserId, {
-                    userId: otherUserId,
-                    lastMessage: item
-                });
-            }
+        const page = Number(req.query?.page ?? 1);
+        const requestedLimit = Number(req.query?.limit ?? 50);
+        if (
+            !Number.isSafeInteger(page) ||
+            page < 1 ||
+            !Number.isSafeInteger(requestedLimit) ||
+            requestedLimit < 1
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Page and limit must be positive integers."
+            });
         }
-
-        const conversations = Array.from(
-            conversationMap.values()
+        const limit = Math.min(requestedLimit, 100);
+        const skip = (page - 1) * limit;
+        if (!Number.isSafeInteger(skip)) {
+            return res.status(400).json({
+                success: false,
+                message: "Page is too large."
+            });
+        }
+        if (!isValidObjectId(currentUser)) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+        const currentUserObjectId = new mongoose.Types.ObjectId(
+            String(currentUser)
         );
+        const rows = await Message.aggregate([
+            {
+                $match: {
+                    deletedFor: { $ne: currentUserObjectId },
+                    $or: [
+                        { sender: currentUserObjectId },
+                        { receiver: currentUserObjectId }
+                    ]
+                }
+            },
+            {
+                $addFields: {
+                    otherUserId: {
+                        $cond: [
+                            { $eq: ["$sender", currentUserObjectId] },
+                            "$receiver",
+                            "$sender"
+                        ]
+                    }
+                }
+            },
+            {
+                $match: {
+                    otherUserId: {
+                        $nin: [currentUserObjectId, null]
+                    }
+                }
+            },
+            { $sort: { createdAt: -1, _id: -1 } },
+            {
+                $group: {
+                    _id: "$otherUserId",
+                    userId: {
+                        $first: { $toString: "$otherUserId" }
+                    },
+                    lastMessageAt: { $first: "$createdAt" }
+                }
+            },
+            { $sort: { lastMessageAt: -1, _id: -1 } },
+            { $skip: skip },
+            { $limit: limit + 1 },
+            {
+                $project: {
+                    _id: 0,
+                    userId: 1,
+                    lastMessage: {
+                        createdAt: "$lastMessageAt"
+                    }
+                }
+            }
+        ]);
+        const hasMore = rows.length > limit;
+        const conversations = rows.slice(0, limit);
 
         return res.status(200).json({
             success: true,
-            data: conversations
+            data: conversations,
+            page,
+            limit,
+            hasMore
         });
 
     } catch (error) {

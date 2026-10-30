@@ -296,17 +296,43 @@ exports.setGroupEncryption = async (req, res) => {
 exports.listGroups = async (req, res) => {
     try {
         const userId = getUserId(req);
+        const page = Number(req.query?.page ?? 1);
+        const requestedLimit = Number(req.query?.limit ?? 50);
+        if (
+            !Number.isSafeInteger(page) ||
+            page < 1 ||
+            !Number.isSafeInteger(requestedLimit) ||
+            requestedLimit < 1
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Page and limit must be positive integers."
+            });
+        }
+        const limit = Math.min(requestedLimit, 100);
+        const skip = (page - 1) * limit;
+        if (!Number.isSafeInteger(skip)) {
+            return res.status(400).json({
+                success: false,
+                message: "Page is too large."
+            });
+        }
         const groups = await groupPopulation(
             GroupConversation.find({
                 participants: userId
-            }).sort({ updatedAt: -1 })
+            })
+                .sort({ updatedAt: -1, _id: -1 })
+                .skip(skip)
+                .limit(limit + 1)
         );
+        const hasMore = groups.length > limit;
+        const pageGroups = groups.slice(0, limit);
 
-        const unreadRows = groups.length
+        const unreadRows = pageGroups.length
             ? await Message.aggregate([
                   {
                       $match: {
-                          groupId: { $in: groups.map(group => group._id) },
+                          groupId: { $in: pageGroups.map(group => group._id) },
                           sender: { $ne: new mongoose.Types.ObjectId(String(userId)) },
                           readBy: { $ne: new mongoose.Types.ObjectId(String(userId)) }
                       }
@@ -325,10 +351,13 @@ exports.listGroups = async (req, res) => {
 
         return res.json({
             success: true,
-            data: groups.map(group => ({
+            data: pageGroups.map(group => ({
                 ...serializeGroup(group),
                 unreadCount: unreadByGroup.get(String(group._id)) || 0
-            }))
+            })),
+            page,
+            limit,
+            hasMore
         });
     } catch (error) {
         console.error("LIST GROUPS ERROR:", error);

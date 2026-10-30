@@ -205,6 +205,27 @@ exports.getChatUsers = async (req, res) => {
         const currentUserId =
             req.user.id;
         const searchTerm = String(req.query?.q || "").trim().slice(0, 100);
+        const page = Number(req.query?.page ?? 1);
+        const requestedLimit = Number(req.query?.limit ?? 50);
+        if (
+            !Number.isSafeInteger(page) ||
+            page < 1 ||
+            !Number.isSafeInteger(requestedLimit) ||
+            requestedLimit < 1
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Page and limit must be positive integers."
+            });
+        }
+        const limit = Math.min(requestedLimit, 100);
+        const skip = (page - 1) * limit;
+        if (!Number.isSafeInteger(skip)) {
+            return res.status(400).json({
+                success: false,
+                message: "Page is too large."
+            });
+        }
         const searchPattern = new RegExp(escapeRegex(searchTerm), "i");
         const searchFilter = {
             _id: { $ne: currentUserId },
@@ -213,38 +234,15 @@ exports.getChatUsers = async (req, res) => {
                 { username: searchPattern }
             ]
         };
-        const userSearch = searchTerm.length >= 2
-            ? Promise.all([
-                  User.find({
-                      ...searchFilter,
-                      accountVisibility: { $ne: "private" }
-                  })
-                      .select("_id accountVisibility following")
-                      .limit(50)
-                      .lean(),
-                  User.find({
-                      ...searchFilter,
-                      accountVisibility: "private"
-                  })
-                      .select("_id accountVisibility following")
-                      .limit(50)
-                      .lean()
-              ]).then(([publicUsers, privateUsers]) => [
-                  ...publicUsers,
-                  ...privateUsers
-              ])
-            : Promise.resolve([]);
 
         const [
             currentUser,
-            publicUsers,
             sentToUsers,
             receivedFromUsers
         ] = await Promise.all([
             User.findById(currentUserId)
                 .select("blockedUsers following")
                 .lean(),
-            userSearch,
             Message.distinct("receiver", {
                 sender: currentUserId,
                 receiver: { $ne: null },
@@ -270,29 +268,25 @@ exports.getChatUsers = async (req, res) => {
         ].map(String));
         const eligibleIds = new Set(getEligibleConversationPeerIds({
             currentUserId,
-            users: publicUsers.filter(
-                user => user.accountVisibility !== "private"
-            ),
+            users: [],
             following: currentUser.following || [],
             existingConversationPeers: [...existingConversationIds]
         }));
         const currentFollowing = new Set(
             (currentUser.following || []).map(String)
         );
-        publicUsers
-            .filter(user =>
-                user.accountVisibility === "private" &&
-                !currentFollowing.has(String(user._id)) &&
-                !existingConversationIds.has(String(user._id))
-            )
-            .forEach(user => eligibleIds.add(String(user._id)));
 
-        const users = await User.find({
-            _id: { $in: [...eligibleIds] }
-        })
+        const userFilter = searchTerm.length >= 2
+            ? searchFilter
+            : { _id: { $in: [...eligibleIds] } };
+        const users = await User.find(userFilter)
             .select(`${safeUserFields.join(" ")} blockedUsers`)
-            .sort({ name: 1 })
+            .sort({ name: 1, _id: 1 })
+            .skip(skip)
+            .limit(limit + 1)
             .lean();
+        const hasMore = users.length > limit;
+        const pageUsers = users.slice(0, limit);
 
         const myBlockedSet =
             new Set(
@@ -306,7 +300,7 @@ exports.getChatUsers = async (req, res) => {
 
             success: true,
 
-            users: users
+            users: pageUsers
                 .map(user => {
                     const userId = String(user._id);
                     const isBlockedByMe = myBlockedSet.has(userId);
@@ -354,7 +348,10 @@ exports.getChatUsers = async (req, res) => {
                         )
                     };
                 })
-                .filter(Boolean)
+                .filter(Boolean),
+            page,
+            limit,
+            hasMore
 
         });
 

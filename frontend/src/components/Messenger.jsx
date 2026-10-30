@@ -1455,6 +1455,12 @@ const Messenger = ({ isActive = true }) => {
     const [recentTimestamps, setRecentTimestamps] =
         useState({});
 
+    const [recentConversationsPage, setRecentConversationsPage] =
+        useState(1);
+
+    const [hasMoreRecentConversations, setHasMoreRecentConversations] =
+        useState(false);
+
     const bumpRecent =
         useCallback(
             (userId, when) => {
@@ -2410,6 +2416,37 @@ useEffect(() => {
                     });
                     return next;
                 });
+                if (hasMoreRecentConversations) {
+                    try {
+                        const nextRecentPage = recentConversationsPage + 1;
+                        const recentResponse = await api.get("/messages/recent", {
+                            params: { page: nextRecentPage, limit: 50 }
+                        });
+                        const recentList = recentResponse.data?.data || [];
+                        setRecentTimestamps(previous => {
+                            const next = { ...previous };
+                            recentList.forEach(item => {
+                                const id = getId(item.userId || item.user);
+                                const lastMessage = item.lastMessage || item;
+                                const timestamp = new Date(
+                                    lastMessage?.createdAt || lastMessage?.timestamp
+                                ).getTime();
+                                if (id && !Number.isNaN(timestamp)) {
+                                    next[id] = Math.max(next[id] || 0, timestamp);
+                                }
+                            });
+                            return next;
+                        });
+                        setRecentConversationsPage(
+                            recentResponse.data?.page || nextRecentPage
+                        );
+                        setHasMoreRecentConversations(
+                            Boolean(recentResponse.data?.hasMore)
+                        );
+                    } catch (error) {
+                        console.error("Load more recent conversations error:", error);
+                    }
+                }
             } catch (error) {
                 console.error("Load more chat users error:", error);
             } finally {
@@ -2423,7 +2460,9 @@ useEffect(() => {
             loadingMoreChatUsers,
             searchUsersPage,
             hasMoreSearchUsers,
-            loadingMoreSearchUsers
+            loadingMoreSearchUsers,
+            recentConversationsPage,
+            hasMoreRecentConversations
         ]);
 
     const loadMoreGroups =
@@ -2626,6 +2665,9 @@ useEffect(() => {
     useEffect(() => {
 
         if (!user) {
+            setRecentConversationsPage(1);
+            setHasMoreRecentConversations(false);
+            setRecentTimestamps({});
             return;
         }
 
@@ -2638,7 +2680,8 @@ useEffect(() => {
 
                 const response =
                     await api.get(
-                        "/messages/recent"
+                        "/messages/recent",
+                        { params: { page: 1, limit: 50 } }
                     );
 
                 const list =
@@ -2653,6 +2696,10 @@ useEffect(() => {
                     return;
                 }
 
+                setRecentConversationsPage(response.data?.page || 1);
+                setHasMoreRecentConversations(
+                    Boolean(response.data?.hasMore)
+                );
                 setRecentTimestamps(
                     previous => {
 
@@ -10027,7 +10074,7 @@ const onCallMissed =
                 ) : (
                 <div className="user-list">
 
-                    {filteredGroups.length > 0 && (
+                    {(filteredGroups.length > 0 || hasMoreGroups) && (
                         <section className="messenger-group-list">
                             <div className="messenger-list-heading">
                                 <span>Groups</span>
@@ -10078,6 +10125,16 @@ const onCallMissed =
                                     </button>
                                 );
                             })}
+                            {hasMoreGroups && (
+                                <button
+                                    type="button"
+                                    className="messenger-pagination-button"
+                                    disabled={loadingMoreGroups}
+                                    onClick={loadMoreGroups}
+                                >
+                                    {loadingMoreGroups ? "Loading…" : "Load more groups"}
+                                </button>
+                            )}
                         </section>
                     )}
 
@@ -10099,12 +10156,28 @@ const onCallMissed =
                                     ? "Chats you archive will appear here."
                                     : "Try another name or email"}
                             </small>
+                            {(
+                                search.trim().length >= 2
+                                    ? hasMoreSearchUsers
+                                    : hasMoreChatUsers
+                            ) && (
+                                <button
+                                    type="button"
+                                    className="messenger-pagination-button"
+                                    disabled={loadingMoreChatUsers || loadingMoreSearchUsers}
+                                    onClick={loadMoreChatUsers}
+                                >
+                                    {loadingMoreChatUsers || loadingMoreSearchUsers
+                                        ? "Loading…"
+                                        : "Load more conversations"}
+                                </button>
+                            )}
 
                         </div>
 
                     ) : (
-
-                        filteredUsers.map(
+                        <>
+                        {filteredUsers.map(
                             target => {
 
                                 const id =
@@ -10209,8 +10282,24 @@ const onCallMissed =
                                 );
 
                             }
-                        )
-
+                        )}
+                        {(
+                            search.trim().length >= 2
+                                ? hasMoreSearchUsers
+                                : hasMoreChatUsers
+                        ) && (
+                            <button
+                                type="button"
+                                className="messenger-pagination-button"
+                                disabled={loadingMoreChatUsers || loadingMoreSearchUsers}
+                                onClick={loadMoreChatUsers}
+                            >
+                                {loadingMoreChatUsers || loadingMoreSearchUsers
+                                    ? "Loading…"
+                                    : "Load more conversations"}
+                            </button>
+                        )}
+                        </>
                     )}
 
                 </div>

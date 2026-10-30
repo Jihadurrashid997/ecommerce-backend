@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const GroupConversation = require("../models/GroupConversation");
+const Message = require("../models/Message");
 const controller = require("../controllers/groupController");
 
 const ADMIN_ID = "507f1f77bcf86cd799439011";
@@ -37,6 +38,35 @@ const makePopulationQuery = group => ({
         return Promise.resolve(group).then(resolve, reject);
     }
 });
+
+const makeGroupListQuery = (groups, pagination) => {
+    let skip = 0;
+    let limit = groups.length;
+    return {
+        sort() {
+            return this;
+        },
+        skip(count) {
+            skip = count;
+            pagination.skip = count;
+            return this;
+        },
+        limit(count) {
+            limit = count;
+            pagination.limit = count;
+            return this;
+        },
+        populate() {
+            return this;
+        },
+        then(resolve, reject) {
+            return Promise.resolve(groups.slice(skip, skip + limit)).then(
+                resolve,
+                reject
+            );
+        }
+    };
+};
 
 test("only group admins can update group details", async () => {
     const originalFindOne = GroupConversation.findOne;
@@ -135,6 +165,55 @@ test("users who are not group members cannot retrieve its photo", async () => {
     GroupConversation.findOne = () => ({
         select() {
             return Promise.resolve(null);
+        }
+    });
+
+    test("group listing paginates results and calculates unread counts for the current page", async () => {
+        const originals = {
+            find: GroupConversation.find,
+            aggregate: Message.aggregate
+        };
+        const groups = [
+            { _id: GROUP_ID, name: "First", participants: [ADMIN_ID] },
+            {
+                _id: "507f191e810c19729de860ec",
+                name: "Second",
+                participants: [ADMIN_ID]
+            }
+        ];
+        const pagination = {};
+        let unreadGroupIds;
+        GroupConversation.find = filter => {
+            assert.deepEqual(filter, { participants: ADMIN_ID });
+            return makeGroupListQuery(groups, pagination);
+        };
+        Message.aggregate = async pipeline => {
+            unreadGroupIds = pipeline[0].$match.groupId.$in;
+            return [];
+        };
+
+        try {
+            const response = makeResponse();
+            await controller.listGroups(
+                {
+                    user: { id: ADMIN_ID },
+                    query: { page: "1", limit: "1" }
+                },
+                response
+            );
+
+            assert.equal(response.body.page, 1);
+            assert.equal(response.body.limit, 1);
+            assert.equal(response.body.hasMore, true);
+            assert.deepEqual(pagination, { skip: 0, limit: 2 });
+            assert.deepEqual(
+                response.body.data.map(group => group._id),
+                [GROUP_ID]
+            );
+            assert.deepEqual(unreadGroupIds, [GROUP_ID]);
+        } finally {
+            GroupConversation.find = originals.find;
+            Message.aggregate = originals.aggregate;
         }
     });
 

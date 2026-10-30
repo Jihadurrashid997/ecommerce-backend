@@ -9,21 +9,29 @@ const PUBLIC_USER = "507f191e810c19729de860ea";
 const PRIVATE_USER = "507f191e810c19729de860eb";
 const SEARCH_TIME = new Date("2026-01-01T00:00:00.000Z");
 
-const query = value => ({
-    select() {
-        return this;
-    },
-    limit() {
-        return this;
-    },
-    sort() {
-        return this;
-    },
-    skip() {
-        return this;
-    },
-    lean: async () => value
-});
+const query = value => {
+    let skip = 0;
+    let limit = Infinity;
+    return {
+        select() {
+            return this;
+        },
+        limit(count) {
+            limit = count;
+            return this;
+        },
+        sort() {
+            return this;
+        },
+        skip(count) {
+            skip = count;
+            return this;
+        },
+        lean: async () => Array.isArray(value)
+            ? value.slice(skip, skip + limit)
+            : value
+    };
+};
 
 test("chat-user search discovers matching Public accounts without exposing unapproved Private accounts", async () => {
     const originals = {
@@ -38,23 +46,24 @@ test("chat-user search discovers matching Public accounts without exposing unapp
         blockedUsers: []
     });
     User.find = filter => {
-        if (filter.accountVisibility?.$ne === "private") {
+        if (filter._id?.$ne === CURRENT_USER) {
             searchFilters.push(filter);
             return query([
                 {
                     _id: PUBLIC_USER,
+                    name: "Jordan",
                     accountVisibility: "public",
-                    following: []
-                }
-            ]);
-        }
-        if (filter.accountVisibility === "private") {
-            searchFilters.push(filter);
-            return query([
+                    following: [],
+                    blockedUsers: [],
+                    lastSeen: SEARCH_TIME
+                },
                 {
                     _id: PRIVATE_USER,
+                    name: "Jordan Private",
                     accountVisibility: "private",
-                    following: []
+                    following: [],
+                    blockedUsers: [],
+                    lastSeen: SEARCH_TIME
                 }
             ]);
         }
@@ -62,24 +71,10 @@ test("chat-user search discovers matching Public accounts without exposing unapp
         const ids = filter._id?.$in || [];
         return query([
             ...(ids.includes(PUBLIC_USER)
-                ? [{
-                      _id: PUBLIC_USER,
-                      name: "Jordan",
-                      accountVisibility: "public",
-                      following: [],
-                      blockedUsers: [],
-                      lastSeen: SEARCH_TIME
-                  }]
+                ? [{ _id: PUBLIC_USER }]
                 : []),
             ...(ids.includes(PRIVATE_USER)
-                ? [{
-                      _id: PRIVATE_USER,
-                      name: "Jordan Private",
-                      accountVisibility: "private",
-                      following: [],
-                      blockedUsers: [],
-                      lastSeen: SEARCH_TIME
-                  }]
+                ? [{ _id: PRIVATE_USER }]
                 : [])
         ]);
     };
@@ -118,6 +113,71 @@ test("chat-user search discovers matching Public accounts without exposing unapp
                 filter.$or[0].name.source === "jor"
             ),
             true
+        );
+    } finally {
+        User.findById = originals.userFindById;
+        User.find = originals.userFind;
+        Message.distinct = originals.messageDistinct;
+    }
+});
+
+test("chat-user discovery paginates server-side and reports whether another page exists", async () => {
+    const originals = {
+        userFindById: User.findById,
+        userFind: User.find,
+        messageDistinct: Message.distinct
+    };
+    const peers = [
+        {
+            _id: PUBLIC_USER,
+            name: "Alpha",
+            accountVisibility: "public",
+            following: [],
+            blockedUsers: []
+        },
+        {
+            _id: PRIVATE_USER,
+            name: "Beta",
+            accountVisibility: "public",
+            following: [],
+            blockedUsers: []
+        }
+    ];
+    User.findById = () => query({
+        _id: CURRENT_USER,
+        following: [],
+        blockedUsers: []
+    });
+    User.find = filter => query(
+        peers.filter(peer =>
+            (filter._id?.$in || []).map(String).includes(String(peer._id))
+        )
+    );
+    Message.distinct = async field =>
+        field === "receiver" ? [PUBLIC_USER, PRIVATE_USER] : [];
+
+    try {
+        const response = {
+            body: null,
+            json(body) {
+                this.body = body;
+                return this;
+            }
+        };
+        await userController.getChatUsers(
+            {
+                user: { id: CURRENT_USER },
+                query: { page: "1", limit: "1" }
+            },
+            response
+        );
+
+        assert.equal(response.body.page, 1);
+        assert.equal(response.body.limit, 1);
+        assert.equal(response.body.hasMore, true);
+        assert.deepEqual(
+            response.body.users.map(peer => peer._id),
+            [PUBLIC_USER]
         );
     } finally {
         User.findById = originals.userFindById;
