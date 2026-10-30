@@ -15,6 +15,23 @@ const GroupConversationSchema = new mongoose.Schema(
             maxlength: 500,
             default: ""
         },
+        groupPhoto: {
+            type: String,
+            default: ""
+        },
+        groupPhotoPublicId: {
+            type: String,
+            default: ""
+        },
+        groupPhotoStorageType: {
+            type: String,
+            enum: ["", "image"],
+            default: ""
+        },
+        groupPhotoType: {
+            type: String,
+            default: ""
+        },
         isEncrypted: {
             type: Boolean,
             default: false

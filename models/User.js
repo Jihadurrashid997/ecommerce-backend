@@ -317,12 +317,53 @@ const userSchema = new mongoose.Schema(
             }
         ],
 
+        pendingFollowRequests: [
+            {
+                user: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User",
+                    required: true
+                },
+                createdAt: {
+                    type: Date,
+                    default: Date.now
+                }
+            }
+        ],
+
+        accountVisibility: {
+            type: String,
+            enum: ["public", "private"],
+            default: "public",
+            index: true
+        },
+
+        messageRequestAttempts: {
+            type: [Date],
+            default: [],
+            select: false
+        },
+
         blockedUsers: [
             {
                 type: mongoose.Schema.Types.ObjectId,
                 ref: "User"
             }
-        ]
+        ],
+
+        messengerPreferences: {
+            type: Map,
+            of: new mongoose.Schema(
+                {
+                    pinned: { type: Boolean, default: false },
+                    archived: { type: Boolean, default: false },
+                    muted: { type: Boolean, default: false }
+                },
+                { _id: false }
+            ),
+            default: () => new Map(),
+            select: false
+        }
 
     },
     {

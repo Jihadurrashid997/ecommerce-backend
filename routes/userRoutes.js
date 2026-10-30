@@ -7,6 +7,8 @@ const {
 
     getUsers,
     getChatUsers,
+    getMessengerPreferences,
+    updateMessengerPreference,
     getProfile,
     updateProfile,
     searchUsers,
@@ -20,7 +22,9 @@ const {
     changePassword,
     getSocialStats,
     toggleFollow,
-    getFollowing
+    getFollowing,
+    getFollowRequests,
+    respondToFollowRequest
 
 } =
     require("../controllers/userController");
@@ -71,6 +75,18 @@ router.get(
     getChatUsers
 );
 
+router.get(
+    "/messenger-preferences",
+    auth(),
+    getMessengerPreferences
+);
+
+router.patch(
+    "/messenger-preferences/:conversationId",
+    auth(),
+    updateMessengerPreference
+);
+
 
 // SOCIAL (follow + profile stats)
 
@@ -84,6 +100,18 @@ router.post(
     "/follow/:id",
     auth(),
     toggleFollow
+);
+
+router.get(
+    "/follow-requests",
+    auth(),
+    getFollowRequests
+);
+
+router.post(
+    "/follow-requests/:id/respond",
+    auth(),
+    respondToFollowRequest
 );
 
 router.get(

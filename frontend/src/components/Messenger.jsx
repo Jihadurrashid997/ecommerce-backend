@@ -562,8 +562,41 @@ const Messenger = ({ isActive = true }) => {
     const [users, setUsers] =
         useState([]);
 
+    const [chatUsersPage, setChatUsersPage] =
+        useState(1);
+
+    const [hasMoreChatUsers, setHasMoreChatUsers] =
+        useState(false);
+
+    const [loadingMoreChatUsers, setLoadingMoreChatUsers] =
+        useState(false);
+
+    const [searchUsersPage, setSearchUsersPage] =
+        useState(1);
+
+    const [hasMoreSearchUsers, setHasMoreSearchUsers] =
+        useState(false);
+
+    const [loadingMoreSearchUsers, setLoadingMoreSearchUsers] =
+        useState(false);
+
+    const [discoveredUsers, setDiscoveredUsers] =
+        useState([]);
+
     const [groups, setGroups] =
         useState([]);
+
+    const [groupsPage, setGroupsPage] =
+        useState(1);
+
+    const [hasMoreGroups, setHasMoreGroups] =
+        useState(false);
+
+    const [loadingMoreGroups, setLoadingMoreGroups] =
+        useState(false);
+
+    const [groupPhotoUrls, setGroupPhotoUrls] =
+        useState({});
 
     const [chatPreferences, setChatPreferences] =
         useState({});
@@ -573,6 +606,33 @@ const Messenger = ({ isActive = true }) => {
 
     const [chatListView, setChatListView] =
         useState("chats");
+
+    const [messageRequests, setMessageRequests] =
+        useState([]);
+
+    const [messageRequestsBusy, setMessageRequestsBusy] =
+        useState("");
+
+    const [liveLocations, setLiveLocations] =
+        useState([]);
+
+    const [showLiveLocationOptions, setShowLiveLocationOptions] =
+        useState(false);
+
+    const [liveLocationBusy, setLiveLocationBusy] =
+        useState(false);
+
+    const liveLocationWatchRef =
+        useRef(null);
+
+    const liveLocationExpiryRef =
+        useRef(null);
+
+    const liveLocationShareRef =
+        useRef(null);
+
+    const liveLocationMountedRef =
+        useRef(false);
 
     const [encryptionIdentity, setEncryptionIdentity] =
         useState(null);
@@ -612,6 +672,168 @@ const Messenger = ({ isActive = true }) => {
 
     const [message, setMessage] =
         useState("");
+
+    useEffect(() => {
+        liveLocationMountedRef.current = true;
+        return () => {
+            liveLocationMountedRef.current = false;
+            if (liveLocationWatchRef.current !== null) {
+                navigator.geolocation?.clearWatch(
+                    liveLocationWatchRef.current.watchId
+                );
+                liveLocationWatchRef.current = null;
+            }
+            if (liveLocationExpiryRef.current) {
+                clearTimeout(liveLocationExpiryRef.current);
+                liveLocationExpiryRef.current = null;
+            }
+
+            const share = liveLocationShareRef.current;
+            liveLocationShareRef.current = null;
+            if (share?._id) {
+                setTimeout(() => {
+                    if (!liveLocationMountedRef.current) {
+                        api.delete(
+                            `/messages/live-locations/${share._id}`
+                        ).catch(error => {
+                            console.error(
+                                "Stop live location on Messenger close error:",
+                                error
+                            );
+                        });
+                    }
+                }, 0);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        setLiveLocations([]);
+        if (!selectedUser || !user) {
+            return undefined;
+        }
+
+        const selectedId = getId(selectedUser);
+        const params = selectedUser.isGroup
+            ? { groupId: selectedId }
+            : { peerId: selectedId };
+        let cancelled = false;
+        api.get("/messages/live-locations", { params })
+            .then(response => {
+                if (!cancelled) {
+                    setLiveLocations(response.data?.data || []);
+                }
+            })
+            .catch(error => {
+                if (!cancelled && error.response?.status !== 403) {
+                    console.error("Load live locations error:", error);
+                }
+            });
+
+        const belongsToSelectedConversation = share =>
+            selectedUser.isGroup
+                ? String(share.groupId) === selectedId
+                : !share.groupId &&
+                    (
+                        String(share.sender) === selectedId ||
+                        String(share.recipient) === selectedId
+                    );
+        const handleUpdate = share => {
+            if (!belongsToSelectedConversation(share)) {
+                return;
+            }
+            setLiveLocations(previous => [
+                ...previous.filter(item => item._id !== share._id),
+                share
+            ]);
+        };
+        const handleStop = payload => {
+            setLiveLocations(previous =>
+                previous.filter(item => item._id !== payload?.shareId)
+            );
+        };
+
+        socket.on("live-location-updated", handleUpdate);
+        socket.on("live-location-stopped", handleStop);
+        return () => {
+            cancelled = true;
+            socket.off("live-location-updated", handleUpdate);
+            socket.off("live-location-stopped", handleStop);
+        };
+    }, [selectedUser, user]);
+
+    useEffect(() => {
+        const timers = liveLocations.map(share => {
+            const delay = new Date(share.expiresAt).getTime() - Date.now();
+            if (delay <= 0) {
+                setLiveLocations(previous =>
+                    previous.filter(item => item._id !== share._id)
+                );
+                return null;
+            }
+            return setTimeout(() => {
+                setLiveLocations(previous =>
+                    previous.filter(item => item._id !== share._id)
+                );
+                if (
+                    liveLocationShareRef.current?._id === share._id
+                ) {
+                    if (liveLocationWatchRef.current !== null) {
+                        navigator.geolocation?.clearWatch(
+                            liveLocationWatchRef.current.watchId
+                        );
+                        liveLocationWatchRef.current = null;
+                    }
+                    liveLocationShareRef.current = null;
+                    liveLocationExpiryRef.current = null;
+                }
+            }, delay);
+        });
+        return () => timers.forEach(timer => timer && clearTimeout(timer));
+    }, [liveLocations]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const createdUrls = [];
+
+        Promise.all(
+            groups
+                .filter(group => group.groupPhoto)
+                .map(async group => {
+                    try {
+                        const response = await api.get(
+                            `/groups/${getId(group)}/photo`,
+                            { responseType: "blob" }
+                        );
+                        if (
+                            typeof URL.createObjectURL !== "function" ||
+                            !response.data
+                        ) {
+                            return null;
+                        }
+                        const url = URL.createObjectURL(response.data);
+                        createdUrls.push(url);
+                        return [getId(group), url];
+                    } catch (error) {
+                        console.error("Load group photo error:", error);
+                        return null;
+                    }
+                })
+        ).then(entries => {
+            if (cancelled) {
+                createdUrls.forEach(url => URL.revokeObjectURL(url));
+                return;
+            }
+            setGroupPhotoUrls(
+                Object.fromEntries(entries.filter(Boolean))
+            );
+        });
+
+        return () => {
+            cancelled = true;
+            createdUrls.forEach(url => URL.revokeObjectURL(url));
+        };
+    }, [groups, user]);
 
     useEffect(() => {
         if (!isActive) {
@@ -691,6 +913,21 @@ const Messenger = ({ isActive = true }) => {
 
     const [showGroupDetails, setShowGroupDetails] =
         useState(false);
+
+    const [groupDetailsDescription, setGroupDetailsDescription] =
+        useState("");
+
+    const [groupPhotoFile, setGroupPhotoFile] =
+        useState(null);
+
+    const [groupDetailsBusy, setGroupDetailsBusy] =
+        useState(false);
+
+    const [groupDetailsError, setGroupDetailsError] =
+        useState("");
+
+    const groupPhotoInputRef =
+        useRef(null);
 
     const [groupMemberSelection, setGroupMemberSelection] =
         useState([]);
@@ -777,6 +1014,17 @@ const Messenger = ({ isActive = true }) => {
                     [key]: value
                 }
             }));
+
+            if (["pinned", "archived", "muted"].includes(key)) {
+                api.patch(`/users/messenger-preferences/${id}`, {
+                    [key]: value
+                }).catch(error => {
+                    console.error(
+                        "Messenger account preference save error:",
+                        error
+                    );
+                });
+            }
         };
 
     const getChatPreference =
@@ -1089,6 +1337,14 @@ const Messenger = ({ isActive = true }) => {
     }, [showGroupDetails, selectedUser, user]);
 
     useEffect(() => {
+        if (showGroupDetails && selectedUser?.isGroup) {
+            setGroupDetailsDescription(selectedUser.description || "");
+            setGroupPhotoFile(null);
+            setGroupDetailsError("");
+        }
+    }, [showGroupDetails, selectedUser]);
+
+    useEffect(() => {
         const userId = getId(user);
 
         if (!userId) {
@@ -1118,6 +1374,52 @@ const Messenger = ({ isActive = true }) => {
         }
 
         setChatPreferencesOwner(userId);
+    }, [user]);
+
+    useEffect(() => {
+        const userId = getId(user);
+        if (!userId) {
+            return undefined;
+        }
+
+        let cancelled = false;
+        api.get("/users/messenger-preferences")
+            .then(response => {
+                if (cancelled) {
+                    return;
+                }
+                const preferences = response.data?.preferences;
+                if (
+                    !preferences ||
+                    typeof preferences !== "object" ||
+                    Array.isArray(preferences)
+                ) {
+                    return;
+                }
+
+                setChatPreferences(previous => {
+                    const merged = { ...previous };
+                    Object.entries(preferences).forEach(([id, value]) => {
+                        merged[id] = {
+                            ...merged[id],
+                            ...value
+                        };
+                    });
+                    return merged;
+                });
+            })
+            .catch(error => {
+                if (!cancelled) {
+                    console.error(
+                        "Messenger account preferences load error:",
+                        error
+                    );
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
     }, [user]);
 
     useEffect(() => {
@@ -1919,7 +2221,8 @@ useEffect(() => {
 
                     const response =
                         await api.get(
-                            "/users/chat-users"
+                            "/users/chat-users",
+                            { params: { page: 1, limit: 50 } }
                         );
 
                     const data =
@@ -1938,9 +2241,13 @@ useEffect(() => {
                             : [];
 
                     setUsers(list);
+                    setChatUsersPage(response.data?.page || 1);
+                    setHasMoreChatUsers(Boolean(response.data?.hasMore));
 
                     try {
-                        const groupResponse = await api.get("/groups");
+                        const groupResponse = await api.get("/groups", {
+                            params: { page: 1, limit: 50 }
+                        });
                         const groupList =
                             groupResponse.data?.data ||
                             groupResponse.data?.groups ||
@@ -1954,6 +2261,8 @@ useEffect(() => {
                                   }))
                                 : []
                         );
+                        setGroupsPage(groupResponse.data?.page || 1);
+                        setHasMoreGroups(Boolean(groupResponse.data?.hasMore));
                         if (Array.isArray(groupList)) {
                             setUnreadUsers(previous => {
                                 const next = { ...previous };
@@ -2034,12 +2343,271 @@ useEffect(() => {
             ]
         );
 
+    const loadMoreChatUsers =
+        useCallback(async () => {
+            if (!user || loadingMoreChatUsers || loadingMoreSearchUsers) {
+                return;
+            }
+
+            const term = search.trim();
+            if (term.length >= 2) {
+                if (!hasMoreSearchUsers) {
+                    return;
+                }
+                setLoadingMoreSearchUsers(true);
+                try {
+                    const nextPage = searchUsersPage + 1;
+                    const response = await api.get("/users/chat-users", {
+                        params: { q: term, page: nextPage, limit: 50 }
+                    });
+                    const results = response.data?.users || [];
+                    setDiscoveredUsers(previous => {
+                        const byId = new Map(
+                            previous.map(target => [getId(target), target])
+                        );
+                        results.forEach(target => byId.set(getId(target), target));
+                        return [...byId.values()];
+                    });
+                    setSearchUsersPage(response.data?.page || nextPage);
+                    setHasMoreSearchUsers(Boolean(response.data?.hasMore));
+                } catch (error) {
+                    console.error("Load more chat-user search results error:", error);
+                } finally {
+                    setLoadingMoreSearchUsers(false);
+                }
+                return;
+            }
+
+            if (!hasMoreChatUsers) {
+                return;
+            }
+            setLoadingMoreChatUsers(true);
+            try {
+                const nextPage = chatUsersPage + 1;
+                const response = await api.get("/users/chat-users", {
+                    params: { page: nextPage, limit: 50 }
+                });
+                const results = response.data?.users || [];
+                setUsers(previous => {
+                    const byId = new Map(
+                        previous.map(target => [getId(target), target])
+                    );
+                    results.forEach(target => byId.set(getId(target), target));
+                    return [...byId.values()];
+                });
+                setChatUsersPage(response.data?.page || nextPage);
+                setHasMoreChatUsers(Boolean(response.data?.hasMore));
+                setLastSeenMap(previous => {
+                    const next = { ...previous };
+                    results.forEach(target => {
+                        const seenAt = target.lastSeen
+                            ? new Date(target.lastSeen).getTime()
+                            : null;
+                        if (seenAt && !Number.isNaN(seenAt)) {
+                            const id = getId(target);
+                            next[id] = Math.max(next[id] || 0, seenAt);
+                        }
+                    });
+                    return next;
+                });
+            } catch (error) {
+                console.error("Load more chat users error:", error);
+            } finally {
+                setLoadingMoreChatUsers(false);
+            }
+        }, [
+            user,
+            search,
+            chatUsersPage,
+            hasMoreChatUsers,
+            loadingMoreChatUsers,
+            searchUsersPage,
+            hasMoreSearchUsers,
+            loadingMoreSearchUsers
+        ]);
+
+    const loadMoreGroups =
+        useCallback(async () => {
+            if (!user || !hasMoreGroups || loadingMoreGroups) {
+                return;
+            }
+            setLoadingMoreGroups(true);
+            try {
+                const nextPage = groupsPage + 1;
+                const response = await api.get("/groups", {
+                    params: { page: nextPage, limit: 50 }
+                });
+                const results =
+                    response.data?.data ||
+                    response.data?.groups ||
+                    [];
+                if (Array.isArray(results)) {
+                    setGroups(previous => {
+                        const byId = new Map(
+                            previous.map(group => [getId(group), group])
+                        );
+                        results.forEach(group => {
+                            byId.set(getId(group), { ...group, isGroup: true });
+                        });
+                        return [...byId.values()];
+                    });
+                    setUnreadUsers(previous => {
+                        const next = { ...previous };
+                        results.forEach(group => {
+                            next[getId(group)] = group.unreadCount || 0;
+                        });
+                        return next;
+                    });
+                }
+                setGroupsPage(response.data?.page || nextPage);
+                setHasMoreGroups(Boolean(response.data?.hasMore));
+            } catch (error) {
+                console.error("Load more groups error:", error);
+            } finally {
+                setLoadingMoreGroups(false);
+            }
+        }, [user, hasMoreGroups, loadingMoreGroups, groupsPage]);
+
 
     useEffect(() => {
 
         loadUsers();
 
     }, [loadUsers]);
+
+    useEffect(() => {
+        const term = search.trim();
+        if (!user || term.length < 2) {
+            setDiscoveredUsers([]);
+            setSearchUsersPage(1);
+            setHasMoreSearchUsers(false);
+            return undefined;
+        }
+
+        let cancelled = false;
+        const timer = window.setTimeout(async () => {
+            try {
+                const response = await api.get("/users/chat-users", {
+                    params: { q: term, page: 1, limit: 50 }
+                });
+                if (!cancelled) {
+                    const results =
+                        response.data?.users ||
+                        response.data?.data ||
+                        [];
+                    setDiscoveredUsers(
+                        Array.isArray(results) ? results : []
+                    );
+                    setSearchUsersPage(response.data?.page || 1);
+                    setHasMoreSearchUsers(Boolean(response.data?.hasMore));
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    console.error("Public chat-user search error:", error);
+                    setDiscoveredUsers([]);
+                }
+            }
+        }, 250);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [search, user]);
+
+    const loadMessageRequests =
+        useCallback(
+            async () => {
+                if (!user) {
+                    setMessageRequests([]);
+                    return;
+                }
+
+                try {
+                    const response = await api.get("/messages/requests");
+                    const requests = Array.isArray(response.data?.requests)
+                        ? response.data.requests
+                        : [];
+                    const visibleRequests = await Promise.all(
+                        requests.map(async request => {
+                            if (!request.isEncrypted) {
+                                return request;
+                            }
+
+                            const [visible] = await decryptMessagesForTarget(
+                                [
+                                    {
+                                        ...request,
+                                        sender: getId(request.sender),
+                                        receiver: getId(user)
+                                    }
+                                ],
+                                request.sender
+                            );
+                            const media = getEncryptedMediaMetadata(
+                                visible?.message
+                            );
+                            return {
+                                ...request,
+                                message: media?.caption || visible?.message || "",
+                                fileName: media?.fileName || request.fileName,
+                                fileType: media?.fileType || request.fileType
+                            };
+                        })
+                    );
+                    setMessageRequests(visibleRequests);
+                } catch (error) {
+                    console.error("Message Requests load error:", error);
+                }
+            },
+            [decryptMessagesForTarget, user]
+        );
+
+    useEffect(() => {
+        loadMessageRequests();
+    }, [loadMessageRequests]);
+
+    const handleMessageRequestAction =
+        useCallback(
+            async (request, action) => {
+                const requestId = String(request?._id || "");
+                if (!requestId || messageRequestsBusy) {
+                    return;
+                }
+
+                try {
+                    setMessageRequestsBusy(requestId);
+                    if (action === "accept") {
+                        await api.post(`/messages/requests/${requestId}/accept`);
+                    } else if (action === "delete") {
+                        await api.delete(`/messages/requests/${requestId}`);
+                    } else if (action === "block") {
+                        await api.post(`/messages/requests/${requestId}/block`);
+                    } else if (action === "report") {
+                        await api.post(`/messages/requests/${requestId}/report`, {
+                            reason: ""
+                        });
+                    }
+
+                    if (action !== "report") {
+                        setMessageRequests(previous =>
+                            previous.filter(item => String(item._id) !== requestId)
+                        );
+                    }
+                    if (action === "accept") {
+                        await loadUsers();
+                    }
+                } catch (error) {
+                    showMessengerToast(
+                        error.response?.data?.message ||
+                            "Could not update this Message Request."
+                    );
+                } finally {
+                    setMessageRequestsBusy("");
+                }
+            },
+            [messageRequestsBusy, loadUsers, showMessengerToast]
+        );
 
 
     /* =====================================================
@@ -6028,6 +6596,61 @@ const onCallMissed =
             }
         };
 
+    const saveGroupDetails = async ({ removePhoto = false } = {}) => {
+        if (
+            !selectedUser?.isGroup ||
+            groupDetailsBusy
+        ) {
+            return;
+        }
+
+        setGroupDetailsBusy(true);
+        setGroupDetailsError("");
+        const formData = new FormData();
+        formData.append("description", groupDetailsDescription);
+        if (groupPhotoFile) {
+            formData.append("file", groupPhotoFile);
+        }
+        if (removePhoto) {
+            formData.append("removePhoto", "true");
+        }
+
+        try {
+            const response = await api.put(
+                `/groups/${getId(selectedUser)}/details`,
+                formData
+            );
+            const updated = {
+                ...(response.data?.data || {}),
+                isGroup: true
+            };
+            if (!getId(updated)) {
+                throw new Error("Group details could not be refreshed.");
+            }
+
+            setGroups(previous =>
+                previous.map(group =>
+                    getId(group) === getId(updated) ? updated : group
+                )
+            );
+            setSelectedUser(updated);
+            selectedUserRef.current = updated;
+            setGroupPhotoFile(null);
+            if (groupPhotoInputRef.current) {
+                groupPhotoInputRef.current.value = "";
+            }
+        } catch (error) {
+            console.error("Update group details error:", error);
+            setGroupDetailsError(
+                error.response?.data?.message ||
+                    error.message ||
+                    "Could not update group details."
+            );
+        } finally {
+            setGroupDetailsBusy(false);
+        }
+    };
+
     const toggleGroupEncryption =
         async () => {
             if (!selectedUser?.isGroup || groupEncryptionBusy) {
@@ -6584,6 +7207,48 @@ const onCallMissed =
                     "Send message error:",
                     error
                 );
+                if (
+                    !selectedUser.isGroup &&
+                    error.response?.data?.code === "MESSAGE_REQUEST_REQUIRED"
+                ) {
+                    setMessages(previous =>
+                        previous.filter(item => item._id !== temporaryId)
+                    );
+
+                    if (
+                        !window.confirm(
+                            "This account is Private. Send your message as a Message Request?"
+                        )
+                    ) {
+                        setMessage(text);
+                        return;
+                    }
+
+                    try {
+                        await api.post("/messages/requests", {
+                            receiver,
+                            message: storedText,
+                            isEncrypted: encryptedChat
+                        });
+                        showMessengerToast(
+                            "Message Request sent. It will appear in the inbox only if accepted."
+                        );
+                        return;
+                    } catch (requestError) {
+                        console.error(
+                            "Send Message Request error:",
+                            requestError
+                        );
+                        setMessage(text);
+                        alert(
+                            requestError.response?.data?.message ||
+                                requestError.message ||
+                                "Message Request could not be sent."
+                        );
+                        return;
+                    }
+                }
+
                 let sendError = error;
 
                 const retryable =
@@ -6846,6 +7511,185 @@ const onCallMissed =
             }
         };
 
+    const clearLiveLocationTracking = shareId => {
+        if (
+            liveLocationWatchRef.current &&
+            (!shareId ||
+                liveLocationWatchRef.current.shareId === shareId)
+        ) {
+            navigator.geolocation?.clearWatch(
+                liveLocationWatchRef.current.watchId
+            );
+            liveLocationWatchRef.current = null;
+        }
+        if (
+            liveLocationShareRef.current &&
+            (!shareId ||
+                liveLocationShareRef.current._id === shareId)
+        ) {
+            liveLocationShareRef.current = null;
+        }
+    };
+
+    const stopLiveLocation = async shareId => {
+        if (!shareId) {
+            return;
+        }
+
+        try {
+            await api.delete(`/messages/live-locations/${shareId}`);
+            clearLiveLocationTracking(shareId);
+            setLiveLocations(previous =>
+                previous.filter(item => item._id !== shareId)
+            );
+            return true;
+        } catch (error) {
+            if (error.response?.status === 404) {
+                clearLiveLocationTracking(shareId);
+                setLiveLocations(previous =>
+                    previous.filter(item => item._id !== shareId)
+                );
+                return true;
+            }
+            console.error("Stop live location error:", error);
+            alert(
+                error.response?.data?.message ||
+                    "Could not stop live location sharing."
+            );
+            return false;
+        }
+    };
+
+    const startLiveLocation = async durationMinutes => {
+        if (
+            !selectedUser ||
+            isConversationBlocked ||
+            liveLocationBusy
+        ) {
+            return;
+        }
+        if (
+            !navigator.geolocation ||
+            typeof navigator.geolocation.watchPosition !== "function"
+        ) {
+            alert("This browser does not support live location sharing.");
+            return;
+        }
+
+        const audience = selectedUser.isGroup
+            ? `all ${selectedUser.participants?.length || "group"} members`
+            : getUserName(selectedUser);
+        const durationLabel = {
+            15: "15 minutes",
+            60: "1 hour",
+            480: "8 hours"
+        }[durationMinutes];
+        if (!window.confirm(
+            `Share your live location with ${audience} for ${durationLabel}? It stops automatically at expiry or when you stop it. Only the latest location is kept.`
+        )) {
+            return;
+        }
+
+        setLiveLocationBusy(true);
+        try {
+            const previousShare = liveLocationShareRef.current;
+            if (
+                previousShare &&
+                !await stopLiveLocation(previousShare._id)
+            ) {
+                return;
+            }
+
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    resolve,
+                    reject,
+                    {
+                        enableHighAccuracy: false,
+                        maximumAge: 0,
+                        timeout: 12000
+                    }
+                );
+            });
+            const response = await api.post(
+                "/messages/live-locations",
+                {
+                    ...(selectedUser.isGroup
+                        ? { groupId: getId(selectedUser) }
+                        : { recipientId: getId(selectedUser) }),
+                    durationMinutes,
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                }
+            );
+            const share = response.data?.data;
+            if (!share?._id) {
+                throw new Error("The live location share could not be started.");
+            }
+
+            clearLiveLocationTracking();
+            liveLocationShareRef.current = share;
+            setLiveLocations(previous => [
+                ...previous.filter(item => item._id !== share._id),
+                share
+            ]);
+            setShowLiveLocationOptions(false);
+            let lastUpdateAt = Date.now();
+            const watchId = navigator.geolocation.watchPosition(
+                nextPosition => {
+                    const now = Date.now();
+                    if (now - lastUpdateAt < 10000) {
+                        return;
+                    }
+                    lastUpdateAt = now;
+                    api.patch(
+                        `/messages/live-locations/${share._id}`,
+                        {
+                            latitude: nextPosition.coords.latitude,
+                            longitude: nextPosition.coords.longitude
+                        }
+                    ).catch(error => {
+                        console.error("Live location update error:", error);
+                        if (
+                            error.response?.status === 403 ||
+                            error.response?.status === 404
+                        ) {
+                            void stopLiveLocation(share._id);
+                        }
+                    });
+                },
+                error => {
+                    console.error("Live location tracking error:", error);
+                    void stopLiveLocation(share._id);
+                },
+                {
+                    enableHighAccuracy: false,
+                    maximumAge: 10000,
+                    timeout: 20000
+                }
+            );
+            liveLocationWatchRef.current = {
+                shareId: share._id,
+                watchId
+            };
+        } catch (error) {
+            const messageByCode = {
+                1: "Location permission was denied. Allow location access to share live location.",
+                2: "Your location is unavailable. Try again when your device can determine it.",
+                3: "Location lookup timed out. Please try again."
+            };
+            console.error("Start live location error:", error);
+            alert(
+                messageByCode[error.code] ||
+                    error.response?.data?.message ||
+                    error.message ||
+                    "Could not start live location sharing."
+            );
+        } finally {
+            setLiveLocationBusy(false);
+        }
+    };
+
 
     /* =====================================================
        TYPING
@@ -6980,7 +7824,30 @@ const onCallMissed =
             formData.append("isEncrypted", "true");
         }
 
-        const response = await api.post("/messages/send", formData);
+        let response;
+        try {
+            response = await api.post("/messages/send", formData);
+        } catch (error) {
+            if (
+                !target.isGroup &&
+                error.response?.data?.code === "MESSAGE_REQUEST_REQUIRED"
+            ) {
+                if (
+                    !window.confirm(
+                        "This account is Private. Send this attachment as a Message Request?"
+                    )
+                ) {
+                    return;
+                }
+
+                await api.post("/messages/requests", formData);
+                showMessengerToast(
+                    "Message Request sent. It will appear in the inbox only if accepted."
+                );
+                return;
+            }
+            throw error;
+        }
         const saved =
             response.data?.data ||
             response.data?.message;
@@ -7911,13 +8778,25 @@ const onCallMissed =
                         .trim()
                         .toLowerCase();
 
+                const knownIds = new Set(
+                    sortedUsers.map(target => getId(target))
+                );
+                const searchableUsers = [
+                    ...sortedUsers,
+                    ...discoveredUsers.filter(target =>
+                        !knownIds.has(getId(target))
+                    )
+                ];
 
-                return sortedUsers.filter(
+                return searchableUsers.filter(
                     target => {
                         const archived =
                             Boolean(chatPreferences[getId(target)]?.archived);
 
                         if (archived !== (chatListView === "archived")) {
+                            return false;
+                        }
+                        if (chatListView === "requests") {
                             return false;
                         }
 
@@ -7961,6 +8840,7 @@ const onCallMissed =
             },
             [
                 sortedUsers,
+                discoveredUsers,
                 search,
                 chatPreferences,
                 chatListView
@@ -7979,6 +8859,7 @@ const onCallMissed =
                             Boolean(chatPreferences[getId(group)]?.archived);
 
                         return (
+                            chatListView !== "requests" &&
                             archived === (chatListView === "archived") &&
                             (!term ||
                                 getUserName(group)
@@ -8556,6 +9437,15 @@ const onCallMissed =
         target => {
 
             if (target?.isGroup) {
+                const photoUrl = groupPhotoUrls[getId(target)];
+                if (photoUrl) {
+                    return (
+                        <img
+                            src={photoUrl}
+                            alt=""
+                        />
+                    );
+                }
                 return (
                     <div className="avatar-fallback group-avatar-fallback">
                         <FaUsers />
@@ -9063,8 +9953,78 @@ const onCallMissed =
                     >
                         Archived
                     </button>
+                    <button
+                        type="button"
+                        aria-pressed={chatListView === "requests"}
+                        className={chatListView === "requests" ? "active" : ""}
+                        onClick={() => setChatListView("requests")}
+                    >
+                        Requests{messageRequests.length ? ` (${messageRequests.length})` : ""}
+                    </button>
                 </div>
 
+                {chatListView === "requests" ? (
+                    <section className="messenger-request-list" aria-label="Message Requests">
+                        {messageRequests.length ? messageRequests.map(request => (
+                            <article className="messenger-request-card" key={request._id}>
+                                <div className="messenger-request-heading">
+                                    <strong>{request.sender?.name || "E Top user"}</strong>
+                                    <small>
+                                        {request.createdAt
+                                            ? new Date(request.createdAt).toLocaleDateString()
+                                            : ""}
+                                    </small>
+                                </div>
+                                <p>
+                                    {request.isEncrypted
+                                        ? "Encrypted message"
+                                        : request.message || "Attachment"}
+                                </p>
+                                {request.fileName && (
+                                    <small className="messenger-request-attachment">
+                                        Attachment: {request.fileName}
+                                    </small>
+                                )}
+                                <div className="messenger-request-actions">
+                                    <button
+                                        type="button"
+                                        disabled={Boolean(messageRequestsBusy)}
+                                        onClick={() => handleMessageRequestAction(request, "accept")}
+                                    >
+                                        Accept
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={Boolean(messageRequestsBusy)}
+                                        onClick={() => handleMessageRequestAction(request, "delete")}
+                                    >
+                                        Delete
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={Boolean(messageRequestsBusy)}
+                                        onClick={() => handleMessageRequestAction(request, "block")}
+                                    >
+                                        Block
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={Boolean(messageRequestsBusy)}
+                                        onClick={() => handleMessageRequestAction(request, "report")}
+                                    >
+                                        Report
+                                    </button>
+                                </div>
+                            </article>
+                        )) : (
+                            <div className="no-users">
+                                <FaUserCircle />
+                                <p>No Message Requests</p>
+                                <small>Requests from people you do not follow appear here.</small>
+                            </div>
+                        )}
+                    </section>
+                ) : (
                 <div className="user-list">
 
                     {filteredGroups.length > 0 && (
@@ -9221,13 +10181,11 @@ const onCallMissed =
                                             <div className="chat-user-bottom">
 
                                                 <span>
-                                                    {isOnline(
-                                                        target
-                                                    )
+                                                    {target.requiresMessageRequest
+                                                        ? "Private account · message request"
+                                                        : isOnline(target)
                                                         ? "Active now"
-                                                        : formatLastSeen(
-                                                              target
-                                                          )}
+                                                        : formatLastSeen(target)}
                                                 </span>
 
 
@@ -9256,6 +10214,7 @@ const onCallMissed =
                     )}
 
                 </div>
+                )}
 
             </aside>
 
@@ -9393,6 +10352,8 @@ const onCallMissed =
                                     <span>
                                         {selectedUser.isGroup
                                             ? `${selectedUser.participants?.length || 0} members`
+                                            : selectedUser.requiresMessageRequest
+                                            ? "Private account · message request"
                                             : typing
                                             ? "typing..."
                                             : isOnline(selectedUser)
@@ -9946,6 +10907,67 @@ const onCallMissed =
                                         )}
                                     </div>
                                 )}
+
+                            {liveLocations.length > 0 && (
+                                <section
+                                    className="live-location-cards"
+                                    aria-label="Active live locations"
+                                >
+                                    {liveLocations.map(share => {
+                                        const ownShare =
+                                            String(share.sender) === currentUserId;
+                                        const mapUrl =
+                                            `https://www.google.com/maps?q=${share.latitude},${share.longitude}`;
+                                        return (
+                                            <article
+                                                className="live-location-card"
+                                                key={share._id}
+                                            >
+                                                <div>
+                                                    <strong>
+                                                        {ownShare
+                                                            ? "Your live location"
+                                                            : "Live location shared with you"}
+                                                    </strong>
+                                                    <span>
+                                                        Expires{" "}
+                                                        {new Date(
+                                                            share.expiresAt
+                                                        ).toLocaleTimeString()}
+                                                    </span>
+                                                    {share.updatedAt && (
+                                                        <small>
+                                                            Updated{" "}
+                                                            {new Date(
+                                                                share.updatedAt
+                                                            ).toLocaleTimeString()}
+                                                        </small>
+                                                    )}
+                                                </div>
+                                                <a
+                                                    href={mapUrl}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                >
+                                                    Open map
+                                                </a>
+                                                {ownShare && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            stopLiveLocation(
+                                                                share._id
+                                                            )
+                                                        }
+                                                    >
+                                                        Stop sharing
+                                                    </button>
+                                                )}
+                                            </article>
+                                        );
+                                    })}
+                                </section>
+                            )}
 
                             {chatLoading ? (
 
@@ -11029,6 +12051,50 @@ const onCallMissed =
                                     <FaMapMarkerAlt />
                                 </button>
 
+                                <div className="live-location-menu-wrap">
+                                    <button
+                                        type="button"
+                                        title="Share live location"
+                                        aria-label="Share live location"
+                                        aria-expanded={showLiveLocationOptions}
+                                        disabled={
+                                            !selectedUser ||
+                                            isConversationBlocked ||
+                                            liveLocationBusy
+                                        }
+                                        onClick={() =>
+                                            setShowLiveLocationOptions(value => !value)
+                                        }
+                                    >
+                                        <FaClock />
+                                    </button>
+                                    {showLiveLocationOptions && (
+                                        <div
+                                            className="live-location-options"
+                                            role="group"
+                                            aria-label="Live location duration"
+                                        >
+                                            <strong>Share live location</strong>
+                                            {[15, 60, 480].map(duration => (
+                                                <button
+                                                    key={duration}
+                                                    type="button"
+                                                    disabled={liveLocationBusy}
+                                                    onClick={() =>
+                                                        startLiveLocation(duration)
+                                                    }
+                                                >
+                                                    {duration === 15
+                                                        ? "15 minutes"
+                                                        : duration === 60
+                                                        ? "1 hour"
+                                                        : "8 hours"}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
 
                                 <input
                                     ref={
@@ -11292,6 +12358,87 @@ const onCallMissed =
                             </button>
                         </div>
                         <div className="group-modal-body">
+                            {selectedUser.admins?.some(
+                                admin => getId(admin) === currentUserId
+                            ) ? (
+                                <form
+                                    className="group-details-editor"
+                                    onSubmit={event => {
+                                        event.preventDefault();
+                                        saveGroupDetails();
+                                    }}
+                                >
+                                    <label>
+                                        Group description
+                                        <textarea
+                                            value={groupDetailsDescription}
+                                            maxLength={500}
+                                            onChange={event =>
+                                                setGroupDetailsDescription(
+                                                    event.target.value
+                                                )
+                                            }
+                                            placeholder="Add a description for this group"
+                                            rows={3}
+                                        />
+                                    </label>
+                                    <label>
+                                        Group photo
+                                        <input
+                                            ref={groupPhotoInputRef}
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
+                                            onChange={event =>
+                                                setGroupPhotoFile(
+                                                    event.target.files?.[0] || null
+                                                )
+                                            }
+                                        />
+                                    </label>
+                                    {groupPhotoFile && (
+                                        <small>{groupPhotoFile.name}</small>
+                                    )}
+                                    {groupDetailsError && (
+                                        <p role="alert">{groupDetailsError}</p>
+                                    )}
+                                    <div className="group-details-actions">
+                                        {selectedUser.groupPhoto && (
+                                            <button
+                                                type="button"
+                                                className="group-secondary-btn"
+                                                disabled={
+                                                    groupDetailsBusy ||
+                                                    Boolean(groupPhotoFile)
+                                                }
+                                                onClick={() =>
+                                                    saveGroupDetails({
+                                                        removePhoto: true
+                                                    })
+                                                }
+                                            >
+                                                Remove photo
+                                            </button>
+                                        )}
+                                        <button
+                                            type="submit"
+                                            className="group-primary-btn"
+                                            disabled={groupDetailsBusy}
+                                        >
+                                            {groupDetailsBusy
+                                                ? "Saving..."
+                                                : "Save group details"}
+                                        </button>
+                                    </div>
+                                </form>
+                            ) : (
+                                <section className="group-description-panel">
+                                    <strong>Group description</strong>
+                                    <p>
+                                        {selectedUser.description ||
+                                            "No group description yet."}
+                                    </p>
+                                </section>
+                            )}
                             <section className="group-encryption-panel">
                                 <strong>
                                     {selectedUser.isEncrypted

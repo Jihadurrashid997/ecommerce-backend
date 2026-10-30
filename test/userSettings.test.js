@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const MessageRequest = require("../models/MessageRequest");
 const userController = require("../controllers/userController");
 
 const USER_ID = "507f1f77bcf86cd799439011";
@@ -87,6 +88,137 @@ test("user settings reject unsupported notification preference keys", async () =
         assert.equal(response.statusCode, 400);
     } finally {
         User.findByIdAndUpdate = originalFindByIdAndUpdate;
+    }
+});
+
+test("messenger preferences persist only account-scoped pin, archive, and mute flags", async () => {
+    const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+    let update;
+    User.findByIdAndUpdate = (id, changes) => {
+        assert.equal(id, USER_ID);
+        update = changes;
+        return {
+            select() {
+                return this;
+            },
+            async lean() {
+                return {
+                    messengerPreferences: {
+                        "507f191e810c19729de860ea": {
+                            pinned: true,
+                            archived: false,
+                            muted: true
+                        }
+                    }
+                };
+            }
+        };
+    };
+
+    try {
+        const response = makeResponse();
+        await userController.updateMessengerPreference(
+            {
+                user: { id: USER_ID },
+                params: { conversationId: "507f191e810c19729de860ea" },
+                body: { pinned: true, muted: true }
+            },
+            response
+        );
+
+        assert.deepEqual(update, {
+            $set: {
+                "messengerPreferences.507f191e810c19729de860ea.pinned": true,
+                "messengerPreferences.507f191e810c19729de860ea.muted": true
+            }
+        });
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(response.body.preference, {
+            pinned: true,
+            archived: false,
+            muted: true
+        });
+    } finally {
+        User.findByIdAndUpdate = originalFindByIdAndUpdate;
+    }
+});
+
+test("messenger preference updates reject unknown keys and non-boolean values", async () => {
+    const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+    User.findByIdAndUpdate = () => {
+        throw new Error("Invalid preference must not reach the database.");
+    };
+
+    try {
+        const response = makeResponse();
+        await userController.updateMessengerPreference(
+            {
+                user: { id: USER_ID },
+                params: { conversationId: "507f191e810c19729de860ea" },
+                body: { onlineStatus: false }
+            },
+            response
+        );
+        assert.equal(response.statusCode, 400);
+    } finally {
+        User.findByIdAndUpdate = originalFindByIdAndUpdate;
+    }
+});
+
+test("blocking a user removes pending Message Requests in both directions", async () => {
+    const originals = {
+        userFindByIdAndUpdate: User.findByIdAndUpdate,
+        requestFind: MessageRequest.find,
+        requestFindOneAndUpdate: MessageRequest.findOneAndUpdate
+    };
+    const requestId = "507f191e810c19729de860eb";
+    let requestFilter;
+    let requestUpdate;
+    User.findByIdAndUpdate = async () => ({});
+    MessageRequest.find = filter => {
+        assert.deepEqual(filter, {
+            status: "pending",
+            $or: [
+                { sender: USER_ID, recipient: "507f191e810c19729de860ea" },
+                { sender: "507f191e810c19729de860ea", recipient: USER_ID }
+            ]
+        });
+        return {
+            select() {
+                return this;
+            },
+            lean: async () => [{ _id: requestId }]
+        };
+    };
+    MessageRequest.findOneAndUpdate = (filter, update) => {
+        requestFilter = filter;
+        requestUpdate = update;
+        return { lean: async () => ({ _id: requestId }) };
+    };
+
+    try {
+        const response = makeResponse();
+        await userController.blockUser(
+            {
+                user: { id: USER_ID },
+                params: { id: "507f191e810c19729de860ea" },
+                app: { get: () => null }
+            },
+            response
+        );
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(requestFilter, {
+            _id: requestId,
+            status: "pending"
+        });
+        assert.equal(requestUpdate.$set.status, "blocked");
+        assert.equal(requestUpdate.$unset.message, "");
+        assert.equal(requestUpdate.$unset.fileUrl, "");
+    } finally {
+        User.findByIdAndUpdate = originals.userFindByIdAndUpdate;
+        MessageRequest.find = originals.requestFind;
+        MessageRequest.findOneAndUpdate = originals.requestFindOneAndUpdate;
     }
 });
 

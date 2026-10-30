@@ -5,6 +5,10 @@ const Message = require("../models/Message");
 const User = require("../models/User");
 const GroupConversation = require("../models/GroupConversation");
 const {
+    canAccessDirectConversation,
+    getDirectMessagePermission
+} = require("../services/messengerConversationAccess");
+const {
     isCloudinaryConfigured,
     saveFile,
     getPrivateDownloadUrl,
@@ -687,8 +691,8 @@ exports.sendMessage = async (req, res) => {
         }
 
         const [senderDoc, receiverDoc] = await Promise.all([
-            User.findById(sender).select("blockedUsers +messengerEncryptionPublicKey"),
-            User.findById(receiver).select("blockedUsers +messengerEncryptionPublicKey")
+            User.findById(sender).select("blockedUsers following accountVisibility +messengerEncryptionPublicKey"),
+            User.findById(receiver).select("blockedUsers following accountVisibility +messengerEncryptionPublicKey")
         ]);
 
         const senderBlockedReceiver =
@@ -712,6 +716,27 @@ exports.sendMessage = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: "You can't send a message to this user."
+            });
+        }
+
+        const directMessagePermission =
+            await getDirectMessagePermission({
+                User,
+                Message,
+                senderId: sender,
+                recipientId: receiver,
+                senderDocument: senderDoc,
+                recipientDocument: receiverDoc
+            });
+        if (!directMessagePermission.canSendMessage) {
+            return res.status(403).json({
+                success: false,
+                ...(directMessagePermission.canCreateRequest
+                    ? { code: "MESSAGE_REQUEST_REQUIRED" }
+                    : {}),
+                message: directMessagePermission.canCreateRequest
+                    ? "This Private account requires a Message Request."
+                    : "You cannot start a conversation with this user."
             });
         }
 
@@ -912,6 +937,18 @@ exports.getConversation = async (req, res) => {
             });
         }
 
+        if (!await canAccessDirectConversation({
+            User,
+            Message,
+            userId: currentUser,
+            peerId: otherUserId
+        })) {
+            return res.status(403).json({
+                success: false,
+                message: "This conversation isn't available under the current privacy settings."
+            });
+        }
+
         const messages = await populateMessage(
             Message.find({
                 deletedFor: { $ne: currentUser },
@@ -1034,6 +1071,19 @@ exports.markSeen = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Invalid user ID"
+            });
+        }
+
+        const permission = await getDirectMessagePermission({
+            User,
+            Message,
+            senderId: currentUser,
+            recipientId: otherUserId
+        });
+        if (!permission.canSendMessage) {
+            return res.status(403).json({
+                success: false,
+                message: "You cannot update read receipts for this conversation."
             });
         }
 
@@ -1284,6 +1334,24 @@ exports.reactToMessage = async (req, res) => {
             });
         }
 
+        if (!message.groupId) {
+            const peerId = String(message.sender) === String(userId)
+                ? message.receiver
+                : message.sender;
+            const permission = await getDirectMessagePermission({
+                User,
+                Message,
+                senderId: userId,
+                recipientId: peerId
+            });
+            if (!permission.canSendMessage) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You cannot interact with this user."
+                });
+            }
+        }
+
         const existingIndex = message.reactions.findIndex(
             r => String(r.user) === String(userId) && r.emoji === emoji
         );
@@ -1340,6 +1408,21 @@ exports.editMessage = async (req, res) => {
                 success: false,
                 message: "You don't have access to this conversation."
             });
+        }
+
+        if (!message.groupId) {
+            const permission = await getDirectMessagePermission({
+                User,
+                Message,
+                senderId: userId,
+                recipientId: message.receiver
+            });
+            if (!permission.canSendMessage) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You cannot interact with this user."
+                });
+            }
         }
 
         if (String(message.sender) !== String(userId)) {
@@ -1791,16 +1874,31 @@ exports.createCallLog = async (req, res) => {
         }
 
         const caller = await User.findById(requestedCallerId)
-            .select("_id")
+            .select("_id following blockedUsers accountVisibility")
             .lean();
         const otherUser = await User.findById(otherUserId)
-            .select("_id")
+            .select("_id following blockedUsers accountVisibility")
             .lean();
 
         if (!caller || !otherUser) {
             return res.status(404).json({
                 success: false,
                 message: "Call participant not found."
+            });
+        }
+
+        const callPermission = await getDirectMessagePermission({
+            User,
+            Message,
+            senderId: requestedCallerId,
+            recipientId: otherUserId,
+            senderDocument: caller,
+            recipientDocument: otherUser
+        });
+        if (!callPermission.canCall) {
+            return res.status(403).json({
+                success: false,
+                message: "This call is not allowed by the conversation privacy settings."
             });
         }
 

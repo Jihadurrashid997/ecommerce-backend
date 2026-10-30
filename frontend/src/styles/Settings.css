@@ -31,6 +31,9 @@
 .settings-choice-row label { display: inline-flex; align-items: center; gap: 8px; }
 .settings-choice-row input, .settings-toggle-row input { accent-color: #7c6cff; width: 18px; height: 18px; }
 .settings-current-theme { margin-left: auto; color: #aab6ca; font-size: 13px; }
+.settings-account-visibility p { color: #aab6ca; font-size: 13px; line-height: 1.5; }
+.settings-follow-requests { margin-top: 20px; }
+.settings-follow-requests h3 { margin: 0 0 10px; font-size: 16px; }
 .settings-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 0; border-top: 1px solid rgba(148, 163, 184, .15); }
 .settings-toggle-row span { display: flex; flex-direction: column; gap: 4px; }
 .settings-blocked-list { display: flex; flex-direction: column; gap: 8px; }
@@ -39,6 +42,7 @@
 .settings-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .settings-blocked-user b { flex: 1; }
 .settings-blocked-user button, .settings-password-form button { padding: 10px 14px; border: 0; border-radius: 10px; background: #6256e8; color: white; font-weight: 700; }
+.settings-blocked-user .settings-secondary-button { background: rgba(148, 163, 184, .18); }
 .settings-empty { color: #aab6ca; }
 .settings-password-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .settings-password-form label { display: flex; flex-direction: column; gap: 7px; font-size: 13px; color: #cbd5e1; }
@@ -51,7 +55,7 @@ html[data-theme="light"] body { background: #f1f5f9; color: #172033; }
 html[data-theme="light"] .App { background: linear-gradient(135deg, #f8fafc, #e2e8f0); color: #172033; }
 html[data-theme="light"] .settings-page { color: #172033; }
 html[data-theme="light"] .settings-card { background: #fff; border-color: rgba(71, 85, 105, .2); box-shadow: 0 12px 32px rgba(15, 23, 42, .08); }
-html[data-theme="light"] .settings-section-heading p, html[data-theme="light"] .settings-header p, html[data-theme="light"] .settings-toggle-row small, html[data-theme="light"] .settings-current-theme, html[data-theme="light"] .settings-empty { color: #64748b; }
+html[data-theme="light"] .settings-section-heading p, html[data-theme="light"] .settings-header p, html[data-theme="light"] .settings-toggle-row small, html[data-theme="light"] .settings-current-theme, html[data-theme="light"] .settings-empty, html[data-theme="light"] .settings-account-visibility p { color: #64748b; }
 html[data-theme="light"] .settings-link-card, html[data-theme="light"] .settings-blocked-user { background: #f8fafc; border-color: #e2e8f0; }
 html[data-theme="light"] .settings-password-form label { color: #334155; }
 html[data-theme="light"] .settings-password-form input { color: #172033; background: #fff; border-color: #cbd5e1; }
