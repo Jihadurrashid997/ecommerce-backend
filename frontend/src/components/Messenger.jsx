@@ -96,7 +96,7 @@ import {
 } from "../services/webrtc";
 import { switchCameraStream } from "../services/cameraSwitch";
 import {
-    addDirectCallVideoTransceiver,
+    attachLocalTracksToRemoteOffer,
     ensureDirectCallVideoTransceiver,
     replaceDirectCallVideoTrack
 } from "../services/directCallMedia";
@@ -3099,7 +3099,7 @@ useEffect(() => {
 
     const createPeer =
         useCallback(
-            (receiverId) => {
+            (receiverId, { prepareLocalTracks = true } = {}) => {
 
                 const attemptIceRecovery = connection => {
                     if (
@@ -3352,11 +3352,6 @@ onTrack:
 
         });
 
-        addDirectCallVideoTransceiver(
-            peer,
-            localStreamRef.current
-        );
-
         peerRef.current =
             peer;
 
@@ -3378,6 +3373,7 @@ onTrack:
         );
 
         if (
+            prepareLocalTracks &&
             localStreamRef.current
         ) {
 
@@ -4014,18 +4010,13 @@ const acceptCall =
                  * the receiver has not created its RTCPeerConnection
                  * yet.
                  */
-                const receiverPeer =
-                    peerRef.current &&
-                    peerRef.current.signalingState !== "closed"
-                        ? peerRef.current
-                        : createPeer(
-                              getId(call.callerId)
-                          );
-
-                if (localStreamRef.current) {
-                    addLocalTracks(
-                        receiverPeer,
-                        localStreamRef.current
+                if (
+                    !peerRef.current ||
+                    peerRef.current.signalingState === "closed"
+                ) {
+                    createPeer(
+                        getId(call.callerId),
+                        { prepareLocalTracks: false }
                     );
                 }
 
@@ -5222,22 +5213,9 @@ const onOffer =
                 peerRef.current.signalingState !== "closed"
                     ? peerRef.current
                     : createPeer(
-                          callerId
+                          callerId,
+                          { prepareLocalTracks: false }
                       );
-
-            /*
-             * The receiver MUST have its microphone/camera
-             * tracks on the peer before creating the answer.
-             * createPeer normally does this, but keeping this
-             * explicit makes the offer/answer path safe even if
-             * the peer was created before getUserMedia finished.
-             */
-            if (localStreamRef.current) {
-                addLocalTracks(
-                    peer,
-                    localStreamRef.current
-                );
-            }
 
             /*
              * Set remote offer first.
@@ -5247,6 +5225,11 @@ const onOffer =
                 new RTCSessionDescription(
                     data.offer
                 )
+            );
+
+            await attachLocalTracksToRemoteOffer(
+                peer,
+                localStreamRef.current
             );
 
             /*

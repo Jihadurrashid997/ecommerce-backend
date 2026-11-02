@@ -1,5 +1,6 @@
 import {
     addDirectCallVideoTransceiver,
+    attachLocalTracksToRemoteOffer,
     ensureDirectCallVideoTransceiver,
     replaceDirectCallVideoTrack
 } from "./directCallMedia";
@@ -239,6 +240,68 @@ test("enables sending on an existing receive-only video transceiver", async () =
     expect(sender.replaceTrack).toHaveBeenCalledWith(
         expect.objectContaining({ kind: "video", enabled: true })
     );
+});
+
+test("attaches receiver tracks to negotiated transceivers from the remote offer", async () => {
+    const audioTrack = { kind: "audio" };
+    const videoTrack = { kind: "video" };
+    const audioSender = { replaceTrack: jest.fn().mockResolvedValue(undefined) };
+    const videoSender = { replaceTrack: jest.fn().mockResolvedValue(undefined) };
+    const orphanSender = { replaceTrack: jest.fn() };
+    const transceivers = [
+        {
+            mid: "0",
+            receiver: { track: { kind: "audio" } },
+            sender: audioSender,
+            currentDirection: "recvonly",
+            direction: "recvonly"
+        },
+        {
+            mid: "1",
+            receiver: { track: { kind: "video" } },
+            sender: videoSender,
+            currentDirection: "recvonly",
+            direction: "recvonly"
+        },
+        {
+            mid: null,
+            receiver: { track: { kind: "video" } },
+            sender: orphanSender,
+            currentDirection: null,
+            direction: "sendrecv"
+        }
+    ];
+    const peer = {
+        getTransceivers: () => transceivers
+    };
+
+    await attachLocalTracksToRemoteOffer(peer, {
+        getTracks: () => [audioTrack, videoTrack]
+    });
+
+    expect(audioSender.replaceTrack).toHaveBeenCalledWith(audioTrack);
+    expect(videoSender.replaceTrack).toHaveBeenCalledWith(videoTrack);
+    expect(transceivers[0].direction).toBe("sendrecv");
+    expect(transceivers[1].direction).toBe("sendrecv");
+    expect(orphanSender.replaceTrack).not.toHaveBeenCalled();
+});
+
+test("fails explicitly when a remote offer omits a local media kind", async () => {
+    const peer = {
+        getTransceivers: () => [{
+            mid: "0",
+            receiver: { track: { kind: "audio" } },
+            sender: { replaceTrack: jest.fn() },
+            currentDirection: "recvonly",
+            direction: "recvonly"
+        }]
+    };
+
+    await expect(
+        attachLocalTracksToRemoteOffer(peer, {
+            getTracks: () => [{ kind: "video" }]
+        })
+    ).rejects.toThrow("The remote call offer has no video media section.");
 });
 
 test("fails explicitly when the peer has no video transceiver", async () => {

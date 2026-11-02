@@ -49,6 +49,32 @@ export const ensureDirectCallVideoTransceiver = peer => {
     return peer.addTransceiver("video", { direction: "sendrecv" });
 };
 
+export const attachLocalTracksToRemoteOffer = async (peer, stream) => {
+    if (!peer || !stream) {
+        return;
+    }
+
+    const transceivers = peer.getTransceivers();
+    for (const track of stream.getTracks()) {
+        const transceiver = transceivers.find(
+            item =>
+                item.mid !== null &&
+                item.currentDirection !== "stopped" &&
+                item.receiver?.track?.kind === track.kind
+        );
+        if (!transceiver?.sender) {
+            throw new Error(
+                `The remote call offer has no ${track.kind} media section.`
+            );
+        }
+
+        if (!transceiver.direction?.includes("send")) {
+            transceiver.direction = "sendrecv";
+        }
+        await transceiver.sender.replaceTrack(track);
+    }
+};
+
 export const replaceDirectCallVideoTrack = async (peer, track) => {
     const videoTransceiver = ensureDirectCallVideoTransceiver(peer);
     const sender = videoTransceiver.sender;
