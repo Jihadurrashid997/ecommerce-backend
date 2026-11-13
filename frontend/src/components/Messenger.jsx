@@ -97,6 +97,7 @@ import {
 import { switchCameraStream } from "../services/cameraSwitch";
 import {
     attachLocalTracksToRemoteOffer,
+    createFreshRemoteStream,
     ensureDirectCallVideoTransceiver,
     replaceDirectCallVideoTrack
 } from "../services/directCallMedia";
@@ -3177,28 +3178,12 @@ onTrack:
          * <video>/<audio> element.
          */
 
-        const eventTracks =
-            (event.streams || []).flatMap(
-                stream => stream.getTracks()
-            );
-        if (event.track) {
-            eventTracks.push(event.track);
-        }
-
         const existingTracks =
             remoteTracksRef.current ||
             [];
 
-        const updatedTracks = [
-            ...existingTracks,
-            ...eventTracks.filter(
-                track =>
-                    !existingTracks.some(
-                        existingTrack =>
-                            existingTrack.id === track.id
-                    )
-            )
-        ];
+        const { tracks: updatedTracks } =
+            createFreshRemoteStream(existingTracks, event);
 
         remoteTracksRef.current =
             updatedTracks;

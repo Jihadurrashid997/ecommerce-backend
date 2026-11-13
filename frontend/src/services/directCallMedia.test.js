@@ -1,9 +1,53 @@
 import {
     addDirectCallVideoTransceiver,
     attachLocalTracksToRemoteOffer,
+    createFreshRemoteStream,
     ensureDirectCallVideoTransceiver,
     replaceDirectCallVideoTrack
 } from "./directCallMedia";
+
+test("creates a fresh remote stream as audio and video tracks arrive", () => {
+    const originalMediaStream =
+        Object.getOwnPropertyDescriptor(global, "MediaStream");
+    const createdStreams = [];
+    Object.defineProperty(global, "MediaStream", {
+        configurable: true,
+        value: class {
+            constructor(tracks) {
+                this.tracks = tracks;
+                createdStreams.push(this);
+            }
+
+            getTracks() {
+                return this.tracks;
+            }
+        }
+    });
+
+    try {
+        const audioTrack = { id: "audio", kind: "audio" };
+        const videoTrack = { id: "video", kind: "video" };
+        const first = createFreshRemoteStream([], {
+            track: audioTrack,
+            streams: [{ getTracks: () => [audioTrack] }]
+        });
+        const second = createFreshRemoteStream(first.tracks, {
+            track: videoTrack,
+            streams: [{ getTracks: () => [audioTrack, videoTrack] }]
+        });
+
+        expect(second.stream).not.toBe(first.stream);
+        expect(second.tracks).toEqual([audioTrack, videoTrack]);
+        expect(second.stream.getTracks()).toEqual([audioTrack, videoTrack]);
+        expect(createdStreams).toHaveLength(2);
+    } finally {
+        if (originalMediaStream) {
+            Object.defineProperty(global, "MediaStream", originalMediaStream);
+        } else {
+            delete global.MediaStream;
+        }
+    }
+});
 
 test("pre-negotiates a sendrecv video transceiver for voice calls", () => {
     const peer = {
