@@ -3875,8 +3875,12 @@ const toggleScreenSharing =
 
             const getDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
             if (typeof getDisplayMedia !== "function") {
+                const isMobileBrowser =
+                    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
                 throw new Error(
-                    "This browser does not support screen sharing. Many mobile browsers do not provide screen capture; try a supported desktop browser."
+                    isMobileBrowser
+                        ? "This mobile browser does not provide screen capture to websites, so Messenger cannot share your screen here. Use Messenger on a desktop browser."
+                        : "Screen capture is not available in this browser. Use Messenger in a supported browser over HTTPS."
                 );
             }
             if (!window.isSecureContext) {

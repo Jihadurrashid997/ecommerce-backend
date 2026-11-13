@@ -330,3 +330,28 @@ test("exposes video and screen-share controls on a connected voice call", async 
     expect(screen.getByRole("menu", { name: "More call options" }))
         .toBeInTheDocument();
 });
+
+test("shows screen-share errors without ending the active call", async () => {
+    const onShareScreen = jest.fn().mockRejectedValue(
+        new Error(
+            "This mobile browser does not provide screen capture to websites, so Messenger cannot share your screen here. Use Messenger on a desktop browser."
+        )
+    );
+
+    render(
+        <CallModal
+            visible
+            type="audio"
+            mode="connected"
+            status="connected"
+            onShareScreen={onShareScreen}
+        />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Share screen" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+        "This mobile browser does not provide screen capture to websites"
+    );
+    expect(screen.getByRole("button", { name: "End call" })).toBeInTheDocument();
+});
