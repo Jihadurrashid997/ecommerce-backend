@@ -708,7 +708,7 @@ const CallModal = ({
                             style={{
                                 width: "100%",
                                 height: "100%",
-                                objectFit: "cover",
+                                objectFit: "contain",
                                 background: "#000",
                                 visibility: hasRemoteVideo ? "visible" : "hidden"
                             }}
@@ -773,7 +773,7 @@ const CallModal = ({
                                     borderRadius:
                                         "50%",
                                     objectFit:
-                                        "cover",
+                                        "contain",
                                     border:
                                         "4px solid rgba(255,255,255,.25)"
                                 }}
@@ -916,7 +916,7 @@ const CallModal = ({
                             width: 130,
                             height: 175,
                             objectFit:
-                                "cover",
+                                "contain",
                             borderRadius: 16,
                             background: "#000",
                             border:
