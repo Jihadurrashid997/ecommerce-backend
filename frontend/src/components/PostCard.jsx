@@ -10,6 +10,7 @@ import { useApp } from "../context/AppContext";
 import CommentsPanel from "./CommentsPanel";
 import MediaViewer from "./MediaViewer";
 import ReactionPicker from "./ReactionPicker";
+import SocialFollowButton from "./SocialFollowButton";
 
 const timeAgo = value => {
 
@@ -24,7 +25,7 @@ const timeAgo = value => {
 
 };
 
-const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
+const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange }) => {
 
     const { user } = useApp();
 
@@ -37,7 +38,6 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
     const [reposted, setReposted] = useState(Boolean(post.isRepostedByMe));
     const [commentCount, setCommentCount] = useState(post.commentCount);
     const [showComments, setShowComments] = useState(false);
-    const [slide, setSlide] = useState(0);
     const [viewerSlide, setViewerSlide] = useState(null);
     const [shareMessage, setShareMessage] = useState("");
     const [postError, setPostError] = useState("");
@@ -46,6 +46,7 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
     const [savingPost, setSavingPost] = useState(false);
     const [editCaption, setEditCaption] = useState(post.caption || "");
     const [editVisibility, setEditVisibility] = useState(post.visibility || "public");
+    const [slide, setSlide] = useState(0);
     const [postContent, setPostContent] = useState({
         caption: post.caption || "",
         visibility: post.visibility || "public"
@@ -226,6 +227,15 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
                     </div>
                 </Link>
 
+                {post.isFollowedByMe === false && String(author._id) !== myId && (
+                    <SocialFollowButton
+                        userId={author._id}
+                        onFollowChange={result => {
+                            if (onFollowChange) onFollowChange(author, result);
+                        }}
+                    />
+                )}
+
                 {(canEdit || canDelete) && (
                     <div className="post-menu-wrap">
                         <button
@@ -265,6 +275,8 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
 
             </header>
 
+            {post.location && <p className="post-location">{post.location}</p>}
+
             {postError && <p className="post-error" role="alert">{postError}</p>}
 
             {editingPost && (
@@ -302,7 +314,40 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
                 </form>
             )}
 
+            {post.taggedUsers?.length > 0 && (
+                <p className="post-tagged-people">
+                    With {post.taggedUsers.map((taggedUser, index) => (
+                        <React.Fragment key={taggedUser._id}>
+                            {index > 0 && ", "}
+                            <Link to={`/user/${taggedUser._id}`}>{taggedUser.name || "E Top member"}</Link>
+                        </React.Fragment>
+                    ))}
+                </p>
+            )}
             {postContent.caption && <p className="post-caption">{postContent.caption}</p>}
+
+            {post.audio?.url && (
+                <div className="post-audio-player">
+                    <strong>{post.audio.title || "Post soundtrack"}</strong>
+                    <audio
+                        key={post._id}
+                        src={getUploadUrl(post.audio.url)}
+                        controls
+                        preload="metadata"
+                        onLoadedMetadata={event => {
+                            event.currentTarget.currentTime = Number(post.audio.startSeconds) || 0;
+                        }}
+                        onTimeUpdate={event => {
+                            const end = (Number(post.audio.startSeconds) || 0) +
+                                (Number(post.audio.durationSeconds) || 30);
+                            if (event.currentTarget.currentTime >= end) {
+                                event.currentTarget.pause();
+                                event.currentTarget.currentTime = end;
+                            }
+                        }}
+                    />
+                </div>
+            )}
 
             {post.originalPost && (
                 <section className="post-original" aria-label="Reposted post">
@@ -332,7 +377,7 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
                     aria-label="View photo full screen"
                     onClick={() => setViewerSlide(slide)}
                 >
-                    <img src={photoUrls[slide]} alt="" loading="lazy" />
+                    <img src={photoUrls[slide]} alt={post.media?.[slide]?.altText || ""} loading="lazy" />
                 </button>
 
                 {post.media.length > 1 && (
@@ -415,6 +460,7 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated }) => {
                     myId={myId}
                     createdAt={post.createdAt}
                     caption={postContent.caption}
+                    altText={post.media?.[viewerSlide]?.altText}
                     liked={liked}
                     likeCount={likeCount}
                     commentCount={commentCount}

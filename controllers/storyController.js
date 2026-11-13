@@ -5,12 +5,28 @@ const { saveFile, deleteFile } = require("../services/mediaStorage");
 const { purgeExpiredStories } = require("../services/storyCleanup");
 
 const MAX_STORY_DURATION_SECONDS = 60;
+const MAX_STORY_AUDIO_SECONDS = 15;
 
 const shapeStory = (story, userId) => ({
     _id: story._id,
     owner: story.owner,
     text: story.text || "",
     media: story.media || { url: "", type: "", publicId: "" },
+    audio: story.audio?.url ? story.audio : null,
+    poll: story.poll?.question
+        ? {
+            question: story.poll.question,
+            options: (story.poll.options || []).map((option, index) => ({
+                text: option.text,
+                votes: (story.poll.votes || []).filter(vote =>
+                    vote.optionIndex === index
+                ).length
+            })),
+            myVote: (story.poll.votes || []).find(vote =>
+                String(vote.user?._id || vote.user) === String(userId)
+            )?.optionIndex ?? null
+        }
+        : null,
     audience: story.audience,
     expiresAt: story.expiresAt,
     createdAt: story.createdAt,
@@ -50,13 +66,47 @@ const canViewStory = async (story, userId) => {
 
 exports.createStory = async (req, res) => {
     let savedMedia;
+    let savedAudio;
     let storySaved = false;
     try {
         await purgeExpiredStories();
         const owner = req.user?._id || req.user?.id;
         const text = String(req.body?.text || "").trim();
         const audience = req.body?.audience || "followers";
-        const file = req.file;
+        const file = req.file || req.files?.media?.[0];
+        const audioFile = req.files?.audio?.[0];
+        let poll;
+        if (req.body?.poll) {
+            try {
+                poll = JSON.parse(req.body.poll);
+            } catch {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid Story poll."
+                });
+            }
+            const options = Array.isArray(poll?.options)
+                ? poll.options.map(option => String(option || "").trim()).filter(Boolean)
+                : [];
+            if (
+                typeof poll?.question !== "string" ||
+                !poll.question.trim() ||
+                poll.question.trim().length > 120 ||
+                options.length < 2 ||
+                options.length > 4 ||
+                options.some(option => option.length > 60)
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A poll needs a question and 2–4 options."
+                });
+            }
+            poll = {
+                question: poll.question.trim(),
+                options: options.map(text => ({ text })),
+                votes: []
+            };
+        }
 
         if (!owner) {
             return res.status(401).json({
@@ -82,6 +132,38 @@ exports.createStory = async (req, res) => {
                 message: "Status text must be 700 characters or fewer."
             });
         }
+        if (audioFile && (
+            !file ||
+            file.mimetype?.startsWith("video/") ||
+            req.body?.audioRightsConfirmed !== "true"
+        )) {
+            return res.status(400).json({
+                success: false,
+                message: "Add a photo and confirm that you have the rights to use this audio."
+            });
+        }
+
+        const audioStartSeconds = Number(req.body?.audioStartSeconds);
+        const audioDurationSeconds = Number(req.body?.audioDurationSeconds);
+        const audioTitle = String(req.body?.audioTitle || "").trim().slice(0, 100);
+        if (audioFile && (
+            !Number.isFinite(audioStartSeconds) ||
+            audioStartSeconds < 0 ||
+            !Number.isFinite(audioDurationSeconds) ||
+            audioDurationSeconds <= 0 ||
+            audioDurationSeconds > MAX_STORY_AUDIO_SECONDS
+        )) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose an audio segment up to 15 seconds long."
+            });
+        }
+        if (audioFile?.size > 10 * 1024 * 1024) {
+            return res.status(400).json({
+                success: false,
+                message: "Audio must be under 10MB."
+            });
+        }
 
         if (file) {
             savedMedia = await saveFile(file, "etop/messenger-status");
@@ -94,6 +176,9 @@ exports.createStory = async (req, res) => {
                     success: false,
                     message: "Status videos can be up to 60 seconds long."
                 });
+            }
+            if (audioFile) {
+                savedAudio = await saveFile(audioFile, "etop/story-audio");
             }
         }
 
@@ -108,7 +193,16 @@ exports.createStory = async (req, res) => {
                       type: savedMedia.type,
                       publicId: savedMedia.publicId
                   }
-                : undefined
+                : undefined,
+            audio: savedAudio
+                ? {
+                    ...savedAudio,
+                    title: audioTitle,
+                    startSeconds: audioStartSeconds,
+                    durationSeconds: audioDurationSeconds
+                }
+                : undefined,
+            poll
         });
         storySaved = true;
         const populated = await Story.findById(story._id)
@@ -120,13 +214,72 @@ exports.createStory = async (req, res) => {
             data: shapeStory(populated, owner)
         });
     } catch (error) {
-        if (savedMedia && !storySaved) {
-            await deleteFile(savedMedia);
+        if (!storySaved) {
+            const cleanupResults = await Promise.allSettled([
+                ...(savedMedia ? [deleteFile(savedMedia)] : []),
+                ...(savedAudio ? [deleteFile(savedAudio)] : [])
+            ]);
+            if (cleanupResults.some(result => result.status === "rejected" || result.value === false)) {
+                console.error("CREATE STORY MEDIA CLEANUP ERROR:", cleanupResults);
+            }
         }
         console.error("CREATE MESSENGER STORY ERROR:", error);
         return res.status(500).json({
             success: false,
             message: "Could not publish the status."
+        });
+    }
+};
+
+exports.voteStoryPoll = async (req, res) => {
+    try {
+        const userId = req.user?._id || req.user?.id;
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ success: false, message: "Invalid status." });
+        }
+        const optionIndex = Number(req.body?.optionIndex);
+        if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex > 3) {
+            return res.status(400).json({ success: false, message: "Choose a poll option." });
+        }
+        const story = await Story.findOne({
+            _id: req.params.id,
+            expiresAt: { $gt: new Date() }
+        });
+        if (!story || !story.poll?.question || !await canViewStory(story, userId)) {
+            return res.status(404).json({ success: false, message: "Status poll not found." });
+        }
+        if (optionIndex >= story.poll.options.length) {
+            return res.status(400).json({ success: false, message: "Choose a valid poll option." });
+        }
+        const existingVote = (story.poll.votes || []).some(vote =>
+            String(vote.user?._id || vote.user) === String(userId)
+        );
+        if (existingVote) {
+            return res.status(409).json({
+                success: false,
+                message: "You have already voted in this poll."
+            });
+        }
+        const result = await Story.updateOne(
+            {
+                _id: story._id,
+                "poll.votes.user": { $ne: userId }
+            },
+            { $push: { "poll.votes": { user: userId, optionIndex } } }
+        );
+        if (!result.modifiedCount) {
+            return res.status(409).json({
+                success: false,
+                message: "You have already voted in this poll."
+            });
+        }
+        story.poll.votes.push({ user: userId, optionIndex });
+        return res.json({ success: true, data: shapeStory(story.toObject(), userId) });
+    } catch (error) {
+        console.error("VOTE STORY POLL ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not save your poll vote."
         });
     }
 };
@@ -306,9 +459,8 @@ exports.deleteStory = async (req, res) => {
             });
         }
 
-        if (story.media?.url) {
-            const deletedMedia = await deleteFile(story.media);
-            if (!deletedMedia) {
+        for (const media of [story.media, story.audio]) {
+            if (media?.url && !await deleteFile(media)) {
                 return res.status(502).json({
                     success: false,
                     message: "Status media could not be deleted. Please try again."

@@ -12,6 +12,11 @@ const REACTION_TYPES = new Set(["like", "love", "haha", "wow", "sad", "angry"]);
 
 const isId = id => mongoose.Types.ObjectId.isValid(id);
 
+const getFollowingIds = async userId => {
+    const viewer = await User.findById(userId).select("following").lean();
+    return new Set([userId, ...(viewer?.following || [])].map(String));
+};
+
 const getReactionState = (post, userId) => {
     const counts = Object.fromEntries(
         [...REACTION_TYPES].map(type => [type, 0])
@@ -48,10 +53,16 @@ const getReactionState = (post, userId) => {
  *  - never ships the whole likes/reactions arrays
  *  - adds reaction counts and the viewer's reaction
  */
-const shape = (post, userId, savedPostIds = new Set(), repostedPostIds = new Set()) => {
+const shape = (
+    post,
+    userId,
+    savedPostIds = new Set(),
+    repostedPostIds = new Set(),
+    followingIds = null
+) => {
     const reactionState = getReactionState(post, userId);
     const originalPost = post.originalPost?.author
-        ? shape(post.originalPost, userId, savedPostIds, repostedPostIds)
+        ? shape(post.originalPost, userId, savedPostIds, repostedPostIds, followingIds)
         : null;
 
     return {
@@ -61,6 +72,12 @@ const shape = (post, userId, savedPostIds = new Set(), repostedPostIds = new Set
         community: post.community || null,
         visibility: post.visibility || "public",
         author: post.author,
+        audio: post.audio || null,
+        location: post.location || "",
+        taggedUsers: post.taggedUsers || [],
+        isFollowedByMe: followingIds
+            ? followingIds.has(String(post.author?._id || post.author))
+            : null,
         caption: post.caption,
         media: post.media,
         views: post.views || 0,
@@ -150,14 +167,13 @@ const listQuery = async (filter, req, following = []) => {
         filter.createdAt = { $lt: before };
     }
 
-    const queryFilter = filter.kind === "reel"
-        ? filter
-        : addVisibilityFilter(filter, req.user.id, following);
+    const queryFilter = addVisibilityFilter(filter, req.user.id, following);
 
     const posts = await Post.find(queryFilter)
         .sort({ createdAt: -1 })
         .limit(limit + 1)
         .populate("author", AUTHOR_FIELDS)
+        .populate("taggedUsers", AUTHOR_FIELDS)
         .populate({
             path: "originalPost",
             populate: { path: "author", select: AUTHOR_FIELDS }
@@ -191,10 +207,13 @@ const listQuery = async (filter, req, following = []) => {
         }).select("originalPost").lean())
             .map(repost => String(repost.originalPost)))
         : new Set();
+    const followingIds = new Set([req.user.id, ...following].map(String));
 
     return {
         success: true,
-        data: visiblePage.map(post => shape(post, req.user.id, savedPostIds, repostedPostIds)),
+        data: visiblePage.map(post =>
+            shape(post, req.user.id, savedPostIds, repostedPostIds, followingIds)
+        ),
         nextCursor:
             hasMore
                 ? page[page.length - 1].createdAt
@@ -207,9 +226,15 @@ const listQuery = async (filter, req, following = []) => {
 
 exports.createPost = async (req, res) => {
 
+    const savedMedia = [];
+    let savedAudio;
+    let postSaved = false;
     try {
 
-        const files = req.files || [];
+        const files = Array.isArray(req.files)
+            ? req.files
+            : req.files?.photos || [];
+        const audioFile = req.files?.audio?.[0];
         const caption = String(req.body?.caption || "").trim().slice(0, 2200);
         const communityId = req.params?.communityId || null;
         const visibility = req.body?.visibility === undefined
@@ -230,7 +255,14 @@ exports.createPost = async (req, res) => {
             });
         }
 
-        if (files.length === 0 && !caption) {
+        if (!communityId && files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Add at least one photo to share a Home post."
+            });
+        }
+
+        if (communityId && files.length === 0 && !caption) {
             return res.status(400).json({
                 success: false,
                 message: "Write something or add at least one photo."
@@ -241,6 +273,105 @@ exports.createPost = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "You can add up to 5 photos."
+            });
+        }
+
+        if (audioFile && files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Add at least one photo to use a soundtrack."
+            });
+        }
+        if (audioFile && req.body?.audioRightsConfirmed !== "true") {
+            return res.status(400).json({
+                success: false,
+                message: "Confirm that you have the rights to use this audio."
+            });
+        }
+
+        const audioStartSeconds = Number(req.body?.audioStartSeconds);
+        const audioDurationSeconds = Number(req.body?.audioDurationSeconds);
+        const audioTitle = String(req.body?.audioTitle || "").trim().slice(0, 100);
+        const location = String(req.body?.location || "").trim().slice(0, 100);
+        let altTexts = [];
+        let taggedUserIds = [];
+        try {
+            altTexts = req.body?.altTexts ? JSON.parse(req.body.altTexts) : [];
+            taggedUserIds = req.body?.taggedUsers ? JSON.parse(req.body.taggedUsers) : [];
+        } catch {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid photo descriptions or people tags."
+            });
+        }
+        if (
+            !Array.isArray(altTexts) ||
+            !Array.isArray(taggedUserIds) ||
+            altTexts.length > 5 ||
+            taggedUserIds.length > 10 ||
+            altTexts.some(value => typeof value !== "string" || value.length > 250) ||
+            taggedUserIds.some(id => !isId(id))
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Use up to five photo descriptions and ten valid people tags."
+            });
+        }
+        taggedUserIds = [...new Set(taggedUserIds.map(String))]
+            .filter(id => id !== String(req.user.id));
+        if (taggedUserIds.length) {
+            const [viewer, taggedUsers] = await Promise.all([
+                User.findById(req.user.id).select("following blockedUsers").lean(),
+                User.find({ _id: { $in: taggedUserIds } })
+                    .select("accountVisibility following blockedUsers")
+                    .lean()
+            ]);
+            if (taggedUsers.length !== taggedUserIds.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: "One or more people tagged in this post could not be found."
+                });
+            }
+            const viewerFollowing = new Set((viewer?.following || []).map(String));
+            const viewerBlocked = new Set((viewer?.blockedUsers || []).map(String));
+            const canTag = taggedUsers.every(tagged =>
+                !viewerBlocked.has(String(tagged._id)) &&
+                !(tagged.blockedUsers || []).some(id => String(id) === String(req.user.id)) &&
+                (
+                    tagged.accountVisibility !== "private" ||
+                    viewerFollowing.has(String(tagged._id))
+                )
+            );
+            if (!canTag) {
+                return res.status(403).json({
+                    success: false,
+                    message: "You cannot tag a blocked user or a private account you do not follow."
+                });
+            }
+        }
+        if (audioFile && (
+            !Number.isFinite(audioStartSeconds) ||
+            audioStartSeconds < 0 ||
+            !Number.isFinite(audioDurationSeconds) ||
+            audioDurationSeconds <= 0 ||
+            audioDurationSeconds > 30
+        )) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose an audio segment up to 30 seconds long."
+            });
+        }
+
+        if (files.some(file => file.size > 10 * 1024 * 1024)) {
+            return res.status(400).json({
+                success: false,
+                message: "Each photo must be under 10MB."
+            });
+        }
+        if (audioFile?.size > 10 * 1024 * 1024) {
+            return res.status(400).json({
+                success: false,
+                message: "Audio must be under 10MB."
             });
         }
 
@@ -265,10 +396,11 @@ exports.createPost = async (req, res) => {
             }
         }
 
-        const media = [];
-
         for (const file of files) {
-            media.push(await mediaStorage.saveFile(file, "etop/posts"));
+            savedMedia.push(await mediaStorage.saveFile(file, "etop/posts"));
+        }
+        if (audioFile) {
+            savedAudio = await mediaStorage.saveFile(audioFile, "etop/post-audio");
         }
 
         const post = await Post.create({
@@ -277,8 +409,22 @@ exports.createPost = async (req, res) => {
             kind: "post",
             visibility,
             caption,
-            media
+            media: savedMedia.map((media, index) => ({
+                ...media,
+                altText: String(altTexts[index] || "").trim().slice(0, 250)
+            })),
+            location,
+            taggedUsers: taggedUserIds,
+            audio: savedAudio
+                ? {
+                    ...savedAudio,
+                    title: audioTitle,
+                    startSeconds: audioStartSeconds,
+                    durationSeconds: audioDurationSeconds
+                }
+                : undefined
         });
+        postSaved = true;
 
         if (!communityId && visibility !== "private") {
             await notifyFollowers(req.user.id, {
@@ -291,6 +437,7 @@ exports.createPost = async (req, res) => {
 
         const populated = await Post.findById(post._id)
             .populate("author", AUTHOR_FIELDS)
+            .populate("taggedUsers", AUTHOR_FIELDS)
             .lean();
 
         return res.status(201).json({
@@ -300,6 +447,15 @@ exports.createPost = async (req, res) => {
 
     } catch (error) {
 
+        if (!postSaved) {
+            const cleanupResults = await Promise.allSettled([
+                ...savedMedia.map(media => mediaStorage.deleteFile(media)),
+                ...(savedAudio ? [mediaStorage.deleteFile(savedAudio)] : [])
+            ]);
+            if (cleanupResults.some(result => result.status === "rejected" || result.value === false)) {
+                console.error("CREATE POST MEDIA CLEANUP ERROR:", cleanupResults);
+            }
+        }
         console.error("CREATE POST ERROR:", error);
 
         return res.status(500).json({
@@ -331,9 +487,9 @@ exports.createReel = async (req, res) => {
 
         // The browser measures the length before upload.
         // (Cloudinary measures it again below, for real.)
-        const clientDuration = Number(req.body?.duration || 0);
+        const clientDuration = Number(req.body?.duration);
 
-        if (clientDuration > MAX_REEL_SECONDS + 0.5) {
+        if (!Number.isFinite(clientDuration) || clientDuration <= 0 || clientDuration > MAX_REEL_SECONDS) {
             return res.status(400).json({
                 success: false,
                 message: `Reels can be at most ${MAX_REEL_MINUTES} minutes.`
@@ -342,7 +498,7 @@ exports.createReel = async (req, res) => {
 
         const saved = await mediaStorage.saveFile(file, "etop/reels");
 
-        if (saved.duration > MAX_REEL_SECONDS + 1) {
+        if (saved.duration > MAX_REEL_SECONDS) {
 
             await mediaStorage.deleteFile(saved);
 
@@ -421,7 +577,16 @@ exports.getFeed = async (req, res) => {
 exports.getReels = async (req, res) => {
 
     try {
-        return res.json(await listQuery({ kind: "reel", community: null }, req));
+        const viewer = await User
+            .findById(req.user.id)
+            .select("following")
+            .lean();
+
+        return res.json(await listQuery(
+            { kind: "reel", community: null },
+            req,
+            viewer?.following || []
+        ));
     } catch (error) {
         console.error("GET REELS ERROR:", error);
         return res.status(500).json({ success: false, message: "Could not load reels." });
@@ -556,6 +721,7 @@ exports.getPost = async (req, res) => {
 
         const post = await Post.findById(req.params.id)
             .populate("author", AUTHOR_FIELDS)
+            .populate("taggedUsers", AUTHOR_FIELDS)
             .populate({
                 path: "originalPost",
                 populate: { path: "author", select: AUTHOR_FIELDS }
@@ -580,10 +746,11 @@ exports.getPost = async (req, res) => {
             post: { $in: postIds }
         }).select("post").lean();
         const savedPostIds = new Set(savedPosts.map(saved => String(saved.post)));
+        const followingIds = await getFollowingIds(req.user.id);
 
         return res.json({
             success: true,
-            data: shape(post, req.user.id, savedPostIds)
+            data: shape(post, req.user.id, savedPostIds, new Set(), followingIds)
         });
     } catch (error) {
         console.error("GET POST ERROR:", error);
@@ -612,6 +779,7 @@ exports.getSavedPosts = async (req, res) => {
                 path: "post",
                 populate: [
                     { path: "author", select: AUTHOR_FIELDS },
+                    { path: "taggedUsers", select: AUTHOR_FIELDS },
                     {
                         path: "originalPost",
                         populate: { path: "author", select: AUTHOR_FIELDS }
@@ -632,10 +800,13 @@ exports.getSavedPosts = async (req, res) => {
         const savedPostIds = new Set(
             page.filter(saved => saved.post).map(saved => String(saved.post._id))
         );
+        const followingIds = await getFollowingIds(req.user.id);
 
         return res.json({
             success: true,
-            data: accessiblePosts.map(post => shape(post, req.user.id, savedPostIds)),
+            data: accessiblePosts.map(post =>
+                shape(post, req.user.id, savedPostIds, new Set(), followingIds)
+            ),
             nextCursor: hasMore ? page[page.length - 1]?.createdAt || null : null
         });
     } catch (error) {
@@ -1173,6 +1344,24 @@ exports.deletePost = async (req, res) => {
             const references = [];
             if (media.publicId) {
                 references.push({ "media.publicId": media.publicId });
+            }
+            if (post.audio?.url) {
+                const audioReferences = [];
+                if (post.audio.publicId) audioReferences.push({ "audio.publicId": post.audio.publicId });
+                audioReferences.push({ "audio.url": post.audio.url });
+                const hasOtherPostReference = await Post.exists({
+                    _id: { $ne: post._id },
+                    $or: audioReferences
+                });
+                if (!hasOtherPostReference) {
+                    const deletedAudio = await mediaStorage.deleteFile(post.audio);
+                    if (!deletedAudio) {
+                        return res.status(502).json({
+                            success: false,
+                            message: "Post soundtrack could not be deleted. Please try again."
+                        });
+                    }
+                }
             }
             if (media.url) {
                 references.push({ "media.url": media.url });

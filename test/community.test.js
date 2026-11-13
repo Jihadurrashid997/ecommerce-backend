@@ -6,6 +6,7 @@ const User = require("../models/User");
 const SavedPost = require("../models/SavedPost");
 const communityController = require("../controllers/communityController");
 const postController = require("../controllers/postController");
+const mediaStorage = require("../services/mediaStorage");
 
 const CREATOR_ID = "507f1f77bcf86cd799439011";
 const MEMBER_ID = "507f191e810c19729de860ea";
@@ -83,6 +84,7 @@ test("post creation persists the selected visibility and rejects community-only 
     const originalCreate = Post.create;
     const originalFindById = Post.findById;
     const originalCommunityFindOne = Community.findOne;
+    const originalSaveFile = mediaStorage.saveFile;
     let createdPost;
     Post.create = async fields => {
         createdPost = fields;
@@ -103,13 +105,18 @@ test("post creation persists the selected visibility and rejects community-only 
     Community.findOne = () => {
         throw new Error("Community membership must not be queried for a private audience.");
     };
+    mediaStorage.saveFile = async () => ({
+        url: "https://media.example.com/photo.jpg",
+        type: "image",
+        publicId: "private-post-photo"
+    });
 
     try {
         const response = makeResponse();
         await postController.createPost({
             params: {},
             body: { caption: "A private note", visibility: "private" },
-            files: [],
+            files: [{ mimetype: "image/jpeg", size: 100, buffer: Buffer.from("photo") }],
             user: { id: CREATOR_ID }
         }, response);
 
@@ -129,12 +136,14 @@ test("post creation persists the selected visibility and rejects community-only 
         Post.create = originalCreate;
         Post.findById = originalFindById;
         Community.findOne = originalCommunityFindOne;
+        mediaStorage.saveFile = originalSaveFile;
     }
 });
 
 test("shared post detail returns a shaped public post", async () => {
     const originalFindById = Post.findById;
     const originalSavedPostFind = SavedPost.find;
+    const originalUserFindById = User.findById;
     const post = {
         _id: "507f1f77bcf86cd799439012",
         author: { _id: CREATOR_ID, name: "Creator" },
@@ -156,6 +165,10 @@ test("shared post detail returns a shaped public post", async () => {
         },
         lean: async () => []
     });
+    User.findById = () => ({
+        select() { return this; },
+        lean: async () => ({ following: [] })
+    });
 
     try {
         const response = makeResponse();
@@ -173,6 +186,7 @@ test("shared post detail returns a shaped public post", async () => {
     } finally {
         Post.findById = originalFindById;
         SavedPost.find = originalSavedPostFind;
+        User.findById = originalUserFindById;
     }
 });
 

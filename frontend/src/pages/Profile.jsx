@@ -12,6 +12,7 @@ import {
 } from "react-icons/fa";
 
 import { useApp } from "../context/AppContext";
+import { getUploadUrl } from "../services/api";
 import ProfileSocial from "../components/ProfileSocial";
 import VerifiedBadge from "../components/VerifiedBadge";
 
@@ -136,7 +137,7 @@ const Profile = () => {
                         {avatar ? (
 
                             <img
-                                src={avatar}
+                                src={getUploadUrl(avatar)}
                                 alt={userName}
                             />
 

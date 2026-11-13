@@ -49,6 +49,8 @@ beforeEach(() => {
     api.get.mockImplementation(path => Promise.resolve({
         data: path === "/users/following"
             ? { users: [{ _id: "friend-1", name: "A friend" }] }
+            : path === "/users/suggestions"
+                ? { data: [] }
             : { data: [], nextCursor: null }
     }));
 });
@@ -58,7 +60,7 @@ afterAll(() => {
     URL.revokeObjectURL = originalRevokeObjectURL;
 });
 
-test("new feed posts include the selected audience and reset to public", async () => {
+test("photo feed posts include the selected audience and reset to public", async () => {
     api.post.mockResolvedValue({
         data: {
             data: {
@@ -72,11 +74,14 @@ test("new feed posts include the selected audience and reset to public", async (
         }
     });
 
-    render(<Home />);
+    const { container } = render(<Home />);
 
     const audience = await screen.findByRole("combobox", { name: "Post audience" });
+    fireEvent.change(container.querySelector('input[type="file"]'), {
+        target: { files: [new File(["photo"], "moment.jpg", { type: "image/jpeg" })] }
+    });
     fireEvent.change(audience, { target: { value: "followers" } });
-    fireEvent.change(screen.getByPlaceholderText("What's worth sharing today?"), {
+    fireEvent.change(screen.getByPlaceholderText("Write a caption for your photos..."), {
         target: { value: "A followers-only update" }
     });
     fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
@@ -89,6 +94,7 @@ test("new feed posts include the selected audience and reset to public", async (
         })
     ));
     expect(api.post.mock.calls[0][1].get("visibility")).toBe("followers");
+    expect(api.post.mock.calls[0][1].getAll("photos")).toHaveLength(1);
     await waitFor(() => expect(audience).toHaveValue("public"));
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
 });
@@ -98,7 +104,16 @@ test("Home includes a story bar configured to allow photo-only story uploads", a
     const stories = await screen.findByRole("region", { name: "Stories" });
     expect(stories).toHaveAttribute("data-video-upload", "false");
     expect(screen.getByRole("button", { name: "Add story" })).toBeVisible();
-    expect(screen.getByPlaceholderText("What's worth sharing today?")).toBeVisible();
+    expect(screen.getByPlaceholderText("Write a caption for your photos...")).toBeVisible();
+});
+
+test("requires at least one photo before sharing a Home post", async () => {
+    render(<Home />);
+    const caption = await screen.findByPlaceholderText("Write a caption for your photos...");
+    fireEvent.change(caption, { target: { value: "A caption by itself" } });
+
+    expect(screen.getByRole("button", { name: /Share post/ })).toBeDisabled();
+    expect(api.post).not.toHaveBeenCalled();
 });
 
 test("photo uploads send the selected image and show upload progress", async () => {
@@ -128,7 +143,7 @@ test("photo uploads send the selected image and show upload progress", async () 
     fireEvent.change(fileInput, {
         target: { files: [photo] }
     });
-    fireEvent.change(screen.getByPlaceholderText("What's worth sharing today?"), {
+    fireEvent.change(screen.getByPlaceholderText("Write a caption for your photos..."), {
         target: { value: "  A sunny day  " }
     });
 
@@ -151,10 +166,90 @@ test("photo uploads send the selected image and show upload progress", async () 
     finishUpload();
     expect(await screen.findByRole("article")).toBeInTheDocument();
     await waitFor(() => {
-        expect(screen.getByPlaceholderText("What's worth sharing today?")).toHaveValue("");
+        expect(screen.getByPlaceholderText("Write a caption for your photos...")).toHaveValue("");
         expect(screen.getByRole("button", { name: /Share post/ })).toBeDisabled();
     });
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
+});
+
+test("photo posts include the selected, rights-confirmed soundtrack segment", async () => {
+    api.post.mockResolvedValue({
+        data: { data: { _id: "photo-audio-post", caption: "With music", media: [] } }
+    });
+    const { container } = render(<Home />);
+    const photo = new File(["photo"], "moment.jpg", { type: "image/jpeg" });
+    const photoInput = container.querySelector('input[type="file"]');
+    await waitFor(() => expect(photoInput).toBeEnabled());
+    fireEvent.change(photoInput, {
+        target: { files: [photo] }
+    });
+    const soundtrack = new File(["ID3audio"], "original.mp3", { type: "audio/mpeg" });
+    fireEvent.change(container.querySelector(".home-audio-picker input"), {
+        target: { files: [soundtrack] }
+    });
+    const preview = container.querySelector(".home-audio-preview audio");
+    Object.defineProperty(preview, "duration", { configurable: true, value: 42 });
+    fireEvent.loadedMetadata(preview);
+    await screen.findByRole("slider", { name: "Soundtrack start time" });
+    fireEvent.click(screen.getByLabelText("I own this audio or have permission to use it."));
+    fireEvent.change(screen.getByPlaceholderText("Write a caption for your photos..."), {
+        target: { value: "With music" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+        "/posts",
+        expect.any(FormData),
+        expect.objectContaining({ onUploadProgress: expect.any(Function) })
+    ));
+    const form = api.post.mock.calls[0][1];
+    expect(form.get("audio")).toEqual(soundtrack);
+    expect(form.get("audioStartSeconds")).toBe("0");
+    expect(form.get("audioDurationSeconds")).toBe("30");
+    expect(form.get("audioRightsConfirmed")).toBe("true");
+});
+
+test("photo posts include alt text, a place, and selected people tags", async () => {
+    api.get.mockImplementation(path => {
+        if (path === "/users/search") {
+            return Promise.resolve({
+                data: { users: [{ _id: "tagged-person", name: "Tagged Person" }] }
+            });
+        }
+        if (path === "/users/following") return Promise.resolve({ data: { users: [] } });
+        if (path === "/users/suggestions") return Promise.resolve({ data: [] });
+        return Promise.resolve({ data: [], nextCursor: null });
+    });
+    api.post.mockResolvedValue({
+        data: { data: { _id: "post-with-tags", media: [] } }
+    });
+    const { container } = render(<Home />);
+    const photoInput = container.querySelector('input[type="file"]');
+    await waitFor(() => expect(photoInput).toBeEnabled());
+    fireEvent.change(photoInput, {
+        target: { files: [new File(["photo"], "place.jpg", { type: "image/jpeg" })] }
+    });
+    fireEvent.change(screen.getByLabelText("Photo 1 description (for screen readers)"), {
+        target: { value: "A quiet mountain lake" }
+    });
+    fireEvent.change(screen.getByPlaceholderText("Add a place name (no precise location)"), {
+        target: { value: "Lake District" }
+    });
+    fireEvent.change(screen.getByPlaceholderText("Search people by name"), {
+        target: { value: "Tagged" }
+    });
+    fireEvent.click(await screen.findByRole("option", { name: "Tagged Person" }));
+    fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(
+        "/posts",
+        expect.any(FormData),
+        expect.objectContaining({ onUploadProgress: expect.any(Function) })
+    ));
+    const form = api.post.mock.calls[0][1];
+    expect(JSON.parse(form.get("altTexts"))).toEqual(["A quiet mountain lake"]);
+    expect(JSON.parse(form.get("taggedUsers"))).toEqual(["tagged-person"]);
+    expect(form.get("location")).toBe("Lake District");
 });
 
 test("rejects unsupported and oversized photos before publishing", async () => {
@@ -204,7 +299,7 @@ test("limits a post to five uploaded photos", async () => {
     });
     expect(screen.getByRole("alert")).toHaveTextContent("You can add up to 5 photos.");
     expect(container.querySelectorAll(".composer-thumb")).toHaveLength(5);
-    fireEvent.change(screen.getByPlaceholderText("What's worth sharing today?"), {
+    fireEvent.change(screen.getByPlaceholderText("Write a caption for your photos..."), {
         target: { value: "Five photos" }
     });
     fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
@@ -226,7 +321,7 @@ test("keeps the draft available when photo publishing fails", async () => {
     fireEvent.change(fileInput, {
         target: { files: [photo] }
     });
-    const caption = screen.getByPlaceholderText("What's worth sharing today?");
+    const caption = screen.getByPlaceholderText("Write a caption for your photos...");
     fireEvent.change(caption, { target: { value: "Keep this draft" } });
     fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
 
@@ -249,7 +344,7 @@ test("restores the user's Home draft, including selected photos", async () => {
     });
     const { container } = render(<Home />);
 
-    expect(await screen.findByPlaceholderText("What's worth sharing today?"))
+    expect(await screen.findByPlaceholderText("Write a caption for your photos..."))
         .toHaveValue("Restored caption");
     expect(screen.getByRole("combobox", { name: "Post audience" })).toHaveValue("private");
     expect(container.querySelectorAll(".composer-thumb")).toHaveLength(1);
@@ -259,7 +354,7 @@ test("restores the user's Home draft, including selected photos", async () => {
 
 test("autosaves non-empty Home drafts for the current user", async () => {
     render(<Home />);
-    const caption = await screen.findByPlaceholderText("What's worth sharing today?");
+    const caption = await screen.findByPlaceholderText("Write a caption for your photos...");
     fireEvent.change(caption, { target: { value: "A saved thought" } });
 
     await waitFor(() => expect(saveHomeDraft).toHaveBeenCalledWith(
@@ -277,13 +372,16 @@ test("clears the saved Home draft only after a successful publish", async () => 
         data: { data: { _id: "published-post", caption: "Publish this", media: [] } }
     });
     const { container } = render(<Home />);
-    fireEvent.change(await screen.findByPlaceholderText("What's worth sharing today?"), {
+    fireEvent.change(container.querySelector('input[type="file"]'), {
+        target: { files: [new File(["photo"], "moment.jpg", { type: "image/jpeg" })] }
+    });
+    fireEvent.change(await screen.findByPlaceholderText("Write a caption for your photos..."), {
         target: { value: "Publish this" }
     });
     fireEvent.click(screen.getByRole("button", { name: "Share post" }));
 
     await waitFor(() => expect(clearHomeDraft).toHaveBeenCalledWith("current-user"));
-    expect(screen.getByPlaceholderText("What's worth sharing today?")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Write a caption for your photos...")).toHaveValue("");
 });
 
 test("loads additional feed posts using the next cursor", async () => {
@@ -298,6 +396,9 @@ test("loads additional feed posts using the next cursor", async () => {
     api.get.mockImplementation(path => {
         if (path === "/users/following") {
             return Promise.resolve({ data: { users: [{ _id: "friend-1", name: "A friend" }] } });
+        }
+        if (path === "/users/suggestions") {
+            return Promise.resolve({ data: { data: [] } });
         }
 
         feedRequest += 1;
@@ -343,6 +444,9 @@ test("shows feed errors and retries the feed request", async () => {
         if (path === "/users/following") {
             return Promise.resolve({ data: { users: [{ _id: "friend-1", name: "A friend" }] } });
         }
+        if (path === "/users/suggestions") {
+            return Promise.resolve({ data: { data: [] } });
+        }
 
         feedRequest += 1;
         return feedRequest === 1
@@ -369,6 +473,9 @@ test("shows a retry action when the following list cannot be loaded", async () =
                 ? Promise.reject({ response: { data: { message: "Circle unavailable" } } })
                 : Promise.resolve({ data: { users: [{ _id: "friend-1", name: "A friend" }] } });
         }
+        if (path === "/users/suggestions") {
+            return Promise.resolve({ data: { data: [] } });
+        }
         return Promise.resolve({ data: { data: [], nextCursor: null } });
     });
 
@@ -379,4 +486,22 @@ test("shows a retry action when the following list cannot be loaded", async () =
 
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
     expect(followingRequest).toBe(2);
+});
+
+test("shows follow suggestions and removes a person after following", async () => {
+    api.get.mockImplementation(path => Promise.resolve({
+        data: path === "/users/following"
+            ? { users: [] }
+            : path === "/users/suggestions"
+                ? { data: [{ _id: "suggested-1", name: "Suggested creator", mutualConnections: 2 }] }
+                : { data: [], nextCursor: null }
+    }));
+    api.post.mockResolvedValue({ data: { isFollowing: true, action: "followed" } });
+
+    render(<Home />);
+    expect(await screen.findByText("Suggested creator")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Follow" }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith("/users/follow/suggested-1"));
+    await waitFor(() => expect(screen.queryByText("Suggested creator")).not.toBeInTheDocument());
 });

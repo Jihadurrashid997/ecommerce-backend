@@ -23,6 +23,7 @@ const {
     getSocialStats,
     toggleFollow,
     getFollowing,
+    getFollowSuggestions,
     getFollowRequests,
     respondToFollowRequest
 
@@ -118,6 +119,12 @@ router.get(
     "/following",
     auth(),
     getFollowing
+);
+
+router.get(
+    "/suggestions",
+    auth(),
+    getFollowSuggestions
 );
 
 

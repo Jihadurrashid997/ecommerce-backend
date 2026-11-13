@@ -8,6 +8,7 @@ import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import CommentsPanel from "../components/CommentsPanel";
 import ReactionPicker from "../components/ReactionPicker";
+import SocialFollowButton from "../components/SocialFollowButton";
 import "../styles/Social.css";
 
 const MAX_MINUTES = 5;
@@ -15,7 +16,7 @@ const MAX_SECONDS = MAX_MINUTES * 60;
 
 /* ---------------- one reel ---------------- */
 
-const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
+const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowChange }) => {
 
     const videoRef = useRef(null);
     const viewed = useRef(false);
@@ -130,6 +131,12 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
                     </div>
                     <b>{author.name || "User"}</b>
                 </Link>
+                {reel.isFollowedByMe === false && String(author._id) !== myId && (
+                    <SocialFollowButton
+                        userId={author._id}
+                        onFollowChange={result => onFollowChange(author, result)}
+                    />
+                )}
 
                 {reel.caption && <p>{reel.caption}</p>}
                 {actionMessage && <p className="reel-action-status" role="status">{actionMessage}</p>}
@@ -228,7 +235,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 
         probe.onloadedmetadata = () => {
 
-            if (probe.duration > MAX_SECONDS + 0.5) {
+            if (probe.duration > MAX_SECONDS) {
                 URL.revokeObjectURL(url);
                 setError(`Reels can be at most ${MAX_MINUTES} minutes. This video is ${Math.round(probe.duration)}s.`);
                 return;
@@ -257,7 +264,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 
         form.append("video", file);
         form.append("caption", caption.trim());
-        form.append("duration", String(Math.round(duration)));
+        form.append("duration", String(duration));
 
         try {
 
@@ -346,6 +353,7 @@ const Reels = () => {
     const [reels, setReels] = useState([]);
     const [cursor, setCursor] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState("");
     const [muted, setMuted] = useState(true);
     const [showUpload, setShowUpload] = useState(false);
@@ -354,17 +362,30 @@ const Reels = () => {
 
         try {
 
+            before ? setLoadingMore(true) : setLoading(true);
+            setError("");
+
             const res = await api.get("/posts/reels", {
                 params: before ? { before } : {}
             });
 
-            setReels(prev => before ? [...prev, ...res.data.data] : res.data.data);
+            const incomingReels = res.data.data || [];
+            setReels(prev => {
+                const seen = new Set();
+                return (before ? [...prev, ...incomingReels] : incomingReels).filter(reel => {
+                    const id = String(reel._id);
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            });
             setCursor(res.data.nextCursor || null);
 
         } catch (e) {
             setError(e.response?.data?.message || "Could not load reels.");
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
 
     }, []);
@@ -405,12 +426,17 @@ const Reels = () => {
                     myId={myId}
                     isAdmin={user?.role === "admin"}
                     onDeleted={id => setReels(prev => prev.filter(r => r._id !== id))}
+                    onFollowChange={(author, result) => setReels(previous => previous.map(item =>
+                       String(item.author?._id || item.author) === String(author._id)
+                           ? { ...item, isFollowedByMe: Boolean(result.isFollowing) }
+                           : item
+                    ))}
                 />
             ))}
 
             {cursor && (
-                <button className="btn-ghost reel-more" type="button" onClick={() => load(cursor)}>
-                    Load more reels
+                <button className="btn-ghost reel-more" type="button" onClick={() => load(cursor)} disabled={loadingMore}>
+                    {loadingMore ? "Loading reels..." : "Load more reels"}
                 </button>
             )}
 

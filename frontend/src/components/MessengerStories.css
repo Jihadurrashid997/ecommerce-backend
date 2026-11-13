@@ -186,6 +186,35 @@
     background: #fff1f0;
     cursor: pointer;
 }
+.messenger-story-audio-tools { display: grid; gap: 9px; padding: 10px; border: 1px solid #e4e9e3; border-radius: 12px; background: #f8faf7; }
+.messenger-story-audio-preview { display: grid; gap: 8px; }
+.messenger-story-audio-preview audio,
+.messenger-story-audio-playback audio { width: 100%; }
+.messenger-story-audio-preview > label { display: grid; gap: 5px; color: #475467; font-size: 12px; }
+.messenger-story-audio-preview input:not([type="range"]) { width: 100%; padding: 8px; border: 1px solid #d0d5dd; border-radius: 9px; font: inherit; }
+.messenger-story-audio-preview .messenger-story-audio-rights { display: flex; align-items: center; gap: 7px; }
+.messenger-story-audio-preview .messenger-story-audio-rights input { margin: 0; }
+.messenger-story-audio-preview > button { justify-self: start; color: #b42318; background: transparent; cursor: pointer; }
+.messenger-story-audio-playback { display: grid; gap: 6px; width: min(420px, 90%); padding: 9px 12px; border-radius: 12px; color: #fff; background: rgba(0, 0, 0, .66); }
+.messenger-story-audio-playback strong { font-size: 12px; }
+.messenger-story-add-poll,
+.messenger-story-poll-editor button { justify-self: start; padding: 7px 10px; border: 1px solid #d5e0d4; border-radius: 9px; color: #27594b; background: #f3f8f2; cursor: pointer; }
+.messenger-story-poll-editor { display: grid; gap: 8px; padding: 10px; border: 1px solid #e4e9e3; border-radius: 12px; background: #f8faf7; }
+.messenger-story-poll-editor label { display: grid; gap: 5px; color: #475467; font-size: 12px; }
+.messenger-story-poll-editor input { width: 100%; padding: 8px; border: 1px solid #d0d5dd; border-radius: 9px; font: inherit; }
+.messenger-story-poll-option { display: flex; gap: 7px; }
+.messenger-story-poll-option input { flex: 1; }
+.messenger-story-poll { display: grid; gap: 8px; width: min(390px, 90%); padding: 14px; border-radius: 14px; color: #1d2939; background: #fff; }
+.messenger-story-poll > button { display: flex; justify-content: space-between; gap: 8px; padding: 10px; border: 1px solid #d0d5dd; border-radius: 9px; text-align: left; background: #fff; cursor: pointer; }
+.messenger-story-poll > button.is-selected { border-color: #3a775d; background: #eaf3ea; }
+.messenger-story-poll > button:disabled { cursor: default; }
+.messenger-story-poll > small { color: #667085; }
+.messenger-story-reply { display: flex; flex-wrap: wrap; gap: 7px; padding: 10px; }
+.messenger-story-reply input { flex: 1; min-width: 150px; padding: 9px 11px; border: 1px solid rgba(255,255,255,.55); border-radius: 999px; color: #fff; background: rgba(0,0,0,.4); }
+.messenger-story-reply input::placeholder { color: rgba(255,255,255,.8); }
+.messenger-story-reply button { padding: 8px 13px; border-radius: 999px; color: #fff; background: #36734f; cursor: pointer; }
+.messenger-story-reply button:disabled { opacity: .6; cursor: wait; }
+.messenger-story-reply small { flex-basis: 100%; color: #fff; }
 
 .messenger-story-composer form > button {
     min-height: 42px;

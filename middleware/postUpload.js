@@ -23,6 +23,14 @@ const VIDEO_TYPES = [
     "video/3gpp"
 ];
 const STORY_TYPES = [...IMAGE_TYPES, ...VIDEO_TYPES];
+const AUDIO_TYPES = [
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/aac",
+    "audio/wav",
+    "audio/ogg",
+    "audio/webm"
+];
 
 const makeUploader = ({ allowed, maxSize, maxFiles }) =>
     multer({
@@ -72,6 +80,30 @@ exports.homeStoryUpload = makeUploader({
     maxFiles: 1
 });
 
+const makeFieldsUploader = ({ allowed, maxSize, maxFiles, fields }) =>
+    multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: maxSize, files: maxFiles },
+        fileFilter: (req, file, cb) => {
+            if (allowed.includes(file.mimetype)) return cb(null, true);
+            cb(new Error("This file type isn't supported."), false);
+        }
+    }).fields(fields);
+
+exports.postAudioUpload = makeFieldsUploader({
+    allowed: [...IMAGE_TYPES, ...AUDIO_TYPES],
+    maxSize: 10 * 1024 * 1024,
+    maxFiles: 6,
+    fields: [{ name: "photos", maxCount: 5 }, { name: "audio", maxCount: 1 }]
+});
+
+exports.homeStoryAudioUpload = makeFieldsUploader({
+    allowed: [...IMAGE_TYPES, ...AUDIO_TYPES],
+    maxSize: 20 * 1024 * 1024,
+    maxFiles: 2,
+    fields: [{ name: "media", maxCount: 1 }, { name: "audio", maxCount: 1 }]
+});
+
 // Wraps an uploader so ANY multer error becomes a clean JSON 400
 exports.handle = (uploader, field) => (req, res, next) => {
 
@@ -106,6 +138,20 @@ exports.handleSingle = (uploader, field) => (req, res, next) => {
                 ? "File is too large."
                 : error.message || "Upload failed.";
 
+        return res.status(400).json({ success: false, message });
+    });
+};
+
+exports.handleFields = uploader => (req, res, next) => {
+    uploader(req, res, error => {
+        if (!error) return next();
+        const message =
+            error.code === "LIMIT_FILE_SIZE"
+                ? "File is too large."
+                : error.code === "LIMIT_FILE_COUNT" ||
+                  error.code === "LIMIT_UNEXPECTED_FILE"
+                    ? "Too many files."
+                    : error.message || "Upload failed.";
         return res.status(400).json({ success: false, message });
     });
 };

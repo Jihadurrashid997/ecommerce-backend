@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const Story = require("../models/Story");
 const User = require("../models/User");
 const mediaStorage = require("../services/mediaStorage");
+const { voteStoryPoll } = require("../controllers/storyController");
 
 const USER_ID = "507f1f77bcf86cd799439011";
 const FOLLOWER_ID = "507f191e810c19729de860ea";
@@ -28,7 +29,7 @@ const makeResponse = () => ({
     }
 });
 
-const makeStory = ({ audience = "followers", viewers = [] } = {}) => ({
+const makeStory = ({ audience = "followers", viewers = [], poll } = {}) => ({
     _id: new mongoose.Types.ObjectId(STORY_ID),
     owner: {
         _id: new mongoose.Types.ObjectId(USER_ID),
@@ -37,6 +38,7 @@ const makeStory = ({ audience = "followers", viewers = [] } = {}) => ({
     },
     audience,
     viewers,
+    poll,
     expiresAt: new Date(Date.now() + 60_000),
     toObject() {
         return this;
@@ -66,6 +68,68 @@ test("status requires text or media and defaults to follower-only for 24 hours",
     });
     assert.equal(story.validateSync(), undefined);
     assert.equal(story.audience, "followers");
+});
+
+test("photo stories accept only bounded soundtrack segments", () => {
+    const story = new Story({
+        owner: USER_ID,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        media: { url: "https://media.example.com/photo.jpg", type: "image" },
+        audio: {
+            url: "https://media.example.com/audio.mp3",
+            type: "audio",
+            title: "Original track",
+            startSeconds: 4,
+            durationSeconds: 15
+        }
+    });
+    assert.equal(story.validateSync(), undefined);
+
+    story.audio.durationSeconds = 16;
+    assert.ok(story.validateSync());
+});
+
+test("Story polls require two to four non-empty options", () => {
+    const story = new Story({
+        owner: USER_ID,
+        text: "Vote",
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        poll: {
+            question: "Pick one",
+            options: [{ text: "A" }, { text: "B" }]
+        }
+    });
+    assert.equal(story.validateSync(), undefined);
+    story.poll.options = [{ text: "Only one" }];
+    assert.ok(story.validateSync());
+});
+
+test("a Story poll accepts one vote from an authorized viewer", async () => {
+    const story = makeStory({
+        audience: "public",
+        poll: {
+            question: "Pick one",
+            options: [{ text: "A" }, { text: "B" }],
+            votes: []
+        }
+    });
+    let updateFilter;
+    Story.findOne = async () => story;
+    Story.updateOne = async (filter, update) => {
+        updateFilter = filter;
+        return { modifiedCount: 1 };
+    };
+    const response = makeResponse();
+    await voteStoryPoll({
+        user: { id: USER_ID },
+        params: { id: STORY_ID },
+        body: { optionIndex: 1 }
+    }, response);
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.data.poll.myVote, 1);
+    assert.equal(response.body.data.poll.options[1].votes, 1);
+    assert.deepEqual(updateFilter["poll.votes.user"], { $ne: USER_ID });
 });
 
 test("a follower may view a follower-only status and gets one view record", async () => {
@@ -187,6 +251,11 @@ test("expired statuses remain queued for cleanup when media deletion fails", asy
             publicId: "status-media",
             type: "video"
         },
+        audio: {
+            url: "https://media.example.com/status.mp3",
+            publicId: "status-audio",
+            type: "audio"
+        },
         deleted: false,
         async deleteOne() {
             this.deleted = true;
@@ -198,7 +267,11 @@ test("expired statuses remain queued for cleanup when media deletion fails", asy
         },
         limit: async () => [story]
     });
-    mediaStorage.deleteFile = async () => false;
+    const deletedMedia = [];
+    mediaStorage.deleteFile = async media => {
+        deletedMedia.push(media);
+        return deletedMedia.length > 2;
+    };
 
     const { purgeExpiredStories } = require("../services/storyCleanup");
     assert.equal(await purgeExpiredStories(), 0);
@@ -207,4 +280,5 @@ test("expired statuses remain queued for cleanup when media deletion fails", asy
     mediaStorage.deleteFile = async () => true;
     assert.equal(await purgeExpiredStories(), 1);
     assert.equal(story.deleted, true);
+    assert.ok(deletedMedia.some(media => media.type === "audio"));
 });
