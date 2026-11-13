@@ -143,7 +143,7 @@
     max-width: min(520px, calc(100% - 32px));
     margin: 0 auto !important;
     box-sizing: border-box;
-    border: 1px solid rgba(255, 175, 175, 0.24);
+    border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 14px !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }

@@ -1257,9 +1257,9 @@ const CallModal = ({
                             right: 16,
                             bottom: 112,
                             margin: 0,
-                            padding: 10,
+                            padding: "10px 14px",
                             borderRadius: 10,
-                            background: "rgba(127,29,29,.95)",
+                            background: "rgba(31,41,55,.96)",
                             color: "#fff",
                             textAlign: "center"
                         }}
