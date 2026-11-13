@@ -122,7 +122,7 @@ const saveFile = async (
             type,
             publicId: result.public_id,
             deliveryType,
-            duration: Math.round(result.duration || 0)
+            duration: Number(result.duration) || 0
         };
 
     }

@@ -150,9 +150,7 @@ const listQuery = async (filter, req, following = []) => {
         filter.createdAt = { $lt: before };
     }
 
-    const queryFilter = filter.kind === "reel"
-        ? filter
-        : addVisibilityFilter(filter, req.user.id, following);
+    const queryFilter = addVisibilityFilter(filter, req.user.id, following);
 
     const posts = await Post.find(queryFilter)
         .sort({ createdAt: -1 })
@@ -230,7 +228,14 @@ exports.createPost = async (req, res) => {
             });
         }
 
-        if (files.length === 0 && !caption) {
+        if (!communityId && files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Add at least one photo to share a Home post."
+            });
+        }
+
+        if (communityId && files.length === 0 && !caption) {
             return res.status(400).json({
                 success: false,
                 message: "Write something or add at least one photo."
@@ -331,9 +336,9 @@ exports.createReel = async (req, res) => {
 
         // The browser measures the length before upload.
         // (Cloudinary measures it again below, for real.)
-        const clientDuration = Number(req.body?.duration || 0);
+        const clientDuration = Number(req.body?.duration);
 
-        if (clientDuration > MAX_REEL_SECONDS + 0.5) {
+        if (!Number.isFinite(clientDuration) || clientDuration <= 0 || clientDuration > MAX_REEL_SECONDS) {
             return res.status(400).json({
                 success: false,
                 message: `Reels can be at most ${MAX_REEL_MINUTES} minutes.`
@@ -342,7 +347,7 @@ exports.createReel = async (req, res) => {
 
         const saved = await mediaStorage.saveFile(file, "etop/reels");
 
-        if (saved.duration > MAX_REEL_SECONDS + 1) {
+        if (saved.duration > MAX_REEL_SECONDS) {
 
             await mediaStorage.deleteFile(saved);
 
@@ -421,7 +426,16 @@ exports.getFeed = async (req, res) => {
 exports.getReels = async (req, res) => {
 
     try {
-        return res.json(await listQuery({ kind: "reel", community: null }, req));
+        const viewer = await User
+            .findById(req.user.id)
+            .select("following")
+            .lean();
+
+        return res.json(await listQuery(
+            { kind: "reel", community: null },
+            req,
+            viewer?.following || []
+        ));
     } catch (error) {
         console.error("GET REELS ERROR:", error);
         return res.status(500).json({ success: false, message: "Could not load reels." });

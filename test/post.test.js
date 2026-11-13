@@ -17,6 +17,9 @@ const adminControlController = require("../controllers/adminControlController");
 const mediaStorage = require("../services/mediaStorage");
 const { forgotPassword } = require("../controllers/authController");
 const {
+    createPost,
+    createReel,
+    getReels,
     updatePost,
     undoRepost,
     deleteComment,
@@ -69,6 +72,106 @@ test("an empty post is rejected", () => {
 
     assert.ok(error);
     assert.match(error.errors.media.message, /caption or media/);
+});
+
+test("Home posts require at least one photo", async () => {
+    const response = makeResponse();
+    await createPost({
+        params: {},
+        body: { caption: "Text-only Home post" },
+        files: [],
+        user: { id: TEST_USER_ID }
+    }, response);
+
+    assert.equal(response.statusCode, 400);
+    assert.match(response.body.message, /at least one photo/i);
+});
+
+test("reel uploads reject missing or over-five-minute duration metadata", async () => {
+    const originalSaveFile = mediaStorage.saveFile;
+    let saveCalls = 0;
+    mediaStorage.saveFile = async () => {
+        saveCalls += 1;
+        throw new Error("The duration should be rejected before saving.");
+    };
+
+    try {
+        for (const duration of [undefined, "300.01"]) {
+            const response = makeResponse();
+            await createReel({
+                files: [{ mimetype: "video/mp4" }],
+                body: { duration },
+                user: { id: TEST_USER_ID }
+            }, response);
+
+            assert.equal(response.statusCode, 400);
+            assert.match(response.body.message, /5 minutes/);
+        }
+        assert.equal(saveCalls, 0);
+    } finally {
+        mediaStorage.saveFile = originalSaveFile;
+    }
+});
+
+test("reel uploads delete media when the stored video exceeds five minutes", async () => {
+    const originalSaveFile = mediaStorage.saveFile;
+    const originalDeleteFile = mediaStorage.deleteFile;
+    let deletedMedia = null;
+    mediaStorage.saveFile = async () => ({ url: "/uploads/too-long.mp4", duration: 300.01 });
+    mediaStorage.deleteFile = async media => { deletedMedia = media; };
+
+    try {
+        const response = makeResponse();
+        await createReel({
+            files: [{ mimetype: "video/mp4" }],
+            body: { duration: "300" },
+            user: { id: TEST_USER_ID }
+        }, response);
+
+        assert.equal(response.statusCode, 400);
+        assert.equal(deletedMedia.duration, 300.01);
+    } finally {
+        mediaStorage.saveFile = originalSaveFile;
+        mediaStorage.deleteFile = originalDeleteFile;
+    }
+});
+
+test("reel feeds include public, own, and followed users' visibility scopes", async () => {
+    const originalFindById = User.findById;
+    const originalFind = Post.find;
+    let queryFilter;
+    User.findById = () => ({
+        select() { return this; },
+        lean: async () => ({ following: [OTHER_USER_ID] })
+    });
+    Post.find = filter => {
+        queryFilter = filter;
+        return {
+            sort() { return this; },
+            limit() { return this; },
+            populate() { return this; },
+            lean: async () => []
+        };
+    };
+
+    try {
+        const response = makeResponse();
+        await getReels({
+            user: { id: TEST_USER_ID },
+            query: {}
+        }, response);
+
+        assert.equal(response.statusCode, 200);
+        assert.deepEqual(queryFilter.$or, [
+            { visibility: { $exists: false } },
+            { visibility: "public" },
+            { author: TEST_USER_ID },
+            { visibility: "followers", author: { $in: [OTHER_USER_ID] } }
+        ]);
+    } finally {
+        User.findById = originalFindById;
+        Post.find = originalFind;
+    }
 });
 
 test("a photo post remains valid", () => {

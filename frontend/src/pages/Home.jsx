@@ -223,7 +223,7 @@ const Home = () => {
 
         event.preventDefault();
 
-        if ((files.length === 0 && !caption.trim()) || posting) return;
+        if (files.length === 0 || posting) return;
 
         const form = new FormData();
 
@@ -387,7 +387,7 @@ const Home = () => {
                             setCaption(e.target.value);
                             setUploadError("");
                         }}
-                        placeholder="What's worth sharing today?"
+                        placeholder="Write a caption for your photos..."
                         maxLength={2200}
                         disabled={!draftReady || posting}
                     />
@@ -461,7 +461,7 @@ const Home = () => {
                                 </select>
                             </label>
                             <span className="home-composer-count">{caption.length}/2200</span>
-                            <button className="btn-primary" type="submit" disabled={!draftReady || posting || (!caption.trim() && files.length === 0)}>
+                            <button className="btn-primary" type="submit" disabled={!draftReady || posting || files.length === 0}>
                                 {posting ? `Sharing ${uploadProgress}%...` : uploadError ? "Retry upload" : "Share post"} <FaArrowRight />
                             </button>
                         </div>

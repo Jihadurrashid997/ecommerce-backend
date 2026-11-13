@@ -58,7 +58,7 @@ afterAll(() => {
     URL.revokeObjectURL = originalRevokeObjectURL;
 });
 
-test("new feed posts include the selected audience and reset to public", async () => {
+test("photo feed posts include the selected audience and reset to public", async () => {
     api.post.mockResolvedValue({
         data: {
             data: {
@@ -72,11 +72,14 @@ test("new feed posts include the selected audience and reset to public", async (
         }
     });
 
-    render(<Home />);
+    const { container } = render(<Home />);
 
     const audience = await screen.findByRole("combobox", { name: "Post audience" });
+    fireEvent.change(container.querySelector('input[type="file"]'), {
+        target: { files: [new File(["photo"], "moment.jpg", { type: "image/jpeg" })] }
+    });
     fireEvent.change(audience, { target: { value: "followers" } });
-    fireEvent.change(screen.getByPlaceholderText("What's worth sharing today?"), {
+    fireEvent.change(screen.getByPlaceholderText("Write a caption for your photos..."), {
         target: { value: "A followers-only update" }
     });
     fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
@@ -89,6 +92,7 @@ test("new feed posts include the selected audience and reset to public", async (
         })
     ));
     expect(api.post.mock.calls[0][1].get("visibility")).toBe("followers");
+    expect(api.post.mock.calls[0][1].getAll("photos")).toHaveLength(1);
     await waitFor(() => expect(audience).toHaveValue("public"));
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
 });
@@ -98,7 +102,16 @@ test("Home includes a story bar configured to allow photo-only story uploads", a
     const stories = await screen.findByRole("region", { name: "Stories" });
     expect(stories).toHaveAttribute("data-video-upload", "false");
     expect(screen.getByRole("button", { name: "Add story" })).toBeVisible();
-    expect(screen.getByPlaceholderText("What's worth sharing today?")).toBeVisible();
+    expect(screen.getByPlaceholderText("Write a caption for your photos...")).toBeVisible();
+});
+
+test("requires at least one photo before sharing a Home post", async () => {
+    render(<Home />);
+    const caption = await screen.findByPlaceholderText("Write a caption for your photos...");
+    fireEvent.change(caption, { target: { value: "A caption by itself" } });
+
+    expect(screen.getByRole("button", { name: /Share post/ })).toBeDisabled();
+    expect(api.post).not.toHaveBeenCalled();
 });
 
 test("photo uploads send the selected image and show upload progress", async () => {
@@ -128,7 +141,7 @@ test("photo uploads send the selected image and show upload progress", async () 
     fireEvent.change(fileInput, {
         target: { files: [photo] }
     });
-    fireEvent.change(screen.getByPlaceholderText("What's worth sharing today?"), {
+    fireEvent.change(screen.getByPlaceholderText("Write a caption for your photos..."), {
         target: { value: "  A sunny day  " }
     });
 
@@ -151,7 +164,7 @@ test("photo uploads send the selected image and show upload progress", async () 
     finishUpload();
     expect(await screen.findByRole("article")).toBeInTheDocument();
     await waitFor(() => {
-        expect(screen.getByPlaceholderText("What's worth sharing today?")).toHaveValue("");
+        expect(screen.getByPlaceholderText("Write a caption for your photos...")).toHaveValue("");
         expect(screen.getByRole("button", { name: /Share post/ })).toBeDisabled();
     });
     expect(await screen.findByRole("link", { name: /A friend/ })).toBeVisible();
@@ -204,7 +217,7 @@ test("limits a post to five uploaded photos", async () => {
     });
     expect(screen.getByRole("alert")).toHaveTextContent("You can add up to 5 photos.");
     expect(container.querySelectorAll(".composer-thumb")).toHaveLength(5);
-    fireEvent.change(screen.getByPlaceholderText("What's worth sharing today?"), {
+    fireEvent.change(screen.getByPlaceholderText("Write a caption for your photos..."), {
         target: { value: "Five photos" }
     });
     fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
@@ -226,7 +239,7 @@ test("keeps the draft available when photo publishing fails", async () => {
     fireEvent.change(fileInput, {
         target: { files: [photo] }
     });
-    const caption = screen.getByPlaceholderText("What's worth sharing today?");
+    const caption = screen.getByPlaceholderText("Write a caption for your photos...");
     fireEvent.change(caption, { target: { value: "Keep this draft" } });
     fireEvent.click(screen.getByRole("button", { name: /Share post/ }));
 
@@ -249,7 +262,7 @@ test("restores the user's Home draft, including selected photos", async () => {
     });
     const { container } = render(<Home />);
 
-    expect(await screen.findByPlaceholderText("What's worth sharing today?"))
+    expect(await screen.findByPlaceholderText("Write a caption for your photos..."))
         .toHaveValue("Restored caption");
     expect(screen.getByRole("combobox", { name: "Post audience" })).toHaveValue("private");
     expect(container.querySelectorAll(".composer-thumb")).toHaveLength(1);
@@ -259,7 +272,7 @@ test("restores the user's Home draft, including selected photos", async () => {
 
 test("autosaves non-empty Home drafts for the current user", async () => {
     render(<Home />);
-    const caption = await screen.findByPlaceholderText("What's worth sharing today?");
+    const caption = await screen.findByPlaceholderText("Write a caption for your photos...");
     fireEvent.change(caption, { target: { value: "A saved thought" } });
 
     await waitFor(() => expect(saveHomeDraft).toHaveBeenCalledWith(
@@ -277,13 +290,16 @@ test("clears the saved Home draft only after a successful publish", async () => 
         data: { data: { _id: "published-post", caption: "Publish this", media: [] } }
     });
     const { container } = render(<Home />);
-    fireEvent.change(await screen.findByPlaceholderText("What's worth sharing today?"), {
+    fireEvent.change(container.querySelector('input[type="file"]'), {
+        target: { files: [new File(["photo"], "moment.jpg", { type: "image/jpeg" })] }
+    });
+    fireEvent.change(await screen.findByPlaceholderText("Write a caption for your photos..."), {
         target: { value: "Publish this" }
     });
     fireEvent.click(screen.getByRole("button", { name: "Share post" }));
 
     await waitFor(() => expect(clearHomeDraft).toHaveBeenCalledWith("current-user"));
-    expect(screen.getByPlaceholderText("What's worth sharing today?")).toHaveValue("");
+    expect(screen.getByPlaceholderText("Write a caption for your photos...")).toHaveValue("");
 });
 
 test("loads additional feed posts using the next cursor", async () => {
