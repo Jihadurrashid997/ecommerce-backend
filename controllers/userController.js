@@ -1786,17 +1786,44 @@ exports.getFollowSuggestions = async (req, res) => {
 
         const followedIds = new Set((viewer.following || []).map(String));
         const ranked = suggestions.map(suggestion => {
-            const mutualConnections = (suggestion.following || []).filter(
-                followedId => followedIds.has(String(followedId))
-            ).length;
+            const mutualIds = (suggestion.following || [])
+                .filter(followedId => followedIds.has(String(followedId)))
+                .map(String);
             const { following, ...publicSuggestion } = suggestion;
-            return { ...publicSuggestion, mutualConnections };
+            return {
+                ...publicSuggestion,
+                mutualIds,
+                mutualConnections: mutualIds.length
+            };
         }).sort((left, right) =>
             right.mutualConnections - left.mutualConnections ||
             Number(right.isVerified) - Number(left.isVerified)
-        ).slice(0, 12);
+        ).slice(0, 20);
 
-        return res.json({ success: true, data: ranked });
+        const mutualIds = [...new Set(ranked.flatMap(person => person.mutualIds.slice(0, 3)))];
+        const mutualUsers = mutualIds.length
+            ? await User.find({ _id: { $in: mutualIds } })
+                .select("name profileImage avatar")
+                .lean()
+            : [];
+        const mutualUsersById = new Map(mutualUsers.map(person => [
+            String(person._id),
+            {
+                _id: person._id,
+                name: person.name,
+                profileImage: person.profileImage,
+                avatar: person.avatar
+            }
+        ]));
+        const results = ranked.map(({ mutualIds: personMutualIds, ...person }) => ({
+            ...person,
+            mutualProfiles: personMutualIds
+                .slice(0, 3)
+                .map(id => mutualUsersById.get(id))
+                .filter(Boolean)
+        }));
+
+        return res.json({ success: true, data: results });
     } catch (error) {
         console.error("GET FOLLOW SUGGESTIONS ERROR:", error);
         return res.status(500).json({
