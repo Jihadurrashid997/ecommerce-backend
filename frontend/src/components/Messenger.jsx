@@ -96,6 +96,10 @@ import {
 } from "../services/webrtc";
 import { switchCameraStream } from "../services/cameraSwitch";
 import {
+    applyCameraZoom,
+    getCameraZoomInfo
+} from "../services/cameraZoom";
+import {
     attachLocalTracksToRemoteOffer,
     createFreshRemoteStream,
     ensureDirectCallVideoTransceiver,
@@ -1969,6 +1973,12 @@ const Messenger = ({ isActive = true }) => {
     const [cameraEnabled, setCameraEnabled] =
         useState(false);
 
+    const [cameraZoom, setCameraZoom] =
+        useState(1);
+
+    const [cameraZoomRange, setCameraZoomRange] =
+        useState(null);
+
     const [localStream, setLocalStream] =
         useState(null);
 
@@ -3077,6 +3087,8 @@ useEffect(() => {
 
                 setSharingScreen(false);
                 setCameraEnabled(false);
+                setCameraZoom(1);
+                setCameraZoomRange(null);
 
                 setRemoteStream(null);
 
@@ -3563,10 +3575,12 @@ const startCall =
                         ? new MediaStream(stream.getVideoTracks())
                         : null;
 
+                const cameraTrack = stream.getVideoTracks()[0];
+                const zoomInfo = getCameraZoomInfo(cameraTrack);
+                setCameraZoom(zoomInfo.value);
+                setCameraZoomRange(zoomInfo.range);
                 setCameraEnabled(
-                    stream.getVideoTracks().some(
-                        track => track.readyState === "live"
-                    )
+                    cameraTrack?.readyState === "live"
                 );
 
                 setLocalStream(
@@ -3686,6 +3700,16 @@ const startCall =
    SWITCH CAMERA
 ===================================================== */
 
+const refreshCameraZoom =
+    useCallback(
+        track => {
+            const zoomInfo = getCameraZoomInfo(track);
+            setCameraZoom(zoomInfo.value);
+            setCameraZoomRange(zoomInfo.range);
+        },
+        []
+    );
+
 const switchCamera =
     useCallback(
         async () => {
@@ -3707,6 +3731,7 @@ const switchCamera =
                 );
                 setLocalStream(result.stream);
                 setCameraFacing(result.facingMode);
+                refreshCameraZoom(result.stream.getVideoTracks()[0]);
             } catch (error) {
                 if (error.restoredStream) {
                     localStreamRef.current = error.restoredStream;
@@ -3714,6 +3739,9 @@ const switchCamera =
                         error.restoredStream.getVideoTracks()
                     );
                     setLocalStream(error.restoredStream);
+                    refreshCameraZoom(
+                        error.restoredStream.getVideoTracks()[0]
+                    );
                 } else if (error.restoreError) {
                     console.error(
                         "Could not restore the previous camera:",
@@ -3732,7 +3760,8 @@ const switchCamera =
 
         },
         [
-            cameraFacing
+            cameraFacing,
+            refreshCameraZoom
         ]
     );
 
@@ -3805,6 +3834,8 @@ const toggleCallVideo =
                 stopMediaStream(cameraStreamRef.current);
                 cameraStreamRef.current = null;
                 setCameraEnabled(false);
+                setCameraZoom(1);
+                setCameraZoomRange(null);
 
                 if (!screenStreamRef.current) {
                     await replaceCallVideoTrack(null);
@@ -3825,6 +3856,7 @@ const toggleCallVideo =
             }
 
             cameraStreamRef.current = stream;
+            refreshCameraZoom(track);
             setCameraEnabled(true);
             try {
                 if (!screenStreamRef.current) {
@@ -3834,10 +3866,30 @@ const toggleCallVideo =
                 stopMediaStream(stream);
                 cameraStreamRef.current = null;
                 setCameraEnabled(false);
+                setCameraZoom(1);
+                setCameraZoomRange(null);
                 throw error;
             }
         },
-        [cameraFacing, replaceCallVideoTrack]
+        [cameraFacing, refreshCameraZoom, replaceCallVideoTrack]
+    );
+
+const setOutgoingCameraZoom =
+    useCallback(
+        async zoom => {
+            if (screenStreamRef.current) {
+                throw new Error("Stop screen sharing before zooming the camera.");
+            }
+            const track = cameraStreamRef.current
+                ?.getVideoTracks()
+                .find(item => item.readyState === "live");
+            if (!track) {
+                throw new Error("Turn on your camera before adjusting its zoom.");
+            }
+            const appliedZoom = await applyCameraZoom(track, zoom);
+            setCameraZoom(appliedZoom);
+        },
+        []
     );
 
 const stopScreenSharing =
@@ -3959,10 +4011,12 @@ const acceptCall =
                         ? new MediaStream(stream.getVideoTracks())
                         : null;
 
+                const cameraTrack = stream.getVideoTracks()[0];
+                const zoomInfo = getCameraZoomInfo(cameraTrack);
+                setCameraZoom(zoomInfo.value);
+                setCameraZoomRange(zoomInfo.range);
                 setCameraEnabled(
-                    stream.getVideoTracks().some(
-                        track => track.readyState === "live"
-                    )
+                    cameraTrack?.readyState === "live"
                 );
 
                 setLocalStream(
@@ -12814,6 +12868,14 @@ const onCallMissed =
         cameraEnabled
     }
 
+    cameraZoom={
+        cameraZoom
+    }
+
+    cameraZoomRange={
+        cameraZoomRange
+    }
+
     sharingScreen={
         sharingScreen
     }
@@ -12840,6 +12902,10 @@ const onCallMissed =
 
     onToggleVideo={
         toggleCallVideo
+    }
+
+    onCameraZoom={
+        setOutgoingCameraZoom
     }
 
     onShareScreen={

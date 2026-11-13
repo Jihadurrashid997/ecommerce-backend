@@ -16,7 +16,8 @@ import {
     FiRefreshCw,
     FiMoreHorizontal,
     FiMonitor,
-    FiClipboard
+    FiClipboard,
+    FiZoomIn
 } from "react-icons/fi";
 import CallAudioOutputSelector from "./CallAudioOutputSelector";
 import { collectWebRtcDiagnostics } from "../services/webrtcDiagnostics";
@@ -36,12 +37,15 @@ const CallModal = ({
     callDuration = 0,
     cameraFacing = "user",
     cameraEnabled = false,
+    cameraZoom = 1,
+    cameraZoomRange = null,
     sharingScreen = false,
     onAccept,
     onReject,
     onEnd,
     onSwitchCamera,
     onToggleVideo,
+    onCameraZoom,
     onShareScreen
 }) => {
 
@@ -70,6 +74,9 @@ const CallModal = ({
         useState(false);
 
     const [moreOpen, setMoreOpen] =
+        useState(false);
+
+    const [zoomOpen, setZoomOpen] =
         useState(false);
 
     const [controlError, setControlError] =
@@ -145,6 +152,7 @@ const CallModal = ({
         setPlaybackBlocked(false);
         setAudioOutputOpen(false);
         setMoreOpen(false);
+        setZoomOpen(false);
         setControlError("");
         setDiagnosticsStatus("");
     }, [visible, type]);
@@ -1172,6 +1180,34 @@ const CallModal = ({
                                 <FiMoreHorizontal size={21} />
                             </button>
 
+                            {cameraEnabled && !sharingScreen && (
+                                <button
+                                    type="button"
+                                    className="messenger-call-control"
+                                    onClick={() => setZoomOpen(value => !value)}
+                                    aria-label={`Camera zoom ${cameraZoom}x`}
+                                    aria-expanded={zoomOpen}
+                                    aria-controls="messenger-call-zoom"
+                                    title="Zoom your camera; the other caller sees this too"
+                                    style={{
+                                        width: 52,
+                                        height: 52,
+                                        border: "none",
+                                        borderRadius: "50%",
+                                        background: zoomOpen
+                                            ? "#374151"
+                                            : "rgba(255,255,255,.16)",
+                                        color: "#fff",
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center"
+                                    }}
+                                >
+                                    <FiZoomIn size={21} />
+                                </button>
+                            )}
+
                             {onShareScreen && (
                                 <button
                                     type="button"
@@ -1335,6 +1371,68 @@ const CallModal = ({
                                 {diagnosticsStatus}
                             </p>
                         )}
+                    </div>
+                )}
+
+                {zoomOpen && cameraEnabled && !sharingScreen && (
+                    <div
+                        id="messenger-call-zoom"
+                        className="messenger-call-zoom"
+                        role="group"
+                        aria-label="Camera zoom controls"
+                        style={{
+                            position: "absolute",
+                            zIndex: 5,
+                            left: "50%",
+                            bottom: 112,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            width: "min(320px, calc(100% - 32px))",
+                            boxSizing: "border-box",
+                            padding: "12px 16px",
+                            borderRadius: 16,
+                            background: "rgba(17,24,39,.96)",
+                            color: "#fff",
+                            transform: "translateX(-50%)"
+                        }}
+                    >
+                        <div style={{ display: "grid", gap: 6, width: "100%" }}>
+                            <label htmlFor="messenger-call-zoom-slider">
+                                Camera zoom
+                            </label>
+                            {cameraZoomRange ? (
+                                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                    <input
+                                        id="messenger-call-zoom-slider"
+                                        type="range"
+                                        min={cameraZoomRange.min}
+                                        max={cameraZoomRange.max}
+                                        step={cameraZoomRange.step}
+                                        value={cameraZoom}
+                                        aria-label="Camera zoom"
+                                        onChange={event => runCallAction(
+                                            () => onCameraZoom?.(
+                                                Number(event.target.value)
+                                            )
+                                        )}
+                                        style={{ flex: 1, minWidth: 0 }}
+                                    />
+                                    <output
+                                        htmlFor="messenger-call-zoom-slider"
+                                        aria-live="polite"
+                                        style={{ minWidth: 36, textAlign: "right" }}
+                                    >
+                                        {cameraZoom}x
+                                    </output>
+                                </div>
+                            ) : (
+                                <p role="status" style={{ margin: 0 }}>
+                                    This camera does not support zoom.
+                                </p>
+                            )}
+                            <small>Other callers see this camera zoom.</small>
+                        </div>
                     </div>
                 )}
 
