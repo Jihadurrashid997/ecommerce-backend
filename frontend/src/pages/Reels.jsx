@@ -228,7 +228,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 
         probe.onloadedmetadata = () => {
 
-            if (probe.duration > MAX_SECONDS + 0.5) {
+            if (probe.duration > MAX_SECONDS) {
                 URL.revokeObjectURL(url);
                 setError(`Reels can be at most ${MAX_MINUTES} minutes. This video is ${Math.round(probe.duration)}s.`);
                 return;
@@ -257,7 +257,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 
         form.append("video", file);
         form.append("caption", caption.trim());
-        form.append("duration", String(Math.round(duration)));
+        form.append("duration", String(duration));
 
         try {
 
@@ -346,6 +346,7 @@ const Reels = () => {
     const [reels, setReels] = useState([]);
     const [cursor, setCursor] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState("");
     const [muted, setMuted] = useState(true);
     const [showUpload, setShowUpload] = useState(false);
@@ -354,17 +355,30 @@ const Reels = () => {
 
         try {
 
+            before ? setLoadingMore(true) : setLoading(true);
+            setError("");
+
             const res = await api.get("/posts/reels", {
                 params: before ? { before } : {}
             });
 
-            setReels(prev => before ? [...prev, ...res.data.data] : res.data.data);
+            const incomingReels = res.data.data || [];
+            setReels(prev => {
+                const seen = new Set();
+                return (before ? [...prev, ...incomingReels] : incomingReels).filter(reel => {
+                    const id = String(reel._id);
+                    if (seen.has(id)) return false;
+                    seen.add(id);
+                    return true;
+                });
+            });
             setCursor(res.data.nextCursor || null);
 
         } catch (e) {
             setError(e.response?.data?.message || "Could not load reels.");
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
 
     }, []);
@@ -409,8 +423,8 @@ const Reels = () => {
             ))}
 
             {cursor && (
-                <button className="btn-ghost reel-more" type="button" onClick={() => load(cursor)}>
-                    Load more reels
+                <button className="btn-ghost reel-more" type="button" onClick={() => load(cursor)} disabled={loadingMore}>
+                    {loadingMore ? "Loading reels..." : "Load more reels"}
                 </button>
             )}
 
