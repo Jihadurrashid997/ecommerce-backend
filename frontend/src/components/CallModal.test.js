@@ -119,6 +119,61 @@ test("keeps the caller name and connected timer visible over remote video", () =
     expect(screen.getByLabelText("Call duration")).toHaveTextContent("01:33");
 });
 
+test("sends camera zoom changes to the outgoing camera instead of zooming remote video", () => {
+    const remoteStream = {
+        getVideoTracks: () => [{ readyState: "live" }],
+        getAudioTracks: () => [],
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+    };
+    const localStream = {
+        getVideoTracks: () => [{ readyState: "live" }],
+        getAudioTracks: () => [],
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+    };
+    jest.spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+
+    const onCameraZoom = jest.fn().mockResolvedValue(undefined);
+    const ZoomCall = () => {
+        const [cameraZoom, setCameraZoom] = React.useState(1);
+        return (
+            <CallModal
+                visible
+                type="video"
+                mode="connected"
+                localStream={localStream}
+                remoteStream={remoteStream}
+                cameraEnabled
+                cameraZoom={cameraZoom}
+                cameraZoomRange={{ min: 0.5, max: 10, step: 0.5 }}
+                onCameraZoom={async zoom => {
+                    await onCameraZoom(zoom);
+                    setCameraZoom(zoom);
+                }}
+            />
+        );
+    };
+    render(<ZoomCall />);
+
+    const remoteVideo = document.querySelector(".messenger-call-remote-video");
+    fireEvent.click(screen.getByRole("button", { name: "Camera zoom 1x" }));
+
+    const zoomSlider = screen.getByRole("slider", { name: "Camera zoom" });
+    expect(zoomSlider).toHaveAttribute("min", "0.5");
+    expect(zoomSlider).toHaveAttribute("max", "10");
+    fireEvent.change(zoomSlider, { target: { value: "0.5" } });
+    fireEvent.change(zoomSlider, { target: { value: "10" } });
+
+    return waitFor(() => {
+        expect(onCameraZoom).toHaveBeenNthCalledWith(1, 0.5);
+        expect(onCameraZoom).toHaveBeenNthCalledWith(2, 10);
+        expect(screen.getByText("10x")).toBeInTheDocument();
+        expect(remoteVideo.style.transform).toBe("");
+    });
+});
+
 test("shows the remote caller profile when their video is muted and restores video when unmuted", async () => {
     const videoTrack = new EventTarget();
     Object.assign(videoTrack, {

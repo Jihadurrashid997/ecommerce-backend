@@ -157,6 +157,17 @@
     backdrop-filter: blur(20px);
 }
 
+.messenger-call-zoom {
+    bottom: max(112px, calc(env(safe-area-inset-bottom) + 96px)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(20px);
+}
+
+.messenger-call-zoom input {
+    accent-color: #087f72;
+}
+
 .messenger-call-modal .call-audio-output-control,
 .messenger-call-modal .call-audio-output-hint {
     bottom: max(104px, calc(env(safe-area-inset-bottom) + 88px)) !important;
