@@ -86,6 +86,40 @@ test("mirrors only the local front-camera preview", () => {
     expect(localVideo.style.transform).toBe("none");
 });
 
+test("shows the full local and remote camera frames without cropping", () => {
+    const localStream = {
+        getVideoTracks: () => [{ readyState: "live" }],
+        getAudioTracks: () => [],
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+    };
+    const remoteStream = {
+        getVideoTracks: () => [{ readyState: "live" }],
+        getAudioTracks: () => [],
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn()
+    };
+    jest.spyOn(HTMLMediaElement.prototype, "play")
+        .mockResolvedValue(undefined);
+
+    render(
+        <CallModal
+            visible
+            type="video"
+            mode="connected"
+            localStream={localStream}
+            remoteStream={remoteStream}
+        />
+    );
+
+    expect(
+        document.querySelector(".messenger-call-local-video").style.objectFit
+    ).toBe("contain");
+    expect(
+        document.querySelector(".messenger-call-remote-video").style.objectFit
+    ).toBe("contain");
+});
+
 test("keeps the caller name and connected timer visible over remote video", () => {
     const remoteStream = {
         getVideoTracks: () => [{ readyState: "live" }],
