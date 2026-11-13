@@ -8,6 +8,7 @@ import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import CommentsPanel from "../components/CommentsPanel";
 import ReactionPicker from "../components/ReactionPicker";
+import SocialFollowButton from "../components/SocialFollowButton";
 import "../styles/Social.css";
 
 const MAX_MINUTES = 5;
@@ -15,7 +16,7 @@ const MAX_SECONDS = MAX_MINUTES * 60;
 
 /* ---------------- one reel ---------------- */
 
-const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
+const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowChange }) => {
 
     const videoRef = useRef(null);
     const viewed = useRef(false);
@@ -130,6 +131,12 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted }) => {
                     </div>
                     <b>{author.name || "User"}</b>
                 </Link>
+                {reel.isFollowedByMe === false && String(author._id) !== myId && (
+                    <SocialFollowButton
+                        userId={author._id}
+                        onFollowChange={result => onFollowChange(author, result)}
+                    />
+                )}
 
                 {reel.caption && <p>{reel.caption}</p>}
                 {actionMessage && <p className="reel-action-status" role="status">{actionMessage}</p>}
@@ -419,6 +426,11 @@ const Reels = () => {
                     myId={myId}
                     isAdmin={user?.role === "admin"}
                     onDeleted={id => setReels(prev => prev.filter(r => r._id !== id))}
+                    onFollowChange={(author, result) => setReels(previous => previous.map(item =>
+                       String(item.author?._id || item.author) === String(author._id)
+                           ? { ...item, isFollowedByMe: Boolean(result.isFollowing) }
+                           : item
+                    ))}
                 />
             ))}
 

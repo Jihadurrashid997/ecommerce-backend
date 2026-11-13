@@ -10,6 +10,11 @@ const STORY_VIDEO_TYPES = new Set([
     "video/mp4", "video/webm", "video/quicktime", "video/3gpp"
 ]);
 const MAX_STORY_FILE_SIZE = 20 * 1024 * 1024;
+const MAX_STORY_AUDIO_SIZE = 10 * 1024 * 1024;
+const STORY_AUDIO_TYPES = new Set([
+    "audio/mpeg", "audio/mp4", "audio/aac", "audio/wav", "audio/ogg", "audio/webm"
+]);
+const STORY_AUDIO_CLIP_SECONDS = 15;
 
 const userIdOf = user => String(user?._id || user?.id || user || "");
 const ownerOf = story => story.owner || {};
@@ -38,6 +43,18 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
     const [text, setText] = useState("");
     const [audience, setAudience] = useState("followers");
     const [file, setFile] = useState(null);
+    const [audioFile, setAudioFile] = useState(null);
+    const [audioTitle, setAudioTitle] = useState("");
+    const [audioDuration, setAudioDuration] = useState(0);
+    const [audioStartSeconds, setAudioStartSeconds] = useState(0);
+    const [audioRightsConfirmed, setAudioRightsConfirmed] = useState(false);
+    const [pollEnabled, setPollEnabled] = useState(false);
+    const [pollQuestion, setPollQuestion] = useState("");
+    const [pollOptions, setPollOptions] = useState(["", ""]);
+    const [pollBusy, setPollBusy] = useState(false);
+    const [replyText, setReplyText] = useState("");
+    const [replyBusy, setReplyBusy] = useState(false);
+    const [replyStatus, setReplyStatus] = useState("");
     const [busy, setBusy] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [selected, setSelected] = useState(null);
@@ -55,10 +72,17 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
         () => file && STORY_IMAGE_TYPES.has(file.type) ? URL.createObjectURL(file) : "",
         [file]
     );
+    const audioPreview = useMemo(
+        () => audioFile ? URL.createObjectURL(audioFile) : "",
+        [audioFile]
+    );
 
     useEffect(() => () => {
         if (filePreview) URL.revokeObjectURL(filePreview);
     }, [filePreview]);
+    useEffect(() => () => {
+        if (audioPreview) URL.revokeObjectURL(audioPreview);
+    }, [audioPreview]);
 
     const loadStories = useCallback(async () => {
         setLoading(true);
@@ -117,6 +141,16 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
             setError("Story photos and videos must be under 20MB.");
             return;
         }
+        if (audioFile && (
+            !home ||
+            !file ||
+            !STORY_IMAGE_TYPES.has(file.type) ||
+            !audioRightsConfirmed ||
+            audioDuration <= 0
+        )) {
+            setError("Choose a photo, confirm audio rights, and wait for the soundtrack to load.");
+            return;
+        }
         setBusy(true);
         setError("");
         setUploadProgress(0);
@@ -127,6 +161,21 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
             if (file) {
                 formData.append("media", file);
             }
+            if (audioFile) {
+                formData.append("audio", audioFile);
+                formData.append("audioTitle", audioTitle);
+                formData.append("audioStartSeconds", String(audioStartSeconds));
+                formData.append("audioDurationSeconds", String(
+                    Math.min(STORY_AUDIO_CLIP_SECONDS, audioDuration)
+                ));
+                formData.append("audioRightsConfirmed", "true");
+            }
+            if (pollEnabled) {
+                formData.append("poll", JSON.stringify({
+                    question: pollQuestion,
+                    options: pollOptions
+                }));
+            }
             const response = await api.post(home ? "/stories/home" : "/stories", formData, {
                 onUploadProgress: event => {
                     if (event.total) setUploadProgress(Math.round(event.loaded / event.total * 100));
@@ -135,6 +184,14 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
             setStories(previous => [response.data.data, ...previous]);
             setText("");
             setFile(null);
+            setAudioFile(null);
+            setAudioTitle("");
+            setAudioDuration(0);
+            setAudioStartSeconds(0);
+            setAudioRightsConfirmed(false);
+            setPollEnabled(false);
+            setPollQuestion("");
+            setPollOptions(["", ""]);
             setAudience("followers");
             setShowComposer(false);
         } catch (publishError) {
@@ -172,7 +229,45 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
     const closeViewer = useCallback(() => {
         setSelected(null);
         setViewers(null);
+        setReplyText("");
+        setReplyStatus("");
     }, []);
+
+    const voteInPoll = async optionIndex => {
+        if (!currentStory?.poll || currentStory.poll.myVote !== null || pollBusy) return;
+        setPollBusy(true);
+        setError("");
+        try {
+            const response = await api.post(`/stories/${currentStory._id}/poll`, { optionIndex });
+            setStories(previous => previous.map(item =>
+                item._id === currentStory._id ? response.data.data : item
+            ));
+        } catch (voteError) {
+            setError(voteError.response?.data?.message || "Could not save your vote.");
+        } finally {
+            setPollBusy(false);
+        }
+    };
+
+    const replyToStory = async event => {
+        event.preventDefault();
+        const receiver = userIdOf(ownerOf(currentStory));
+        if (!replyText.trim() || !receiver || replyBusy) return;
+        setReplyBusy(true);
+        setReplyStatus("");
+        try {
+            await api.post("/messages/send", {
+                receiver,
+                message: replyText.trim()
+            });
+            setReplyText("");
+            setReplyStatus("Reply sent.");
+        } catch (replyError) {
+            setReplyStatus(replyError.response?.data?.message || "Could not send your reply.");
+        } finally {
+            setReplyBusy(false);
+        }
+    };
 
     const moveStory = direction => {
         const nextIndex = currentIndex + direction;
@@ -367,17 +462,32 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
                                                 ? "Choose a supported photo or video."
                                                 : "Choose a photo for your story.");
                                             setFile(null);
+                                            setAudioFile(null);
+                                            setAudioTitle("");
+                                            setAudioDuration(0);
+                                            setAudioStartSeconds(0);
+                                            setAudioRightsConfirmed(false);
                                             event.target.value = "";
                                             return;
                                         }
                                         if (selectedFile?.size > MAX_STORY_FILE_SIZE) {
                                             setError("Story photos and videos must be under 20MB.");
                                             setFile(null);
+                                            setAudioFile(null);
+                                            setAudioTitle("");
+                                            setAudioDuration(0);
+                                            setAudioStartSeconds(0);
+                                            setAudioRightsConfirmed(false);
                                             event.target.value = "";
                                             return;
                                         }
                                         setError("");
                                         setFile(selectedFile);
+                                        if (!selectedFile || !STORY_IMAGE_TYPES.has(selectedFile.type)) {
+                                            setAudioFile(null);
+                                            setAudioTitle("");
+                                            setAudioRightsConfirmed(false);
+                                        }
                                     }}
                                 />
                             </label>
@@ -390,12 +500,165 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
                                         aria-label="Remove selected story photo"
                                         onClick={() => {
                                             setFile(null);
+                                            setAudioFile(null);
+                                            setAudioTitle("");
+                                            setAudioDuration(0);
+                                            setAudioStartSeconds(0);
+                                            setAudioRightsConfirmed(false);
                                             setError("");
                                         }}
                                         disabled={busy}
                                     >
                                         <FaTimes />
                                     </button>
+                                </div>
+                            )}
+                            {!pollEnabled ? (
+                                <button
+                                    type="button"
+                                    className="messenger-story-add-poll"
+                                    onClick={() => setPollEnabled(true)}
+                                    disabled={busy}
+                                >
+                                    Add poll
+                                </button>
+                            ) : (
+                                <div className="messenger-story-poll-editor">
+                                    <label>
+                                        Poll question
+                                        <input
+                                            value={pollQuestion}
+                                            onChange={event => setPollQuestion(event.target.value.slice(0, 120))}
+                                            maxLength={120}
+                                            placeholder="Ask your followers"
+                                        />
+                                    </label>
+                                    {pollOptions.map((option, index) => (
+                                        <div className="messenger-story-poll-option" key={index}>
+                                            <input
+                                                aria-label={`Poll option ${index + 1}`}
+                                                value={option}
+                                                onChange={event => setPollOptions(previous =>
+                                                    previous.map((item, itemIndex) =>
+                                                        itemIndex === index
+                                                            ? event.target.value.slice(0, 60)
+                                                            : item
+                                                    )
+                                                )}
+                                                maxLength={60}
+                                                placeholder={`Option ${index + 1}`}
+                                            />
+                                            {pollOptions.length > 2 && (
+                                                <button type="button" onClick={() =>
+                                                    setPollOptions(previous => previous.filter((_, itemIndex) => itemIndex !== index))
+                                                }>Remove</button>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {pollOptions.length < 4 && (
+                                        <button type="button" onClick={() =>
+                                            setPollOptions(previous => [...previous, ""])
+                                        }>Add option</button>
+                                    )}
+                                    <button type="button" onClick={() => {
+                                        setPollEnabled(false);
+                                        setPollQuestion("");
+                                        setPollOptions(["", ""]);
+                                    }}>Remove poll</button>
+                                </div>
+                            )}
+                            {home && file && STORY_IMAGE_TYPES.has(file.type) && (
+                                <div className="messenger-story-audio-tools">
+                                    <label className="messenger-story-file">
+                                        Add your own soundtrack (up to 10MB)
+                                        <input
+                                            type="file"
+                                            accept="audio/mpeg,audio/mp4,audio/aac,audio/wav,audio/ogg,audio/webm"
+                                            disabled={busy}
+                                            onChange={event => {
+                                                const selectedAudio = event.target.files?.[0] || null;
+                                                event.target.value = "";
+                                                if (selectedAudio && !STORY_AUDIO_TYPES.has(selectedAudio.type)) {
+                                                    setError("Choose an MP3, MP4, AAC, WAV, OGG, or WebM audio file.");
+                                                    return;
+                                                }
+                                                if (selectedAudio?.size > MAX_STORY_AUDIO_SIZE) {
+                                                    setError("Audio must be under 10MB.");
+                                                    return;
+                                                }
+                                                setAudioFile(selectedAudio);
+                                                setAudioTitle(selectedAudio?.name.replace(/\.[^.]+$/, "").slice(0, 100) || "");
+                                                setAudioDuration(0);
+                                                setAudioStartSeconds(0);
+                                                setAudioRightsConfirmed(false);
+                                                setError("");
+                                            }}
+                                        />
+                                    </label>
+                                    {audioFile && (
+                                        <div className="messenger-story-audio-preview">
+                                            <audio
+                                                src={audioPreview}
+                                                controls
+                                                preload="metadata"
+                                                onPlay={event => {
+                                                    event.currentTarget.currentTime = audioStartSeconds;
+                                                }}
+                                                onTimeUpdate={event => {
+                                                    const audio = event.currentTarget;
+                                                    if (audio.currentTime >= audioStartSeconds +
+                                                        Math.min(STORY_AUDIO_CLIP_SECONDS, audioDuration)) {
+                                                        audio.pause();
+                                                    }
+                                                }}
+                                                onLoadedMetadata={event => {
+                                                    const duration = event.currentTarget.duration;
+                                                    if (Number.isFinite(duration) && duration > 0) setAudioDuration(duration);
+                                                }}
+                                            />
+                                            <label>
+                                                Track title
+                                                <input
+                                                    value={audioTitle}
+                                                    onChange={event => setAudioTitle(event.target.value.slice(0, 100))}
+                                                    maxLength={100}
+                                                    disabled={busy}
+                                                />
+                                            </label>
+                                            {audioDuration > STORY_AUDIO_CLIP_SECONDS && (
+                                                <label>
+                                                    Start at {Math.floor(audioStartSeconds)}s
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max={Math.floor(audioDuration - STORY_AUDIO_CLIP_SECONDS)}
+                                                        step="1"
+                                                        value={Math.min(audioStartSeconds, audioDuration - STORY_AUDIO_CLIP_SECONDS)}
+                                                        onChange={event => setAudioStartSeconds(Number(event.target.value))}
+                                                        aria-label="Story soundtrack start time"
+                                                    />
+                                                </label>
+                                            )}
+                                            <label className="messenger-story-audio-rights">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={audioRightsConfirmed}
+                                                    onChange={event => setAudioRightsConfirmed(event.target.checked)}
+                                                    disabled={busy}
+                                                />
+                                                I own this audio or have permission to use it.
+                                            </label>
+                                            <button type="button" onClick={() => {
+                                                setAudioFile(null);
+                                                setAudioTitle("");
+                                                setAudioDuration(0);
+                                                setAudioStartSeconds(0);
+                                                setAudioRightsConfirmed(false);
+                                            }} disabled={busy}>
+                                                Remove soundtrack
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             <label>
@@ -459,6 +722,60 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
                             />
                         ) : null}
                         {currentStory.text && <p>{currentStory.text}</p>}
+                        {currentStory.poll && (
+                            <section className="messenger-story-poll" aria-label="Story poll">
+                                <strong>{currentStory.poll.question}</strong>
+                                {currentStory.poll.options.map((option, index) => {
+                                    const totalVotes = currentStory.poll.options.reduce(
+                                        (total, item) => total + item.votes, 0
+                                    );
+                                    const percentage = totalVotes
+                                        ? Math.round(option.votes / totalVotes * 100)
+                                        : 0;
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={`${index}-${option.text}`}
+                                            onClick={() => voteInPoll(index)}
+                                            disabled={currentStory.poll.myVote !== null || pollBusy}
+                                            className={currentStory.poll.myVote === index ? "is-selected" : ""}
+                                        >
+                                            <span>{option.text}</span>
+                                            {currentStory.poll.myVote !== null && (
+                                                <small>{percentage}% · {option.votes}</small>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                                {currentStory.poll.myVote === null && (
+                                    <small>Vote once to see results</small>
+                                )}
+                            </section>
+                        )}
+                        {currentStory.audio?.url && (
+                            <div className="messenger-story-audio-playback">
+                                <strong>{currentStory.audio.title || "Story soundtrack"}</strong>
+                                <audio
+                                    key={currentStory._id}
+                                    src={getUploadUrl(currentStory.audio.url)}
+                                    controls
+                                    autoPlay
+                                    onLoadedMetadata={event => {
+                                        event.currentTarget.currentTime =
+                                            Number(currentStory.audio.startSeconds) || 0;
+                                    }}
+                                    onTimeUpdate={event => {
+                                        const audio = currentStory.audio;
+                                        const end = (Number(audio.startSeconds) || 0) +
+                                            (Number(audio.durationSeconds) || STORY_AUDIO_CLIP_SECONDS);
+                                        if (event.currentTarget.currentTime >= end) {
+                                            event.currentTarget.pause();
+                                            event.currentTarget.currentTime = end;
+                                        }
+                                    }}
+                                />
+                            </div>
+                        )}
                         <nav aria-label="Status navigation">
                             <button type="button" onClick={() => moveStory(-1)} aria-label="Previous status">‹</button>
                             <button type="button" onClick={() => moveStory(1)} aria-label="Next status">›</button>
@@ -481,7 +798,22 @@ const MessengerStories = ({ active, currentUser, allowVideo = true, home = false
                                     </ul>
                                 )}
                             </footer>
-                        ) : null}
+                        ) : (
+                            <form className="messenger-story-reply" onSubmit={replyToStory}>
+                                <input
+                                    value={replyText}
+                                    onChange={event => setReplyText(event.target.value)}
+                                    maxLength={1000}
+                                    placeholder="Reply to story"
+                                    aria-label="Reply to story"
+                                    disabled={replyBusy}
+                                />
+                                <button type="submit" disabled={replyBusy || !replyText.trim()}>
+                                    {replyBusy ? "Sending…" : "Send"}
+                                </button>
+                                {replyStatus && <small role="status">{replyStatus}</small>}
+                            </form>
+                        )}
                     </section>
                 </div>
             )}

@@ -31,7 +31,20 @@ const mediaSchema = new mongoose.Schema(
         url: { type: String, required: true },
         type: { type: String, enum: ["image", "video"], required: true },
         publicId: { type: String, default: "" },
-        duration: { type: Number, default: 0 }
+        duration: { type: Number, default: 0 },
+        altText: { type: String, trim: true, maxlength: 250, default: "" }
+    },
+    { _id: false }
+);
+
+const audioSchema = new mongoose.Schema(
+    {
+        url: { type: String, required: true },
+        type: { type: String, enum: ["audio"], required: true },
+        publicId: { type: String, default: "" },
+        title: { type: String, trim: true, maxlength: 100, default: "" },
+        startSeconds: { type: Number, min: 0, required: true },
+        durationSeconds: { type: Number, min: 0.1, max: 30, required: true }
     },
     { _id: false }
 );
@@ -96,6 +109,18 @@ const postSchema = new mongoose.Schema(
             default: ""
         },
 
+        location: {
+            type: String,
+            trim: true,
+            maxlength: 100,
+            default: ""
+        },
+
+        taggedUsers: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User"
+        }],
+
         media: {
             type: [mediaSchema],
             validate: {
@@ -108,6 +133,11 @@ const postSchema = new mongoose.Schema(
                 },
                 message: "A post needs a caption or media."
             }
+        },
+
+        audio: {
+            type: audioSchema,
+            default: undefined
         },
 
         likes: [

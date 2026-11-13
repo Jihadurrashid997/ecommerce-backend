@@ -21,6 +21,7 @@ const MediaViewer = ({
     myId,
     createdAt,
     caption,
+    altText,
     liked,
     likeCount,
     commentCount,
@@ -95,7 +96,7 @@ const MediaViewer = ({
                     <FaChevronLeft />
                 </button>
             )}
-            <img src={item} alt={`Post media ${index + 1}`} onClick={event => event.stopPropagation()} />
+            <img src={item} alt={altText || `Post media ${index + 1}`} onClick={event => event.stopPropagation()} />
             {index < items.length - 1 && (
                 <button
                     type="button"

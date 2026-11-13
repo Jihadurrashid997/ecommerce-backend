@@ -278,8 +278,31 @@
 
 .post-author b { display: block; }
 .post-author small { opacity: 0.65; }
+.social-follow-control { display: inline-flex; align-items: center; }
+.social-follow-button {
+    border: 1px solid #d6e0d7;
+    border-radius: 999px;
+    padding: 6px 12px;
+    color: #27594b;
+    background: #f3f8f2;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.social-follow-button:disabled { opacity: .6; cursor: wait; }
+.social-follow-error { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.home-suggestions-card { margin-top: 16px; }
+.home-suggestion-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.home-suggestion-row .home-person-row { flex: 1; min-width: 0; }
+.home-suggestion-row .social-follow-button { padding: 5px 10px; }
 
 .post-caption { padding: 0 14px 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }
+.post-location, .post-tagged-people { margin: 0; padding: 0 14px 8px; color: #68766d; font-size: 11px; }
+.post-tagged-people a { color: #27594b; font-weight: 700; }
+.post-audio-player { display: grid; gap: 7px; padding: 0 14px 12px; }
+.post-audio-player strong { color: #58675e; font-size: 11px; }
 
 .post-media { position: relative; background: #000; }
 
@@ -589,6 +612,7 @@
     gap: 18px;
     align-items: center;
 }
+.reel-overlay .social-follow-button { margin-left: 9px; color: #fff; border-color: rgba(255,255,255,.55); background: rgba(0,0,0,.28); }
 
 .reel-side button {
     background: rgba(0, 0, 0, 0.45);
@@ -1119,6 +1143,27 @@
 .home-composer .icon-btn.big { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid #e7eae2; border-radius: 13px; color: var(--home-green); background: #f8f9f4; }
 .home-composer .icon-btn.big:hover { background: #eaf1e7; }
 .home-composer .composer-previews { padding-left: 47px; }
+.home-audio-tools { display: grid; gap: 9px; padding-left: 47px; }
+.home-audio-picker { display: inline-flex; align-items: center; gap: 8px; color: var(--home-green); font-size: 11px; font-weight: 750; cursor: pointer; }
+.home-audio-picker input { max-width: 230px; font: inherit; font-size: 10px; }
+.home-audio-preview { display: grid; gap: 8px; padding: 10px; border: 1px solid #e3e9df; border-radius: 12px; background: #f9fbf7; }
+.home-audio-preview audio, .post-audio-player audio { width: 100%; }
+.home-audio-preview > label { display: grid; gap: 4px; color: #64736a; font-size: 10px; font-weight: 700; }
+.home-audio-preview input:not([type="range"]) { width: 100%; padding: 7px; border: 1px solid #dfe5da; border-radius: 8px; font: inherit; }
+.home-audio-preview .home-audio-rights { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 7px; font-weight: 500; }
+.home-audio-preview .home-audio-rights input { margin: 0; }
+.home-audio-remove { justify-self: start; padding: 4px 0; color: #a13e35; font: inherit; font-size: 10px; background: none; cursor: pointer; }
+.home-audio-note { margin: 0 0 0 47px; color: #69756c; font-size: 10px; }
+.home-post-details { display: grid; gap: 8px; padding-left: 47px; }
+.home-post-details > label, .home-photo-alt-text { display: grid; gap: 4px; color: #66736a; font-size: 10px; font-weight: 700; }
+.home-post-details input, .home-photo-alt-text input { width: 100%; padding: 8px; border: 1px solid #dfe5da; border-radius: 8px; font: inherit; }
+.home-photo-alt-text { margin-left: 47px; }
+.home-tag-results { display: grid; gap: 2px; padding: 4px; border: 1px solid #e3e9df; border-radius: 9px; background: #fff; }
+.home-tag-results button { padding: 7px; color: #34443a; text-align: left; background: transparent; cursor: pointer; }
+.home-tag-results button:hover { background: #f0f5ed; }
+.home-tag-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.home-tag-chips > span { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 999px; color: #27594b; background: #eaf1e7; font-size: 10px; }
+.home-tag-chips button { color: inherit; background: transparent; cursor: pointer; }
 .home-composer-footer { display: flex; align-items: center; gap: 11px; padding-top: 12px; border-top: 1px solid #eff0e9; }
 .home-composer-footer {
     display: grid;
