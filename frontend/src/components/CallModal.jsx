@@ -108,8 +108,8 @@ const CallModal = ({
             .some(track => track.readyState === "live") || false;
 
     const updateRemoteVideoAvailability = useCallback(
-        event => {
-            const video = event.currentTarget;
+        videoOrEvent => {
+            const video = videoOrEvent?.currentTarget || videoOrEvent;
             const hasVideoFrame =
                 video.videoWidth > 0 &&
                 video.videoHeight > 0 &&
@@ -128,18 +128,26 @@ const CallModal = ({
         const videoTracks = remoteStream?.getVideoTracks() || [];
         setRemoteVideoAvailable(false);
         const hideRemoteVideo = () => setRemoteVideoAvailable(false);
+        const checkRemoteVideo = () => {
+            const video = remoteVideoRef.current;
+            if (video) {
+                updateRemoteVideoAvailability(video);
+            }
+        };
         videoTracks.forEach(track => {
             track.addEventListener?.("mute", hideRemoteVideo);
             track.addEventListener?.("ended", hideRemoteVideo);
+            track.addEventListener?.("unmute", checkRemoteVideo);
         });
 
         return () => {
             videoTracks.forEach(track => {
                 track.removeEventListener?.("mute", hideRemoteVideo);
                 track.removeEventListener?.("ended", hideRemoteVideo);
+                track.removeEventListener?.("unmute", checkRemoteVideo);
             });
         };
-    }, [remoteStream]);
+    }, [remoteStream, updateRemoteVideoAvailability]);
 
     useEffect(() => {
         if (visible) {

@@ -267,12 +267,10 @@ test("shows the remote caller profile when their video is muted and restores vid
         await new Promise(resolve => setTimeout(resolve, 0));
     });
 
-    expect(container.querySelector(".messenger-call-profile"))
-        .toHaveTextContent("Snoopy");
-    fireEvent.loadedData(remoteVideo);
     await waitFor(() => {
         expect(remoteVideo.style.visibility).toBe("visible");
     });
+    expect(container.querySelector(".messenger-call-profile")).toBeNull();
 });
 
 test("rebinds remote media when the remote stream is refreshed", async () => {
