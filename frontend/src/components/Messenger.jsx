@@ -279,6 +279,42 @@ const getAvatar = (target) => {
     );
 };
 
+const getCallParticipantName = (providedName, participantId, people) => {
+    const name = typeof providedName === "string"
+        ? providedName.trim()
+        : "";
+
+    if (name && name.toLowerCase() !== "user") {
+        return name;
+    }
+
+    const participant = people.find(
+        person => getId(person) === getId(participantId)
+    );
+    const resolvedName =
+        participant?.name ||
+        participant?.username ||
+        participant?.fullName ||
+        participant?.displayName ||
+        participant?.firstName;
+
+    return typeof resolvedName === "string" && resolvedName.trim()
+        ? resolvedName.trim()
+        : "User";
+};
+
+const getCallParticipantAvatar = (providedAvatar, participantId, people) => {
+    if (typeof providedAvatar === "string" && providedAvatar.trim()) {
+        return providedAvatar.trim();
+    }
+
+    const participant = people.find(
+        person => getId(person) === getId(participantId)
+    );
+
+    return getAvatar(participant);
+};
+
 
 const getMessageSenderId = (item) => {
 
@@ -12784,59 +12820,29 @@ const onCallMissed =
 
     callerName={
         callState?.mode === "incoming"
-            ? (
-                callState?.callerName ||
-                callState?.senderName ||
-                getUserName(
-                    users.find(
-                        u =>
-                            getId(u) ===
-                            getId(callState?.callerId)
-                    )
-                )
+            ? getCallParticipantName(
+                callState?.callerName || callState?.senderName,
+                callState?.callerId,
+                [selectedUser, ...users].filter(Boolean)
             )
-            : (
-                callState?.receiverName ||
-                callState?.calleeName ||
-                getUserName(selectedUser) ||
-                getUserName(
-                    users.find(
-                        u =>
-                            getId(u) ===
-                            getId(callState?.receiverId)
-                    )
-                )
+            : getCallParticipantName(
+                callState?.receiverName || callState?.calleeName,
+                callState?.receiverId,
+                [selectedUser, ...users].filter(Boolean)
             )
     }
 
     callerAvatar={
         getUploadUrl(
-            callState?.mode === "incoming"
-                ? (
-                    callState?.callerAvatar ||
-                    callState?.senderAvatar ||
-                    getAvatar(
-                        users.find(
-                            u =>
-                                getId(u) ===
-                                getId(callState?.callerId)
-                        )
-                    ) ||
-                    ""
-                )
-                : (
-                    callState?.receiverAvatar ||
-                    callState?.calleeAvatar ||
-                    getAvatar(selectedUser) ||
-                    getAvatar(
-                        users.find(
-                            u =>
-                                getId(u) ===
-                                getId(callState?.receiverId)
-                        )
-                    ) ||
-                    ""
-                )
+            getCallParticipantAvatar(
+                callState?.mode === "incoming"
+                    ? callState?.callerAvatar || callState?.senderAvatar
+                    : callState?.receiverAvatar || callState?.calleeAvatar,
+                callState?.mode === "incoming"
+                    ? callState?.callerId
+                    : callState?.receiverId,
+                [selectedUser, ...users].filter(Boolean)
+            )
         )
     }
 

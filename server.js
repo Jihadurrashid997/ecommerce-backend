@@ -1645,7 +1645,7 @@ socket.on(
         try {
             [caller, receiver] = await Promise.all([
                 User.findById(callerId)
-                    .select("blockedUsers following accountVisibility")
+                    .select("name profileImage blockedUsers following accountVisibility")
                     .lean(),
                 User.findById(receiverId)
                     .select("blockedUsers following accountVisibility")
@@ -1792,10 +1792,12 @@ socket.on(
             receiverId,
 
             callerName:
+                caller.name ||
                 payload.callerName ||
                 "User",
 
             callerAvatar:
+                caller.profileImage ||
                 payload.callerAvatar ||
                 "",
 
