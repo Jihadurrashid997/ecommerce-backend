@@ -39,7 +39,13 @@ test("follow suggestions exclude private, followed, and blocked users and rank c
             limit() { return this; },
             lean: async () => filter.blockedUsers && !filter._id
                 ? [{ _id: "507f1f77bcf86cd799439014" }]
-                : [{
+                : filter._id?.$in
+                    ? [{
+                        _id: FOLLOWED_ID,
+                        name: "Mutual friend",
+                        profileImage: "/mutual.jpg"
+                    }]
+                    : [{
                     _id: SUGGESTED_ID,
                     name: "Suggested",
                     isVerified: true,
@@ -58,7 +64,13 @@ test("follow suggestions exclude private, followed, and blocked users and rank c
             _id: SUGGESTED_ID,
             name: "Suggested",
             isVerified: true,
-            mutualConnections: 1
+            mutualConnections: 1,
+            mutualProfiles: [{
+                _id: FOLLOWED_ID,
+                name: "Mutual friend",
+                profileImage: "/mutual.jpg",
+                avatar: undefined
+            }]
         }]);
         assert.ok(filters[1]._id.$nin.includes(USER_ID));
         assert.ok(filters[1]._id.$nin.includes(FOLLOWED_ID));
