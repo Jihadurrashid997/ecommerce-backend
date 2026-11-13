@@ -33,6 +33,7 @@ const Home = () => {
     const followingRequestRef = useRef(0);
     const feedRequestRef = useRef(0);
     const draftSaveRequestRef = useRef(0);
+    const suggestionsCarouselRef = useRef(null);
     const userId = String(user?._id || user?.id || "");
 
     const [posts, setPosts] = useState([]);
@@ -40,6 +41,7 @@ const Home = () => {
     const [suggestions, setSuggestions] = useState([]);
     const [followingError, setFollowingError] = useState("");
     const [suggestionsError, setSuggestionsError] = useState("");
+    const [suggestionPage, setSuggestionPage] = useState(0);
     const [feedScope, setFeedScope] = useState("for-you");
     const [cursor, setCursor] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -384,6 +386,15 @@ const Home = () => {
 
     };
 
+    const suggestionPages = [];
+    for (let index = 0; index < suggestions.length; index += 4) {
+        suggestionPages.push(suggestions.slice(index, index + 4));
+    }
+    const activeSuggestionPage = Math.min(
+        suggestionPage,
+        Math.max(0, suggestionPages.length - 1)
+    );
+
     return (
         <main className="home-experience">
 
@@ -460,6 +471,148 @@ const Home = () => {
 
                 <div className="home-feed-column">
                     <MessengerStories active currentUser={user} allowVideo={false} home />
+
+                    {(suggestions.length > 0 || suggestionsError) && (
+                        <section className="home-suggestion-carousel" aria-label="Suggested for you">
+                            <header className="home-suggestion-heading">
+                                <div>
+                                    <h2>Suggested for you</h2>
+                                    <p>E Top is better with friends</p>
+                                </div>
+                                <Link to="/search">See all</Link>
+                            </header>
+                            {suggestionsError ? (
+                                <div className="home-circle-empty">
+                                    <p role="alert">{suggestionsError}</p>
+                                    <button
+                                        type="button"
+                                        className="home-circle-retry"
+                                        onClick={loadSuggestions}
+                                    >
+                                        Try again
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <div
+                                        className="home-suggestion-pages"
+                                        ref={suggestionsCarouselRef}
+                                        onScroll={event => {
+                                            const width = event.currentTarget.clientWidth;
+                                            setSuggestionPage(width
+                                                ? Math.round(event.currentTarget.scrollLeft / width)
+                                                : 0);
+                                        }}
+                                    >
+                                        {suggestionPages.map((page, pageIndex) => (
+                                            <div
+                                                className="home-suggestion-page"
+                                                key={`suggestion-page-${pageIndex}`}
+                                                aria-label={`Suggestion page ${pageIndex + 1}`}
+                                            >
+                                                {page.map(person => (
+                                                    <article className="home-suggestion-card" key={person._id}>
+                                                        <button
+                                                            className="home-suggestion-dismiss"
+                                                            type="button"
+                                                            aria-label={`Dismiss ${person.name || "member"} suggestion`}
+                                                            onClick={() => setSuggestions(current =>
+                                                                current.filter(item => item._id !== person._id)
+                                                            )}
+                                                        >
+                                                            <FaTimes />
+                                                        </button>
+                                                        <Link
+                                                            className="home-suggestion-avatar"
+                                                            to={`/user/${person._id}`}
+                                                            tabIndex={-1}
+                                                            aria-hidden="true"
+                                                        >
+                                                            {person.profileImage || person.avatar
+                                                                ? <img
+                                                                    src={getUploadUrl(person.profileImage || person.avatar)}
+                                                                    alt=""
+                                                                />
+                                                                : (person.name || "U").charAt(0).toUpperCase()}
+                                                        </Link>
+                                                        <Link
+                                                            className="home-suggestion-name"
+                                                            to={`/user/${person._id}`}
+                                                            title={person.name}
+                                                        >
+                                                            {person.name || "E Top member"}
+                                                        </Link>
+                                                        <span className="home-suggestion-mutual-count">
+                                                            {person.mutualConnections
+                                                                ? `${person.mutualConnections} mutual${person.mutualConnections === 1 ? "" : "s"}`
+                                                                : "Suggested for you"}
+                                                        </span>
+                                                        {person.mutualProfiles?.length > 0 ? (
+                                                            <div
+                                                                className="home-suggestion-mutual-avatars"
+                                                                aria-label="People you both follow"
+                                                            >
+                                                                {person.mutualProfiles.slice(0, 3).map(mutual => (
+                                                                    <Link
+                                                                        to={`/user/${mutual._id}`}
+                                                                        key={mutual._id}
+                                                                        title={mutual.name}
+                                                                        aria-label={`View ${mutual.name || "mutual connection"} profile`}
+                                                                    >
+                                                                        {mutual.profileImage || mutual.avatar
+                                                                            ? <img
+                                                                                src={getUploadUrl(mutual.profileImage || mutual.avatar)}
+                                                                                alt=""
+                                                                            />
+                                                                            : (mutual.name || "U").charAt(0).toUpperCase()}
+                                                                    </Link>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="home-suggestion-mutual-placeholder" aria-hidden="true" />
+                                                        )}
+                                                        <SocialFollowButton
+                                                            userId={person._id}
+                                                            className="home-suggestion-follow"
+                                                            onFollowChange={result => {
+                                                                if (result.isFollowing) {
+                                                                    setSuggestions(current =>
+                                                                        current.filter(item => item._id !== person._id)
+                                                                    );
+                                                                    loadFollowing();
+                                                                }
+                                                            }}
+                                                        />
+                                                    </article>
+                                                ))}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {suggestionPages.length > 1 && (
+                                        <div className="home-suggestion-dots" aria-label="Suggestion pages">
+                                            {suggestionPages.map((_, index) => (
+                                                <button
+                                                    type="button"
+                                                    key={index}
+                                                    aria-label={`Show suggestion page ${index + 1}`}
+                                                    aria-current={index === activeSuggestionPage ? "true" : undefined}
+                                                    onClick={() => {
+                                                        const carousel = suggestionsCarouselRef.current;
+                                                        if (carousel) {
+                                                            carousel.scrollTo({
+                                                                left: index * carousel.clientWidth,
+                                                                behavior: "smooth"
+                                                            });
+                                                        }
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </section>
+                    )}
 
                     <section className="home-following-strip">
                         <div className="home-following-intro">
@@ -839,47 +992,6 @@ const Home = () => {
                         <h3>More than a feed.<br /><em>A feeling.</em></h3>
                         <p>Meet your people and make this corner of the internet yours.</p>
                         <Link to="/communities">Explore communities <FaArrowRight /></Link>
-                    </section>
-                    <section className="home-side-card home-suggestions-card">
-                        <div className="home-side-heading"><span>PEOPLE TO FOLLOW</span></div>
-                        {suggestionsError ? (
-                            <div className="home-circle-empty">
-                                <p role="alert">{suggestionsError}</p>
-                                <button type="button" className="home-circle-retry" onClick={loadSuggestions}>
-                                    Try again
-                                </button>
-                            </div>
-                        ) : suggestions.length ? suggestions.slice(0, 5).map(person => (
-                            <div className="home-suggestion-row" key={person._id}>
-                                <Link className="home-person-row" to={`/user/${person._id}`}>
-                                    <span className="home-person-avatar">
-                                        {person.profileImage || person.avatar
-                                            ? <img src={getUploadUrl(person.profileImage || person.avatar)} alt="" />
-                                            : (person.name || "U").charAt(0).toUpperCase()}
-                                    </span>
-                                    <span>
-                                        <b>{person.name}</b>
-                                        <small>{person.mutualConnections
-                                            ? `${person.mutualConnections} mutual connection${person.mutualConnections === 1 ? "" : "s"}`
-                                            : person.role === "seller" ? "Creator & seller" : "Suggested for you"}</small>
-                                    </span>
-                                </Link>
-                                <SocialFollowButton
-                                    userId={person._id}
-                                    onFollowChange={result => {
-                                        if (result.isFollowing) {
-                                            setSuggestions(current => current.filter(item => item._id !== person._id));
-                                            loadFollowing();
-                                        }
-                                    }}
-                                />
-                            </div>
-                        )) : (
-                            <div className="home-circle-empty">
-                                <p>New people to discover will show up here.</p>
-                                <Link to="/search">Explore people <FaArrowRight /></Link>
-                            </div>
-                        )}
                     </section>
                     <p className="home-footer-note">A little corner of the internet, made for everyone.<br />© 2026 E Top</p>
                 </aside>

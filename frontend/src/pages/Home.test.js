@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import Home from "./Home";
 import api from "../services/api";
 import { clearHomeDraft, loadHomeDraft, saveHomeDraft } from "../services/homeDraft";
@@ -105,6 +105,50 @@ test("Home includes a story bar configured to allow photo-only story uploads", a
     expect(stories).toHaveAttribute("data-video-upload", "false");
     expect(screen.getByRole("button", { name: "Add story" })).toBeVisible();
     expect(screen.getByPlaceholderText("Write a caption for your photos...")).toBeVisible();
+});
+
+test("follow suggestions appear in Instagram-style cards with mutuals and dismissal", async () => {
+    api.get.mockImplementation(path => Promise.resolve({
+        data: path === "/users/following"
+            ? { users: [] }
+            : path === "/users/suggestions"
+                ? {
+                    data: [
+                        {
+                            _id: "suggestion-1",
+                            name: "Suggested One",
+                            mutualConnections: 2,
+                            profileImage: "/suggested.jpg",
+                            mutualProfiles: [{
+                                _id: "mutual-1",
+                                name: "Mutual One",
+                                profileImage: "/mutual.jpg"
+                            }]
+                        },
+                        { _id: "suggestion-2", name: "Suggested Two" },
+                        { _id: "suggestion-3", name: "Suggested Three" },
+                        { _id: "suggestion-4", name: "Suggested Four" },
+                        { _id: "suggestion-5", name: "Suggested Five" }
+                    ]
+                }
+                : { data: [], nextCursor: null }
+    }));
+
+    render(<Home />);
+
+    const suggestions = await screen.findByRole("region", { name: "Suggested for you" });
+    expect(within(suggestions).getByRole("link", { name: "Suggested One" }))
+        .toHaveAttribute("href", "/user/suggestion-1");
+    expect(within(suggestions).getByText("2 mutuals")).toBeVisible();
+    expect(within(suggestions).getByRole("link", { name: "View Mutual One profile" }))
+        .toHaveAttribute("href", "/user/mutual-1");
+    expect(within(suggestions).getByRole("button", { name: "Show suggestion page 2" }))
+        .toBeVisible();
+
+    fireEvent.click(within(suggestions).getByRole("button", {
+        name: "Dismiss Suggested One suggestion"
+    }));
+    expect(within(suggestions).queryByRole("link", { name: "Suggested One" })).not.toBeInTheDocument();
 });
 
 test("requires at least one photo before sharing a Home post", async () => {
