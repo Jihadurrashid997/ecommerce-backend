@@ -20,6 +20,10 @@ import {
     closePeerConnection,
     stopMediaStream
 } from "../services/webrtc";
+import {
+    attachLocalTracksToRemoteOffer,
+    createFreshRemoteStream
+} from "../services/directCallMedia";
 
 import CallModal from "./CallModal";
 
@@ -88,6 +92,9 @@ const GlobalCallManager = () => {
 
     const remoteStreamRef =
         useRef(null);
+
+    const remoteTracksRef =
+        useRef([]);
 
 
     const callRef =
@@ -203,6 +210,9 @@ const GlobalCallManager = () => {
             remoteStreamRef.current =
                 null;
 
+            remoteTracksRef.current =
+                [];
+
 
             pendingCandidatesRef.current =
                 [];
@@ -238,7 +248,7 @@ const GlobalCallManager = () => {
 
     const createPeer =
         useCallback(
-            (receiverId) => {
+            (receiverId, { prepareLocalTracks = true } = {}) => {
 
                 const peer =
                     createPeerConnection({
@@ -273,47 +283,16 @@ const GlobalCallManager = () => {
 
                         onTrack:
                             event => {
-
-                                let stream =
-                                    event.streams?.[0];
-
-
-                                if (
-                                    !stream
-                                ) {
-
-                                    stream =
-                                        remoteStreamRef.current ||
-                                        new MediaStream();
-
-                                }
-
-
-                                if (
-                                    event.track &&
-                                    !stream
-                                        .getTracks()
-                                        .some(
-                                            track =>
-                                                track.id ===
-                                                event.track.id
-                                        )
-                                ) {
-
-                                    stream.addTrack(
-                                        event.track
-                                    );
-
-                                }
-
-
-                                remoteStreamRef.current =
-                                    stream;
-
-
-                                setRemoteStream(
+                                const {
+                                    tracks,
                                     stream
+                                } = createFreshRemoteStream(
+                                    remoteTracksRef.current,
+                                    event
                                 );
+                                remoteTracksRef.current = tracks;
+                                remoteStreamRef.current = stream;
+                                setRemoteStream(stream);
 
                             },
 
@@ -362,6 +341,7 @@ const GlobalCallManager = () => {
 
 
                 if (
+                    prepareLocalTracks &&
                     localStreamRef.current
                 ) {
 
@@ -458,7 +438,8 @@ const GlobalCallManager = () => {
                     createPeer(
                         getId(
                             call.callerId
-                        )
+                        ),
+                        { prepareLocalTracks: false }
                     );
 
 
@@ -897,9 +878,8 @@ const GlobalCallManager = () => {
                     const peer =
                         peerRef.current ||
                         createPeer(
-                            getId(
-                                data.callerId
-                            )
+                            getId(data.callerId),
+                            { prepareLocalTracks: false }
                         );
 
 
@@ -914,6 +894,11 @@ const GlobalCallManager = () => {
                         new RTCSessionDescription(
                             data.offer
                         )
+                    );
+
+                    await attachLocalTracksToRemoteOffer(
+                        peer,
+                        localStreamRef.current
                     );
 
 
@@ -952,23 +937,6 @@ const GlobalCallManager = () => {
                             );
 
                         }
-
-                    }
-
-
-                    /*
-                     * Make sure local tracks
-                     * exist before answer.
-                     */
-
-                    if (
-                        localStreamRef.current
-                    ) {
-
-                        addLocalTracks(
-                            peer,
-                            localStreamRef.current
-                        );
 
                     }
 

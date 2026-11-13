@@ -9,6 +9,24 @@ export const addDirectCallVideoTransceiver = (peer, stream) => {
     );
 };
 
+export const createFreshRemoteStream = (existingTracks = [], event = {}) => {
+    const receivedTracks = [
+        ...(event.streams || []).flatMap(stream => stream.getTracks()),
+        ...(event.track ? [event.track] : [])
+    ];
+    const tracks = [...existingTracks];
+    receivedTracks.forEach(track => {
+        if (!tracks.some(existingTrack => existingTrack.id === track.id)) {
+            tracks.push(track);
+        }
+    });
+
+    return {
+        tracks,
+        stream: new MediaStream(tracks)
+    };
+};
+
 export const ensureDirectCallVideoTransceiver = peer => {
     const videoTransceivers = (peer?.getTransceivers() || [])
         .filter(
