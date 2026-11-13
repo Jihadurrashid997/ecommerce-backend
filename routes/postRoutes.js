@@ -5,11 +5,15 @@ const router = express.Router();
 const auth = require("../middleware/auth");
 
 const {
-    postUpload,
+    postAudioUpload,
     reelUpload,
-    handle
+    handle,
+    handleFields
 } = require("../middleware/postUpload");
-const { validateHomeImageContent } = require("../middleware/imageContentValidation");
+const {
+    validateHomeImageContent,
+    validateUploadedAudioContent
+} = require("../middleware/imageContentValidation");
 
 const {
     createPost,
@@ -45,11 +49,19 @@ router.get("/community/:communityId/feed", auth(), getCommunityPosts);
 router.post(
     "/community/:communityId",
     auth(),
-    handle(postUpload, "photos"),
+    handleFields(postAudioUpload),
     validateHomeImageContent,
+    validateUploadedAudioContent,
     createPost
 );
-router.post("/", auth(), handle(postUpload, "photos"), validateHomeImageContent, createPost);
+router.post(
+    "/",
+    auth(),
+    handleFields(postAudioUpload),
+    validateHomeImageContent,
+    validateUploadedAudioContent,
+    createPost
+);
 
 // Reels
 router.get("/reels", auth(), getReels);

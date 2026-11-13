@@ -49,7 +49,14 @@ export const loadHomeDraft = async userId => {
         visibility: ["public", "followers", "private"].includes(draft.visibility)
             ? draft.visibility
             : "public",
-        files: Array.isArray(draft.files) ? draft.files : []
+        files: Array.isArray(draft.files) ? draft.files : [],
+        audioFile: draft.audioFile || null,
+        audioTitle: typeof draft.audioTitle === "string" ? draft.audioTitle : "",
+        audioStartSeconds: Number(draft.audioStartSeconds) || 0,
+        audioRightsConfirmed: Boolean(draft.audioRightsConfirmed),
+        location: typeof draft.location === "string" ? draft.location : "",
+        altTexts: Array.isArray(draft.altTexts) ? draft.altTexts : [],
+        taggedUsers: Array.isArray(draft.taggedUsers) ? draft.taggedUsers : []
     };
 };
 
@@ -58,7 +65,14 @@ export const saveHomeDraft = (userId, draft) =>
         userId,
         caption: draft.caption,
         visibility: draft.visibility,
-        files: draft.files
+        files: draft.files,
+        audioFile: draft.audioFile || null,
+        audioTitle: draft.audioTitle || "",
+        audioStartSeconds: Number(draft.audioStartSeconds) || 0,
+        audioRightsConfirmed: Boolean(draft.audioRightsConfirmed),
+        location: draft.location || "",
+        altTexts: draft.altTexts || [],
+        taggedUsers: draft.taggedUsers || []
     }));
 
 export const clearHomeDraft = userId =>

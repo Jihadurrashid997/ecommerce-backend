@@ -15,9 +15,15 @@ import { clearHomeDraft, loadHomeDraft, saveHomeDraft } from "../services/homeDr
 import { useApp } from "../context/AppContext";
 import PostCard from "../components/PostCard";
 import MessengerStories from "../components/MessengerStories";
+import SocialFollowButton from "../components/SocialFollowButton";
 import "../styles/Social.css";
 
 const MAX_PHOTOS = 5;
+const MAX_POST_AUDIO_SIZE = 10 * 1024 * 1024;
+const POST_AUDIO_TYPES = new Set([
+    "audio/mpeg", "audio/mp4", "audio/aac", "audio/wav", "audio/ogg", "audio/webm"
+]);
+const POST_AUDIO_CLIP_SECONDS = 30;
 
 const Home = () => {
 
@@ -31,7 +37,9 @@ const Home = () => {
 
     const [posts, setPosts] = useState([]);
     const [following, setFollowing] = useState([]);
+    const [suggestions, setSuggestions] = useState([]);
     const [followingError, setFollowingError] = useState("");
+    const [suggestionsError, setSuggestionsError] = useState("");
     const [feedScope, setFeedScope] = useState("for-you");
     const [cursor, setCursor] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -41,6 +49,16 @@ const Home = () => {
     const [caption, setCaption] = useState("");
     const [visibility, setVisibility] = useState("public");
     const [files, setFiles] = useState([]);
+    const [audioFile, setAudioFile] = useState(null);
+    const [audioTitle, setAudioTitle] = useState("");
+    const [audioDuration, setAudioDuration] = useState(0);
+    const [audioStartSeconds, setAudioStartSeconds] = useState(0);
+    const [audioRightsConfirmed, setAudioRightsConfirmed] = useState(false);
+    const [location, setLocation] = useState("");
+    const [altTexts, setAltTexts] = useState([]);
+    const [tagSearch, setTagSearch] = useState("");
+    const [tagResults, setTagResults] = useState([]);
+    const [taggedUsers, setTaggedUsers] = useState([]);
     const [posting, setPosting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadError, setUploadError] = useState("");
@@ -54,11 +72,18 @@ const Home = () => {
         () => files.map(f => URL.createObjectURL(f)),
         [files]
     );
+    const audioPreview = useMemo(
+        () => audioFile ? URL.createObjectURL(audioFile) : "",
+        [audioFile]
+    );
 
     useEffect(
         () => () => previews.forEach(url => URL.revokeObjectURL(url)),
         [previews]
     );
+    useEffect(() => () => {
+        if (audioPreview) URL.revokeObjectURL(audioPreview);
+    }, [audioPreview]);
 
     const load = useCallback(async (before = null, scope = feedScope) => {
         const requestId = before ? feedRequestRef.current : ++feedRequestRef.current;
@@ -122,9 +147,50 @@ const Home = () => {
         }
     }, []);
 
+    const loadSuggestions = useCallback(async () => {
+        try {
+            const response = await api.get("/users/suggestions");
+            setSuggestions(response.data.data || []);
+            setSuggestionsError("");
+        } catch (loadError) {
+            console.error("HOME FOLLOW SUGGESTIONS LOAD ERROR:", loadError);
+            setSuggestionsError(
+                loadError.response?.data?.message || "Could not load follow suggestions."
+            );
+        }
+    }, []);
+
     useEffect(() => {
         loadFollowing();
-    }, [loadFollowing]);
+        loadSuggestions();
+    }, [loadFollowing, loadSuggestions]);
+
+    useEffect(() => {
+        const query = tagSearch.trim();
+        if (query.length < 2) {
+            setTagResults([]);
+            return undefined;
+        }
+        let active = true;
+        const timeout = setTimeout(async () => {
+            try {
+                const response = await api.get("/users/search", { params: { q: query } });
+                if (active) {
+                    const selectedIds = new Set(taggedUsers.map(item => String(item._id)));
+                    setTagResults((response.data.users || [])
+                        .filter(person => String(person._id) !== userId && !selectedIds.has(String(person._id)))
+                        .slice(0, 5));
+                }
+            } catch (searchError) {
+                console.error("HOME PEOPLE TAG SEARCH ERROR:", searchError);
+                if (active) setTagResults([]);
+            }
+        }, 250);
+        return () => {
+            active = false;
+            clearTimeout(timeout);
+        };
+    }, [tagSearch, taggedUsers, userId]);
 
     useEffect(() => () => {
         followingRequestRef.current += 1;
@@ -140,9 +206,16 @@ const Home = () => {
         loadHomeDraft(userId).then(draft => {
             if (!active) return;
             if (draft) {
-                setCaption(draft.caption);
-                setVisibility(draft.visibility);
-                setFiles(draft.files);
+                setCaption(draft.caption || "");
+                setVisibility(draft.visibility || "public");
+                setFiles(Array.isArray(draft.files) ? draft.files : []);
+                setAudioFile(draft.audioFile || null);
+                setAudioTitle(draft.audioTitle || "");
+                setAudioStartSeconds(Number(draft.audioStartSeconds) || 0);
+                setAudioRightsConfirmed(Boolean(draft.audioRightsConfirmed));
+                setLocation(draft.location || "");
+                setAltTexts(Array.isArray(draft.altTexts) ? draft.altTexts : []);
+                setTaggedUsers(Array.isArray(draft.taggedUsers) ? draft.taggedUsers : []);
             }
             setDraftUserId(userId);
             setDraftReady(true);
@@ -164,8 +237,20 @@ const Home = () => {
         const requestId = ++draftSaveRequestRef.current;
         setDraftStatus("Saving draft...");
         const timeout = setTimeout(async () => {
-            const draft = { caption, visibility, files };
-            const isEmpty = !caption.trim() && files.length === 0;
+            const draft = {
+                caption,
+                visibility,
+                files,
+                audioFile,
+                audioTitle,
+                audioStartSeconds,
+                audioRightsConfirmed,
+                location,
+                altTexts,
+                taggedUsers
+            };
+            const isEmpty = !caption.trim() && files.length === 0 && !audioFile &&
+                !location.trim() && !taggedUsers.length;
             try {
                 if (isEmpty) {
                     await clearHomeDraft(userId);
@@ -183,7 +268,11 @@ const Home = () => {
         }, 350);
 
         return () => clearTimeout(timeout);
-    }, [caption, visibility, files, userId, draftReady, draftUserId, draftLoadError]);
+    }, [
+        caption, visibility, files, audioFile, audioTitle, audioStartSeconds,
+        audioRightsConfirmed, location, altTexts, taggedUsers,
+        userId, draftReady, draftUserId, draftLoadError
+    ]);
 
     const pickFiles = event => {
 
@@ -215,6 +304,10 @@ const Home = () => {
         }
 
         setFiles(next);
+        setAltTexts(previous => [
+            ...previous,
+            ...Array.from({ length: Math.max(0, next.length - previous.length) }, () => "")
+        ].slice(0, next.length));
         if (files.length + picked.length <= MAX_PHOTOS) setUploadError("");
 
     };
@@ -224,12 +317,28 @@ const Home = () => {
         event.preventDefault();
 
         if (files.length === 0 || posting) return;
+        if (audioFile && (!audioRightsConfirmed || audioDuration <= 0)) {
+            setUploadError("Confirm audio rights and wait for the soundtrack to load before sharing.");
+            return;
+        }
 
         const form = new FormData();
 
         files.forEach(f => form.append("photos", f));
+        form.append("altTexts", JSON.stringify(altTexts));
+        form.append("taggedUsers", JSON.stringify(taggedUsers.map(person => person._id)));
         form.append("caption", caption.trim());
         form.append("visibility", visibility);
+        form.append("location", location.trim());
+        if (audioFile) {
+            form.append("audio", audioFile);
+            form.append("audioTitle", audioTitle);
+            form.append("audioStartSeconds", String(audioStartSeconds));
+            form.append("audioDurationSeconds", String(
+                Math.min(POST_AUDIO_CLIP_SECONDS, audioDuration)
+            ));
+            form.append("audioRightsConfirmed", "true");
+        }
 
         try {
 
@@ -247,6 +356,14 @@ const Home = () => {
 
             setPosts(prev => [res.data.data, ...prev]);
             setFiles([]);
+            setAudioFile(null);
+            setAudioTitle("");
+            setAudioDuration(0);
+            setAudioStartSeconds(0);
+            setAudioRightsConfirmed(false);
+            setLocation("");
+            setAltTexts([]);
+            setTaggedUsers([]);
             setCaption("");
             setVisibility("public");
             setUploadError("");
@@ -372,6 +489,84 @@ const Home = () => {
                             <span><b>Start a little something</b><small>Share a moment with your community</small></span>
                         </div>
 
+                        <div className="home-post-details">
+                            <label>
+                                Place (optional)
+                                <input
+                                    value={location}
+                                    onChange={event => setLocation(event.target.value.slice(0, 100))}
+                                    maxLength={100}
+                                    placeholder="Add a place name (no precise location)"
+                                    disabled={!draftReady || posting}
+                                />
+                            </label>
+                            <label>
+                                Tag people (optional)
+                                <input
+                                    value={tagSearch}
+                                    onChange={event => setTagSearch(event.target.value)}
+                                    placeholder="Search people by name"
+                                    disabled={!draftReady || posting || taggedUsers.length >= 10}
+                                />
+                            </label>
+                            {tagResults.length > 0 && (
+                                <div className="home-tag-results" role="listbox" aria-label="People to tag">
+                                    {tagResults.map(person => (
+                                        <button
+                                            type="button"
+                                            role="option"
+                                            aria-selected="false"
+                                            key={person._id}
+                                            onClick={() => {
+                                                setTaggedUsers(previous => [...previous, {
+                                                    _id: person._id,
+                                                    name: person.name
+                                                }].slice(0, 10));
+                                                setTagSearch("");
+                                                setTagResults([]);
+                                            }}
+                                        >
+                                            {person.name || "E Top member"}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {taggedUsers.length > 0 && (
+                                <div className="home-tag-chips" aria-label="Tagged people">
+                                    {taggedUsers.map(person => (
+                                        <span key={person._id}>
+                                            {person.name}
+                                            <button
+                                                type="button"
+                                                aria-label={`Remove ${person.name}`}
+                                                onClick={() => setTaggedUsers(previous =>
+                                                    previous.filter(item => item._id !== person._id)
+                                                )}
+                                                disabled={posting}
+                                            >×</button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {files.map((photo, index) => (
+                            <label className="home-photo-alt-text" key={`${photo.name}-${index}`}>
+                                Photo {index + 1} description (for screen readers)
+                                <input
+                                    value={altTexts[index] || ""}
+                                    onChange={event => setAltTexts(previous =>
+                                        previous.map((value, itemIndex) =>
+                                            itemIndex === index ? event.target.value.slice(0, 250) : value
+                                        )
+                                    )}
+                                    maxLength={250}
+                                    placeholder="Describe this photo"
+                                    disabled={posting}
+                                />
+                            </label>
+                        ))}
+
                         <div className="composer-row">
 
                     <div className="avatar-sm home-composer-avatar">
@@ -424,6 +619,7 @@ const Home = () => {
                                     disabled={posting}
                                     onClick={() => {
                                         setFiles(files.filter((_, n) => n !== i));
+                                        setAltTexts(previous => previous.filter((_, n) => n !== i));
                                         setUploadError("");
                                     }}
                                     aria-label="Remove"
@@ -434,6 +630,110 @@ const Home = () => {
                         ))}
                     </div>
                 )}
+
+                {audioFile && (
+                    <p className="home-audio-note" role="note">
+                        Soundtracks are user-uploaded. Use only audio you own or have permission to share.
+                    </p>
+                )}
+
+                <div className="home-audio-tools">
+                    <label className="home-audio-picker">
+                        Add your own soundtrack (up to 10MB)
+                        <input
+                            type="file"
+                            accept="audio/mpeg,audio/mp4,audio/aac,audio/wav,audio/ogg,audio/webm"
+                            disabled={!draftReady || posting}
+                            onChange={event => {
+                                const selectedAudio = event.target.files?.[0] || null;
+                                event.target.value = "";
+                                if (selectedAudio && !POST_AUDIO_TYPES.has(selectedAudio.type)) {
+                                    setUploadError("Choose an MP3, MP4, AAC, WAV, OGG, or WebM audio file.");
+                                    return;
+                                }
+                                if (selectedAudio?.size > MAX_POST_AUDIO_SIZE) {
+                                    setUploadError("Audio must be under 10MB.");
+                                    return;
+                                }
+                                setAudioFile(selectedAudio);
+                                setAudioTitle(selectedAudio?.name.replace(/\.[^.]+$/, "").slice(0, 100) || "");
+                                setAudioDuration(0);
+                                setAudioStartSeconds(0);
+                                setAudioRightsConfirmed(false);
+                                setUploadError("");
+                            }}
+                        />
+                    </label>
+                    {audioFile && (
+                        <div className="home-audio-preview">
+                            <audio
+                                src={audioPreview}
+                                controls
+                                preload="metadata"
+                                onPlay={event => {
+                                    event.currentTarget.currentTime = audioStartSeconds;
+                                }}
+                                onTimeUpdate={event => {
+                                    const audio = event.currentTarget;
+                                    if (audio.currentTime >= audioStartSeconds +
+                                        Math.min(POST_AUDIO_CLIP_SECONDS, audioDuration)) {
+                                        audio.pause();
+                                    }
+                                }}
+                                onLoadedMetadata={event => {
+                                    const duration = event.currentTarget.duration;
+                                    if (Number.isFinite(duration) && duration > 0) setAudioDuration(duration);
+                                }}
+                            />
+                            <label>
+                                Track title
+                                <input
+                                    value={audioTitle}
+                                    onChange={event => setAudioTitle(event.target.value.slice(0, 100))}
+                                    maxLength={100}
+                                    disabled={posting}
+                                />
+                            </label>
+                            {audioDuration > POST_AUDIO_CLIP_SECONDS && (
+                                <label>
+                                    Start at {Math.floor(audioStartSeconds)}s
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max={Math.floor(audioDuration - POST_AUDIO_CLIP_SECONDS)}
+                                        step="1"
+                                        value={Math.min(audioStartSeconds, audioDuration - POST_AUDIO_CLIP_SECONDS)}
+                                        onChange={event => setAudioStartSeconds(Number(event.target.value))}
+                                        aria-label="Soundtrack start time"
+                                    />
+                                </label>
+                            )}
+                            <label className="home-audio-rights">
+                                <input
+                                    type="checkbox"
+                                    checked={audioRightsConfirmed}
+                                    onChange={event => setAudioRightsConfirmed(event.target.checked)}
+                                    disabled={posting}
+                                />
+                                I own this audio or have permission to use it.
+                            </label>
+                            <button
+                                type="button"
+                                className="home-audio-remove"
+                                onClick={() => {
+                                    setAudioFile(null);
+                                    setAudioTitle("");
+                                    setAudioDuration(0);
+                                    setAudioStartSeconds(0);
+                                    setAudioRightsConfirmed(false);
+                                }}
+                                disabled={posting}
+                            >
+                                Remove soundtrack
+                            </button>
+                        </div>
+                    )}
+                </div>
 
                         {uploadError && <div className="home-upload-error" role="alert">{uploadError}</div>}
                         {draftLoadError && <p className="home-draft-error" role="alert">{draftLoadError}</p>}
@@ -514,6 +814,14 @@ const Home = () => {
                             onUpdated={updated => setPosts(prev => prev.map(item =>
                                 item._id === updated._id ? { ...item, ...updated } : item
                             ))}
+                            onFollowChange={(author, result) => {
+                                setPosts(previous => previous.map(item =>
+                                    String(item.author?._id || item.author) === String(author._id)
+                                        ? { ...item, isFollowedByMe: Boolean(result.isFollowing) }
+                                        : item
+                                ));
+                                loadFollowing();
+                            }}
                         />
                     ))}
 
@@ -531,6 +839,47 @@ const Home = () => {
                         <h3>More than a feed.<br /><em>A feeling.</em></h3>
                         <p>Meet your people and make this corner of the internet yours.</p>
                         <Link to="/communities">Explore communities <FaArrowRight /></Link>
+                    </section>
+                    <section className="home-side-card home-suggestions-card">
+                        <div className="home-side-heading"><span>PEOPLE TO FOLLOW</span></div>
+                        {suggestionsError ? (
+                            <div className="home-circle-empty">
+                                <p role="alert">{suggestionsError}</p>
+                                <button type="button" className="home-circle-retry" onClick={loadSuggestions}>
+                                    Try again
+                                </button>
+                            </div>
+                        ) : suggestions.length ? suggestions.slice(0, 5).map(person => (
+                            <div className="home-suggestion-row" key={person._id}>
+                                <Link className="home-person-row" to={`/user/${person._id}`}>
+                                    <span className="home-person-avatar">
+                                        {person.profileImage || person.avatar
+                                            ? <img src={getUploadUrl(person.profileImage || person.avatar)} alt="" />
+                                            : (person.name || "U").charAt(0).toUpperCase()}
+                                    </span>
+                                    <span>
+                                        <b>{person.name}</b>
+                                        <small>{person.mutualConnections
+                                            ? `${person.mutualConnections} mutual connection${person.mutualConnections === 1 ? "" : "s"}`
+                                            : person.role === "seller" ? "Creator & seller" : "Suggested for you"}</small>
+                                    </span>
+                                </Link>
+                                <SocialFollowButton
+                                    userId={person._id}
+                                    onFollowChange={result => {
+                                        if (result.isFollowing) {
+                                            setSuggestions(current => current.filter(item => item._id !== person._id));
+                                            loadFollowing();
+                                        }
+                                    }}
+                                />
+                            </div>
+                        )) : (
+                            <div className="home-circle-empty">
+                                <p>New people to discover will show up here.</p>
+                                <Link to="/search">Explore people <FaArrowRight /></Link>
+                            </div>
+                        )}
                     </section>
                     <p className="home-footer-note">A little corner of the internet, made for everyone.<br />© 2026 E Top</p>
                 </aside>

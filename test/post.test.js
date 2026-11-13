@@ -27,7 +27,11 @@ const {
 } = require("../controllers/postController");
 const jwt = require("jsonwebtoken");
 const messageUpload = require("../middleware/messageUpload");
-const { matchesAllowedImageContent, validateHomeImageContent } =
+const {
+    matchesAllowedImageContent,
+    validateHomeImageContent,
+    validateUploadedAudioContent
+} =
     require("../middleware/imageContentValidation");
 
 const TEST_USER_ID = "507f1f77bcf86cd799439011";
@@ -183,6 +187,23 @@ test("a photo post remains valid", () => {
         }]
     });
 
+    test("photo post soundtracks persist bounded audio metadata", () => {
+        const post = makePost({
+            caption: "",
+            media: [{ url: "https://cdn.example.com/photo.jpg", type: "image" }],
+            audio: {
+                url: "https://cdn.example.com/audio.mp3",
+                type: "audio",
+                title: "Original track",
+                startSeconds: 8,
+                durationSeconds: 30
+            }
+        });
+        assert.equal(post.validateSync(), undefined);
+        post.audio.durationSeconds = 31;
+        assert.ok(post.validateSync());
+    });
+
     assert.equal(post.validateSync(), undefined);
 });
 
@@ -208,6 +229,64 @@ test("Home upload validation checks image signatures and rejects spoofed media",
     }, response, () => { continued = true; });
     assert.equal(response.statusCode, 400);
     assert.equal(continued, false);
+});
+
+test("Home upload validation accepts supported audio signatures and rejects spoofed audio", () => {
+    const response = makeResponse();
+    let continued = false;
+    validateUploadedAudioContent({
+        files: {
+            audio: [{
+                mimetype: "audio/mpeg",
+                buffer: Buffer.from("ID3audio")
+            }]
+        }
+    }, response, () => { continued = true; });
+    assert.equal(continued, true);
+
+    continued = false;
+    const invalidResponse = makeResponse();
+    validateUploadedAudioContent({
+        files: {
+            audio: [{
+                mimetype: "audio/mpeg",
+                buffer: Buffer.from("not audio")
+            }]
+        }
+    }, invalidResponse, () => { continued = true; });
+    assert.equal(invalidResponse.statusCode, 400);
+    assert.equal(continued, false);
+});
+
+test("post soundtrack requires rights confirmation and a bounded segment", async () => {
+    const originalSaveFile = mediaStorage.saveFile;
+    let saveCalls = 0;
+    mediaStorage.saveFile = async () => {
+        saveCalls += 1;
+        return { url: "/uploads/audio.mp3", type: "audio" };
+    };
+
+    try {
+        for (const body of [
+            { audioStartSeconds: "0", audioDurationSeconds: "12" },
+            { audioRightsConfirmed: "true", audioStartSeconds: "0", audioDurationSeconds: "31" }
+        ]) {
+            const response = makeResponse();
+            await createPost({
+                params: {},
+                body: { ...body, caption: "Photo with music" },
+                files: {
+                    photos: [{ size: 100, buffer: Buffer.from("photo"), mimetype: "image/jpeg" }],
+                    audio: [{ size: 100, buffer: Buffer.from("ID3audio"), mimetype: "audio/mpeg" }]
+                },
+                user: { id: TEST_USER_ID }
+            }, response);
+            assert.equal(response.statusCode, 400);
+        }
+        assert.equal(saveCalls, 0);
+    } finally {
+        mediaStorage.saveFile = originalSaveFile;
+    }
 });
 
 test("post owners can edit captions and audience", async () => {

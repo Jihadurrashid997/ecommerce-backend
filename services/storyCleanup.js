@@ -18,10 +18,11 @@ exports.purgeExpiredStories = async () => {
             .limit(50);
 
         for (const story of expired) {
-            if (
-                story.media?.url &&
-                !await mediaStorage.deleteFile(story.media)
-            ) {
+            const mediaFiles = [story.media, story.audio].filter(media => media?.url);
+            const allMediaDeleted = await Promise.all(
+                mediaFiles.map(media => mediaStorage.deleteFile(media))
+            );
+            if (allMediaDeleted.some(deleted => !deleted)) {
                 continue;
             }
             await story.deleteOne();

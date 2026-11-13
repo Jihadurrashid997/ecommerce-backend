@@ -47,7 +47,13 @@ const post = {
 };
 
 test("opens post photos in a full-screen viewer with navigation and close", () => {
-    render(<PostCard post={post} />);
+    render(<PostCard post={{
+        ...post,
+        media: [
+            { url: "/photo-one.jpg", altText: "A person walking beside a lake" },
+            { url: "/photo-two.jpg" }
+        ]
+    }} />);
 
     fireEvent.click(screen.getByRole("button", { name: "View photo full screen" }));
     const viewer = screen.getByRole("dialog", { name: "Post photo 1 of 2" });
@@ -60,7 +66,8 @@ test("opens post photos in a full-screen viewer with navigation and close", () =
     expect(within(postInfo).getByText("A shared moment")).toBeVisible();
     expect(postFooter.querySelector(".media-viewer-post-info").compareDocumentPosition(actions))
         .toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByRole("img", { name: "Post media 1" })).toHaveAttribute("src", "/photo-one.jpg");
+    expect(within(viewer).getByRole("img", { name: "A person walking beside a lake" }))
+        .toHaveAttribute("src", "/photo-one.jpg");
     expect(within(viewer).getByRole("button", { name: "Like post" })).toHaveAttribute("aria-pressed", "false");
     expect(within(viewer).getByRole("button", { name: "Comments, 1" })).toBeVisible();
 

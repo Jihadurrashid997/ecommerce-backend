@@ -1751,3 +1751,57 @@ exports.getFollowing = async (req, res) => {
         });
     }
 };
+
+exports.getFollowSuggestions = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const viewer = await User.findById(userId)
+            .select("following blockedUsers")
+            .lean();
+        if (!viewer) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const blockedViewer = await User.find({ blockedUsers: userId })
+            .select("_id")
+            .lean();
+        const excludedIds = [
+            String(userId),
+            ...(viewer.following || []).map(String),
+            ...(viewer.blockedUsers || []).map(String),
+            ...blockedViewer.map(user => String(user._id))
+        ];
+        const suggestions = await User.find({
+            _id: { $nin: excludedIds },
+            accountVisibility: { $ne: "private" },
+            suspendedAt: { $exists: false },
+            blockedUsers: { $ne: userId }
+        })
+            .select("name role profileImage avatar isVerified following")
+            .limit(80)
+            .lean();
+
+        const followedIds = new Set((viewer.following || []).map(String));
+        const ranked = suggestions.map(suggestion => {
+            const mutualConnections = (suggestion.following || []).filter(
+                followedId => followedIds.has(String(followedId))
+            ).length;
+            const { following, ...publicSuggestion } = suggestion;
+            return { ...publicSuggestion, mutualConnections };
+        }).sort((left, right) =>
+            right.mutualConnections - left.mutualConnections ||
+            Number(right.isVerified) - Number(left.isVerified)
+        ).slice(0, 12);
+
+        return res.json({ success: true, data: ranked });
+    } catch (error) {
+        console.error("GET FOLLOW SUGGESTIONS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load follow suggestions."
+        });
+    }
+};
