@@ -1,14 +1,19 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
-
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import {
-    FaUserCircle,
-    FaSignOutAlt,
-    FaEnvelope,
-    FaUserTag,
+    FaArrowRight,
+    FaCalendarAlt,
     FaComments,
+    FaCog,
     FaEdit,
-    FaCog
+    FaEnvelope,
+    FaHeart,
+    FaMapMarkerAlt,
+    FaShieldAlt,
+    FaShoppingBag,
+    FaSignOutAlt,
+    FaUserCircle,
+    FaUserTag
 } from "react-icons/fa";
 
 import { useApp } from "../context/AppContext";
@@ -20,339 +25,205 @@ import "../styles/Profile.css";
 import "../styles/VerifiedBadge.css";
 
 const Profile = () => {
-
-    const {
-        user,
-        logout
-    } = useApp();
-
+    const { user, logout } = useApp();
     const navigate = useNavigate();
 
-    // ==========================
-    // AUTH CHECK
-    // ==========================
-
     if (!user) {
-        navigate("/login");
-        return null;
+        return <Navigate to="/login" replace />;
     }
 
-    // ==========================
-    // USER DATA
-    // ==========================
-
-    const userName =
-        user.name || "E Top user";
-
-    const userEmail =
-        user.email || "No email available";
-
-    const userRole =
-        user.role || "customer";
-
-    const avatar =
-        user.avatar ||
-        user.profileImage ||
-        user.image ||
-        null;
-
-    const bio =
-        user.bio ||
-        "Welcome to my profile.";
-
-    const location =
-        user.location ||
-        "Location not added";
-
-    // ==========================
-    // LOGOUT
-    // ==========================
+    const userName = user.name || "E Top user";
+    const userEmail = user.email || "No email available";
+    const userRole = user.role || "customer";
+    const avatar = user.avatar || user.profileImage || user.image || null;
+    const bio = user.bio || "Add a few words about yourself and make this space yours.";
+    const location = user.location || "Add your location";
+    const memberSince = user.createdAt
+        ? new Date(user.createdAt).toLocaleDateString(undefined, {
+            month: "long",
+            year: "numeric"
+        })
+        : null;
 
     const handleLogout = () => {
-
         logout();
-
         navigate("/login");
-
     };
-
-    // ==========================
-    // EDIT PROFILE
-    // ==========================
-
-    const handleEditProfile = () => {
-
-        navigate("/edit-profile");
-
-    };
-
-    // ==========================
-    // SETTINGS
-    // ==========================
-
-    const handleSettings = () => navigate("/edit-profile");
 
     return (
-
         <div className="profile-page">
-
-            {/* ==========================
-                COVER
-            =========================== */}
-
-            <div className="profile-cover">
-
-                <div className="cover-overlay">
-
-                    <div className="cover-content">
-
-                        <span>
-                            Your Profile
-                        </span>
-
+            <header className="profile-hero">
+                <div className="profile-hero-glow" aria-hidden="true" />
+                <div className="profile-hero-inner">
+                    <div className="profile-eyebrow">
+                        <span className="profile-eyebrow-mark" />
+                        E TOP MEMBER SPACE
                     </div>
-
+                    <h1>
+                        Your profile,
+                        <span> your corner.</span>
+                    </h1>
+                    <p>A little space for your story, your community, and everything you love.</p>
                 </div>
+                <div className="profile-hero-stamp" aria-hidden="true">
+                    <FaShieldAlt />
+                    <span>YOUR<br />SPACE</span>
+                </div>
+            </header>
 
-            </div>
-
-
-            {/* ==========================
-                PROFILE CONTAINER
-            =========================== */}
-
-            <div className="profile-container">
-
-
-                {/* ==========================
-                    PROFILE HEADER
-                =========================== */}
-
-                <section className="profile-header">
-
-                    {/* PROFILE IMAGE */}
-
-                    <div className="profile-avatar">
-
-                        {avatar ? (
-
-                            <img
-                                src={getUploadUrl(avatar)}
-                                alt={userName}
-                            />
-
-                        ) : (
-
-                            <FaUserCircle />
-
+            <main className="profile-container">
+                <section className="profile-overview" aria-label="Your profile overview">
+                    <div className="profile-avatar-frame">
+                        <div className="profile-avatar">
+                            {avatar ? (
+                                <img src={getUploadUrl(avatar)} alt={`${userName}'s profile`} />
+                            ) : (
+                                <FaUserCircle aria-hidden="true" />
+                            )}
+                        </div>
+                        {user.isVerified && (
+                            <span className="profile-avatar-verified" aria-label="Verified account">
+                                <FaShieldAlt />
+                            </span>
                         )}
-
                     </div>
-
-
-                    {/* USER INFORMATION */}
 
                     <div className="profile-main-info">
-
-                        <h1>
+                        <span className="profile-section-kicker">YOUR E TOP PROFILE</span>
+                        <h2>
                             {userName}
-                            {user?.isVerified && <VerifiedBadge />}
-                        </h1>
-
-                        <span className="profile-role">
-
-                            <FaUserTag />
-
-                            {userRole}
-
-                        </span>
-
-                        <p className="profile-bio">
-                            {bio}
+                            {user.isVerified && <VerifiedBadge />}
+                        </h2>
+                        <div className="profile-meta">
+                            <span className="profile-role">
+                                <FaUserTag aria-hidden="true" />
+                                {userRole}
+                            </span>
+                            {memberSince && (
+                                <span className="profile-member-since">
+                                    <FaCalendarAlt aria-hidden="true" />
+                                    Member since {memberSince}
+                                </span>
+                            )}
+                        </div>
+                        <p className="profile-bio">{bio}</p>
+                        <p className={`profile-location${user.location ? "" : " is-empty"}`}>
+                            <FaMapMarkerAlt aria-hidden="true" />
+                            {location}
                         </p>
-
-                        <p className="profile-location">
-                            📍 {location}
-                        </p>
-
                     </div>
-
-
-                    {/* PROFILE ACTIONS */}
 
                     <div className="profile-actions">
-
                         <button
                             className="edit-profile-btn"
-                            onClick={handleEditProfile}
+                            type="button"
+                            onClick={() => navigate("/edit-profile")}
                         >
-
-                            <FaEdit />
-
-                            Edit Profile
-
+                            <FaEdit aria-hidden="true" />
+                            Edit profile
+                            <FaArrowRight className="profile-button-arrow" aria-hidden="true" />
                         </button>
-
-
                         <button
                             className="settings-btn"
-                            onClick={handleSettings}
-                            title="Settings"
+                            type="button"
+                            onClick={() => navigate("/edit-profile")}
+                            aria-label="Profile settings"
+                            title="Profile settings"
                         >
-
-                            <FaCog />
-
+                            <FaCog aria-hidden="true" />
                         </button>
-
                     </div>
-
                 </section>
 
-
-                {/* ==========================
-                    PROFILE BODY
-                =========================== */}
-
                 <div className="profile-content">
-
-
-                    {/* ==========================
-                        ABOUT
-                    =========================== */}
-
-                    <div className="profile-card about-card">
-
-                        <h2>
-                            About
-                        </h2>
-
+                    <section className="profile-card about-card">
+                        <div className="profile-card-heading">
+                            <span className="profile-card-icon"><FaUserTag /></span>
+                            <div>
+                                <span className="profile-section-kicker">THE BASICS</span>
+                                <h2>About you</h2>
+                            </div>
+                        </div>
+                        <p className="profile-card-intro">The details that help your community know you better.</p>
 
                         <div className="profile-detail">
-
-                            <FaEnvelope />
-
+                            <span className="profile-detail-icon"><FaEnvelope /></span>
                             <div>
-
-                                <span>
-                                    Email
-                                </span>
-
-                                <strong>
-                                    {userEmail}
-                                </strong>
-
+                                <span>Email address</span>
+                                <strong>{userEmail}</strong>
                             </div>
-
                         </div>
-
-
                         <div className="profile-detail">
-
-                            <FaUserTag />
-
+                            <span className="profile-detail-icon"><FaUserTag /></span>
                             <div>
-
-                                <span>
-                                    Account Type
-                                </span>
-
-                                <strong>
-                                    {userRole}
-                                </strong>
-
+                                <span>Account type</span>
+                                <strong className="profile-role-label">{userRole}</strong>
                             </div>
-
                         </div>
+                    </section>
 
-
-                    </div>
-
-
-                    {/* ==========================
-                        QUICK ACCESS
-                    =========================== */}
-
-                    <div className="profile-card">
-
-                        <h2>
-                            Quick Access
-                        </h2>
-
-
+                    <section className="profile-card profile-shortcuts">
+                        <div className="profile-card-heading">
+                            <span className="profile-card-icon"><FaHeart /></span>
+                            <div>
+                                <span className="profile-section-kicker">MAKE YOURSELF AT HOME</span>
+                                <h2>Your shortcuts</h2>
+                            </div>
+                        </div>
                         <div className="profile-actions-grid">
-
-                            <Link
-                                to="/messenger"
-                                className="profile-action-card"
-                            >
-
-                                <FaComments />
-
-                                <div>
-
-                                    <strong>
-                                        Messages
-                                    </strong>
-
-                                    <span>
-                                        Chat with users
-                                    </span>
-
-                                </div>
-
+                            <Link to="/messenger" className="profile-action-card">
+                                <span className="profile-shortcut-icon"><FaComments /></span>
+                                <span className="profile-shortcut-copy">
+                                    <strong>Messages</strong>
+                                    <span>Pick up the conversation</span>
+                                </span>
+                                <FaArrowRight className="profile-shortcut-arrow" aria-hidden="true" />
                             </Link>
-
-
+                            <Link to="/shop/orders" className="profile-action-card">
+                                <span className="profile-shortcut-icon"><FaShoppingBag /></span>
+                                <span className="profile-shortcut-copy">
+                                    <strong>Your orders</strong>
+                                    <span>Keep track of your purchases</span>
+                                </span>
+                                <FaArrowRight className="profile-shortcut-arrow" aria-hidden="true" />
+                            </Link>
+                            <Link to="/shop/wishlist" className="profile-action-card">
+                                <span className="profile-shortcut-icon"><FaHeart /></span>
+                                <span className="profile-shortcut-copy">
+                                    <strong>Wishlist</strong>
+                                    <span>All your saved favourites</span>
+                                </span>
+                                <FaArrowRight className="profile-shortcut-arrow" aria-hidden="true" />
+                            </Link>
                         </div>
+                    </section>
 
-                    </div>
-
-
-                    {/* ==========================
-                        ACCOUNT SETTINGS
-                    =========================== */}
-
-                    <div className="profile-card account-card">
-
+                    <section className="profile-card account-card">
                         <div>
-
-                            <h2>
-                                Account
-                            </h2>
-
-                            <p>
-                                Manage your account.
-                            </p>
-
+                            <span className="profile-section-kicker">ACCOUNT</span>
+                            <h2>Ready to step away?</h2>
+                            <p>You can sign back in whenever you like.</p>
                         </div>
-
-
-                        <button
-                            className="logout-button"
-                            onClick={handleLogout}
-                        >
-
-                            <FaSignOutAlt />
-
-                            Logout
-
+                        <button className="logout-button" type="button" onClick={handleLogout}>
+                            <FaSignOutAlt aria-hidden="true" />
+                            Sign out
                         </button>
-
-                    </div>
-
+                    </section>
                 </div>
 
-            </div>
-
-            <ProfileSocial
-                userId={user?._id || user?.id}
-                isSelf
-            />
-
+                <section className="profile-community-section" aria-labelledby="profile-community-title">
+                    <div className="profile-community-heading">
+                        <div>
+                            <span className="profile-section-kicker">SHARE A LITTLE MORE</span>
+                            <h2 id="profile-community-title">Your community</h2>
+                        </div>
+                        <p>Your photos, reels, and connections in one place.</p>
+                    </div>
+                    <ProfileSocial userId={user._id || user.id} isSelf />
+                </section>
+            </main>
         </div>
-
     );
-
 };
 
 export default Profile;
