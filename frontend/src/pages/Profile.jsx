@@ -51,7 +51,7 @@ const Profile = () => {
     };
 
     return (
-        <div className="profile-page">
+        <div className="profile-page profile-owner-page">
             <header className="profile-hero">
                 <div className="profile-hero-glow" aria-hidden="true" />
                 <div className="profile-hero-inner">
@@ -134,6 +134,8 @@ const Profile = () => {
                         </button>
                     </div>
                 </section>
+
+                <ProfileSocial userId={user._id || user.id} isSelf />
 
                 <div className="profile-content">
                     <section className="profile-card about-card">
@@ -219,7 +221,6 @@ const Profile = () => {
                         </div>
                         <p>Your photos, reels, and connections in one place.</p>
                     </div>
-                    <ProfileSocial userId={user._id || user.id} isSelf />
                 </section>
             </main>
         </div>
