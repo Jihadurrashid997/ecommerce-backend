@@ -510,7 +510,7 @@ function AppLayout() {
                 <Route
                     path="/communities"
                     element={
-                        <MaintenanceGate section="home">
+                        <MaintenanceGate section="community">
                             <PrivateRoute><Communities /></PrivateRoute>
                         </MaintenanceGate>
                     }
@@ -519,7 +519,7 @@ function AppLayout() {
                 <Route
                     path="/communities/:id"
                     element={
-                        <MaintenanceGate section="home">
+                        <MaintenanceGate section="community">
                             <PrivateRoute><Communities /></PrivateRoute>
                         </MaintenanceGate>
                     }

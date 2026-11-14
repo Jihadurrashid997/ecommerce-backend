@@ -25,7 +25,8 @@ const platformSettingsSchema = new mongoose.Schema({
         reels: { type: maintenanceSectionSchema, default: () => ({}) },
         messenger: { type: maintenanceSectionSchema, default: () => ({}) },
         shop: { type: maintenanceSectionSchema, default: () => ({}) },
-        profile: { type: maintenanceSectionSchema, default: () => ({}) }
+        profile: { type: maintenanceSectionSchema, default: () => ({}) },
+        community: { type: maintenanceSectionSchema, default: () => ({}) }
     }
 }, {
     timestamps: true,

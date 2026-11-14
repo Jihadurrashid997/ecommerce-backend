@@ -9,7 +9,8 @@ const SECTIONS = [
     ["reels", "Reels"],
     ["messenger", "Messenger"],
     ["shop", "Shop"],
-    ["profile", "Profile"]
+    ["profile", "Profile"],
+    ["community", "Community"]
 ];
 
 const DEFAULT_MESSAGE = "This section is temporarily unavailable while we make updates.";
