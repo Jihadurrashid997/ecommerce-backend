@@ -17,7 +17,7 @@ const MAX_SECONDS = MAX_MINUTES * 60;
 
 /* ---------------- one reel ---------------- */
 
-const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowChange }) => {
+const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) => {
 
     const videoRef = useRef(null);
     const viewed = useRef(false);
@@ -141,7 +141,7 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
 
     const author = reel.author || {};
 
-    const canDelete = String(author._id) === myId || isAdmin;
+    const canDelete = Boolean(myId) && String(author._id) === myId;
     const canFollow = Boolean(author._id) && String(author._id) !== myId;
 
     return (
@@ -497,7 +497,6 @@ const Reels = () => {
                     muted={muted}
                     setMuted={setMuted}
                     myId={myId}
-                    isAdmin={user?.role === "admin"}
                     onDeleted={id => setReels(prev => prev.filter(r => r._id !== id))}
                     onFollowChange={(author, result) => setReels(previous => previous.map(item =>
                        String(item.author?._id || item.author) === String(author._id)

@@ -834,6 +834,16 @@
 }
 .reel-side .reaction-picker-trigger > span[aria-hidden="true"] { font-size: 19px; }
 .reel-side .reaction-picker-count { color: inherit; font-size: 11px; }
+.reel-side .facebook-reaction-picker .facebook-reaction-trigger,
+.reel-side .facebook-reaction-picker .facebook-reaction-trigger:hover,
+.reel-side .facebook-reaction-picker .facebook-reaction-trigger:focus-visible {
+    border-radius: 24px;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+}
+.reel-side .facebook-reaction-picker .facebook-reaction-trigger.selected {
+    color: #fff;
+}
 .reel-add {
     position: fixed;
     top: max(14px, env(safe-area-inset-top));
