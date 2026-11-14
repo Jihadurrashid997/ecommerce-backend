@@ -1,6 +1,6 @@
 const PlatformSettings = require("../models/PlatformSettings");
 
-const MAINTENANCE_SECTIONS = ["app", "home", "reels", "messenger", "shop", "profile"];
+const MAINTENANCE_SECTIONS = ["app", "home", "reels", "messenger", "shop", "profile", "community"];
 const DEFAULT_MESSAGE = "This section is temporarily unavailable while we make updates.";
 
 const DEFAULT_MAINTENANCE = Object.fromEntries(

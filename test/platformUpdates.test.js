@@ -51,6 +51,10 @@ test("platform settings service fills missing sections in legacy settings", asyn
         });
         assert.equal(settings.maintenance.reels.enabled, false);
         assert.equal(settings.maintenance.app.enabled, false);
+        assert.deepEqual(settings.maintenance.community, {
+            enabled: false,
+            message: platformSettings.DEFAULT_MESSAGE
+        });
     } finally {
         PlatformSettings.findOneAndUpdate = originalFindOneAndUpdate;
     }
@@ -66,7 +70,7 @@ test("admin can set one module's maintenance status and message", async () => {
                 _id: "global",
                 maintenance: {
                     ...platformSettings.DEFAULT_MAINTENANCE,
-                    reels: { enabled: true, message: "Reels update in progress." }
+                    community: { enabled: true, message: "Community update in progress." }
                 }
             })
         };
@@ -77,21 +81,21 @@ test("admin can set one module's maintenance status and message", async () => {
         await platformController.updateMaintenance(
             {
                 body: {
-                    section: "reels",
+                    section: "community",
                     enabled: true,
-                    message: "  Reels update in progress.  "
+                    message: "  Community update in progress.  "
                 }
             },
             response
         );
 
         assert.deepEqual(update.$set, {
-            "maintenance.reels": {
+            "maintenance.community": {
                 enabled: true,
-                message: "Reels update in progress."
+                message: "Community update in progress."
             }
         });
-        assert.equal(response.body.maintenance.reels.enabled, true);
+        assert.equal(response.body.maintenance.community.enabled, true);
     } finally {
         PlatformSettings.findOneAndUpdate = originalFindOneAndUpdate;
     }
