@@ -614,6 +614,20 @@ test("customer order responses do not expose seller account IDs", async () => {
             sellerConfirmedAt: null,
             payoutStatus: "held",
             deliveredAt: null,
+            returnRequest: {
+                status: "none",
+                reason: "",
+                requestedAt: null,
+                adminNote: "",
+                courierName: "",
+                trackingNumber: "",
+                trackingUrl: "",
+                shippedAt: null,
+                receivedAt: null,
+                refundMethod: "",
+                refundReference: "",
+                refundedAt: null
+            },
             deliveryDispute: {
                 status: "none",
                 reason: "",
@@ -675,6 +689,9 @@ test("only the order owner can confirm receipt after paid delivery", async () =>
             deliveryStatus: "Delivered",
             payoutStatus: "held",
             receiptConfirmedAt: null,
+            "returnRequest.status": {
+                $nin: ["requested", "approved", "shipped", "received"]
+            },
             "deliveryDispute.status": {
                 $nin: ["open", "referred_to_refund"]
             }
@@ -690,6 +707,9 @@ test("only the order owner can confirm receipt after paid delivery", async () =>
             payoutStatus: "held",
             receiptConfirmedAt: { $ne: null },
             sellerConfirmedAt: { $ne: null },
+            "returnRequest.status": {
+                $nin: ["requested", "approved", "shipped", "received"]
+            },
             "deliveryDispute.status": {
                 $nin: ["open", "referred_to_refund"]
             }
@@ -747,6 +767,9 @@ test("seller must confirm their own paid delivered shipment before payout readin
             deliveryStatus: "Delivered",
             payoutStatus: "held",
             sellerConfirmedAt: null,
+            "returnRequest.status": {
+                $nin: ["requested", "approved", "shipped", "received"]
+            },
             "deliveryDispute.status": {
                 $nin: ["open", "referred_to_refund"]
             }
@@ -1230,6 +1253,9 @@ test("admin payout queue requires both buyer and seller confirmations", async ()
             payoutStatus: { $in: ["ready", "approved"] },
             receiptConfirmedAt: { $ne: null },
             sellerConfirmedAt: { $ne: null },
+            "returnRequest.status": {
+                $nin: ["requested", "approved", "shipped", "received"]
+            },
             "deliveryDispute.status": {
                 $nin: ["open", "referred_to_refund"]
             }
@@ -1318,6 +1344,9 @@ test("admin can record a seller payout only after approval", async () => {
             "settlement.payoutStatus": "approved",
             "settlement.receiptConfirmedAt": { $ne: null },
             "settlement.sellerConfirmedAt": { $ne: null },
+            "settlement.returnRequest.status": {
+                $nin: ["requested", "approved", "shipped", "received"]
+            },
             "settlement.deliveryDispute.status": {
                 $nin: ["open", "referred_to_refund"]
             }
@@ -1564,7 +1593,12 @@ test("customer refund requests are paid-order only and hide reviewer identity", 
         assert.deepEqual(filter.sellerSettlements.$not.$elemMatch, {
             $or: [
                 { payoutStatus: "paid" },
-                { "deliveryDispute.status": "open" }
+                { "deliveryDispute.status": "open" },
+                {
+                    "returnRequest.status": {
+                        $in: ["requested", "approved", "shipped", "received"]
+                    }
+                }
             ]
         });
         assert.equal(update.$set["refundRequest.reason"], "The package arrived damaged.");
@@ -1647,7 +1681,14 @@ test("admin refund completion requires a pending request and cancels unpaid sell
         assert.equal(filter.paymentStatus, "paid");
         assert.equal(filter["refundRequest.status"], "requested");
         assert.deepEqual(filter.sellerSettlements.$not.$elemMatch, {
-            payoutStatus: "paid"
+            $or: [
+                { payoutStatus: "paid" },
+                {
+                    "returnRequest.status": {
+                        $in: ["requested", "approved", "shipped", "received"]
+                    }
+                }
+            ]
         });
         assert.equal(update.$set.paymentStatus, "refunded");
         assert.equal(update.$set["refundRequest.status"], "refunded");

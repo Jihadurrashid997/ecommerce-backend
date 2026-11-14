@@ -124,8 +124,19 @@ exports.getAnalytics =
 
                             total: {
                                 $sum: {
-                                    $toDouble:
-                                        "$totalPrice"
+                                    $max: [
+                                        0,
+                                        {
+                                            $subtract: [
+                                                { $toDouble: "$totalPrice" },
+                                                {
+                                                    $toDouble: {
+                                                        $ifNull: ["$refundedAmount", 0]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
                                 }
                             }
 

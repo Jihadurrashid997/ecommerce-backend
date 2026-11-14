@@ -18,6 +18,12 @@ const {
     respondToDeliveryDispute,
     getOpenDeliveryDisputes,
     resolveDeliveryDispute,
+    requestShipmentReturn,
+    submitReturnShipping,
+    getOpenShipmentReturns,
+    reviewShipmentReturn,
+    confirmShipmentReturnReceived,
+    recordShipmentReturnRefund,
     requestOrderRefund,
     getRequestedOrderRefunds,
     rejectOrderRefund,
@@ -61,6 +67,18 @@ router.post(
     "/:id/refund-request",
     auth(),
     requestOrderRefund
+);
+
+router.post(
+    "/:id/shipments/:fulfillmentId/return-request",
+    auth(),
+    requestShipmentReturn
+);
+
+router.put(
+    "/:id/shipments/:fulfillmentId/return-shipping",
+    auth(),
+    submitReturnShipping
 );
 
 router.post(
@@ -113,6 +131,30 @@ router.get(
     "/admin/disputes/open",
     auth(["admin"]),
     getOpenDeliveryDisputes
+);
+
+router.get(
+    "/admin/returns/open",
+    auth(["admin"]),
+    getOpenShipmentReturns
+);
+
+router.put(
+    "/admin/:id/returns/review",
+    auth(["admin"]),
+    reviewShipmentReturn
+);
+
+router.put(
+    "/admin/:id/returns/received",
+    auth(["admin"]),
+    confirmShipmentReturnReceived
+);
+
+router.put(
+    "/admin/:id/returns/refund",
+    auth(["admin"]),
+    recordShipmentReturnRefund
 );
 
 router.put(
