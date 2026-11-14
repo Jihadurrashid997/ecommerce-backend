@@ -97,9 +97,9 @@ const CommentsPanel = ({ postId, onCount, onClose }) => {
                                 ? <img src={getUploadUrl(c.user.profileImage || c.user.avatar)} alt="" />
                                 : (c.user?.name || "U").charAt(0).toUpperCase()}
                         </div>
-                        <div>
+                        <div className="comment-copy">
                             <Link to={`/user/${c.user?._id}`}><b>{c.user?.name || "User"}</b></Link>
-                            <span>{c.text}</span>
+                            <span className="comment-text">{c.text}</span>
                         </div>
                         {(String(c.user?._id || c.user) === currentUserId || user?.role === "admin") && (
                             <button

@@ -422,7 +422,7 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange })
                 </button>
 
                 <button type="button" onClick={sharePost} aria-label="Share post">
-                    <FaShare /> Share
+                    <FaShare /> <span className="post-action-label">Share</span>
                 </button>
 
                 <button
@@ -438,7 +438,8 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange })
                 {post.kind === "post" && !post.originalPost && !post.community &&
                     (!post.visibility || post.visibility === "public") && (
                         <button type="button" onClick={reposted ? undoRepost : repost} aria-label={reposted ? "Undo repost" : "Repost"}>
-                            <FaRetweet /> {reposted ? "Undo repost" : "Repost"}
+                            <FaRetweet />
+                            <span className="post-action-label">{reposted ? "Undo repost" : "Repost"}</span>
                         </button>
                     )}
 
