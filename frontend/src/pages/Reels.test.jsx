@@ -20,7 +20,7 @@ jest.mock("../services/api", () => ({
 }));
 
 jest.mock("../context/AppContext", () => ({
-    useApp: () => ({ user: { _id: "viewer" } })
+    useApp: () => ({ user: { _id: "viewer", role: "admin" } })
 }));
 
 const reel = {
@@ -60,11 +60,29 @@ afterAll(() => {
 test("shows a follow control for another creator and keeps its Following state", async () => {
     render(<Reels />);
 
+    expect(await screen.findByRole("button", { name: "Like" })).toHaveClass("facebook-reaction-trigger");
+    fireEvent.keyDown(screen.getByRole("button", { name: "Like" }), { key: "ArrowDown" });
+    expect(screen.getByRole("group", { name: "Reactions" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Delete reel" })).not.toBeInTheDocument();
+
     const followButton = await screen.findByRole("button", { name: "Follow" });
     fireEvent.click(followButton);
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/users/follow/creator-1"));
     expect(await screen.findByRole("button", { name: "Unfollow" })).toHaveTextContent("Following");
+});
+
+test("shows the delete control only on the current user's own reel", async () => {
+    api.get.mockResolvedValueOnce({
+        data: {
+            data: [{ ...reel, author: { _id: "viewer", name: "Viewer" } }],
+            nextCursor: null
+        }
+    });
+
+    render(<Reels />);
+
+    expect(await screen.findByRole("button", { name: "Delete reel" })).toBeVisible();
 });
 
 test("shares a reel link and exposes view and mute controls accessibly", async () => {
