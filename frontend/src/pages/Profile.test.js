@@ -43,6 +43,9 @@ describe("Profile", () => {
         expect(screen.getByRole("heading", { name: /riley shah/i })).toBeInTheDocument();
         expect(screen.getByText("riley@example.com")).toBeInTheDocument();
         expect(screen.getByText("Dhaka")).toBeInTheDocument();
+        const social = screen.getByText("Your social profile");
+        const about = screen.getByRole("heading", { name: "About you" });
+        expect(social.compareDocumentPosition(about) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(screen.getByRole("link", { name: /messages/i })).toHaveAttribute("href", "/messenger");
         expect(screen.getByRole("link", { name: /your orders/i })).toHaveAttribute("href", "/shop/orders");
         expect(screen.getByRole("link", { name: /wishlist/i })).toHaveAttribute("href", "/shop/wishlist");
