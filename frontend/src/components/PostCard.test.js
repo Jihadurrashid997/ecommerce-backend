@@ -101,6 +101,20 @@ test("closes the full-screen photo viewer with Escape", () => {
     expect(screen.queryByRole("dialog", { name: "Post photo 1 of 2" })).not.toBeInTheDocument();
 });
 
+test("opens and closes comments from the Instagram-style comment action", () => {
+    render(<PostCard post={post} />);
+    const commentAction = screen.getByRole("button", { name: "Comments, 1" });
+
+    expect(commentAction).toHaveClass("post-comment-action");
+    expect(commentAction).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(commentAction);
+
+    expect(commentAction).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Post comments")).toBeVisible();
+    fireEvent.click(commentAction);
+    expect(commentAction).toHaveAttribute("aria-expanded", "false");
+});
+
 test("copies a shareable post link when native sharing is unavailable", async () => {
     const originalClipboard = navigator.clipboard;
     const writeText = jest.fn().mockResolvedValue(undefined);
@@ -132,26 +146,30 @@ test("saves a post and offers icon-based reactions", async () => {
     expect(await screen.findByRole("button", { name: "Remove saved post" })).toHaveAttribute("aria-pressed", "true");
     expect(api.put).toHaveBeenCalledWith("/posts/post-1/saved", { saved: true });
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose reaction" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Like" }), { key: "ArrowDown" });
     expect(screen.getByRole("group", { name: "Reactions" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Choose reaction" })).toHaveTextContent("React");
+    expect(screen.getByRole("button", { name: "Like" })).toHaveTextContent("Like");
     expect(screen.queryByRole("combobox", { name: "Choose a reaction" })).not.toBeInTheDocument();
     const loveReaction = screen.getByRole("button", { name: "Love (0)" });
     expect(loveReaction).toHaveTextContent("❤️");
     expect(loveReaction).not.toHaveTextContent("Love");
     fireEvent.click(loveReaction);
     expect(api.put).toHaveBeenCalledWith("/posts/post-1/reaction", { reaction: "love" });
-    expect(screen.getByRole("button", { name: "Love reaction selected; choose reaction" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Love reaction selected; activate to remove" })).toBeVisible();
     expect(screen.queryByRole("group", { name: "Reactions" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Love reaction selected; choose reaction" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Love reaction selected; activate to remove" }), {
+        key: "ArrowDown"
+    });
     fireEvent.click(screen.getByRole("button", { name: "Love (1)" }));
     expect(api.put).toHaveBeenLastCalledWith("/posts/post-1/reaction", { reaction: null });
 
-    fireEvent.click(screen.getByRole("button", { name: "Choose reaction" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Like" }), { key: "ArrowDown" });
     fireEvent.click(screen.getByRole("button", { name: "Love (0)" }));
-    expect(screen.getByRole("button", { name: "Love reaction selected; choose reaction" })).toHaveTextContent("3");
-    fireEvent.click(screen.getByRole("button", { name: "Love reaction selected; choose reaction" }));
+    expect(screen.getByRole("button", { name: "Love reaction selected; activate to remove" })).toHaveTextContent("3");
+    fireEvent.keyDown(screen.getByRole("button", { name: "Love reaction selected; activate to remove" }), {
+        key: "ArrowDown"
+    });
     fireEvent.click(screen.getByRole("button", { name: "No reaction" }));
     expect(api.put).toHaveBeenLastCalledWith("/posts/post-1/reaction", { reaction: null });
 });

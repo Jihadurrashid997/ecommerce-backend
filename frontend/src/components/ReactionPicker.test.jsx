@@ -18,7 +18,9 @@ test("keeps the reaction tray inside the viewport on narrow screens", () => {
 
     try {
         render(<ReactionPicker onSelect={jest.fn()} />);
-        fireEvent.click(screen.getByRole("button", { name: "Choose reaction" }));
+        fireEvent.keyDown(screen.getByRole("button", { name: "Like" }), {
+            key: "ArrowDown"
+        });
 
         const tray = screen.getByRole("group", { name: "Reactions" });
         expect(tray).toHaveStyle({ left: "8px", top: "382px" });
@@ -28,4 +30,16 @@ test("keeps the reaction tray inside the viewport on narrow screens", () => {
         Element.prototype.getBoundingClientRect.mockRestore();
         Object.defineProperty(window, "innerWidth", { configurable: true, value: originalInnerWidth });
     }
+});
+
+test("clicking the trigger toggles the Like reaction", () => {
+    const onSelect = jest.fn();
+    render(<ReactionPicker onSelect={onSelect} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Like" }));
+    expect(onSelect).toHaveBeenLastCalledWith("like");
+
+    render(<ReactionPicker reaction="like" onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button", { name: /reaction selected/ }));
+    expect(onSelect).toHaveBeenLastCalledWith(null);
 });

@@ -472,6 +472,22 @@
 
 .post-actions button.liked, .reel-side button.liked { color: #ef4444; }
 .post-actions button.is-saved { color: var(--home-green, #36734f); }
+.post-actions .post-comment-action {
+    min-height: 34px;
+    gap: 6px;
+    padding: 0 5px;
+    color: #262626;
+    font-size: 14px;
+    font-weight: 500;
+    transition: opacity 140ms ease;
+}
+.post-actions .post-comment-action svg { width: 20px; height: 20px; }
+.post-actions .post-comment-action:hover { opacity: 0.65; }
+.post-actions .post-comment-action:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+}
 .reaction-picker { position: relative; display: inline-flex; align-items: center; }
 .post-actions .reaction-picker-trigger {
     min-width: 30px;
