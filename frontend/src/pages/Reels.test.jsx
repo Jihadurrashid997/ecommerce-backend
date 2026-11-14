@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import api from "../services/api";
 import Reels from "./Reels";
 
@@ -83,6 +83,38 @@ test("shows the delete control only on the current user's own reel", async () =>
     render(<Reels />);
 
     expect(await screen.findByRole("button", { name: "Delete reel" })).toBeVisible();
+});
+
+test("video clicks toggle playback and reveal 10-second seek controls for two seconds", async () => {
+    render(<Reels />);
+    const video = await screen.findByLabelText("Play reel");
+    jest.useFakeTimers();
+    try {
+        Object.defineProperty(video, "paused", { configurable: true, writable: true, value: true });
+        Object.defineProperty(video, "currentTime", { configurable: true, writable: true, value: 20 });
+        Object.defineProperty(video, "duration", { configurable: true, value: 35 });
+        video.play = jest.fn().mockResolvedValue(undefined);
+        video.pause = jest.fn();
+
+        fireEvent.click(video);
+        expect(video.play).toHaveBeenCalledTimes(1);
+        expect(screen.getByRole("button", { name: "Rewind 10 seconds" })).toBeVisible();
+        expect(screen.getByRole("button", { name: "Forward 10 seconds" })).toBeVisible();
+
+        fireEvent.click(screen.getByRole("button", { name: "Forward 10 seconds" }));
+        expect(video.currentTime).toBe(30);
+        fireEvent.click(screen.getByRole("button", { name: "Rewind 10 seconds" }));
+        expect(video.currentTime).toBe(20);
+
+        act(() => jest.advanceTimersByTime(2000));
+        expect(screen.queryByRole("button", { name: "Rewind 10 seconds" })).not.toBeInTheDocument();
+
+        video.paused = false;
+        fireEvent.click(video);
+        expect(video.pause).toHaveBeenCalledTimes(1);
+    } finally {
+        jest.useRealTimers();
+    }
 });
 
 test("shares a reel link and exposes view and mute controls accessibly", async () => {
