@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { FaBell, FaCog } from "react-icons/fa";
+import { FaBell, FaClock, FaCog, FaStore } from "react-icons/fa";
 
 import {
     BrowserRouter,
@@ -217,6 +217,70 @@ function ShopSectionNavigation({ user }) {
 // APP LAYOUT
 // ======================================================
 
+function ShopAvailability({ children }) {
+    const [status, setStatus] = useState("loading");
+    const [retry, setRetry] = useState(0);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        let cancelled = false;
+        api.get("/admin/settings")
+            .then(response => {
+                if (!cancelled) {
+                    setStatus(response.data?.settings?.shopLive === true ? "live" : "unpublished");
+                }
+            })
+            .catch(requestError => {
+                if (cancelled) return;
+                setError(
+                    requestError.response?.data?.message ||
+                    "Shop availability couldn't be checked. Please try again."
+                );
+                setStatus("error");
+            });
+
+        return () => { cancelled = true; };
+    }, [retry]);
+
+    if (status === "loading") {
+        return <main className="shop-coming-soon" role="status">Checking Shop status...</main>;
+    }
+
+    if (status === "error") {
+        return (
+            <main className="shop-coming-soon" role="alert">
+                <span className="shop-coming-soon-icon"><FaStore /></span>
+                <h1>Shop status unavailable</h1>
+                <p>{error}</p>
+                <button type="button" onClick={() => setRetry(value => value + 1)}>Try again</button>
+            </main>
+        );
+    }
+
+    if (status === "unpublished") {
+        return (
+            <main className="shop-coming-soon">
+                <span className="shop-coming-soon-icon"><FaStore /></span>
+                <span className="shop-coming-soon-kicker"><FaClock /> COMING SOON</span>
+                <h1>E Top Shop is getting ready.</h1>
+                <p className="shop-coming-soon-bangla">আমাদের Shop-এর কাজ চলছে। Admin খুব শিগগিরই Shop চালু করবেন।</p>
+                <p>We're working on the Shop experience. Please check back soon — it will open as soon as everything is ready.</p>
+                <Link to="/">Back to E Top</Link>
+            </main>
+        );
+    }
+
+    return children;
+}
+
+function ShopRoute({ children, allowedRoles }) {
+    return (
+        <ShopAvailability>
+            <PrivateRoute allowedRoles={allowedRoles}>{children}</PrivateRoute>
+        </ShopAvailability>
+    );
+}
+
 function AppLayout() {
 
     const location =
@@ -413,28 +477,28 @@ function AppLayout() {
                 <Route
                     path="/shop"
                     element={
-                        <PrivateRoute>
+                        <ShopRoute>
                             <Shop />
-                        </PrivateRoute>
+                        </ShopRoute>
                     }
                 />
 
-                <Route path="/shop/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-                <Route path="/shop/product/:id" element={<PrivateRoute><ProductDetails /></PrivateRoute>} />
-                <Route path="/shop/payment-success" element={<PrivateRoute><PaymentSuccess /></PrivateRoute>} />
-                <Route path="/shop/payment-fail" element={<PrivateRoute><PaymentFailed /></PrivateRoute>} />
-                <Route path="/shop/payment-cancel" element={<PrivateRoute><PaymentFailed /></PrivateRoute>} />
-                <Route path="/shop/cart" element={<PrivateRoute><Cart /></PrivateRoute>} />
-                <Route path="/shop/wishlist" element={<PrivateRoute><Wishlist /></PrivateRoute>} />
-                <Route path="/shop/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
-                <Route path="/shop/orders" element={<PrivateRoute><OrderHistory /></PrivateRoute>} />
-                <Route path="/shop/notifications" element={<PrivateRoute><ShopNotifications /></PrivateRoute>} />
-                <Route path="/shop/seller/apply" element={<PrivateRoute><SellerApplication /></PrivateRoute>} />
-                <Route path="/shop/settings" element={<PrivateRoute><ShopSettings /></PrivateRoute>} />
-                <Route path="/shop/seller" element={<PrivateRoute allowedRoles={["seller"]}><SellerDashboard /></PrivateRoute>} />
-                <Route path="/shop/seller/products" element={<PrivateRoute allowedRoles={["seller"]}><SellerProducts /></PrivateRoute>} />
-                <Route path="/shop/seller/orders" element={<PrivateRoute allowedRoles={["seller"]}><SellerOrders /></PrivateRoute>} />
-                <Route path="/shop/edit-product/:id" element={<PrivateRoute allowedRoles={["seller", "admin"]}><EditProduct /></PrivateRoute>} />
+                <Route path="/shop/dashboard" element={<ShopRoute><Dashboard /></ShopRoute>} />
+                <Route path="/shop/product/:id" element={<ShopRoute><ProductDetails /></ShopRoute>} />
+                <Route path="/shop/payment-success" element={<ShopRoute><PaymentSuccess /></ShopRoute>} />
+                <Route path="/shop/payment-fail" element={<ShopRoute><PaymentFailed /></ShopRoute>} />
+                <Route path="/shop/payment-cancel" element={<ShopRoute><PaymentFailed /></ShopRoute>} />
+                <Route path="/shop/cart" element={<ShopRoute><Cart /></ShopRoute>} />
+                <Route path="/shop/wishlist" element={<ShopRoute><Wishlist /></ShopRoute>} />
+                <Route path="/shop/checkout" element={<ShopRoute><Checkout /></ShopRoute>} />
+                <Route path="/shop/orders" element={<ShopRoute><OrderHistory /></ShopRoute>} />
+                <Route path="/shop/notifications" element={<ShopRoute><ShopNotifications /></ShopRoute>} />
+                <Route path="/shop/seller/apply" element={<ShopRoute><SellerApplication /></ShopRoute>} />
+                <Route path="/shop/settings" element={<ShopRoute><ShopSettings /></ShopRoute>} />
+                <Route path="/shop/seller" element={<ShopRoute allowedRoles={["seller"]}><SellerDashboard /></ShopRoute>} />
+                <Route path="/shop/seller/products" element={<ShopRoute allowedRoles={["seller"]}><SellerProducts /></ShopRoute>} />
+                <Route path="/shop/seller/orders" element={<ShopRoute allowedRoles={["seller"]}><SellerOrders /></ShopRoute>} />
+                <Route path="/shop/edit-product/:id" element={<ShopRoute allowedRoles={["seller", "admin"]}><EditProduct /></ShopRoute>} />
 
                 <Route path="/product/:id" element={<ShopRedirect target="/shop/product/:id" />} />
                 <Route path="/payment-success" element={<ShopRedirect target="/shop/payment-success" />} />

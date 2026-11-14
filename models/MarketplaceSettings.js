@@ -5,6 +5,10 @@ const marketplaceSettingsSchema = new mongoose.Schema({
         type: String,
         default: "global"
     },
+    shopLive: {
+        type: Boolean,
+        default: false
+    },
     marketplaceEnabled: {
         type: Boolean,
         default: true
