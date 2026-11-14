@@ -53,6 +53,40 @@ const getCloudinary = () => {
 
 };
 
+const createSignedRawUpload = (folder, publicId) => {
+    const cld = getCloudinary();
+    if (!cld) return null;
+
+    const timestamp = Math.floor(Date.now() / 1000);
+    const params = {
+        folder,
+        public_id: publicId,
+        timestamp
+    };
+    const signature = cld.utils.api_sign_request(
+        params,
+        process.env.CLOUDINARY_API_SECRET
+    );
+
+    return {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        timestamp,
+        folder,
+        publicId,
+        signature
+    };
+};
+
+const getRawUploadResource = async publicId => {
+    const cld = getCloudinary();
+    if (!cld) return null;
+    return cld.api.resource(publicId, {
+        resource_type: "raw",
+        type: "upload"
+    });
+};
+
 const uploadDir = path.join(__dirname, "..", "uploads");
 
 /*
@@ -293,6 +327,8 @@ const deleteFile = async media => {
 
 module.exports = {
     isCloudinaryConfigured,
+    createSignedRawUpload,
+    getRawUploadResource,
     saveFile,
     getPrivateDownloadUrl,
     deleteFile

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import VerifiedBadge from "../components/VerifiedBadge";
+import PlatformUpdates from "./PlatformUpdates";
 import "../styles/AdminControl.css";
 import "../styles/VerifiedBadge.css";
 
@@ -1446,7 +1447,7 @@ const AdminControl = () => {
             </div>
 
             <div className="ac-tabs">
-                {[["overview", "Overview"], ["users", "Users"], ["content", "Content"], ["shop", "Shop"], ["announcements", "Announcements"]].map(([key, label]) => (
+                {[["overview", "Overview"], ["users", "Users"], ["content", "Content"], ["shop", "Shop"], ["updates", "App updates"], ["announcements", "Announcements"]].map(([key, label]) => (
                     <button type="button" key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>
                         {label}
                     </button>
@@ -1457,6 +1458,7 @@ const AdminControl = () => {
             {tab === "users" && <Users myId={user._id || user.id} />}
             {tab === "content" && <Content />}
             {tab === "shop" && <ShopSettings />}
+            {tab === "updates" && <PlatformUpdates />}
             {tab === "announcements" && <Announcements />}
 
         </div>

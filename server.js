@@ -200,6 +200,11 @@ app.use(
 );
 
 app.use(
+    "/api/platform",
+    require("./routes/platformRoutes")
+);
+
+app.use(
     "/api/seller",
     require("./routes/sellerRoutes")
 );

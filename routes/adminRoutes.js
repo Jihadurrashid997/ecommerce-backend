@@ -69,6 +69,24 @@ router.put(
     updateMarketplaceSettings
 );
 
+router.patch(
+    "/platform/maintenance",
+    auth(["admin"]),
+    require("../controllers/platformController").updateMaintenance
+);
+
+router.post(
+    "/android-release/upload-signature",
+    auth(["admin"]),
+    require("../controllers/platformController").getAndroidReleaseUploadSignature
+);
+
+router.post(
+    "/android-release",
+    auth(["admin"]),
+    require("../controllers/platformController").publishAndroidRelease
+);
+
 
 // PRODUCT APPROVAL
 

@@ -40,6 +40,24 @@ button:disabled { opacity: .5; cursor: default; }
 .ac-setting-row small { opacity: .7; }
 .ac-setting-row input { width: 20px; height: 20px; accent-color: #1159ff; }
 .ac-shop-settings .ac-item button { padding: 9px 14px; border: 0; border-radius: 10px; background: #16a34a; color: #fff; font-weight: 700; }
+.platform-maintenance-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; }
+.platform-maintenance-control { padding: 10px; border: 1px solid rgba(127,127,127,.25); border-radius: 14px; background: rgba(127,127,127,.06); }
+.platform-maintenance-control .ac-setting-row { margin-top: 0; }
+.platform-maintenance-message, .platform-release-form > label { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; font-weight: 650; }
+.platform-maintenance-message textarea, .platform-release-form input:not([type="checkbox"]), .platform-release-form textarea { width: 100%; padding: 10px 12px; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: #fff; color: #111; font: inherit; }
+.platform-maintenance-message textarea, .platform-release-form textarea { resize: vertical; }
+.platform-maintenance-control > button, .platform-release-form > button { padding: 10px 14px; border: 0; border-radius: 10px; background: #1159ff; color: #fff; font-weight: 700; cursor: pointer; }
+.platform-release-form { display: grid; gap: 6px; max-width: 700px; padding: 16px; border: 1px solid rgba(127,127,127,.28); border-radius: 14px; background: rgba(127,127,127,.08); }
+.platform-release-form .ac-setting-row { margin: 0; }
+.platform-release-form label small { opacity: .75; }
+.platform-upload-progress { display: flex; align-items: center; gap: 10px; }
+.platform-upload-progress progress { flex: 1; min-width: 100px; }
+.platform-maintenance { display: grid; min-height: 65vh; align-content: center; justify-items: center; gap: 14px; padding: 48px 24px; color: #e2e8f0; text-align: center; background: #0b1220; }
+.platform-maintenance h1 { font-size: clamp(28px, 5vw, 46px); }
+.platform-maintenance p { max-width: 620px; color: #b6c3d6; line-height: 1.7; }
+.platform-maintenance-label { color: #7dd3fc; font-size: 11px; font-weight: 800; letter-spacing: .16em; }
+.platform-maintenance-note { color: #8290a4; font-size: 13px; }
+.platform-maintenance button { padding: 10px 15px; border: 0; border-radius: 10px; background: #1159ff; color: #fff; font-weight: 700; }
 .ac-payout-card { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid rgba(127,127,127,.28); border-radius: 14px; background: rgba(127,127,127,.1); }
 .ac-payout-card > div:first-child { display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; }
 .ac-payout-card > div:first-child span { opacity: .75; font-size: 13px; }
