@@ -263,7 +263,6 @@ function ShopAvailability({ children }) {
                 <span className="shop-coming-soon-icon"><FaStore /></span>
                 <span className="shop-coming-soon-kicker"><FaClock /> COMING SOON</span>
                 <h1>E Top Shop is getting ready.</h1>
-                <p className="shop-coming-soon-bangla">আমাদের Shop-এর কাজ চলছে। Admin খুব শিগগিরই Shop চালু করবেন।</p>
                 <p>We're working on the Shop experience. Please check back soon — it will open as soon as everything is ready.</p>
                 <Link to="/">Back to E Top</Link>
             </main>
