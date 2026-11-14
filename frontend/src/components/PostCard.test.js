@@ -115,6 +115,38 @@ test("opens and closes comments from the Instagram-style comment action", () => 
     expect(commentAction).toHaveAttribute("aria-expanded", "false");
 });
 
+test("keeps a follow control beside another author's name in either follow state", async () => {
+    api.post.mockReset();
+    api.post
+        .mockResolvedValueOnce({ data: { isFollowing: true, isFollowRequestPending: false } })
+        .mockResolvedValueOnce({ data: { isFollowing: false, isFollowRequestPending: false } })
+        .mockResolvedValue({ data: { isFollowing: false, isFollowRequestPending: false } });
+    const onFollowChange = jest.fn();
+    render(<PostCard post={post} onFollowChange={onFollowChange} />);
+
+    const authorGroup = document.querySelector(".post-author-group");
+    expect(within(authorGroup).getByRole("link", { name: /Author/ })).toBeVisible();
+    fireEvent.click(within(authorGroup).getByRole("button", { name: "Follow" }));
+    expect(await within(authorGroup).findByRole("button", { name: "Unfollow" }))
+        .toHaveTextContent("Following");
+
+    fireEvent.click(within(authorGroup).getByRole("button", { name: "Unfollow" }));
+    expect(await within(authorGroup).findByRole("button", { name: "Follow" }))
+        .toBeVisible();
+    expect(api.post).toHaveBeenNthCalledWith(1, "/users/follow/author-1");
+    expect(api.post).toHaveBeenNthCalledWith(2, "/users/follow/author-1");
+    expect(onFollowChange).toHaveBeenCalledTimes(2);
+});
+
+test("does not show a follow control on the current user's own post", () => {
+    render(<PostCard post={{
+        ...post,
+        author: { _id: "viewer", name: "Current User" }
+    }} />);
+
+    expect(screen.queryByRole("button", { name: "Follow" })).not.toBeInTheDocument();
+});
+
 test("copies a shareable post link when native sharing is unavailable", async () => {
     const originalClipboard = navigator.clipboard;
     const writeText = jest.fn().mockResolvedValue(undefined);
