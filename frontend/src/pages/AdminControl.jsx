@@ -892,6 +892,19 @@ const ShopSettings = () => {
 
             <label className="ac-setting-row">
                 <span>
+                    <b>Publish Shop</b>
+                    <small>Keep the Shop hidden while it is being prepared. Turn this on when the full Shop is ready for customers.</small>
+                </span>
+                <input
+                    type="checkbox"
+                    checked={settings.shopLive === true}
+                    disabled={Boolean(busy)}
+                    onChange={event => save("shopLive", event.target.checked)}
+                />
+            </label>
+
+            <label className="ac-setting-row">
+                <span>
                     <b>Shop is open</b>
                     <small>When turned off, product browsing and checkout are paused.</small>
                 </span>

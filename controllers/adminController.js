@@ -270,7 +270,7 @@ exports.updateMarketplaceSettings =
     async (req, res) => {
         const updates = {};
 
-        for (const field of ["marketplaceEnabled", "requireProductApproval"]) {
+        for (const field of ["shopLive", "marketplaceEnabled", "requireProductApproval"]) {
             if (!Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
                 continue;
             }
@@ -283,6 +283,11 @@ exports.updateMarketplaceSettings =
             }
 
             updates[field] = req.body[field];
+        }
+
+        if (typeof updates.shopLive === "boolean" &&
+            !Object.prototype.hasOwnProperty.call(updates, "marketplaceEnabled")) {
+            updates.marketplaceEnabled = updates.shopLive;
         }
 
         if (!Object.keys(updates).length) {
@@ -306,7 +311,11 @@ exports.updateMarketplaceSettings =
 
             return res.json({
                 success: true,
-                settings
+                settings: {
+                    ...settings,
+                    marketplaceEnabled:
+                        settings.shopLive === true && settings.marketplaceEnabled === true
+                }
             });
         } catch (error) {
             console.error("UPDATE MARKETPLACE SETTINGS ERROR:", error);

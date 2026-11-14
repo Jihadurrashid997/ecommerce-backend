@@ -25,11 +25,31 @@ const makeResponse = () => ({
     }
 });
 
-test("marketplace settings default to open with product approval disabled", () => {
+test("marketplace settings default to unpublished with product approval disabled", () => {
     const settings = new MarketplaceSettings();
 
+    assert.equal(settings.shopLive, false);
     assert.equal(settings.marketplaceEnabled, true);
     assert.equal(settings.requireProductApproval, false);
+});
+
+test("legacy marketplace settings remain unavailable until the Shop is published", async () => {
+    const originalFindOneAndUpdate = MarketplaceSettings.findOneAndUpdate;
+    MarketplaceSettings.findOneAndUpdate = () => ({
+        lean: async () => ({
+            _id: "global",
+            marketplaceEnabled: true,
+            requireProductApproval: false
+        })
+    });
+
+    try {
+        const settings = await marketplaceSettings.getMarketplaceSettings();
+        assert.equal(settings.shopLive, undefined);
+        assert.equal(settings.marketplaceEnabled, false);
+    } finally {
+        MarketplaceSettings.findOneAndUpdate = originalFindOneAndUpdate;
+    }
 });
 
 test("admin settings update persists valid boolean fields", async () => {
@@ -61,6 +81,70 @@ test("admin settings update persists valid boolean fields", async () => {
         assert.deepEqual(filter, { _id: "global" });
         assert.deepEqual(update, { $set: { marketplaceEnabled: false } });
         assert.equal(options.upsert, true);
+        assert.equal(response.body.settings.marketplaceEnabled, false);
+    } finally {
+        MarketplaceSettings.findOneAndUpdate = originalFindOneAndUpdate;
+    }
+});
+
+test("publishing the Shop also enables the marketplace", async () => {
+    const originalFindOneAndUpdate = MarketplaceSettings.findOneAndUpdate;
+    let update;
+    MarketplaceSettings.findOneAndUpdate = (_filter, nextUpdate) => {
+        update = nextUpdate;
+        return {
+            lean: async () => ({
+                _id: "global",
+                shopLive: true,
+                marketplaceEnabled: true,
+                requireProductApproval: false
+            })
+        };
+    };
+
+    try {
+        const response = makeResponse();
+        await adminController.updateMarketplaceSettings(
+            { body: { shopLive: true } },
+            response
+        );
+
+        assert.deepEqual(update, {
+            $set: { shopLive: true, marketplaceEnabled: true }
+        });
+        assert.equal(response.body.settings.shopLive, true);
+        assert.equal(response.body.settings.marketplaceEnabled, true);
+    } finally {
+        MarketplaceSettings.findOneAndUpdate = originalFindOneAndUpdate;
+    }
+});
+
+test("unpublishing the Shop also pauses the marketplace", async () => {
+    const originalFindOneAndUpdate = MarketplaceSettings.findOneAndUpdate;
+    let update;
+    MarketplaceSettings.findOneAndUpdate = (_filter, nextUpdate) => {
+        update = nextUpdate;
+        return {
+            lean: async () => ({
+                _id: "global",
+                shopLive: false,
+                marketplaceEnabled: false,
+                requireProductApproval: false
+            })
+        };
+    };
+
+    try {
+        const response = makeResponse();
+        await adminController.updateMarketplaceSettings(
+            { body: { shopLive: false } },
+            response
+        );
+
+        assert.deepEqual(update, {
+            $set: { shopLive: false, marketplaceEnabled: false }
+        });
+        assert.equal(response.body.settings.shopLive, false);
         assert.equal(response.body.settings.marketplaceEnabled, false);
     } finally {
         MarketplaceSettings.findOneAndUpdate = originalFindOneAndUpdate;
