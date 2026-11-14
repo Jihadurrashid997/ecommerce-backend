@@ -19,6 +19,8 @@
 
 .settings-feedback { margin: 12px 0; padding: 12px 14px; border: 1px solid rgba(34, 197, 94, .35); border-radius: 12px; background: rgba(34, 197, 94, .1); }
 .settings-feedback.is-error { border-color: rgba(248, 113, 113, .45); background: rgba(248, 113, 113, .1); color: #fecaca; }
+.settings-retry { padding: 10px 14px; border: 0; border-radius: 10px; color: #fff; background: #6256e8; font: inherit; font-weight: 700; cursor: pointer; }
+.settings-retry:hover { background: #5145d2; }
 .settings-card { margin: 14px 0; padding: clamp(16px, 3vw, 24px); border: 1px solid rgba(148, 163, 184, .22); border-radius: 18px; background: linear-gradient(145deg, rgba(30, 41, 59, .88), rgba(15, 23, 42, .92)); box-shadow: 0 15px 40px rgba(0, 0, 0, .18); }
 .settings-section-heading { display: flex; align-items: flex-start; gap: 13px; margin-bottom: 16px; }
 .settings-section-heading > svg { margin-top: 4px; color: #8b83ff; font-size: 20px; }

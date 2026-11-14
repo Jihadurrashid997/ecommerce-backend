@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
     FaArrowLeft, FaRegComment, FaPlus, FaTimes,
-    FaVolumeMute, FaVolumeUp, FaTrash, FaBookmark, FaRegBookmark
+    FaVolumeMute, FaVolumeUp, FaTrash, FaBookmark, FaRegBookmark,
+    FaShare, FaEye
 } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
@@ -21,6 +22,7 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
     const videoRef = useRef(null);
     const viewed = useRef(false);
 
+    const [isPlaying, setIsPlaying] = useState(false);
     const [reaction, setReaction] = useState(reel.reactionByMe || (reel.likedByMe ? "like" : null));
     const [likeCount, setLikeCount] = useState(reel.likeCount);
     const [reactionCounts, setReactionCounts] = useState(reel.reactionCounts || {});
@@ -61,6 +63,16 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
 
     }, [reel._id]);
 
+    const togglePlayback = () => {
+        const video = videoRef.current;
+        if (!video) return;
+        if (video.paused) {
+            video.play().catch(() => setActionMessage("Could not play this reel."));
+        } else {
+            video.pause();
+        }
+    };
+
     const updateReaction = async nextReaction => {
         const previousReaction = reaction;
         const nextCounts = { ...reactionCounts };
@@ -91,6 +103,29 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
         }
     };
 
+    const shareReel = async () => {
+        const url = new URL(`/post/${reel._id}`, window.location.origin).toString();
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: `${author.name || "Someone"} shared a reel on E Top`,
+                    text: reel.caption || "Watch this reel on E Top.",
+                    url
+                });
+                setActionMessage("Reel shared.");
+            } else if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+                setActionMessage("Reel link copied.");
+            } else {
+                throw new Error("Sharing and clipboard are unavailable.");
+            }
+        } catch (error) {
+            if (error.name === "AbortError") return;
+            console.error("SHARE REEL ERROR:", error);
+            setActionMessage("Could not share this reel.");
+        }
+    };
+
     const remove = async () => {
 
         if (!window.confirm("Delete this reel?")) return;
@@ -107,6 +142,7 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
     const author = reel.author || {};
 
     const canDelete = String(author._id) === myId || isAdmin;
+    const canFollow = Boolean(author._id) && String(author._id) !== myId;
 
     return (
         <section className="reel-item">
@@ -118,7 +154,17 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
                 playsInline
                 muted={muted}
                 preload="metadata"
-                onClick={() => setMuted(m => !m)}
+                tabIndex={0}
+                aria-label={isPlaying ? "Pause reel" : "Play reel"}
+                onClick={togglePlayback}
+                onKeyDown={event => {
+                    if (event.key === " " || event.key === "Enter") {
+                        event.preventDefault();
+                        togglePlayback();
+                    }
+                }}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
             />
 
             <div className="reel-overlay">
@@ -131,9 +177,10 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
                     </div>
                     <b>{author.name || "User"}</b>
                 </Link>
-                {reel.isFollowedByMe === false && String(author._id) !== myId && (
+                {canFollow && (
                     <SocialFollowButton
                         userId={author._id}
+                        isFollowing={reel.isFollowedByMe === true}
                         onFollowChange={result => onFollowChange(author, result)}
                     />
                 )}
@@ -161,18 +208,37 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
                     {saved ? <FaBookmark /> : <FaRegBookmark />}
                 </button>
 
-                <button type="button" onClick={() => setShowComments(true)}>
-                    <FaRegComment />
+                <button
+                    type="button"
+                    onClick={() => setShowComments(true)}
+                    aria-label={`Comments, ${commentCount}`}
+                    aria-expanded={showComments}
+                >
+                    <FaRegComment aria-hidden="true" />
                     <span>{commentCount}</span>
                 </button>
 
-                <button type="button" onClick={() => setMuted(m => !m)}>
-                    {muted ? <FaVolumeMute /> : <FaVolumeUp />}
+                <button
+                    type="button"
+                    onClick={() => setMuted(m => !m)}
+                    aria-label={muted ? "Unmute reel" : "Mute reel"}
+                    aria-pressed={!muted}
+                >
+                    {muted ? <FaVolumeMute aria-hidden="true" /> : <FaVolumeUp aria-hidden="true" />}
                 </button>
 
+                <button type="button" onClick={shareReel} aria-label="Share reel">
+                    <FaShare aria-hidden="true" />
+                </button>
+
+                <span className="reel-view-count" aria-label={`${Number(reel.views) || 0} views`}>
+                    <FaEye aria-hidden="true" />
+                    <span>{Number(reel.views) || 0}</span>
+                </span>
+
                 {canDelete && (
-                    <button type="button" onClick={remove}>
-                        <FaTrash />
+                    <button type="button" onClick={remove} aria-label="Delete reel">
+                        <FaTrash aria-hidden="true" />
                     </button>
                 )}
 
@@ -290,11 +356,13 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 
     return (
         <div className="sheet-overlay">
-            <div className="sheet">
+            <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="new-reel-title">
 
                 <div className="comments-head">
-                    <strong>New reel</strong>
-                    <button type="button" onClick={onClose} disabled={uploading}><FaTimes /></button>
+                    <strong id="new-reel-title">New reel</strong>
+                    <button type="button" onClick={onClose} disabled={uploading} aria-label="Close reel upload">
+                        <FaTimes />
+                    </button>
                 </div>
 
                 {!file ? (
@@ -323,7 +391,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
                     />
                 )}
 
-                {error && <p className="social-note error">{error}</p>}
+                {error && <p className="social-note error" role="alert">{error}</p>}
 
                 {uploading && (
                     <div className="progress-track"><div style={{ width: `${progress}%` }} /></div>
@@ -411,7 +479,12 @@ const Reels = () => {
 
             {loading && <p className="social-note">Loading reels...</p>}
 
-            {error && <p className="social-note error">{error}</p>}
+            {error && (
+                <div className="reels-load-error" role="alert">
+                    <p>{error}</p>
+                    <button type="button" onClick={() => load()}>Try again</button>
+                </div>
+            )}
 
             {!loading && !error && reels.length === 0 && (
                 <p className="social-note">No reels yet. Tap “+ Reel” to share a video up to 5 minutes.</p>
