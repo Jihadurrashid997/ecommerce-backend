@@ -160,6 +160,97 @@ const DeliveryDisputeSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const ReturnRequestSchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: [
+                "none",
+                "requested",
+                "approved",
+                "shipped",
+                "received",
+                "rejected",
+                "refunded"
+            ],
+            default: "none"
+        },
+        reason: {
+            type: String,
+            trim: true,
+            maxlength: 1000,
+            default: ""
+        },
+        requestedAt: {
+            type: Date,
+            default: null
+        },
+        adminNote: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        reviewedAt: {
+            type: Date,
+            default: null
+        },
+        reviewedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        courierName: {
+            type: String,
+            trim: true,
+            maxlength: 80,
+            default: ""
+        },
+        trackingNumber: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            default: ""
+        },
+        trackingUrl: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        shippedAt: {
+            type: Date,
+            default: null
+        },
+        receivedAt: {
+            type: Date,
+            default: null
+        },
+        receivedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+        refundMethod: {
+            type: String,
+            trim: true,
+            maxlength: 40,
+            default: ""
+        },
+        refundReference: {
+            type: String,
+            trim: true,
+            maxlength: 120,
+            default: ""
+        },
+        refundedAt: {
+            type: Date,
+            default: null
+        }
+    },
+    { _id: false }
+);
+
 const SellerSettlementSchema = new mongoose.Schema(
     {
         seller: {
@@ -225,6 +316,10 @@ const SellerSettlementSchema = new mongoose.Schema(
         },
         deliveryDispute: {
             type: DeliveryDisputeSchema,
+            default: () => ({})
+        },
+        returnRequest: {
+            type: ReturnRequestSchema,
             default: () => ({})
         },
         sellerPayoutMethod: {
@@ -449,6 +544,12 @@ const OrderSchema = new mongoose.Schema(
             type: Number,
             required: true,
             min: 0
+        },
+
+        refundedAmount: {
+            type: Number,
+            min: 0,
+            default: 0
         },
 
         shippingAddress: {

@@ -25,8 +25,12 @@ const OrderHistory = () => {
 
     const [refundReasons, setRefundReasons] = useState({});
     const [disputeReasons, setDisputeReasons] = useState({});
+    const [returnReasons, setReturnReasons] = useState({});
+    const [returnShipping, setReturnShipping] = useState({});
     const [refundingOrder, setRefundingOrder] = useState("");
     const [openingDispute, setOpeningDispute] = useState("");
+    const [requestingReturn, setRequestingReturn] = useState("");
+    const [submittingReturnShipping, setSubmittingReturnShipping] = useState("");
 
     const [notice, setNotice] = useState("");
 
@@ -182,6 +186,71 @@ const OrderHistory = () => {
             );
         } finally {
             setOpeningDispute("");
+        }
+    };
+
+    const requestShipmentReturn = async (order, settlement) => {
+        const reason = String(returnReasons[settlement._id] || "").trim();
+        if (reason.length < 10 || reason.length > 1000) {
+            setError("Explain the shipment return request in 10 to 1000 characters.");
+            return;
+        }
+
+        setRequestingReturn(settlement._id);
+        setError("");
+        setNotice("");
+        try {
+            const response = await api.post(
+                `/orders/${order._id}/shipments/${settlement._id}/return-request`,
+                { reason }
+            );
+            setReturnReasons(previous => ({
+                ...previous,
+                [settlement._id]: ""
+            }));
+            setNotice(response.data?.message || "Return request sent for review.");
+            await fetchOrders();
+        } catch (requestError) {
+            setError(
+                requestError.response?.data?.message ||
+                "Could not submit the return request."
+            );
+        } finally {
+            setRequestingReturn("");
+        }
+    };
+
+    const submitReturnShipping = async (order, settlement) => {
+        const shipping = returnShipping[settlement._id] || {};
+        const courierName = String(shipping.courierName || "").trim();
+        const trackingNumber = String(shipping.trackingNumber || "").trim();
+        const trackingUrl = String(shipping.trackingUrl || "").trim();
+        if (
+            courierName.length < 2 ||
+            trackingNumber.length < 2 ||
+            (trackingUrl && !/^https:\/\//i.test(trackingUrl))
+        ) {
+            setError("Enter the courier, tracking number, and an optional HTTPS tracking link.");
+            return;
+        }
+
+        setSubmittingReturnShipping(settlement._id);
+        setError("");
+        setNotice("");
+        try {
+            const response = await api.put(
+                `/orders/${order._id}/shipments/${settlement._id}/return-shipping`,
+                { courierName, trackingNumber, trackingUrl }
+            );
+            setNotice(response.data?.message || "Return tracking submitted.");
+            await fetchOrders();
+        } catch (requestError) {
+            setError(
+                requestError.response?.data?.message ||
+                "Could not submit return tracking."
+            );
+        } finally {
+            setSubmittingReturnShipping("");
         }
     };
 
@@ -592,6 +661,147 @@ const OrderHistory = () => {
                                                     <small>Reporting an issue pauses payout during review. This does not automatically refund the order.</small>
                                                 </div>
                                             )}
+                                            {settlement.returnRequest?.status &&
+                                                settlement.returnRequest.status !== "none" && (
+                                                <div className="order-dispute">
+                                                    <strong>
+                                                        Shipment return: {settlement.returnRequest.status}
+                                                    </strong>
+                                                    {settlement.returnRequest.reason && (
+                                                        <p>{settlement.returnRequest.reason}</p>
+                                                    )}
+                                                    {settlement.returnRequest.adminNote && (
+                                                        <p><strong>Shop admin:</strong> {settlement.returnRequest.adminNote}</p>
+                                                    )}
+                                                    {settlement.returnRequest.status === "requested" && (
+                                                        <p>Waiting for Shop admin review. Shipment changes and payout are paused.</p>
+                                                    )}
+                                                    {settlement.returnRequest.status === "approved" && (
+                                                        <>
+                                                            <p>The Shop approved the return. Send the shipment back and enter its tracking details.</p>
+                                                            <label>
+                                                                Return courier
+                                                                <input
+                                                                    value={returnShipping[settlement._id]?.courierName || ""}
+                                                                    maxLength={80}
+                                                                    onChange={event => setReturnShipping(previous => ({
+                                                                        ...previous,
+                                                                        [settlement._id]: {
+                                                                            ...previous[settlement._id],
+                                                                            courierName: event.target.value
+                                                                        }
+                                                                    }))}
+                                                                />
+                                                            </label>
+                                                            <label>
+                                                                Return tracking number
+                                                                <input
+                                                                    value={returnShipping[settlement._id]?.trackingNumber || ""}
+                                                                    maxLength={120}
+                                                                    onChange={event => setReturnShipping(previous => ({
+                                                                        ...previous,
+                                                                        [settlement._id]: {
+                                                                            ...previous[settlement._id],
+                                                                            trackingNumber: event.target.value
+                                                                        }
+                                                                    }))}
+                                                                />
+                                                            </label>
+                                                            <label>
+                                                                Tracking link (optional HTTPS)
+                                                                <input
+                                                                    type="url"
+                                                                    value={returnShipping[settlement._id]?.trackingUrl || ""}
+                                                                    maxLength={500}
+                                                                    onChange={event => setReturnShipping(previous => ({
+                                                                        ...previous,
+                                                                        [settlement._id]: {
+                                                                            ...previous[settlement._id],
+                                                                            trackingUrl: event.target.value
+                                                                        }
+                                                                    }))}
+                                                                />
+                                                            </label>
+                                                            <button
+                                                                type="button"
+                                                                disabled={submittingReturnShipping === settlement._id}
+                                                                onClick={() => submitReturnShipping(order, settlement)}
+                                                            >
+                                                                {submittingReturnShipping === settlement._id
+                                                                    ? "Submitting..."
+                                                                    : "Submit return tracking"}
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    {settlement.returnRequest.status === "shipped" && (
+                                                        <>
+                                                            <p>
+                                                                Return sent via {settlement.returnRequest.courierName || "courier"}
+                                                                {settlement.returnRequest.trackingNumber
+                                                                    ? ` · ${settlement.returnRequest.trackingNumber}`
+                                                                    : ""}
+                                                                {settlement.returnRequest.trackingUrl && (
+                                                                    <> · <a href={settlement.returnRequest.trackingUrl} target="_blank" rel="noreferrer">Track return</a></>
+                                                                )}
+                                                            </p>
+                                                            <p>Waiting for the Shop admin to confirm receipt.</p>
+                                                        </>
+                                                    )}
+                                                    {settlement.returnRequest.status === "received" && (
+                                                        <p>Return received. The Shop admin will process and record the manual refund.</p>
+                                                    )}
+                                                    {settlement.returnRequest.status === "rejected" && (
+                                                        <p>You may submit a new request within the 14-day return window.</p>
+                                                    )}
+                                                    {settlement.returnRequest.status === "refunded" && (
+                                                        <p>
+                                                            Manual refund recorded via {settlement.returnRequest.refundMethod || "transfer"}
+                                                            {settlement.returnRequest.refundReference
+                                                                ? ` (reference: ${settlement.returnRequest.refundReference})`
+                                                                : ""}.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {order.paymentStatus === "paid" &&
+                                                settlement.deliveryStatus === "Delivered" &&
+                                                !["paid", "cancelled"].includes(settlement.payoutStatus) &&
+                                                ["none", "rejected", undefined].includes(
+                                                    settlement.returnRequest?.status
+                                                ) &&
+                                                !["open", "referred_to_refund"].includes(
+                                                    settlement.deliveryDispute?.status
+                                                ) &&
+                                                !["requested", "refunded"].includes(order.refundRequest?.status) &&
+                                                settlement.deliveredAt &&
+                                                Date.now() >= new Date(settlement.deliveredAt).getTime() &&
+                                                Date.now() - new Date(settlement.deliveredAt).getTime() <= 14 * 24 * 60 * 60 * 1000 && (
+                                                <div className="order-dispute">
+                                                    <label>
+                                                        Return this shipment (within 14 days)
+                                                        <textarea
+                                                            value={returnReasons[settlement._id] || ""}
+                                                            maxLength={1000}
+                                                            rows={3}
+                                                            onChange={event => setReturnReasons(previous => ({
+                                                                ...previous,
+                                                                [settlement._id]: event.target.value
+                                                            }))}
+                                                            placeholder="Explain why you want to return this shipment (10-1000 characters)"
+                                                        />
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        disabled={requestingReturn === settlement._id}
+                                                        onClick={() => requestShipmentReturn(order, settlement)}
+                                                    >
+                                                        {requestingReturn === settlement._id
+                                                            ? "Submitting..."
+                                                            : "Request shipment return"}
+                                                    </button>
+                                                    <small>Admin approval is required. Refunds are manual; this request does not issue one.</small>
+                                                </div>
+                                            )}
                                             {order.paymentStatus === "paid" &&
                                                 settlement.deliveryStatus === "Delivered" &&
                                                 settlement.payoutStatus === "held" &&
@@ -752,7 +962,11 @@ const OrderHistory = () => {
                                         order.refundRequest?.status !== "refunded" &&
                                         order.status !== "Cancelled" &&
                                         !order.sellerSettlements?.some(
-                                            settlement => settlement.payoutStatus === "paid"
+                                            settlement =>
+                                                settlement.payoutStatus === "paid" ||
+                                                ["requested", "approved", "shipped", "received"].includes(
+                                                    settlement.returnRequest?.status
+                                                )
                                         ) && (
                                             <div className="order-refund-form">
                                                 <textarea

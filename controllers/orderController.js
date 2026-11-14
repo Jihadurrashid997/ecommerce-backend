@@ -22,6 +22,7 @@ const canTransitionShipment = (fromStatus, toStatus) =>
     (allowedShipmentTransitions[fromStatus] || []).includes(toStatus);
 
 const DISPUTE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const RETURN_ACTIVE_STATUSES = ["requested", "approved", "shipped", "received"];
 const ORDER_PAGE_SIZE = 10;
 const MAX_ORDER_PAGE_SIZE = 50;
 
@@ -42,6 +43,16 @@ const parseOrderPagination = query => {
 
 const disputeIsOpen = settlement =>
     settlement?.deliveryDispute?.status === "open";
+
+const returnIsActive = settlement =>
+    RETURN_ACTIVE_STATUSES.includes(settlement?.returnRequest?.status);
+
+const getDeliveredAt = settlement =>
+    settlement?.deliveredAt ||
+    [...(settlement?.shipmentHistory || [])]
+        .reverse()
+        .find(update => update.status === "Delivered")?.createdAt ||
+    null;
 
 const getSafeTrackingUrl = value => {
     if (!value) return "";
@@ -73,11 +84,7 @@ const getCustomerOrder = order => {
             trackingNumber: settlement.trackingNumber || "",
             trackingUrl: getSafeTrackingUrl(settlement.trackingUrl),
             deliveryEvidence: settlement.deliveryEvidence || "",
-            deliveredAt: settlement.deliveredAt ||
-                [...(settlement.shipmentHistory || [])]
-                    .reverse()
-                    .find(update => update.status === "Delivered")?.createdAt ||
-                null,
+            deliveredAt: getDeliveredAt(settlement),
             shipmentHistory: (settlement.shipmentHistory || []).map(update => ({
                 status: update.status,
                 courierName: update.courierName || "",
@@ -90,6 +97,22 @@ const getCustomerOrder = order => {
             receiptConfirmedAt: settlement.receiptConfirmedAt,
             sellerConfirmedAt: settlement.sellerConfirmedAt,
             payoutStatus: settlement.payoutStatus,
+            returnRequest: {
+                status: settlement.returnRequest?.status || "none",
+                reason: settlement.returnRequest?.reason || "",
+                requestedAt: settlement.returnRequest?.requestedAt || null,
+                adminNote: settlement.returnRequest?.adminNote || "",
+                courierName: settlement.returnRequest?.courierName || "",
+                trackingNumber: settlement.returnRequest?.trackingNumber || "",
+                trackingUrl: getSafeTrackingUrl(
+                    settlement.returnRequest?.trackingUrl
+                ),
+                shippedAt: settlement.returnRequest?.shippedAt || null,
+                receivedAt: settlement.returnRequest?.receivedAt || null,
+                refundMethod: settlement.returnRequest?.refundMethod || "",
+                refundReference: settlement.returnRequest?.refundReference || "",
+                refundedAt: settlement.returnRequest?.refundedAt || null
+            },
             deliveryDispute: {
                 status: settlement.deliveryDispute?.status || "none",
                 reason: settlement.deliveryDispute?.reason || "",
@@ -882,6 +905,18 @@ exports.getSellerOrders = async (req, res) => {
                               resolutionNote: settlement.deliveryDispute?.resolutionNote || "",
                               resolvedAt: settlement.deliveryDispute?.resolvedAt || null
                           },
+                          returnRequest: {
+                              status: settlement.returnRequest?.status || "none",
+                              reason: settlement.returnRequest?.reason || "",
+                              adminNote: settlement.returnRequest?.adminNote || "",
+                              courierName: settlement.returnRequest?.courierName || "",
+                              trackingNumber: settlement.returnRequest?.trackingNumber || "",
+                              trackingUrl: getSafeTrackingUrl(
+                                  settlement.returnRequest?.trackingUrl
+                              ),
+                              shippedAt: settlement.returnRequest?.shippedAt || null,
+                              receivedAt: settlement.returnRequest?.receivedAt || null
+                          },
                           payoutMethod: settlement.sellerPayoutMethod ||
                               seller?.payoutMethod || "",
                           payoutAccount: settlement.sellerPayoutAccount ||
@@ -1009,6 +1044,11 @@ exports.updateSellerOrderStatus = async (
         if (["requested", "refunded"].includes(order.refundRequest?.status)) {
             return res.status(409).json({
                 message: "Shipment updates are paused while the Shop reviews this refund request."
+            });
+        }
+        if (returnIsActive(settlement)) {
+            return res.status(409).json({
+                message: "Shipment updates are paused while this return request is being reviewed."
             });
         }
         if (disputeIsOpen(settlement)) {
@@ -1157,6 +1197,7 @@ const markSettlementReadyForPayout = (orderId, fulfillmentId) =>
                     payoutStatus: "held",
                     receiptConfirmedAt: { $ne: null },
                     sellerConfirmedAt: { $ne: null },
+                    "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                     "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                 }
             }
@@ -1196,6 +1237,7 @@ exports.confirmOrderReceipt = async (req, res) => {
                         deliveryStatus: "Delivered",
                         payoutStatus: "held",
                         receiptConfirmedAt: null,
+                        "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                         "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                     }
                 }
@@ -1309,6 +1351,7 @@ exports.confirmSellerPayout = async (req, res) => {
                         deliveryStatus: "Delivered",
                         payoutStatus: "held",
                         sellerConfirmedAt: null,
+                        "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                         "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                     }
                 }
@@ -1384,6 +1427,7 @@ exports.getReadySellerPayouts = async (_req, res) => {
                     payoutStatus: { $in: ["ready", "approved"] },
                     receiptConfirmedAt: { $ne: null },
                     sellerConfirmedAt: { $ne: null },
+                    "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                     "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                 }
             }
@@ -1401,6 +1445,7 @@ exports.getReadySellerPayouts = async (_req, res) => {
                     settlement.deliveryStatus === "Delivered" &&
                     settlement.receiptConfirmedAt &&
                     settlement.sellerConfirmedAt &&
+                    !returnIsActive(settlement) &&
                     !["open", "referred_to_refund"].includes(
                         settlement.deliveryDispute?.status
                     ) &&
@@ -1473,6 +1518,7 @@ exports.approveSellerPayout = async (req, res) => {
                     payoutStatus: "ready",
                     receiptConfirmedAt: { $ne: null },
                     sellerConfirmedAt: { $ne: null },
+                    "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                     "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                 }
             }
@@ -1522,6 +1568,7 @@ exports.approveSellerPayout = async (req, res) => {
                         payoutStatus: "ready",
                         receiptConfirmedAt: { $ne: null },
                         sellerConfirmedAt: { $ne: null },
+                        "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                         "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                     }
                 }
@@ -1540,6 +1587,9 @@ exports.approveSellerPayout = async (req, res) => {
                     "settlement.payoutStatus": "ready",
                     "settlement.receiptConfirmedAt": { $ne: null },
                     "settlement.sellerConfirmedAt": { $ne: null },
+                    "settlement.returnRequest.status": {
+                        $nin: RETURN_ACTIVE_STATUSES
+                    },
                     "settlement.deliveryDispute.status": {
                         $nin: ["open", "referred_to_refund"]
                     }
@@ -1608,6 +1658,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
                     payoutStatus: "approved",
                     receiptConfirmedAt: { $ne: null },
                     sellerConfirmedAt: { $ne: null },
+                    "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                     "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                 }
             }
@@ -1650,6 +1701,7 @@ exports.markSellerPayoutPaid = async (req, res) => {
                         payoutStatus: "approved",
                         receiptConfirmedAt: { $ne: null },
                         sellerConfirmedAt: { $ne: null },
+                        "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                         "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] }
                     }
                 }
@@ -1670,6 +1722,9 @@ exports.markSellerPayoutPaid = async (req, res) => {
                     "settlement.payoutStatus": "approved",
                     "settlement.receiptConfirmedAt": { $ne: null },
                     "settlement.sellerConfirmedAt": { $ne: null },
+                    "settlement.returnRequest.status": {
+                        $nin: RETURN_ACTIVE_STATUSES
+                    },
                     "settlement.deliveryDispute.status": {
                         $nin: ["open", "referred_to_refund"]
                     }
@@ -1752,7 +1807,8 @@ exports.openDeliveryDispute = async (req, res) => {
                     _id: req.params.fulfillmentId,
                     deliveryStatus: "Delivered",
                     payoutStatus: { $in: ["held", "ready"] },
-                    "deliveryDispute.status": { $in: ["none", null] }
+                    "deliveryDispute.status": { $in: ["none", null] },
+                    "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES }
                 }
             }
         }).select("sellerSettlements");
@@ -1793,7 +1849,8 @@ exports.openDeliveryDispute = async (req, res) => {
                         _id: req.params.fulfillmentId,
                         deliveryStatus: "Delivered",
                         payoutStatus: { $in: ["held", "ready"] },
-                        "deliveryDispute.status": { $in: ["none", null] }
+                        "deliveryDispute.status": { $in: ["none", null] },
+                        "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES }
                     }
                 }
             },
@@ -1886,6 +1943,7 @@ exports.respondToDeliveryDispute = async (req, res) => {
                         seller: req.user.id,
                         payoutStatus: { $in: ["held", "ready"] },
                         "deliveryDispute.status": "open",
+                        "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES },
                         "deliveryDispute.sellerReplyAt": null
                     }
                 }
@@ -2019,7 +2077,8 @@ exports.resolveDeliveryDispute = async (req, res) => {
                 $elemMatch: {
                     _id: req.body.fulfillmentId,
                     payoutStatus: { $in: ["held", "ready"] },
-                    "deliveryDispute.status": "open"
+                    "deliveryDispute.status": "open",
+                    "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES }
                 }
             }
         }).select("user sellerSettlements refundRequest");
@@ -2055,7 +2114,8 @@ exports.resolveDeliveryDispute = async (req, res) => {
                 $elemMatch: {
                     _id: req.body.fulfillmentId,
                     payoutStatus: { $in: ["held", "ready"] },
-                    "deliveryDispute.status": "open"
+                    "deliveryDispute.status": "open",
+                    "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES }
                 }
             },
             ...(resolution === "refer_to_refund"
@@ -2066,7 +2126,8 @@ exports.resolveDeliveryDispute = async (req, res) => {
                         $elemMatch: {
                             _id: req.body.fulfillmentId,
                             payoutStatus: { $in: ["held", "ready"] },
-                            "deliveryDispute.status": "open"
+                            "deliveryDispute.status": "open",
+                            "returnRequest.status": { $nin: RETURN_ACTIVE_STATUSES }
                         }
                     }
                 }
@@ -2160,6 +2221,671 @@ exports.resolveDeliveryDispute = async (req, res) => {
 };
 
 // ========================================
+// BUYER - SHIPMENT RETURN REQUESTS
+// ========================================
+
+exports.requestShipmentReturn = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.params.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+
+    const reason = typeof req.body?.reason === "string"
+        ? req.body.reason.trim()
+        : "";
+    if (reason.length < 10 || reason.length > 1000) {
+        return res.status(400).json({
+            success: false,
+            message: "Explain the return request in 10 to 1000 characters."
+        });
+    }
+
+    try {
+        const order = await Order.findOne({
+            _id: req.params.id,
+            user: req.user.id,
+            paymentStatus: "paid",
+            status: { $ne: "Cancelled" },
+            "refundRequest.status": { $nin: ["requested", "refunded"] }
+        }).select("sellerSettlements");
+        const settlement = order?.sellerSettlements?.find(
+            entry => String(entry._id) === String(req.params.fulfillmentId)
+        );
+        const deliveredAt = getDeliveredAt(settlement);
+        const deliveredAtMs = deliveredAt ? new Date(deliveredAt).getTime() : NaN;
+        const now = Date.now();
+
+        if (
+            !settlement ||
+            settlement.deliveryStatus !== "Delivered" ||
+            ["paid", "cancelled"].includes(settlement.payoutStatus) ||
+            disputeIsOpen(settlement) ||
+            !deliveredAt ||
+            !Number.isFinite(deliveredAtMs) ||
+            deliveredAtMs > now ||
+            now - deliveredAtMs > DISPUTE_WINDOW_MS ||
+            !["none", "rejected", undefined].includes(
+                settlement.returnRequest?.status
+            )
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "This shipment is not eligible for a return request. Requests are limited to delivered shipments within 14 days, before payout, and cannot be open twice."
+            });
+        }
+
+        const requestedAt = new Date();
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                user: req.user.id,
+                paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.params.fulfillmentId,
+                        deliveryStatus: "Delivered",
+                        payoutStatus: { $nin: ["paid", "cancelled"] },
+                        "deliveryDispute.status": { $nin: ["open", "referred_to_refund"] },
+                        "returnRequest.status": { $in: ["none", "rejected", null] }
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$[settlement].returnRequest.status": "requested",
+                    "sellerSettlements.$[settlement].returnRequest.reason": reason,
+                    "sellerSettlements.$[settlement].returnRequest.requestedAt": requestedAt,
+                    "sellerSettlements.$[settlement].returnRequest.adminNote": "",
+                    "sellerSettlements.$[settlement].returnRequest.reviewedAt": null,
+                    "sellerSettlements.$[settlement].returnRequest.reviewedBy": null,
+                    "sellerSettlements.$[settlement].returnRequest.courierName": "",
+                    "sellerSettlements.$[settlement].returnRequest.trackingNumber": "",
+                    "sellerSettlements.$[settlement].returnRequest.trackingUrl": "",
+                    "sellerSettlements.$[settlement].returnRequest.shippedAt": null,
+                    "sellerSettlements.$[settlement].returnRequest.receivedAt": null,
+                    "sellerSettlements.$[settlement].returnRequest.receivedBy": null,
+                    "sellerSettlements.$[settlement].returnRequest.refundMethod": "",
+                    "sellerSettlements.$[settlement].returnRequest.refundReference": "",
+                    "sellerSettlements.$[settlement].returnRequest.refundedAt": null
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.params.fulfillmentId,
+                    "settlement.deliveryStatus": "Delivered",
+                    "settlement.payoutStatus": { $nin: ["paid", "cancelled"] },
+                    "settlement.deliveryDispute.status": {
+                        $nin: ["open", "referred_to_refund"]
+                    },
+                    "settlement.returnRequest.status": {
+                        $in: ["none", "rejected", null]
+                    }
+                }]
+            }
+        );
+
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "This shipment changed while submitting the return request. Refresh and try again."
+            });
+        }
+
+        await notifyShopUsers({
+            recipients: [settlement.seller],
+            eventKey: `${req.params.id}:return-request:${req.params.fulfillmentId}:${requestedAt.getTime()}`,
+            type: "refund_submitted",
+            title: "Shop return request submitted",
+            message: `A buyer requested a return for shipment #${String(req.params.id).slice(-8)}. Shipment changes and payout are paused during review. / ক্রেতা শিপমেন্ট ফেরতের অনুরোধ করেছেন; পর্যালোচনার সময় শিপমেন্ট ও পেআউট স্থগিত।`,
+            href: "/shop/seller/orders",
+            orderId: req.params.id
+        });
+        await notifyShopAdmins({
+            eventKey: `${req.params.id}:return-request:${req.params.fulfillmentId}:${requestedAt.getTime()}`,
+            type: "refund_submitted",
+            title: "Shop return request needs review",
+            message: `A return was requested for shipment #${String(req.params.id).slice(-8)}. Review the shipment before any payout. / একটি শিপমেন্টের রিটার্ন অনুরোধ এসেছে; পেআউটের আগে পর্যালোচনা করুন।`,
+            href: "/admin/control",
+            orderId: req.params.id
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Return request sent to Shop administrators. No refund has been issued."
+        });
+    } catch (error) {
+        console.error("REQUEST SHIPMENT RETURN ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not submit the return request."
+        });
+    }
+};
+
+exports.submitReturnShipping = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.params.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+
+    const courierName = typeof req.body?.courierName === "string"
+        ? req.body.courierName.trim()
+        : "";
+    const trackingNumber = typeof req.body?.trackingNumber === "string"
+        ? req.body.trackingNumber.trim()
+        : "";
+    const trackingUrl = typeof req.body?.trackingUrl === "string"
+        ? req.body.trackingUrl.trim()
+        : "";
+    if (
+        courierName.length < 2 ||
+        courierName.length > 80 ||
+        trackingNumber.length < 2 ||
+        trackingNumber.length > 120 ||
+        trackingUrl.length > 500
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Enter a courier name and tracking number; each must fit the allowed length."
+        });
+    }
+    if (trackingUrl) {
+        const safeUrl = getSafeTrackingUrl(trackingUrl);
+        if (!safeUrl) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a valid HTTPS courier tracking URL."
+            });
+        }
+    }
+
+    try {
+        const shippedAt = new Date();
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                user: req.user.id,
+                paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.params.fulfillmentId,
+                        deliveryStatus: "Delivered",
+                        payoutStatus: { $ne: "paid" },
+                        "returnRequest.status": "approved"
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$[settlement].returnRequest.status": "shipped",
+                    "sellerSettlements.$[settlement].returnRequest.courierName": courierName,
+                    "sellerSettlements.$[settlement].returnRequest.trackingNumber": trackingNumber,
+                    "sellerSettlements.$[settlement].returnRequest.trackingUrl":
+                        getSafeTrackingUrl(trackingUrl),
+                    "sellerSettlements.$[settlement].returnRequest.shippedAt": shippedAt
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.params.fulfillmentId,
+                    "settlement.returnRequest.status": "approved"
+                }]
+            }
+        );
+
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "Return shipping details can be submitted only after the Shop administrator approves the request."
+            });
+        }
+
+        const order = await Order.findById(req.params.id)
+            .select("sellerSettlements.seller");
+        const settlement = (order?.sellerSettlements || []).find(
+            entry => String(entry._id) === String(req.params.fulfillmentId)
+        );
+        await notifyShopUsers({
+            recipients: [settlement?.seller],
+            eventKey: `${req.params.id}:return-shipped:${req.params.fulfillmentId}`,
+            type: "shipment_update",
+            title: "Return shipment sent",
+            message: `The buyer submitted return-shipping details for order #${String(req.params.id).slice(-8)}. / ক্রেতা রিটার্ন শিপমেন্টের তথ্য দিয়েছেন।`,
+            href: "/shop/seller/orders",
+            orderId: req.params.id
+        });
+        await notifyShopAdmins({
+            eventKey: `${req.params.id}:return-shipped:${req.params.fulfillmentId}`,
+            type: "shipment_update",
+            title: "Return shipment tracking submitted",
+            message: `Return tracking was submitted for order #${String(req.params.id).slice(-8)}. Confirm receipt before recording any manual refund. / অর্ডারটির রিটার্ন ট্র্যাকিং জমা হয়েছে; ম্যানুয়াল রিফান্ড রেকর্ডের আগে পণ্য পাওয়া নিশ্চিত করুন।`,
+            href: "/admin/control",
+            orderId: req.params.id
+        });
+
+        return res.json({
+            success: true,
+            message: "Return tracking details submitted."
+        });
+    } catch (error) {
+        console.error("SUBMIT RETURN SHIPPING ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not submit return shipping details."
+        });
+    }
+};
+
+// ========================================
+// ADMIN - REVIEW SHIPMENT RETURNS
+// ========================================
+
+exports.getOpenShipmentReturns = async (_req, res) => {
+    try {
+        const orders = await Order.find({
+            paymentStatus: "paid",
+            "sellerSettlements.returnRequest.status": {
+                $in: RETURN_ACTIVE_STATUSES
+            }
+        })
+            .populate("user", "name email")
+            .populate("sellerSettlements.seller", "name email")
+            .populate("items.product", "seller")
+            .sort({ updatedAt: -1 });
+
+        const returns = orders.flatMap(order =>
+            (order.sellerSettlements || [])
+                .filter(settlement =>
+                    RETURN_ACTIVE_STATUSES.includes(
+                        settlement.returnRequest?.status
+                    )
+                )
+                .map(settlement => ({
+                    orderId: order._id,
+                    orderNumber: String(order._id).slice(-8),
+                    fulfillmentId: settlement._id,
+                    amount: settlement.amount,
+                    status: settlement.returnRequest.status,
+                    reason: settlement.returnRequest.reason,
+                    requestedAt: settlement.returnRequest.requestedAt,
+                    adminNote: settlement.returnRequest.adminNote || "",
+                    courierName: settlement.returnRequest.courierName || "",
+                    trackingNumber: settlement.returnRequest.trackingNumber || "",
+                    trackingUrl: getSafeTrackingUrl(
+                        settlement.returnRequest.trackingUrl
+                    ),
+                    shippedAt: settlement.returnRequest.shippedAt || null,
+                    receivedAt: settlement.returnRequest.receivedAt || null,
+                    buyer: order.user,
+                    seller: settlement.seller,
+                    items: order.items
+                        .filter(item =>
+                            item.product &&
+                            String(item.product.seller) ===
+                                String(settlement.seller?._id || settlement.seller)
+                        )
+                        .map(({ name, quantity }) => ({ name, quantity }))
+                }))
+        );
+
+        return res.json({ success: true, returns });
+    } catch (error) {
+        console.error("GET SHIPMENT RETURNS ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not load shipment return requests."
+        });
+    }
+};
+
+exports.reviewShipmentReturn = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.body?.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+    const decision = String(req.body?.decision || "");
+    const adminNote = typeof req.body?.adminNote === "string"
+        ? req.body.adminNote.trim()
+        : "";
+    if (
+        !["approve", "reject"].includes(decision) ||
+        adminNote.length < 3 ||
+        adminNote.length > 500
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Choose approve or reject and provide a note between 3 and 500 characters."
+        });
+    }
+
+    try {
+        const order = await Order.findOne({
+            _id: req.params.id,
+            paymentStatus: "paid",
+            "refundRequest.status": { $nin: ["requested", "refunded"] },
+            sellerSettlements: {
+                $elemMatch: {
+                    _id: req.body.fulfillmentId,
+                    payoutStatus: { $ne: "paid" },
+                    "returnRequest.status": "requested"
+                }
+            }
+        }).select("user sellerSettlements");
+        const settlement = order?.sellerSettlements?.find(
+            entry => String(entry._id) === String(req.body.fulfillmentId)
+        );
+        if (!settlement) {
+            return res.status(409).json({
+                success: false,
+                message: "This return request is no longer waiting for review."
+            });
+        }
+
+        const status = decision === "approve" ? "approved" : "rejected";
+        const reviewedAt = new Date();
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.body.fulfillmentId,
+                        payoutStatus: { $ne: "paid" },
+                        "returnRequest.status": "requested"
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$[settlement].returnRequest.status": status,
+                    "sellerSettlements.$[settlement].returnRequest.adminNote": adminNote,
+                    "sellerSettlements.$[settlement].returnRequest.reviewedAt": reviewedAt,
+                    "sellerSettlements.$[settlement].returnRequest.reviewedBy": req.user.id
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.body.fulfillmentId,
+                    "settlement.returnRequest.status": "requested"
+                }]
+            }
+        );
+
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "This return request changed while being reviewed."
+            });
+        }
+
+        if (status === "rejected") {
+            const payoutReadiness = await markSettlementReadyForPayout(
+                req.params.id,
+                req.body.fulfillmentId
+            );
+            if (payoutReadiness.modifiedCount === 1) {
+                await notifyShopAdmins({
+                    eventKey: `${req.params.id}:payout-ready:${req.body.fulfillmentId}`,
+                    type: "payout_ready",
+                    title: "Shop payout ready for review",
+                    message: `The return request for order #${String(req.params.id).slice(-8)} was declined. Both parties had confirmed delivery; review the payout if still eligible. / রিটার্ন অনুরোধ প্রত্যাখ্যাত হয়েছে; দুই পক্ষ ডেলিভারি নিশ্চিত করেছিলেন, যোগ্য হলে পেআউট পর্যালোচনা করুন।`,
+                    href: "/admin/control",
+                    orderId: req.params.id
+                });
+            }
+        }
+
+        await notifyShopUsers({
+            recipients: [order.user, settlement.seller],
+            eventKey: `${req.params.id}:return-reviewed:${req.body.fulfillmentId}:${reviewedAt.getTime()}`,
+            type: "refund_decision",
+            title: status === "approved"
+                ? "Shop return request approved"
+                : "Shop return request declined",
+            message: status === "approved"
+                ? `The Shop administrator approved the return for order #${String(req.params.id).slice(-8)}. See the order for return-shipping instructions. / অ্যাডমিন রিটার্ন অনুমোদন করেছেন; শিপিংয়ের জন্য অর্ডার দেখুন।`
+                : `The Shop administrator reviewed the return for order #${String(req.params.id).slice(-8)}. See the order for the decision note. / অ্যাডমিন রিটার্ন অনুরোধ পর্যালোচনা করেছেন; সিদ্ধান্তের নোট অর্ডারে দেখুন।`,
+            href: "/shop/orders",
+            orderId: req.params.id
+        });
+
+        return res.json({
+            success: true,
+            message: status === "approved"
+                ? "Return request approved. The buyer can now submit return tracking."
+                : "Return request rejected with a review note."
+        });
+    } catch (error) {
+        console.error("REVIEW SHIPMENT RETURN ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not review the return request."
+        });
+    }
+};
+
+exports.confirmShipmentReturnReceived = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.body?.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+
+    try {
+        const receivedAt = new Date();
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.body.fulfillmentId,
+                        payoutStatus: { $ne: "paid" },
+                        "returnRequest.status": "shipped"
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$[settlement].returnRequest.status": "received",
+                    "sellerSettlements.$[settlement].returnRequest.receivedAt": receivedAt,
+                    "sellerSettlements.$[settlement].returnRequest.receivedBy": req.user.id
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.body.fulfillmentId,
+                    "settlement.returnRequest.status": "shipped"
+                }]
+            }
+        );
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "Only a return with submitted tracking can be marked received."
+            });
+        }
+
+        await notifyShopAdmins({
+            eventKey: `${req.params.id}:return-received:${req.body.fulfillmentId}`,
+            type: "refund_submitted",
+            title: "Returned shipment received",
+            message: `The returned shipment for order #${String(req.params.id).slice(-8)} was marked received. Process the manual refund and record its actual reference. / ফেরত পাঠানো শিপমেন্ট পাওয়া গেছে; ম্যানুয়াল রিফান্ড করে প্রকৃত রেফারেন্স রেকর্ড করুন।`,
+            href: "/admin/control",
+            orderId: req.params.id
+        });
+
+        return res.json({
+            success: true,
+            message: "Return receipt confirmed. The manual refund can now be processed and recorded."
+        });
+    } catch (error) {
+        console.error("CONFIRM SHIPMENT RETURN RECEIVED ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not confirm return receipt."
+        });
+    }
+};
+
+exports.recordShipmentReturnRefund = async (req, res) => {
+    if (
+        !mongoose.Types.ObjectId.isValid(req.params.id) ||
+        !mongoose.Types.ObjectId.isValid(req.body?.fulfillmentId)
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid order or shipment ID."
+        });
+    }
+    const refundMethod = typeof req.body?.refundMethod === "string"
+        ? req.body.refundMethod.trim()
+        : "";
+    const refundReference = typeof req.body?.refundReference === "string"
+        ? req.body.refundReference.trim()
+        : "";
+    const adminNote = typeof req.body?.adminNote === "string"
+        ? req.body.adminNote.trim()
+        : "";
+    if (
+        !refundMethod ||
+        refundMethod.length > 40 ||
+        !refundReference ||
+        refundReference.length > 120 ||
+        adminNote.length > 500
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Enter a valid refund method and actual transfer reference; the optional note must be at most 500 characters."
+        });
+    }
+
+    try {
+        const order = await Order.findOne({
+            _id: req.params.id,
+            paymentStatus: "paid",
+            "refundRequest.status": { $nin: ["requested", "refunded"] },
+            sellerSettlements: {
+                $elemMatch: {
+                    _id: req.body.fulfillmentId,
+                    payoutStatus: { $ne: "paid" },
+                    "returnRequest.status": "received"
+                }
+            }
+        }).select("user sellerSettlements");
+        const settlement = order?.sellerSettlements?.find(
+            entry => String(entry._id) === String(req.body.fulfillmentId)
+        );
+        if (!settlement) {
+            return res.status(409).json({
+                success: false,
+                message: "The return must be received before its refund can be recorded."
+            });
+        }
+
+        const refundedAt = new Date();
+        const result = await Order.updateOne(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                "refundRequest.status": { $nin: ["requested", "refunded"] },
+                sellerSettlements: {
+                    $elemMatch: {
+                        _id: req.body.fulfillmentId,
+                        payoutStatus: { $ne: "paid" },
+                        "returnRequest.status": "received"
+                    }
+                }
+            },
+            {
+                $set: {
+                    "sellerSettlements.$[settlement].returnRequest.status": "refunded",
+                    "sellerSettlements.$[settlement].returnRequest.adminNote": adminNote,
+                    "sellerSettlements.$[settlement].returnRequest.refundMethod": refundMethod,
+                    "sellerSettlements.$[settlement].returnRequest.refundReference": refundReference,
+                    "sellerSettlements.$[settlement].returnRequest.refundedAt": refundedAt,
+                    "sellerSettlements.$[settlement].payoutStatus": "cancelled"
+                },
+                $inc: {
+                    refundedAmount: settlement.amount
+                }
+            },
+            {
+                arrayFilters: [{
+                    "settlement._id": req.body.fulfillmentId,
+                    "settlement.payoutStatus": { $ne: "paid" },
+                    "settlement.returnRequest.status": "received"
+                }]
+            }
+        );
+        if (result.modifiedCount !== 1) {
+            return res.status(409).json({
+                success: false,
+                message: "This return changed before the refund could be recorded."
+            });
+        }
+
+        await Order.updateOne(
+            {
+                _id: req.params.id,
+                paymentStatus: "paid",
+                sellerSettlements: {
+                    $not: {
+                        $elemMatch: {
+                            "returnRequest.status": { $ne: "refunded" }
+                        }
+                    }
+                }
+            },
+            { $set: { paymentStatus: "refunded" } }
+        );
+
+        await notifyShopUsers({
+            recipients: [order.user, settlement.seller],
+            eventKey: `${req.params.id}:return-refunded:${req.body.fulfillmentId}`,
+            type: "refund_completed",
+            title: "Shop return refund recorded",
+            message: `The Shop administrator recorded the manual refund for order #${String(req.params.id).slice(-8)}. The related seller payout was cancelled. / অ্যাডমিন ম্যানুয়াল রিফান্ড রেকর্ড করেছেন; সংশ্লিষ্ট বিক্রেতার পেআউট বাতিল।`,
+            href: "/shop/orders",
+            orderId: req.params.id
+        });
+
+        return res.json({
+            success: true,
+            message: "Manual return refund recorded and the related seller payout cancelled."
+        });
+    } catch (error) {
+        console.error("RECORD SHIPMENT RETURN REFUND ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not record the return refund."
+        });
+    }
+};
+
+// ========================================
 // CUSTOMER - REQUEST A FULL ORDER REFUND
 // ========================================
 
@@ -2194,7 +2920,12 @@ exports.requestOrderRefund = async (req, res) => {
                         $elemMatch: {
                             $or: [
                                 { payoutStatus: "paid" },
-                                { "deliveryDispute.status": "open" }
+                                { "deliveryDispute.status": "open" },
+                                {
+                                    "returnRequest.status": {
+                                        $in: RETURN_ACTIVE_STATUSES
+                                    }
+                                }
                             ]
                         }
                     }
@@ -2277,7 +3008,16 @@ exports.getRequestedOrderRefunds = async (_req, res) => {
             "refundRequest.status": "requested",
             sellerSettlements: {
                 $not: {
-                    $elemMatch: { payoutStatus: "paid" }
+                    $elemMatch: {
+                        $or: [
+                            { payoutStatus: "paid" },
+                            {
+                                "returnRequest.status": {
+                                    $in: RETURN_ACTIVE_STATUSES
+                                }
+                            }
+                        ]
+                    }
                 }
             }
         })
@@ -2323,7 +3063,16 @@ exports.rejectOrderRefund = async (req, res) => {
                 "refundRequest.status": "requested",
                 sellerSettlements: {
                     $not: {
-                        $elemMatch: { payoutStatus: "paid" }
+                        $elemMatch: {
+                            $or: [
+                                { payoutStatus: "paid" },
+                                {
+                                    "returnRequest.status": {
+                                        $in: RETURN_ACTIVE_STATUSES
+                                    }
+                                }
+                            ]
+                        }
                     }
                 }
             },
@@ -2406,10 +3155,19 @@ exports.recordOrderRefund = async (req, res) => {
             "refundRequest.status": "requested",
             sellerSettlements: {
                 $not: {
-                    $elemMatch: { payoutStatus: "paid" }
+                    $elemMatch: {
+                        $or: [
+                            { payoutStatus: "paid" },
+                            {
+                                "returnRequest.status": {
+                                    $in: RETURN_ACTIVE_STATUSES
+                                }
+                            }
+                        ]
+                    }
                 }
             }
-        }).select("user sellerSettlements.seller refundRequest.requestedAt");
+        }).select("user totalPrice sellerSettlements.seller refundRequest.requestedAt");
 
         if (!order) {
             return res.status(409).json({
@@ -2425,13 +3183,23 @@ exports.recordOrderRefund = async (req, res) => {
                 "refundRequest.status": "requested",
                 sellerSettlements: {
                     $not: {
-                        $elemMatch: { payoutStatus: "paid" }
+                        $elemMatch: {
+                            $or: [
+                                { payoutStatus: "paid" },
+                                {
+                                    "returnRequest.status": {
+                                        $in: RETURN_ACTIVE_STATUSES
+                                    }
+                                }
+                            ]
+                        }
                     }
                 }
             },
             {
                 $set: {
                     paymentStatus: "refunded",
+                    refundedAmount: order.totalPrice,
                     "refundRequest.status": "refunded",
                     "refundRequest.adminNote": adminNote,
                     "refundRequest.reviewedAt": refundedAt,

@@ -477,9 +477,11 @@ const ShopSettings = () => {
     const [readyPayouts, setReadyPayouts] = useState([]);
     const [refundRequests, setRefundRequests] = useState([]);
     const [deliveryDisputes, setDeliveryDisputes] = useState([]);
+    const [returnRequests, setReturnRequests] = useState([]);
     const [payoutForms, setPayoutForms] = useState({});
     const [refundForms, setRefundForms] = useState({});
     const [disputeForms, setDisputeForms] = useState({});
+    const [returnForms, setReturnForms] = useState({});
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState("");
     const [error, setError] = useState("");
@@ -489,13 +491,14 @@ const ShopSettings = () => {
         try {
             setLoading(true);
             setError("");
-            const [settingsResponse, productsResponse, payoutsResponse, refundsResponse, applicationsResponse, disputesResponse] = await Promise.all([
+            const [settingsResponse, productsResponse, payoutsResponse, refundsResponse, applicationsResponse, disputesResponse, returnsResponse] = await Promise.all([
                 api.get("/admin/settings"),
                 api.get("/admin/products/pending"),
                 api.get("/orders/admin/payouts/ready"),
                 api.get("/orders/admin/refunds/requested"),
                 api.get("/admin/seller-applications"),
-                api.get("/orders/admin/disputes/open")
+                api.get("/orders/admin/disputes/open"),
+                api.get("/orders/admin/returns/open")
             ]);
             setSettings(settingsResponse.data.settings);
             setPendingProducts(productsResponse.data.products || []);
@@ -503,6 +506,7 @@ const ShopSettings = () => {
             setRefundRequests(refundsResponse.data.refunds || []);
             setSellerApplications(applicationsResponse.data.applications || []);
             setDeliveryDisputes(disputesResponse.data.disputes || []);
+            setReturnRequests(returnsResponse.data.returns || []);
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not load Shop settings.");
         } finally {
@@ -792,6 +796,89 @@ const ShopSettings = () => {
         }
     };
 
+    const updateReturnForm = (fulfillmentId, field, value) => {
+        setReturnForms(previous => ({
+            ...previous,
+            [fulfillmentId]: {
+                adminNote: "",
+                refundMethod: "Manual transfer",
+                refundReference: "",
+                ...previous[fulfillmentId],
+                [field]: value
+            }
+        }));
+    };
+
+    const reviewReturn = async (returnRequest, decision) => {
+        const form = returnForms[returnRequest.fulfillmentId] || {};
+        if ((form.adminNote || "").trim().length < 3) {
+            setError("Add a return decision note of at least 3 characters.");
+            return;
+        }
+
+        try {
+            setBusy(returnRequest.fulfillmentId);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${returnRequest.orderId}/returns/review`, {
+                fulfillmentId: returnRequest.fulfillmentId,
+                decision,
+                adminNote: form.adminNote
+            });
+            setNotice(decision === "approve"
+                ? "Return approved; the buyer can submit return tracking."
+                : "Return request rejected with a review note.");
+            await load();
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not review the return request.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const confirmReturnReceived = async returnRequest => {
+        try {
+            setBusy(returnRequest.fulfillmentId);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${returnRequest.orderId}/returns/received`, {
+                fulfillmentId: returnRequest.fulfillmentId
+            });
+            setNotice("Return receipt confirmed. Process the manual refund before recording it.");
+            await load();
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not confirm return receipt.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const recordReturnRefund = async returnRequest => {
+        const form = returnForms[returnRequest.fulfillmentId] || {};
+        if (!form.refundMethod?.trim() || !form.refundReference?.trim()) {
+            setError("Enter the refund method and actual transfer reference before recording the refund.");
+            return;
+        }
+
+        try {
+            setBusy(returnRequest.fulfillmentId);
+            setError("");
+            setNotice("");
+            await api.put(`/orders/admin/${returnRequest.orderId}/returns/refund`, {
+                fulfillmentId: returnRequest.fulfillmentId,
+                refundMethod: form.refundMethod,
+                refundReference: form.refundReference,
+                adminNote: form.adminNote || ""
+            });
+            setNotice("Manual return refund recorded; the related seller payout was cancelled.");
+            await load();
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not record the return refund.");
+        } finally {
+            setBusy("");
+        }
+    };
+
     if (loading) return <p className="ac-note">Loading Shop settings...</p>;
     if (!settings) return <p className="ac-note error" role="alert">{error}</p>;
 
@@ -971,6 +1058,145 @@ const ShopSettings = () => {
                                         </button>
                                     </div>
                                 </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            <h3>Shipment returns ({returnRequests.length})</h3>
+            <p className="ac-note">
+                Review each seller shipment separately. Approve or reject requests, confirm the returned package has arrived, then process the refund manually and record its actual transfer reference. Return shipping is seller-entered tracking; no courier or automatic-refund service is connected.
+            </p>
+            {returnRequests.length === 0 ? (
+                <p className="ac-note">There are no shipment returns awaiting action.</p>
+            ) : (
+                <div className="ac-list">
+                    {returnRequests.map(returnRequest => {
+                        const form = returnForms[returnRequest.fulfillmentId] || {
+                            adminNote: "",
+                            refundMethod: "Manual transfer",
+                            refundReference: ""
+                        };
+                        return (
+                            <div className="ac-refund-card" key={returnRequest.fulfillmentId}>
+                                <div className="ac-refund-summary">
+                                    <b>
+                                        Order #{returnRequest.orderNumber} · Shipment refund ৳
+                                        {Number(returnRequest.amount || 0).toLocaleString("en-BD")}
+                                    </b>
+                                    <span>Status: {returnRequest.status}</span>
+                                    <span>Buyer: {returnRequest.buyer?.name || "Unknown"} · {returnRequest.buyer?.email || "No email"}</span>
+                                    <span>Seller: {returnRequest.seller?.name || "Unknown"} · {returnRequest.seller?.email || "No email"}</span>
+                                    <span>Requested: {returnRequest.requestedAt
+                                        ? new Date(returnRequest.requestedAt).toLocaleString()
+                                        : "Date unavailable"}</span>
+                                    <span>Reason: {returnRequest.reason || "No reason provided"}</span>
+                                    <span>Items: {(returnRequest.items || []).map(item => `${item.name} × ${item.quantity}`).join(", ") || "No items"}</span>
+                                    {returnRequest.status === "shipped" && (
+                                        <span>
+                                            Return tracking: {returnRequest.courierName} · {returnRequest.trackingNumber}
+                                            {returnRequest.trackingUrl && (
+                                                <> · <a href={returnRequest.trackingUrl} target="_blank" rel="noreferrer">Track return</a></>
+                                            )}
+                                        </span>
+                                    )}
+                                </div>
+                                {returnRequest.status === "requested" && (
+                                    <div className="ac-refund-actions">
+                                        <textarea
+                                            aria-label={`Return decision note for order ${returnRequest.orderNumber}`}
+                                            value={form.adminNote}
+                                            onChange={event => updateReturnForm(
+                                                returnRequest.fulfillmentId,
+                                                "adminNote",
+                                                event.target.value
+                                            )}
+                                            maxLength={500}
+                                            rows={2}
+                                            placeholder="Decision note (required)"
+                                        />
+                                        <div>
+                                            <button
+                                                type="button"
+                                                className="ac-refund-complete"
+                                                disabled={Boolean(busy)}
+                                                onClick={() => reviewReturn(returnRequest, "approve")}
+                                            >
+                                                {busy === returnRequest.fulfillmentId ? "Saving..." : "Approve return"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="ac-refund-reject"
+                                                disabled={Boolean(busy)}
+                                                onClick={() => reviewReturn(returnRequest, "reject")}
+                                            >
+                                                {busy === returnRequest.fulfillmentId ? "Saving..." : "Reject return"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                {returnRequest.status === "approved" && (
+                                    <p className="ac-note">Waiting for the buyer to send the return and submit tracking.</p>
+                                )}
+                                {returnRequest.status === "shipped" && (
+                                    <div className="ac-refund-actions">
+                                        <button
+                                            type="button"
+                                            className="ac-refund-complete"
+                                            disabled={Boolean(busy)}
+                                            onClick={() => confirmReturnReceived(returnRequest)}
+                                        >
+                                            {busy === returnRequest.fulfillmentId ? "Saving..." : "Confirm return received"}
+                                        </button>
+                                    </div>
+                                )}
+                                {returnRequest.status === "received" && (
+                                    <div className="ac-refund-actions">
+                                        <input
+                                            aria-label={`Return refund method for order ${returnRequest.orderNumber}`}
+                                            value={form.refundMethod}
+                                            onChange={event => updateReturnForm(
+                                                returnRequest.fulfillmentId,
+                                                "refundMethod",
+                                                event.target.value
+                                            )}
+                                            maxLength={40}
+                                            placeholder="Refund method"
+                                        />
+                                        <input
+                                            aria-label={`Return refund reference for order ${returnRequest.orderNumber}`}
+                                            value={form.refundReference}
+                                            onChange={event => updateReturnForm(
+                                                returnRequest.fulfillmentId,
+                                                "refundReference",
+                                                event.target.value
+                                            )}
+                                            maxLength={120}
+                                            placeholder="Actual refund reference"
+                                        />
+                                        <textarea
+                                            aria-label={`Return refund note for order ${returnRequest.orderNumber}`}
+                                            value={form.adminNote}
+                                            onChange={event => updateReturnForm(
+                                                returnRequest.fulfillmentId,
+                                                "adminNote",
+                                                event.target.value
+                                            )}
+                                            maxLength={500}
+                                            rows={2}
+                                            placeholder="Optional admin note"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="ac-refund-complete"
+                                            disabled={Boolean(busy)}
+                                            onClick={() => recordReturnRefund(returnRequest)}
+                                        >
+                                            {busy === returnRequest.fulfillmentId ? "Saving..." : "Record manual refund"}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         );
                     })}

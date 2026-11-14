@@ -306,6 +306,30 @@ const SellerOrders = () => {
                                 </div>
                             )}
 
+                            {["requested", "approved", "shipped", "received"].includes(
+                                order.payout?.returnRequest?.status
+                            ) && (
+                                <div className="seller-refund-notice" role="status">
+                                    <p>
+                                        <strong>English:</strong> A return request for this shipment is {order.payout.returnRequest.status}. Shipment changes and payout actions are paused during review.
+                                    </p>
+                                    <p lang="bn">
+                                        <strong>বাংলা:</strong> এই শিপমেন্টের রিটার্ন অনুরোধ {order.payout.returnRequest.status} অবস্থায় আছে। পর্যালোচনার সময় শিপমেন্ট ও পেআউট বন্ধ থাকবে।
+                                    </p>
+                                    {order.payout.returnRequest.reason && (
+                                        <p><strong>Buyer reason:</strong> {order.payout.returnRequest.reason}</p>
+                                    )}
+                                    {order.payout.returnRequest.status === "shipped" && (
+                                        <p>
+                                            Return tracking: {order.payout.returnRequest.courierName} · {order.payout.returnRequest.trackingNumber}
+                                            {order.payout.returnRequest.trackingUrl && (
+                                                <> · <a href={order.payout.returnRequest.trackingUrl} target="_blank" rel="noreferrer">Track return</a></>
+                                            )}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
                             {order.payout?.trackingNumber && (
                                 <p>
                                     <strong>Tracking:</strong>{" "}
@@ -324,6 +348,10 @@ const SellerOrders = () => {
                                     ? "Paused during refund review"
                                     : order.refundStatus === "refunded"
                                         ? "Cancelled after refund"
+                                            : ["requested", "approved", "shipped", "received"].includes(
+                                                order.payout?.returnRequest?.status
+                                            )
+                                                ? "Paused during shipment return review"
                                         : order.payout?.status === "held"
                                     ? "Awaiting both confirmations; payment is not held by the Shop"
                                     : order.payout?.status === "ready"
@@ -376,7 +404,10 @@ const SellerOrders = () => {
                                 order.status === "Delivered" &&
                                 order.payout?.status === "held" &&
                                 order.payout?.deliveryDispute?.status !== "open" &&
-                                !["requested", "refunded"].includes(order.refundStatus) && (
+                                !["requested", "refunded"].includes(order.refundStatus) &&
+                                !["requested", "approved", "shipped", "received"].includes(
+                                    order.payout?.returnRequest?.status
+                                ) && (
                                     <>
                                         <p>
                                             <strong>Customer receipt:</strong>{" "}
@@ -419,7 +450,18 @@ const SellerOrders = () => {
                             {order.payout?.receiptConfirmedAt &&
                                 order.payout?.sellerConfirmedAt && (
                                     <div className="seller-payout-instruction">
-                                        {order.refundStatus === "requested" ? (
+                                        {["requested", "approved", "shipped", "received"].includes(
+                                            order.payout?.returnRequest?.status
+                                        ) ? (
+                                            <>
+                                                <p>
+                                                    <strong>English:</strong> Seller payout is paused while this shipment return is reviewed. Do not send or confirm a payout transfer.
+                                                </p>
+                                                <p lang="bn">
+                                                    <strong>বাংলা:</strong> এই শিপমেন্টের রিটার্ন পর্যালোচনার সময় পেআউট স্থগিত। কোনো পেআউট পাঠাবেন বা নিশ্চিত করবেন না।
+                                                </p>
+                                            </>
+                                        ) : order.refundStatus === "requested" ? (
                                             <>
                                                 <p>
                                                     <strong>English:</strong> Payout instructions are paused during refund review. Do not send or confirm any payout transfer.
@@ -492,6 +534,9 @@ const SellerOrders = () => {
                                     disabled={
                                         order.paymentStatus !== "paid" ||
                                                 ["requested", "refunded"].includes(order.refundStatus) ||
+                                                ["requested", "approved", "shipped", "received"].includes(
+                                                    order.payout?.returnRequest?.status
+                                                ) ||
                                                 order.payout?.deliveryDispute?.status === "open"
                                     }
                                     onChange={event => setShipmentDrafts(previous => ({
@@ -518,7 +563,12 @@ const SellerOrders = () => {
                                     maxLength={80}
                                     placeholder="Courier name (optional)"
                                     aria-label={`Courier for order ${order._id.slice(-8)}`}
-                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    disabled={
+                                        ["requested", "refunded"].includes(order.refundStatus) ||
+                                        ["requested", "approved", "shipped", "received"].includes(
+                                            order.payout?.returnRequest?.status
+                                        )
+                                    }
                                     onChange={event => setShipmentDrafts(previous => ({
                                         ...previous,
                                         [order._id]: {
@@ -532,7 +582,12 @@ const SellerOrders = () => {
                                     maxLength={120}
                                     placeholder="Tracking number (optional)"
                                     aria-label={`Tracking number for order ${order._id.slice(-8)}`}
-                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    disabled={
+                                        ["requested", "refunded"].includes(order.refundStatus) ||
+                                        ["requested", "approved", "shipped", "received"].includes(
+                                            order.payout?.returnRequest?.status
+                                        )
+                                    }
                                     onChange={event => setShipmentDrafts(previous => ({
                                         ...previous,
                                         [order._id]: {
@@ -547,7 +602,12 @@ const SellerOrders = () => {
                                     maxLength={500}
                                     placeholder="HTTPS tracking link (optional)"
                                     aria-label={`Tracking link for order ${order._id.slice(-8)}`}
-                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    disabled={
+                                        ["requested", "refunded"].includes(order.refundStatus) ||
+                                        ["requested", "approved", "shipped", "received"].includes(
+                                            order.payout?.returnRequest?.status
+                                        )
+                                    }
                                     onChange={event => setShipmentDrafts(previous => ({
                                         ...previous,
                                         [order._id]: {
@@ -562,7 +622,12 @@ const SellerOrders = () => {
                                     rows={2}
                                     placeholder="Delivery note/evidence required when marking delivered"
                                     aria-label={`Delivery note for order ${order._id.slice(-8)}`}
-                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    disabled={
+                                        ["requested", "refunded"].includes(order.refundStatus) ||
+                                        ["requested", "approved", "shipped", "received"].includes(
+                                            order.payout?.returnRequest?.status
+                                        )
+                                    }
                                     onChange={event => setShipmentDrafts(previous => ({
                                         ...previous,
                                         [order._id]: {
@@ -573,7 +638,12 @@ const SellerOrders = () => {
                                 />
                                 <button
                                     type="button"
-                                    disabled={["requested", "refunded"].includes(order.refundStatus)}
+                                    disabled={
+                                        ["requested", "refunded"].includes(order.refundStatus) ||
+                                        ["requested", "approved", "shipped", "received"].includes(
+                                            order.payout?.returnRequest?.status
+                                        )
+                                    }
                                     onClick={() => updateStatus(
                                         order._id,
                                         shipmentDrafts[order._id] || { status: order.status }
