@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-    FaArrowLeft, FaRegComment, FaPlus, FaTimes,
+    FaArrowLeft, FaBackward, FaForward, FaPause, FaPlay, FaRegComment, FaPlus, FaTimes,
     FaVolumeMute, FaVolumeUp, FaTrash, FaBookmark, FaRegBookmark,
     FaShare, FaEye
 } from "react-icons/fa";
@@ -21,8 +21,10 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
 
     const videoRef = useRef(null);
     const viewed = useRef(false);
+    const playbackControlsTimer = useRef(null);
 
     const [isPlaying, setIsPlaying] = useState(false);
+    const [showPlaybackControls, setShowPlaybackControls] = useState(false);
     const [reaction, setReaction] = useState(reel.reactionByMe || (reel.likedByMe ? "like" : null));
     const [likeCount, setLikeCount] = useState(reel.likeCount);
     const [reactionCounts, setReactionCounts] = useState(reel.reactionCounts || {});
@@ -30,6 +32,8 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
     const [commentCount, setCommentCount] = useState(reel.commentCount);
     const [showComments, setShowComments] = useState(false);
     const [actionMessage, setActionMessage] = useState("");
+
+    useEffect(() => () => clearTimeout(playbackControlsTimer.current), []);
     // play only the reel that's actually on screen
     useEffect(() => {
 
@@ -63,14 +67,33 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
 
     }, [reel._id]);
 
+    const showControlsTemporarily = () => {
+        setShowPlaybackControls(true);
+        clearTimeout(playbackControlsTimer.current);
+        playbackControlsTimer.current = setTimeout(() => {
+            setShowPlaybackControls(false);
+        }, 2000);
+    };
+
     const togglePlayback = () => {
         const video = videoRef.current;
         if (!video) return;
+        showControlsTemporarily();
         if (video.paused) {
             video.play().catch(() => setActionMessage("Could not play this reel."));
         } else {
             video.pause();
         }
+    };
+
+    const seek = seconds => {
+        const video = videoRef.current;
+        if (!video) return;
+        const targetTime = video.currentTime + seconds;
+        video.currentTime = Number.isFinite(video.duration)
+            ? Math.min(video.duration, Math.max(0, targetTime))
+            : Math.max(0, targetTime);
+        showControlsTemporarily();
     };
 
     const updateReaction = async nextReaction => {
@@ -166,6 +189,37 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
             />
+
+            {showPlaybackControls && (
+                <div className="reel-playback-controls" aria-label="Video controls">
+                    <button
+                        type="button"
+                        onClick={() => seek(-10)}
+                        aria-label="Rewind 10 seconds"
+                    >
+                        <FaBackward aria-hidden="true" />
+                        <span>10s</span>
+                    </button>
+                    <button
+                        type="button"
+                        className="reel-playback-toggle"
+                        onClick={togglePlayback}
+                        aria-label={isPlaying ? "Pause reel" : "Play reel"}
+                    >
+                        {isPlaying
+                            ? <FaPause aria-hidden="true" />
+                            : <FaPlay aria-hidden="true" />}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => seek(10)}
+                        aria-label="Forward 10 seconds"
+                    >
+                        <FaForward aria-hidden="true" />
+                        <span>10s</span>
+                    </button>
+                </div>
+            )}
 
             <div className="reel-overlay">
 
