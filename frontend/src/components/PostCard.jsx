@@ -406,7 +406,13 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange })
                     onSelect={updateReaction}
                 />
 
-                <button type="button" onClick={() => setShowComments(v => !v)}>
+                <button
+                    type="button"
+                    className="post-comment-action"
+                    aria-label={`Comments, ${commentCount}`}
+                    aria-expanded={showComments}
+                    onClick={() => setShowComments(v => !v)}
+                >
                     <FaRegComment /> {commentCount}
                 </button>
 

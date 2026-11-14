@@ -1,5 +1,6 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FaTimes } from "react-icons/fa";
+import "./ReactionPicker.css";
 
 const REACTIONS = [
     { value: "like", label: "Like", emoji: "👍" },
@@ -15,7 +16,11 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect
     const [position, setPosition] = useState(null);
     const pickerRef = useRef(null);
     const optionsRef = useRef(null);
+    const pointerTimerRef = useRef(null);
+    const longPressRef = useRef(false);
     const selected = REACTIONS.find(item => item.value === reaction);
+
+    useEffect(() => () => clearTimeout(pointerTimerRef.current), []);
 
     useLayoutEffect(() => {
         if (!open) {
@@ -50,6 +55,8 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect
     }, [open]);
 
     const chooseReaction = value => {
+        clearTimeout(pointerTimerRef.current);
+        longPressRef.current = false;
         onSelect(reaction === value ? null : value);
         setOpen(false);
     };
@@ -62,15 +69,32 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect
     return (
         <div
             ref={pickerRef}
-            className="reaction-picker"
+            className="reaction-picker facebook-reaction-picker"
             onPointerEnter={event => {
                 if (event.pointerType === "mouse") setOpen(true);
+            }}
+            onPointerDown={event => {
+                if (event.pointerType !== "touch") return;
+                longPressRef.current = false;
+                pointerTimerRef.current = setTimeout(() => {
+                    longPressRef.current = true;
+                    setOpen(true);
+                }, 500);
+            }}
+            onPointerUp={() => clearTimeout(pointerTimerRef.current)}
+            onPointerCancel={() => {
+                clearTimeout(pointerTimerRef.current);
+                longPressRef.current = false;
             }}
             onPointerLeave={event => {
                 if (event.pointerType === "mouse") setOpen(false);
             }}
             onKeyDown={event => {
                 if (event.key === "Escape") setOpen(false);
+                if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setOpen(true);
+                }
             }}
             onBlur={event => {
                 if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
@@ -78,19 +102,25 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect
         >
             <button
                 type="button"
-                className={`reaction-picker-trigger${selected ? " selected" : ""}`}
-                aria-label={selected ? `${selected.label} reaction selected; choose reaction` : "Choose reaction"}
+                className={`reaction-picker-trigger facebook-reaction-trigger${selected ? " selected" : ""}`}
+                aria-label={selected ? `${selected.label} reaction selected; activate to remove` : "Like"}
                 aria-expanded={open}
-                onClick={() => setOpen(value => !value)}
+                onClick={() => {
+                    if (longPressRef.current) {
+                        longPressRef.current = false;
+                        return;
+                    }
+                    chooseReaction(reaction === "like" ? null : "like");
+                }}
             >
-                <span aria-hidden="true">{selected?.emoji || "☺"}</span>
-                <span className="reaction-picker-label">{selected ? selected.label : "React"}</span>
+                <span aria-hidden="true">{selected?.emoji || "👍"}</span>
+                <span className="reaction-picker-label">{selected ? selected.label : "Like"}</span>
                 <span className="reaction-picker-count">{likeCount}</span>
             </button>
             {open && (
                 <div
                     ref={optionsRef}
-                    className="reaction-picker-options"
+                    className="reaction-picker-options facebook-reaction-options"
                     role="group"
                     aria-label="Reactions"
                     style={position ? { left: position.left, top: position.top } : undefined}
@@ -99,7 +129,7 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect
                         <button
                             key={item.value}
                             type="button"
-                            className={reaction === item.value ? "selected" : ""}
+                            className={`facebook-reaction-option${reaction === item.value ? " selected" : ""}`}
                             aria-label={`${item.label} (${reactionCounts[item.value] || 0})`}
                             aria-pressed={reaction === item.value}
                             title={item.label}
@@ -110,7 +140,7 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect
                     ))}
                     <button
                         type="button"
-                        className="reaction-picker-clear"
+                        className="reaction-picker-clear facebook-reaction-clear"
                         aria-label="No reaction"
                         title="No reaction"
                         onClick={clearReaction}
