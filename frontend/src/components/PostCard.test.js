@@ -115,6 +115,16 @@ test("opens and closes comments from the Instagram-style comment action", () => 
     expect(commentAction).toHaveAttribute("aria-expanded", "false");
 });
 
+test("keeps all post actions accessible while labels can collapse on small screens", () => {
+    render(<PostCard post={post} />);
+
+    expect(screen.getByRole("button", { name: "Share post" }))
+        .toHaveTextContent("Share");
+    expect(screen.getByRole("button", { name: "Repost" }))
+        .toHaveTextContent("Repost");
+    expect(screen.getByRole("button", { name: "Save post" })).toBeVisible();
+});
+
 test("keeps a follow control beside another author's name in either follow state", async () => {
     api.post.mockReset();
     api.post
