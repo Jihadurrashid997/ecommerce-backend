@@ -282,6 +282,7 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
 
                 <ReactionPicker
                     className="reel-reaction-picker"
+                    triggerClassName="reel-reaction-trigger"
                     reaction={reaction}
                     reactionCounts={reactionCounts}
                     likeCount={likeCount}

@@ -880,25 +880,33 @@
 }
 .reel-side .reaction-picker-trigger > span[aria-hidden="true"] { font-size: 19px; }
 .reel-side .reaction-picker-count { color: inherit; font-size: 11px; }
-.reel-side .reel-reaction-picker .facebook-reaction-trigger,
-.reel-side .reel-reaction-picker .facebook-reaction-trigger:hover,
-.reel-side .reel-reaction-picker .facebook-reaction-trigger:focus-visible {
+.reel-side .reel-reaction-trigger,
+.reel-side .reel-reaction-trigger:hover,
+.reel-side .reel-reaction-trigger:focus-visible {
+    appearance: none;
+    -webkit-appearance: none;
     min-width: 46px;
     min-height: 46px;
     height: 46px;
+    width: 46px;
     padding: 2px 4px;
     border-radius: 50%;
+    border: 0;
+    background-color: rgba(0, 0, 0, 0.45) !important;
+    background-image: none !important;
     background: rgba(0, 0, 0, 0.45) !important;
     color: #fff;
     box-shadow: none !important;
 }
-.reel-side .reel-reaction-picker .facebook-reaction-trigger.selected {
+.reel-side .reel-reaction-trigger.selected {
     color: #fff;
 }
-.reel-side .reel-reaction-picker .facebook-reaction-trigger:hover,
-.reel-side .reel-reaction-picker .facebook-reaction-trigger:focus-visible {
+.reel-side .reel-reaction-trigger:hover,
+.reel-side .reel-reaction-trigger:focus-visible {
+    background-color: rgba(0, 0, 0, 0.65) !important;
     background: rgba(0, 0, 0, 0.65) !important;
 }
+.reel-side .reel-reaction-picker .reaction-picker-label { display: none; }
 .reel-add {
     position: fixed;
     top: max(14px, env(safe-area-inset-top));
