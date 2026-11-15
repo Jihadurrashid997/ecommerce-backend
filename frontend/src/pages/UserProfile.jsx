@@ -21,6 +21,7 @@ import ProfileSocial from "../components/ProfileSocial";
 import VerifiedBadge from "../components/VerifiedBadge";
 
 import "../styles/Profile.css";
+import "../styles/UserProfile.css";
 import "../styles/VerifiedBadge.css";
 
 
@@ -329,18 +330,6 @@ const UserProfile = () => {
                     }
                     {user.isVerified && <VerifiedBadge />}
                 </h1>
-
-
-                {/* ROLE */}
-
-                <span className="profile-role">
-
-                    {
-                        user.role ||
-                        "customer"
-                    }
-
-                </span>
 
 
                 {/* EMAIL */}
