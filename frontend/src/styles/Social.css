@@ -741,19 +741,23 @@
 
 .reel-item {
     position: relative;
-    height: 100%;
-    width: min(100%, 480px);
+    box-sizing: border-box;
+    height: 100dvh;
+    width: min(100%, 900px);
+    min-width: 0;
     margin-inline: auto;
     scroll-snap-align: start;
     scroll-snap-stop: always;
     display: flex;
     justify-content: center;
+    align-items: center;
     background: #000;
 }
 
 .reel-item video {
     width: 100%;
-    height: 100%;
+    height: auto;
+    max-height: 100%;
     max-width: 100%;
     object-fit: contain;
 }
@@ -806,7 +810,17 @@
 .reel-overlay p { margin: 8px 0 0; font-size: 14px; }
 .reel-overlay .reel-action-status { color: #fff; font-size: 12px; }
 
-.reel-author { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }
+.reel-author-row { display: flex; min-width: 0; align-items: center; gap: 10px; }
+.reel-author {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    text-decoration: none;
+}
+.reel-author b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reel-author-row .social-follow-button { flex: 0 0 auto; }
 
 .reel-side {
     position: absolute;
@@ -875,6 +889,14 @@
 }
 .reel-side .facebook-reaction-picker .facebook-reaction-trigger.selected {
     color: #fff;
+}
+.reel-side .facebook-reaction-picker .facebook-reaction-trigger:hover,
+.reel-side .facebook-reaction-picker .facebook-reaction-trigger:focus-visible {
+    background: rgba(255, 255, 255, 0.14);
+}
+.reel-side .facebook-reaction-picker .facebook-reaction-trigger.selected:hover,
+.reel-side .facebook-reaction-picker .facebook-reaction-trigger.selected:focus-visible {
+    background: rgba(255, 255, 255, 0.14);
 }
 .reel-add {
     position: fixed;
