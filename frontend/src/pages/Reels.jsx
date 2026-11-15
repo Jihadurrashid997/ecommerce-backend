@@ -281,6 +281,7 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
             <div className="reel-side">
 
                 <ReactionPicker
+                    className="reel-reaction-picker"
                     reaction={reaction}
                     reactionCounts={reactionCounts}
                     likeCount={likeCount}
