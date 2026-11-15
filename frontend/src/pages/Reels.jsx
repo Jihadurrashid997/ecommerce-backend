@@ -25,6 +25,11 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
 
     const [isPlaying, setIsPlaying] = useState(false);
     const [showPlaybackControls, setShowPlaybackControls] = useState(false);
+    const [mediaAspectRatio, setMediaAspectRatio] = useState(9 / 16);
+    const [viewport, setViewport] = useState(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight
+    }));
     const [reaction, setReaction] = useState(reel.reactionByMe || (reel.likedByMe ? "like" : null));
     const [likeCount, setLikeCount] = useState(reel.likeCount);
     const [reactionCounts, setReactionCounts] = useState(reel.reactionCounts || {});
@@ -34,6 +39,27 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
     const [actionMessage, setActionMessage] = useState("");
 
     useEffect(() => () => clearTimeout(playbackControlsTimer.current), []);
+
+    useEffect(() => {
+        const updateViewport = () => setViewport({
+            width: window.visualViewport?.width || window.innerWidth,
+            height: window.visualViewport?.height || window.innerHeight
+        });
+        const visualViewport = window.visualViewport;
+        window.addEventListener("resize", updateViewport);
+        visualViewport?.addEventListener("resize", updateViewport);
+        return () => {
+            window.removeEventListener("resize", updateViewport);
+            visualViewport?.removeEventListener("resize", updateViewport);
+        };
+    }, []);
+
+    const stageMaxWidth = mediaAspectRatio > 1 ? 900 : 480;
+    const stageWidth = Math.max(0, Math.min(
+        viewport.width,
+        stageMaxWidth,
+        viewport.height * mediaAspectRatio
+    ));
     // play only the reel that's actually on screen
     useEffect(() => {
 
@@ -168,7 +194,7 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
     const canFollow = Boolean(author._id) && String(author._id) !== myId;
 
     return (
-        <section className="reel-item">
+        <section className="reel-item" style={{ width: `${stageWidth}px` }}>
 
             <video
                 ref={videoRef}
@@ -188,6 +214,12 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
                 }}
                 onPlay={() => setIsPlaying(true)}
                 onPause={() => setIsPlaying(false)}
+                onLoadedMetadata={event => {
+                    const { videoWidth, videoHeight } = event.currentTarget;
+                    if (videoWidth > 0 && videoHeight > 0) {
+                        setMediaAspectRatio(videoWidth / videoHeight);
+                    }
+                }}
             />
 
             {showPlaybackControls && (
@@ -223,21 +255,23 @@ const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) =>
 
             <div className="reel-overlay">
 
-                <Link to={String(author._id) === myId ? "/profile" : `/user/${author._id}`} className="reel-author">
-                    <div className="avatar-sm">
-                        {author.profileImage || author.avatar
-                            ? <img src={getUploadUrl(author.profileImage || author.avatar)} alt="" />
-                            : (author.name || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <b>{author.name || "User"}</b>
-                </Link>
-                {canFollow && (
-                    <SocialFollowButton
-                        userId={author._id}
-                        isFollowing={reel.isFollowedByMe === true}
-                        onFollowChange={result => onFollowChange(author, result)}
-                    />
-                )}
+                <div className="reel-author-row">
+                    <Link to={String(author._id) === myId ? "/profile" : `/user/${author._id}`} className="reel-author">
+                        <div className="avatar-sm">
+                            {author.profileImage || author.avatar
+                                ? <img src={getUploadUrl(author.profileImage || author.avatar)} alt="" />
+                                : (author.name || "U").charAt(0).toUpperCase()}
+                        </div>
+                        <b>{author.name || "User"}</b>
+                    </Link>
+                    {canFollow && (
+                        <SocialFollowButton
+                            userId={author._id}
+                            isFollowing={reel.isFollowedByMe === true}
+                            onFollowChange={result => onFollowChange(author, result)}
+                        />
+                    )}
+                </div>
 
                 {reel.caption && <p>{reel.caption}</p>}
                 {actionMessage && <p className="reel-action-status" role="status">{actionMessage}</p>}

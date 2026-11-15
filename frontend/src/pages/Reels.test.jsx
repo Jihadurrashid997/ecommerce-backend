@@ -4,7 +4,7 @@ import api from "../services/api";
 import Reels from "./Reels";
 
 jest.mock("react-router-dom", () => ({
-    Link: ({ to, children, ...props }) => <a href={to} {...props} />,
+    Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
     useNavigate: () => jest.fn()
 }));
 
@@ -66,10 +66,47 @@ test("shows a follow control for another creator and keeps its Following state",
     expect(screen.queryByRole("button", { name: "Delete reel" })).not.toBeInTheDocument();
 
     const followButton = await screen.findByRole("button", { name: "Follow" });
+    const authorRow = followButton.closest(".reel-author-row");
+    expect(authorRow).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Creator/ }).parentElement).toBe(authorRow);
     fireEvent.click(followButton);
 
     await waitFor(() => expect(api.post).toHaveBeenCalledWith("/users/follow/creator-1"));
     expect(await screen.findByRole("button", { name: "Unfollow" })).toHaveTextContent("Following");
+});
+
+test("sizes the Reel stage to its video's aspect ratio", async () => {
+    const originalWidth = window.innerWidth;
+    const originalHeight = window.innerHeight;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1280 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 });
+    render(<Reels />);
+    const video = await screen.findByLabelText("Play reel");
+    Object.defineProperty(video, "videoWidth", { configurable: true, value: 1920 });
+    Object.defineProperty(video, "videoHeight", { configurable: true, value: 1080 });
+
+    fireEvent.loadedMetadata(video);
+
+    expect(video.closest(".reel-item")).toHaveStyle({ width: "900px" });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
+});
+
+test("keeps the Reel stage within mobile viewport width", async () => {
+    const originalWidth = window.innerWidth;
+    const originalHeight = window.innerHeight;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 844 });
+    render(<Reels />);
+
+    const video = await screen.findByLabelText("Play reel");
+    Object.defineProperty(video, "videoWidth", { configurable: true, value: 1920 });
+    Object.defineProperty(video, "videoHeight", { configurable: true, value: 1080 });
+    fireEvent.loadedMetadata(video);
+
+    expect(video.closest(".reel-item")).toHaveStyle({ width: "390px" });
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: originalHeight });
 });
 
 test("shows the delete control only on the current user's own reel", async () => {
