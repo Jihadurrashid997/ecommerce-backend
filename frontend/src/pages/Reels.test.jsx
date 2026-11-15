@@ -60,7 +60,9 @@ afterAll(() => {
 test("shows a follow control for another creator and keeps its Following state", async () => {
     render(<Reels />);
 
-    expect(await screen.findByRole("button", { name: "Like" })).toHaveClass("facebook-reaction-trigger");
+    const reactionButton = await screen.findByRole("button", { name: "Like" });
+    expect(reactionButton).toHaveClass("facebook-reaction-trigger");
+    expect(reactionButton.closest(".reel-reaction-picker")).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("button", { name: "Like" }), { key: "ArrowDown" });
     expect(screen.getByRole("group", { name: "Reactions" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Delete reel" })).not.toBeInTheDocument();

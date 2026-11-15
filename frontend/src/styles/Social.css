@@ -880,23 +880,23 @@
 }
 .reel-side .reaction-picker-trigger > span[aria-hidden="true"] { font-size: 19px; }
 .reel-side .reaction-picker-count { color: inherit; font-size: 11px; }
-.reel-side .facebook-reaction-picker .facebook-reaction-trigger,
-.reel-side .facebook-reaction-picker .facebook-reaction-trigger:hover,
-.reel-side .facebook-reaction-picker .facebook-reaction-trigger:focus-visible {
-    border-radius: 24px;
-    background: rgba(0, 0, 0, 0.45);
+.reel-side .reel-reaction-picker .facebook-reaction-trigger,
+.reel-side .reel-reaction-picker .facebook-reaction-trigger:hover,
+.reel-side .reel-reaction-picker .facebook-reaction-trigger:focus-visible {
+    min-width: 46px;
+    min-height: 46px;
+    padding: 2px 4px;
+    border-radius: 0;
+    background: transparent !important;
+    color: #fff;
+    box-shadow: none !important;
+}
+.reel-side .reel-reaction-picker .facebook-reaction-trigger.selected {
     color: #fff;
 }
-.reel-side .facebook-reaction-picker .facebook-reaction-trigger.selected {
-    color: #fff;
-}
-.reel-side .facebook-reaction-picker .facebook-reaction-trigger:hover,
-.reel-side .facebook-reaction-picker .facebook-reaction-trigger:focus-visible {
-    background: rgba(255, 255, 255, 0.14);
-}
-.reel-side .facebook-reaction-picker .facebook-reaction-trigger.selected:hover,
-.reel-side .facebook-reaction-picker .facebook-reaction-trigger.selected:focus-visible {
-    background: rgba(255, 255, 255, 0.14);
+.reel-side .reel-reaction-picker .facebook-reaction-trigger:hover,
+.reel-side .reel-reaction-picker .facebook-reaction-trigger:focus-visible {
+    background: transparent !important;
 }
 .reel-add {
     position: fixed;
