@@ -885,9 +885,10 @@
 .reel-side .reel-reaction-picker .facebook-reaction-trigger:focus-visible {
     min-width: 46px;
     min-height: 46px;
+    height: 46px;
     padding: 2px 4px;
-    border-radius: 0;
-    background: transparent !important;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45) !important;
     color: #fff;
     box-shadow: none !important;
 }
@@ -896,7 +897,7 @@
 }
 .reel-side .reel-reaction-picker .facebook-reaction-trigger:hover,
 .reel-side .reel-reaction-picker .facebook-reaction-trigger:focus-visible {
-    background: transparent !important;
+    background: rgba(0, 0, 0, 0.65) !important;
 }
 .reel-add {
     position: fixed;
