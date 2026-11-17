@@ -11,6 +11,7 @@ import CommentsPanel from "./CommentsPanel";
 import MediaViewer from "./MediaViewer";
 import ReactionPicker from "./ReactionPicker";
 import SocialFollowButton from "./SocialFollowButton";
+import ReportItemButton from "./ReportItemButton";
 
 const timeAgo = value => {
 
@@ -442,6 +443,14 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange })
                             <span className="post-action-label">{reposted ? "Undo repost" : "Repost"}</span>
                         </button>
                     )}
+
+                {String(author._id) !== myId && (
+                    <ReportItemButton
+                        targetType={post.kind === "reel" ? "reel" : "post"}
+                        targetId={post._id}
+                        compact
+                    />
+                )}
 
             </div>
 

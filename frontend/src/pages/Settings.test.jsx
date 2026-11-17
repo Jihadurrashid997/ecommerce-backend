@@ -4,7 +4,8 @@ import api from "../services/api";
 import Settings from "./Settings";
 
 jest.mock("react-router-dom", () => ({
-    Link: ({ to, children, ...props }) => <a href={to} {...props} />
+    Link: ({ to, children, ...props }) => <a href={to} {...props} />,
+    useNavigate: () => jest.fn()
 }));
 
 jest.mock("../services/api", () => ({

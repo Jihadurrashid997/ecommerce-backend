@@ -73,6 +73,7 @@ describe("Register", () => {
         fireEvent.change(screen.getByLabelText("Confirm Password"), {
             target: { value: "correct horse battery" }
         });
+        fireEvent.click(screen.getByRole("checkbox"));
         fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
         expect(await screen.findByText("Registration successful. You can now sign in.")).toBeInTheDocument();
@@ -80,7 +81,9 @@ describe("Register", () => {
         expect(api.post).toHaveBeenCalledWith("/auth/register", {
             name: "E Top User",
             email: "user@example.com",
-            password: "correct horse battery"
+            password: "correct horse battery",
+            ageConfirmed: true,
+            policiesAccepted: true
         });
         expect(screen.getByText(/continue to login/i).closest("a")).toHaveAttribute(
             "to",
@@ -95,10 +98,14 @@ describe("Register", () => {
         });
 
         render(<Register />);
+        fireEvent.click(screen.getByRole("checkbox"));
         fireEvent.click(screen.getByRole("button", { name: /continue with google/i }));
 
         await waitFor(() => {
-            expect(googleAuthUser).toHaveBeenCalledWith("google-id-token");
+            expect(googleAuthUser).toHaveBeenCalledWith("google-id-token", {
+                ageConfirmed: true,
+                policiesAccepted: true
+            });
             expect(mockSetUser).toHaveBeenCalledWith(user);
             expect(mockNavigate).toHaveBeenCalledWith("/", { replace: true });
         });

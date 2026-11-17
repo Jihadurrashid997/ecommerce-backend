@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaBell, FaLock, FaMoon, FaShieldAlt, FaUser, FaUserSlash } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
@@ -17,7 +17,8 @@ const DEFAULT_SETTINGS = {
 };
 
 const Settings = () => {
-    const { theme, setTheme, user } = useApp();
+    const { theme, setTheme, user, logout } = useApp();
+    const navigate = useNavigate();
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
     const [blockedUsers, setBlockedUsers] = useState([]);
     const [followRequests, setFollowRequests] = useState([]);
@@ -88,6 +89,23 @@ const Settings = () => {
             setNotice(response.data.message || "Password updated successfully.");
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not update your password.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const deleteAccount = async () => {
+        if (!window.confirm("Permanently delete your account and social content? This cannot be undone.")) return;
+        const confirmation = window.prompt('Type DELETE to confirm account deletion:');
+        if (confirmation !== "DELETE") return;
+        try {
+            setBusy("delete");
+            setError("");
+            await api.delete("/users/account", { data: { confirmation } });
+            logout();
+            navigate("/login", { replace: true });
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not delete your account.");
         } finally {
             setBusy("");
         }
@@ -309,6 +327,16 @@ const Settings = () => {
                     <Link to="/forgot-password">Forgot your password?</Link>
                 </form>
                 <div className="settings-security-note"><FaLock /> Your current password is required to make this change.</div>
+            </section>
+            <section className="settings-card settings-danger-zone">
+                <div className="settings-section-heading">
+                    <FaUserSlash />
+                    <div><h2>Delete account</h2><p>Delete your profile, posts, stories, messages, and active sessions. Some transaction records may be retained where required.</p></div>
+                </div>
+                <button type="button" disabled={Boolean(busy)} onClick={deleteAccount}>
+                    {busy === "delete" ? "Deleting..." : "Permanently delete my account"}
+                </button>
+                <p><Link to="/privacy">Privacy Policy</Link> · <Link to="/terms">Terms of Use</Link></p>
             </section>
         </main>
     );

@@ -7,6 +7,7 @@ const SavedPost = require("../models/SavedPost");
 const communityController = require("../controllers/communityController");
 const postController = require("../controllers/postController");
 const mediaStorage = require("../services/mediaStorage");
+const PlatformSettings = require("../models/PlatformSettings");
 
 const CREATOR_ID = "507f1f77bcf86cd799439011";
 const MEMBER_ID = "507f191e810c19729de860ea";
@@ -84,6 +85,7 @@ test("post creation persists the selected visibility and rejects community-only 
     const originalCreate = Post.create;
     const originalFindById = Post.findById;
     const originalCommunityFindOne = Community.findOne;
+    const originalPlatformSettingsFindById = PlatformSettings.findById;
     const originalSaveFile = mediaStorage.saveFile;
     let createdPost;
     Post.create = async fields => {
@@ -105,6 +107,7 @@ test("post creation persists the selected visibility and rejects community-only 
     Community.findOne = () => {
         throw new Error("Community membership must not be queried for a private audience.");
     };
+    PlatformSettings.findById = () => ({ select: async () => null });
     mediaStorage.saveFile = async () => ({
         url: "https://media.example.com/photo.jpg",
         type: "image",
@@ -136,6 +139,7 @@ test("post creation persists the selected visibility and rejects community-only 
         Post.create = originalCreate;
         Post.findById = originalFindById;
         Community.findOne = originalCommunityFindOne;
+        PlatformSettings.findById = originalPlatformSettingsFindById;
         mediaStorage.saveFile = originalSaveFile;
     }
 });
@@ -631,6 +635,7 @@ test("private community posts stay out of the global feed", async () => {
         assert.deepEqual(selectedFilter, {
             kind: "post",
             community: null,
+            moderationStatus: { $nin: ["hidden", "deleted"] },
             $or: [
                 { visibility: { $exists: false } },
                 { visibility: "public" },
@@ -647,10 +652,12 @@ test("private community posts stay out of the global feed", async () => {
 
 test("non-members cannot create posts inside a community", async () => {
     const originalFindOne = Community.findOne;
+    const originalPlatformSettingsFindById = PlatformSettings.findById;
     const response = makeResponse();
     Community.findOne = () => ({
         select: async () => null
     });
+    PlatformSettings.findById = () => ({ select: async () => null });
 
     try {
         await postController.createPost(
@@ -667,5 +674,6 @@ test("non-members cannot create posts inside a community", async () => {
         assert.match(response.body.message, /join the community/i);
     } finally {
         Community.findOne = originalFindOne;
+        PlatformSettings.findById = originalPlatformSettingsFindById;
     }
 });

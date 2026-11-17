@@ -27,6 +27,26 @@ const platformSettingsSchema = new mongoose.Schema({
         shop: { type: maintenanceSectionSchema, default: () => ({}) },
         profile: { type: maintenanceSectionSchema, default: () => ({}) },
         community: { type: maintenanceSectionSchema, default: () => ({}) }
+    },
+    registrationEnabled: {
+        type: Boolean,
+        default: true
+    },
+    reelMaxDurationSeconds: {
+        type: Number,
+        min: 15,
+        max: 300,
+        default: 300
+    },
+    reelMaxSizeBytes: {
+        type: Number,
+        min: 1 * 1024 * 1024,
+        max: 80 * 1024 * 1024,
+        default: 80 * 1024 * 1024
+    },
+    prohibitedWords: {
+        type: [{ type: String, trim: true, maxlength: 60 }],
+        default: []
     }
 }, {
     timestamps: true,

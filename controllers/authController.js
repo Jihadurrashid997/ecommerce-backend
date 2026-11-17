@@ -11,6 +11,8 @@ const crypto =
     require("crypto");
 const DeviceSession =
     require("../models/DeviceSession");
+const PlatformSettings =
+    require("../models/PlatformSettings");
 const auth =
     require("../middleware/auth");
 
@@ -128,6 +130,10 @@ const safeUser = (user) => {
         role:
             user.role || "customer",
 
+        ...(user.role === "admin"
+            ? { adminRole: user.adminRole || "super_admin" }
+            : {}),
+
         bio:
             user.bio || "",
 
@@ -163,11 +169,21 @@ exports.register = async (
 ) => {
 
     try {
+        const platformSettings = await PlatformSettings.findById("global")
+            .select("registrationEnabled");
+        if (platformSettings?.registrationEnabled === false) {
+            return res.status(403).json({
+                success: false,
+                message: "New registrations are temporarily closed."
+            });
+        }
 
         const {
             name,
             email,
-            password
+            password,
+            ageConfirmed,
+            policiesAccepted
         } = req.body || {};
 
 
@@ -182,6 +198,12 @@ exports.register = async (
         const cleanPassword =
             String(password || "");
 
+        if (ageConfirmed !== true || policiesAccepted !== true) {
+            return res.status(400).json({
+                success: false,
+                message: "Confirm that you are at least 13 and accept the Terms of Use and Privacy Policy."
+            });
+        }
 
         /*
         VALIDATION
@@ -298,6 +320,10 @@ exports.register = async (
 
                 password:
                     hashedPassword,
+
+                ageConfirmedAt: new Date(),
+                termsAcceptedAt: new Date(),
+                privacyAcceptedAt: new Date(),
 
                 role:
                     "customer"
@@ -443,6 +469,20 @@ exports.googleAuth = async (req, res) => {
                 user.emailVerified = true;
                 user.emailVerifiedAt = linkedAt;
             } else {
+                if (req.body?.ageConfirmed !== true || req.body?.policiesAccepted !== true) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Confirm that you are at least 13 and accept the Terms of Use and Privacy Policy before creating an account."
+                    });
+                }
+                const platformSettings = await PlatformSettings.findById("global")
+                    .select("registrationEnabled");
+                if (platformSettings?.registrationEnabled === false) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "New registrations are temporarily closed."
+                    });
+                }
                 const randomPassword = crypto.randomBytes(32).toString("hex");
                 try {
                     user = await User.create({
@@ -454,6 +494,9 @@ exports.googleAuth = async (req, res) => {
                         googleId,
                         emailVerified: true,
                         emailVerifiedAt: new Date(),
+                        ageConfirmedAt: new Date(),
+                        termsAcceptedAt: new Date(),
+                        privacyAcceptedAt: new Date(),
                         role: "customer"
                     });
                     isNewUser = true;
@@ -473,12 +516,12 @@ exports.googleAuth = async (req, res) => {
             }
         }
 
-        if (user.isSuspended) {
+        if (user.isSuspended || user.isBanned) {
             return res.status(403).json({
                 success: false,
-                message: "Your account has been suspended." +
-                    (user.suspendedReason
-                        ? ` Reason: ${user.suspendedReason}`
+                message: `Your account has been ${user.isBanned ? "banned" : "suspended"}.` +
+                    ((user.bannedReason || user.suspendedReason)
+                        ? ` Reason: ${user.bannedReason || user.suspendedReason}`
                         : "")
             });
         }
@@ -807,17 +850,17 @@ exports.login = async (
         SUSPENDED ACCOUNTS CANNOT LOG IN
         */
 
-        if (user.isSuspended) {
+        if (user.isSuspended || user.isBanned) {
 
             return res.status(403).json({
 
                 success: false,
 
                 message:
-                    "Your account has been suspended." +
+                    `Your account has been ${user.isBanned ? "banned" : "suspended"}.` +
                     (
-                        user.suspendedReason
-                            ? ` Reason: ${user.suspendedReason}`
+                        user.bannedReason || user.suspendedReason
+                            ? ` Reason: ${user.bannedReason || user.suspendedReason}`
                             : ""
                     )
 

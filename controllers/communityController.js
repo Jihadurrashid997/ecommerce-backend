@@ -102,7 +102,7 @@ exports.createCommunity = async (req, res) => {
 exports.getMyCommunities = async (req, res) => {
     try {
         const communities = await loadForUser(
-            Community.find({ members: req.user.id })
+            Community.find({ members: req.user.id, isHidden: { $ne: true } })
                 .sort({ updatedAt: -1 })
                 .limit(50)
         );
@@ -119,7 +119,7 @@ exports.getMyCommunities = async (req, res) => {
 exports.discoverCommunities = async (req, res) => {
     try {
         const communities = await loadForUser(
-            Community.find({ members: { $ne: req.user.id } })
+            Community.find({ members: { $ne: req.user.id }, isHidden: { $ne: true } })
                 .sort({ createdAt: -1 })
                 .limit(50)
         );
@@ -152,6 +152,9 @@ exports.getCommunity = async (req, res) => {
                 message: "Community not found."
             });
         }
+        if (community.isHidden) {
+            return res.status(404).json({ success: false, message: "Community not found." });
+        }
 
         return res.json({
             success: true,
@@ -172,6 +175,12 @@ exports.joinCommunity = async (req, res) => {
 
         if (!community) {
             return res.status(404).json({ success: false, message: "Community not found." });
+        }
+        if (community.isHidden) {
+            return res.status(404).json({ success: false, message: "Community not found." });
+        }
+        if (community.isClosed) {
+            return res.status(403).json({ success: false, message: "This community is closed to new members." });
         }
 
         if (isMember(community, req.user.id)) {

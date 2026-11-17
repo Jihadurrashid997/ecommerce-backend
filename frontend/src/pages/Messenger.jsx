@@ -25,6 +25,7 @@ import {
 import { io } from "socket.io-client";
 
 import api, { getSocketBaseUrl } from "../services/api";
+import ReportItemButton from "../components/ReportItemButton";
 
 import "../styles/Messenger.css";
 
@@ -1054,6 +1055,9 @@ const Messenger = () => {
                     <p>
                         Loading Messenger...
                     </p>
+                    {!own && msg._id && (
+                        <ReportItemButton targetType="message" targetId={msg._id} compact />
+                    )}
 
                 </div>
 

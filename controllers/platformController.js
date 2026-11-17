@@ -7,6 +7,7 @@ const {
     MAINTENANCE_SECTIONS,
     getPlatformSettings
 } = require("../services/platformSettings");
+const { writeAuditLog } = require("../services/adminAudit");
 
 exports.getSettings = async (_req, res) => {
     try {
@@ -64,6 +65,12 @@ exports.updateMaintenance = async (req, res) => {
                 setDefaultsOnInsert: true
             }
         );
+        await writeAuditLog(req, {
+            action: "platform.maintenance_changed",
+            targetType: "platform_settings",
+            targetId: "global",
+            details: { section, enabled, message }
+        });
 
         return res.json({
             success: true,

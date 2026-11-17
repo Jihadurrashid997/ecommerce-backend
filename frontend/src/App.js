@@ -81,6 +81,7 @@ import SearchResults from "./pages/SearchResults";
 import UserProfile from "./pages/UserProfile";
 import Communities from "./pages/Communities";
 import Settings from "./pages/Settings";
+import LegalPage from "./pages/LegalPage";
 
 
 // ======================================================
@@ -105,6 +106,9 @@ function Footer() {
 
                 <p>
                     © 2026 E Top. All Rights Reserved.
+                </p>
+                <p>
+                    <Link to="/privacy">Privacy Policy</Link> · <Link to="/terms">Terms of Use</Link>
                 </p>
 
             </div>
@@ -454,6 +458,8 @@ function AppLayout() {
                         <Register />
                     }
                 />
+                <Route path="/privacy" element={<LegalPage type="privacy" />} />
+                <Route path="/terms" element={<LegalPage type="terms" />} />
 
                 <Route
                     path="/verify-email"
