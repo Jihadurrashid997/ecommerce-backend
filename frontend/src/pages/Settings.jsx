@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FaArrowLeft, FaBell, FaLock, FaMoon, FaShieldAlt, FaUser, FaUserSlash } from "react-icons/fa";
+import { FaArrowLeft, FaBell, FaExclamationTriangle, FaLock, FaMoon, FaShieldAlt, FaUser, FaUserSlash } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import "../styles/Settings.css";
@@ -17,7 +17,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const Settings = () => {
-    const { theme, setTheme, user, logout } = useApp();
+    const { theme, setTheme, user, logout, setCart, setWishlist } = useApp();
     const navigate = useNavigate();
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
     const [blockedUsers, setBlockedUsers] = useState([]);
@@ -29,6 +29,8 @@ const Settings = () => {
     const [notice, setNotice] = useState("");
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
+    const [deletePassword, setDeletePassword] = useState("");
+    const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
     const load = useCallback(async () => {
         try {
@@ -94,14 +96,22 @@ const Settings = () => {
         }
     };
 
-    const deleteAccount = async () => {
-        if (!window.confirm("Permanently delete your account and social content? This cannot be undone.")) return;
-        const confirmation = window.prompt('Type DELETE to confirm account deletion:');
-        if (confirmation !== "DELETE") return;
+    const deleteAccount = async event => {
+        event.preventDefault();
         try {
-            setBusy("delete");
+            setBusy("delete-account");
             setError("");
-            await api.delete("/users/account", { data: { confirmation } });
+            setNotice("");
+            await api.delete("/users/account", {
+                data: {
+                    currentPassword: deletePassword,
+                    confirmation: deleteConfirmation
+                }
+            });
+            setCart([]);
+            setWishlist([]);
+            localStorage.removeItem("cart");
+            localStorage.removeItem("wishlist");
             logout();
             navigate("/login", { replace: true });
         } catch (requestError) {
@@ -328,15 +338,43 @@ const Settings = () => {
                 </form>
                 <div className="settings-security-note"><FaLock /> Your current password is required to make this change.</div>
             </section>
-            <section className="settings-card settings-danger-zone">
+            <section className="settings-card settings-danger-card">
                 <div className="settings-section-heading">
-                    <FaUserSlash />
-                    <div><h2>Delete account</h2><p>Delete your profile, posts, stories, messages, and active sessions. Some transaction records may be retained where required.</p></div>
+                    <FaExclamationTriangle />
+                    <div>
+                        <h2>Delete account permanently</h2>
+                        <p>This cannot be undone. Your profile, posts, stories, messages, communities you created, and social connections will be deleted; your shop listings will be hidden. Your order and transaction records will remain unchanged.</p>
+                    </div>
                 </div>
-                <button type="button" disabled={Boolean(busy)} onClick={deleteAccount}>
-                    {busy === "delete" ? "Deleting..." : "Permanently delete my account"}
-                </button>
-                <p><Link to="/privacy">Privacy Policy</Link> · <Link to="/terms">Terms of Use</Link></p>
+                <form className="settings-delete-form" onSubmit={deleteAccount}>
+                    <label>
+                        Current password
+                        <input
+                            type="password"
+                            autoComplete="current-password"
+                            value={deletePassword}
+                            onChange={event => setDeletePassword(event.target.value)}
+                            required
+                        />
+                    </label>
+                    <Link to="/forgot-password">Forgot your password?</Link>
+                    <label>
+                        Type DELETE to confirm
+                        <input
+                            type="text"
+                            autoComplete="off"
+                            value={deleteConfirmation}
+                            onChange={event => setDeleteConfirmation(event.target.value)}
+                            required
+                        />
+                    </label>
+                    <button type="submit" disabled={Boolean(busy)}>
+                        {busy === "delete-account" ? "Deleting account..." : "Permanently delete account"}
+                    </button>
+                </form>
+                <p className="settings-policy-links">
+                    <Link to="/privacy">Privacy Policy</Link> · <Link to="/terms">Terms of Use</Link>
+                </p>
             </section>
         </main>
     );

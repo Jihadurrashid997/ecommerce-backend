@@ -10,6 +10,7 @@ const SavedPost = require("../models/SavedPost");
 const ContentReport = require("../models/ContentReport");
 const UserReport = require("../models/UserReport");
 const DeviceSession = require("../models/DeviceSession");
+const Product = require("../models/Product");
 const auth = require("../middleware/auth");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
 const { notifyUser } = require("../services/platformNotifications");
@@ -865,6 +866,161 @@ exports.changePassword = async (req, res) => {
     }
 };
 
+exports.deleteOwnAccount = async (req, res) => {
+    try {
+        const currentPassword = String(req.body?.currentPassword || "");
+        const confirmation = String(req.body?.confirmation || "");
+
+        if (!currentPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter your current password to delete your account."
+            });
+        }
+
+        if (confirmation !== "DELETE") {
+            return res.status(400).json({
+                success: false,
+                message: "Type DELETE to confirm permanent account deletion."
+            });
+        }
+
+        const user = await User.findById(req.user.id)
+            .select("+password +profileImagePublicId +profileImageType");
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const passwordMatches = await bcrypt.compare(currentPassword, user.password);
+        if (!passwordMatches) {
+            return res.status(400).json({
+                success: false,
+                message: "Your current password is incorrect."
+            });
+        }
+
+        const [posts, stories, messages, messageRequests] = await Promise.all([
+            Post.find({ author: user._id }).select("media audio").lean(),
+            Story.find({ owner: user._id }).select("media audio").lean(),
+            Message.find({
+                $or: [{ sender: user._id }, { receiver: user._id }]
+            }).select("fileUrl filePublicId fileStorageType fileType fileDeliveryType fileName").lean(),
+            MessageRequest.find({
+                $or: [{ sender: user._id }, { recipient: user._id }]
+            }).select("fileUrl filePublicId fileStorageType fileType fileDeliveryType fileName").lean()
+        ]);
+
+        const mediaToDelete = [
+            user.profileImage
+                ? {
+                    url: user.profileImage,
+                    publicId: user.profileImagePublicId,
+                    type: user.profileImageType
+                }
+                : null,
+            ...posts.flatMap(post => [...(post.media || []), post.audio]),
+            ...stories.flatMap(story => [story.media, story.audio]),
+            ...[...messages, ...messageRequests].map(message => ({
+                url: message.fileUrl,
+                publicId: message.filePublicId,
+                type: message.fileStorageType,
+                mimeType: message.fileType,
+                deliveryType: message.fileDeliveryType,
+                fileName: message.fileName
+            }))
+        ].filter(media => media && (media.url || media.publicId));
+
+        await Promise.all(mediaToDelete.map(media => deleteFile(media)));
+
+        await Promise.all([
+            Post.deleteMany({ author: user._id }),
+            Story.deleteMany({ owner: user._id }),
+            Message.deleteMany({
+                $or: [{ sender: user._id }, { receiver: user._id }]
+            }),
+            MessageRequest.deleteMany({
+                $or: [{ sender: user._id }, { recipient: user._id }]
+            }),
+            SavedPost.deleteMany({ user: user._id }),
+            Post.updateMany(
+                {},
+                {
+                    $pull: {
+                        likes: user._id,
+                        reactions: { user: user._id },
+                        comments: { user: user._id },
+                        taggedUsers: user._id
+                    }
+                }
+            ),
+            Community.deleteMany({ createdBy: user._id }),
+            Community.updateMany(
+                { createdBy: { $ne: user._id } },
+                {
+                    $pull: {
+                        members: user._id,
+                        admins: user._id,
+                        pendingRequests: user._id
+                    }
+                }
+            ),
+            UserReport.deleteMany({
+                $or: [{ reporter: user._id }, { reportedUser: user._id }]
+            }),
+            ContentReport.deleteMany({
+                $or: [{ reporter: user._id }, { targetOwner: user._id }]
+            }),
+            User.updateMany(
+                {
+                    _id: { $ne: user._id },
+                    $or: [
+                        { following: user._id },
+                        { blockedUsers: user._id },
+                        { "pendingFollowRequests.user": user._id }
+                    ]
+                },
+                {
+                    $pull: {
+                        following: user._id,
+                        blockedUsers: user._id,
+                        pendingFollowRequests: { user: user._id }
+                    }
+                }
+            ),
+            Product.updateMany(
+                { seller: user._id },
+                {
+                    $set: {
+                        isApproved: false,
+                        approvalStatus: "rejected",
+                        approvalReviewNote: "Seller account permanently deleted."
+                    }
+                }
+            ),
+            DeviceSession.deleteMany({ user: user._id })
+        ]);
+
+        await User.deleteOne({ _id: user._id });
+        auth.invalidate(user._id);
+        refreshMessengerPresence(req);
+
+        return res.json({
+            success: true,
+            message: "Your account has been permanently deleted."
+        });
+    } catch (error) {
+        console.error("DELETE OWN ACCOUNT ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not delete your account. Please try again."
+        });
+    }
+};
+
 
 // ======================================================
 // GET MY PROFILE
@@ -1364,76 +1520,6 @@ exports.deleteUser = async (req, res) => {
     }
 
 };
-
-exports.deleteOwnAccount = async (req, res) => {
-    if (String(req.body?.confirmation || "") !== "DELETE") {
-        return res.status(400).json({
-            success: false,
-            message: 'Type "DELETE" to confirm account deletion.'
-        });
-    }
-
-    const userId = req.user.id;
-    try {
-        const [posts, stories, messageRequests] = await Promise.all([
-            Post.find({ author: userId }).select("media").lean(),
-            Story.find({ owner: userId }).select("media").lean(),
-            MessageRequest.find({
-                $or: [{ sender: userId }, { recipient: userId }]
-            }).select("fileUrl filePublicId fileStorageType fileType fileDeliveryType fileName").lean()
-        ]);
-        for (const post of posts) {
-            for (const media of post.media || []) await deleteFile(media);
-        }
-        for (const story of stories) {
-            if (story.media?.url) await deleteFile(story.media);
-        }
-        for (const request of messageRequests) {
-            if (request.fileUrl || request.filePublicId) {
-                await deleteFile({
-                    url: request.fileUrl,
-                    publicId: request.filePublicId,
-                    type: request.fileStorageType,
-                    mimeType: request.fileType,
-                    deliveryType: request.fileDeliveryType,
-                    fileName: request.fileName
-                });
-            }
-        }
-
-        await Promise.all([
-            Post.deleteMany({ author: userId }),
-            Post.updateMany({}, { $pull: { likes: userId, comments: { user: userId }, taggedUsers: userId } }),
-            Story.deleteMany({ owner: userId }),
-            Message.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] }),
-            MessageRequest.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] }),
-            SavedPost.deleteMany({ user: userId }),
-            Community.deleteMany({ createdBy: userId }),
-            Community.updateMany(
-                { createdBy: { $ne: userId } },
-                { $pull: { members: userId, admins: userId, pendingRequests: userId } }
-            ),
-            UserReport.deleteMany({ $or: [{ reporter: userId }, { reportedUser: userId }] }),
-            ContentReport.deleteMany({ $or: [{ reporter: userId }, { targetOwner: userId }] }),
-            DeviceSession.deleteMany({ user: userId }),
-            User.updateMany(
-                { _id: { $ne: userId } },
-                { $pull: { following: userId, blockedUsers: userId } }
-            )
-        ]);
-        await User.deleteOne({ _id: userId });
-        auth.invalidate(userId);
-        refreshMessengerPresence(req);
-        return res.json({ success: true, message: "Your account has been deleted." });
-    } catch (error) {
-        console.error("DELETE OWN ACCOUNT ERROR:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Could not delete the account. Please try again."
-        });
-    }
-};
-
 
 // ======================================================
 // SOCIAL: follow / unfollow + profile stats

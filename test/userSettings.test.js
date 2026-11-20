@@ -2,7 +2,18 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const Message = require("../models/Message");
 const MessageRequest = require("../models/MessageRequest");
+const Post = require("../models/Post");
+const Story = require("../models/Story");
+const SavedPost = require("../models/SavedPost");
+const DeviceSession = require("../models/DeviceSession");
+const Order = require("../models/Order");
+const Product = require("../models/Product");
+const Community = require("../models/Community");
+const ContentReport = require("../models/ContentReport");
+const UserReport = require("../models/UserReport");
+const auth = require("../middleware/auth");
 const userController = require("../controllers/userController");
 
 const USER_ID = "507f1f77bcf86cd799439011";
@@ -292,3 +303,146 @@ test("password changes reject an incorrect current password", async () => {
         User.findById = originalFindById;
     }
 });
+
+test("account deletion requires the correct password before removing account data", async () => {
+        const originalFindById = User.findById;
+        const originalPostDeleteMany = Post.deleteMany;
+        const passwordHash = await bcrypt.hash("correct-password", 4);
+        let deleteCalled = false;
+        User.findById = () => ({
+            select: () => Promise.resolve({
+                _id: USER_ID,
+                password: passwordHash
+            })
+        });
+        Post.deleteMany = async () => {
+            deleteCalled = true;
+        };
+
+        try {
+            const response = makeResponse();
+            await userController.deleteOwnAccount(
+                {
+                    user: { id: USER_ID },
+                    body: { currentPassword: "wrong-password", confirmation: "DELETE" }
+                },
+                response
+            );
+
+            assert.equal(response.statusCode, 400);
+            assert.equal(deleteCalled, false);
+        } finally {
+            User.findById = originalFindById;
+            Post.deleteMany = originalPostDeleteMany;
+        }
+    });
+
+    test("account deletion removes social data while leaving order records untouched", async () => {
+        const originals = {
+            userFindById: User.findById,
+            userUpdateMany: User.updateMany,
+            userDeleteOne: User.deleteOne,
+            messageFind: Message.find,
+            messageDeleteMany: Message.deleteMany,
+            messageRequestFind: MessageRequest.find,
+            messageRequestDeleteMany: MessageRequest.deleteMany,
+            postFind: Post.find,
+            postDeleteMany: Post.deleteMany,
+            postUpdateMany: Post.updateMany,
+            storyFind: Story.find,
+            storyDeleteMany: Story.deleteMany,
+            savedPostDeleteMany: SavedPost.deleteMany,
+            deviceSessionDeleteMany: DeviceSession.deleteMany,
+            productUpdateMany: Product.updateMany,
+            communityDeleteMany: Community.deleteMany,
+            communityUpdateMany: Community.updateMany,
+            contentReportDeleteMany: ContentReport.deleteMany,
+            userReportDeleteMany: UserReport.deleteMany,
+            orderUpdateMany: Order.updateMany,
+            orderDeleteMany: Order.deleteMany,
+            invalidate: auth.invalidate
+        };
+        const user = {
+            _id: USER_ID,
+            password: await bcrypt.hash("correct-password", 4),
+            profileImage: ""
+        };
+        const calls = [];
+        let orderDataChanged = false;
+        let productsUnpublished = false;
+        User.findById = () => ({
+            select: () => Promise.resolve(user)
+        });
+        User.updateMany = async filter => calls.push(["userReferences", filter]);
+        User.deleteOne = async filter => calls.push(["user", filter]);
+        Message.find = MessageRequest.find = () => ({
+            select() { return this; },
+            lean: async () => []
+        });
+        Message.deleteMany = async filter => calls.push(["messages", filter]);
+        MessageRequest.deleteMany = async filter => calls.push(["messageRequests", filter]);
+        Post.find = () => ({ select() { return this; }, lean: async () => [] });
+        Post.deleteMany = async filter => calls.push(["posts", filter]);
+        Post.updateMany = async () => calls.push(["postReferences"]);
+        Story.find = () => ({ select() { return this; }, lean: async () => [] });
+        Story.deleteMany = async filter => calls.push(["stories", filter]);
+        SavedPost.deleteMany = async filter => calls.push(["savedPosts", filter]);
+        DeviceSession.deleteMany = async filter => calls.push(["sessions", filter]);
+        Product.updateMany = async (filter, update) => {
+            productsUnpublished =
+                filter.seller === USER_ID &&
+                update.$set.isApproved === false &&
+                update.$set.approvalStatus === "rejected";
+        };
+        Community.deleteMany = async filter => calls.push(["communities", filter]);
+        Community.updateMany = async filter => calls.push(["communityMembers", filter]);
+        ContentReport.deleteMany = async filter => calls.push(["contentReports", filter]);
+        UserReport.deleteMany = async filter => calls.push(["userReports", filter]);
+        Order.deleteMany = Order.updateMany = async () => {
+            orderDataChanged = true;
+        };
+        auth.invalidate = id => calls.push(["invalidate", id]);
+
+        try {
+            const response = makeResponse();
+            await userController.deleteOwnAccount(
+                {
+                    user: { id: USER_ID },
+                    body: { currentPassword: "correct-password", confirmation: "DELETE" }
+                },
+                response
+            );
+
+            assert.equal(response.statusCode, 200);
+            assert.equal(calls.some(([kind]) => kind === "user"), true);
+            assert.equal(calls.some(([kind]) => kind === "posts"), true);
+            assert.equal(calls.some(([kind]) => kind === "stories"), true);
+            assert.equal(calls.some(([kind]) => kind === "sessions"), true);
+            assert.deepEqual(calls.find(([kind]) => kind === "invalidate"), ["invalidate", USER_ID]);
+            assert.equal(productsUnpublished, true);
+            assert.equal(orderDataChanged, false);
+        } finally {
+            User.findById = originals.userFindById;
+            User.updateMany = originals.userUpdateMany;
+            User.deleteOne = originals.userDeleteOne;
+            Message.find = originals.messageFind;
+            Message.deleteMany = originals.messageDeleteMany;
+            MessageRequest.find = originals.messageRequestFind;
+            MessageRequest.deleteMany = originals.messageRequestDeleteMany;
+            Post.find = originals.postFind;
+            Post.deleteMany = originals.postDeleteMany;
+            Post.updateMany = originals.postUpdateMany;
+            Story.find = originals.storyFind;
+            Story.deleteMany = originals.storyDeleteMany;
+            SavedPost.deleteMany = originals.savedPostDeleteMany;
+            DeviceSession.deleteMany = originals.deviceSessionDeleteMany;
+            Product.updateMany = originals.productUpdateMany;
+            Community.deleteMany = originals.communityDeleteMany;
+            Community.updateMany = originals.communityUpdateMany;
+            ContentReport.deleteMany = originals.contentReportDeleteMany;
+            UserReport.deleteMany = originals.userReportDeleteMany;
+            Order.updateMany = originals.orderUpdateMany;
+            Order.deleteMany = originals.orderDeleteMany;
+            auth.invalidate = originals.invalidate;
+        }
+    });

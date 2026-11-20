@@ -126,7 +126,7 @@ const Profile = () => {
                         <button
                             className="settings-btn"
                             type="button"
-                            onClick={() => navigate("/edit-profile")}
+                            onClick={() => navigate("/settings")}
                             aria-label="Profile settings"
                             title="Profile settings"
                         >
