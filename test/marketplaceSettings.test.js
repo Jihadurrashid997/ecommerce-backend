@@ -5,12 +5,14 @@ const Product = require("../models/Product");
 const Order = require("../models/Order");
 const User = require("../models/User");
 const ShopNotification = require("../models/ShopNotification");
+const AdminAuditLog = require("../models/AdminAuditLog");
 const marketplaceSettings = require("../services/marketplaceSettings");
 const adminController = require("../controllers/adminController");
 const productController = require("../controllers/productController");
 const orderController = require("../controllers/orderController");
 
 ShopNotification.bulkWrite = async () => ({});
+AdminAuditLog.create = async () => ({});
 
 const makeResponse = () => ({
     statusCode: 200,
@@ -74,7 +76,7 @@ test("admin settings update persists valid boolean fields", async () => {
     try {
         const response = makeResponse();
         await adminController.updateMarketplaceSettings(
-            { body: { marketplaceEnabled: false } },
+            { body: { marketplaceEnabled: false }, user: { id: "507f1f77bcf86cd799439011" } },
             response
         );
 
@@ -105,7 +107,7 @@ test("publishing the Shop also enables the marketplace", async () => {
     try {
         const response = makeResponse();
         await adminController.updateMarketplaceSettings(
-            { body: { shopLive: true } },
+            { body: { shopLive: true }, user: { id: "507f1f77bcf86cd799439011" } },
             response
         );
 
@@ -137,7 +139,7 @@ test("unpublishing the Shop also pauses the marketplace", async () => {
     try {
         const response = makeResponse();
         await adminController.updateMarketplaceSettings(
-            { body: { shopLive: false } },
+            { body: { shopLive: false }, user: { id: "507f1f77bcf86cd799439011" } },
             response
         );
 

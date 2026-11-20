@@ -6,6 +6,9 @@ const PlatformSettings = require("../models/PlatformSettings");
 const mediaStorage = require("../services/mediaStorage");
 const platformSettings = require("../services/platformSettings");
 const platformController = require("../controllers/platformController");
+const AdminAuditLog = require("../models/AdminAuditLog");
+
+AdminAuditLog.create = async () => ({});
 
 const makeResponse = () => ({
     statusCode: 200,
@@ -80,6 +83,7 @@ test("admin can set one module's maintenance status and message", async () => {
         const response = makeResponse();
         await platformController.updateMaintenance(
             {
+                user: { id: "507f1f77bcf86cd799439011" },
                 body: {
                     section: "community",
                     enabled: true,

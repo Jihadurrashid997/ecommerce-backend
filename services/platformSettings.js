@@ -31,7 +31,10 @@ const getPlatformSettings = async () => {
                     ...(settings.maintenance?.[section] || {})
                 }
             ])
-        )
+        ),
+        registrationEnabled: settings.registrationEnabled !== false,
+        reelMaxDurationSeconds: settings.reelMaxDurationSeconds || 300,
+        reelMaxSizeBytes: settings.reelMaxSizeBytes || 80 * 1024 * 1024
     };
 };
 

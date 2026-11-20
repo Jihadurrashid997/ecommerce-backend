@@ -3,12 +3,20 @@ const Post = require("../models/Post");
 const Community = require("../models/Community");
 const User = require("../models/User");
 const SavedPost = require("../models/SavedPost");
+const PlatformSettings = require("../models/PlatformSettings");
 const mediaStorage = require("../services/mediaStorage");
 const { notifyUser, notifyFollowers } = require("../services/platformNotifications");
 
 const AUTHOR_FIELDS = "name username profileImage avatar role";
 const POST_VISIBILITIES = new Set(["public", "followers", "private"]);
 const REACTION_TYPES = new Set(["like", "love", "haha", "wow", "sad", "angry"]);
+const matchesProhibitedWord = (text, words = []) => words.some(word => {
+    const normalized = String(word || "").trim();
+    return normalized && new RegExp(
+        `(^|[^\\p{L}\\p{N}_])${normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}_])`,
+        "iu"
+    ).test(text);
+});
 
 const isId = id => mongoose.Types.ObjectId.isValid(id);
 
@@ -94,6 +102,10 @@ const shape = (
 };
 
 const canAccessPost = async (post, userId) => {
+    if (["hidden", "deleted"].includes(post?.moderationStatus)) {
+        return false;
+    }
+
     const authorId = String(post?.author?._id || post?.author || "");
 
     if (post?.visibility === "private" && authorId !== String(userId)) {
@@ -118,10 +130,10 @@ const canAccessPost = async (post, userId) => {
     }
 
     const community = await Community.findById(post.community)
-        .select("privacy members")
+        .select("privacy members isHidden")
         .lean();
 
-    if (!community) {
+    if (!community || community.isHidden) {
         return false;
     }
 
@@ -167,6 +179,7 @@ const listQuery = async (filter, req, following = []) => {
         filter.createdAt = { $lt: before };
     }
 
+    filter.moderationStatus = { $nin: ["hidden", "deleted"] };
     const queryFilter = addVisibilityFilter(filter, req.user.id, following);
 
     const posts = await Post.find(queryFilter)
@@ -185,7 +198,10 @@ const listQuery = async (filter, req, following = []) => {
     const page = posts.slice(0, limit);
     const visiblePage = [];
     for (const post of page) {
-        if (!post.originalPost || await canAccessPost(post.originalPost, req.user.id)) {
+        if (
+            await canAccessPost(post, req.user.id) &&
+            (!post.originalPost || await canAccessPost(post.originalPost, req.user.id))
+        ) {
             visiblePage.push(post);
         }
     }
@@ -362,6 +378,15 @@ exports.createPost = async (req, res) => {
             });
         }
 
+        const postingPolicy = await PlatformSettings.findById("global")
+            .select("prohibitedWords");
+        if (matchesProhibitedWord(caption, postingPolicy?.prohibitedWords)) {
+            return res.status(400).json({
+                success: false,
+                message: "This post contains a word that is not allowed."
+            });
+        }
+
         if (files.some(file => file.size > 10 * 1024 * 1024)) {
             return res.status(400).json({
                 success: false,
@@ -385,7 +410,9 @@ exports.createPost = async (req, res) => {
 
             const community = await Community.findOne({
                 _id: communityId,
-                members: req.user.id
+                members: req.user.id,
+                isHidden: { $ne: true },
+                isClosed: { $ne: true }
             }).select("_id");
 
             if (!community) {
@@ -477,6 +504,7 @@ exports.createReel = async (req, res) => {
     try {
 
         const file = (req.files || [])[0];
+        const caption = String(req.body?.caption || "").trim().slice(0, 2200);
 
         if (!file) {
             return res.status(400).json({
@@ -484,7 +512,6 @@ exports.createReel = async (req, res) => {
                 message: "Please choose a video."
             });
         }
-
         // The browser measures the length before upload.
         // (Cloudinary measures it again below, for real.)
         const clientDuration = Number(req.body?.duration);
@@ -496,15 +523,38 @@ exports.createReel = async (req, res) => {
             });
         }
 
+        const postingPolicy = await PlatformSettings.findById("global")
+            .select("reelMaxDurationSeconds reelMaxSizeBytes prohibitedWords");
+        const maxDuration = postingPolicy?.reelMaxDurationSeconds || MAX_REEL_SECONDS;
+        const maxSize = postingPolicy?.reelMaxSizeBytes || 80 * 1024 * 1024;
+        if (file.size > maxSize) {
+            return res.status(413).json({
+                success: false,
+                message: `Reels can be at most ${Math.floor(maxSize / (1024 * 1024))} MB.`
+            });
+        }
+        if (clientDuration > maxDuration) {
+            return res.status(400).json({
+                success: false,
+                message: `Reels can be at most ${Math.floor(maxDuration / 60)} minutes.`
+            });
+        }
+        if (matchesProhibitedWord(caption, postingPolicy?.prohibitedWords)) {
+            return res.status(400).json({
+                success: false,
+                message: "This reel caption contains a word that is not allowed."
+            });
+        }
+
         const saved = await mediaStorage.saveFile(file, "etop/reels");
 
-        if (saved.duration > MAX_REEL_SECONDS) {
+        if (saved.duration > maxDuration) {
 
             await mediaStorage.deleteFile(saved);
 
             return res.status(400).json({
                 success: false,
-                message: `Reels can be at most ${MAX_REEL_MINUTES} minutes.`
+                message: `Reels can be at most ${Math.floor(maxDuration / 60)} minutes.`
             });
 
         }
@@ -512,7 +562,7 @@ exports.createReel = async (req, res) => {
         const reel = await Post.create({
             author: req.user.id,
             kind: "reel",
-            caption: String(req.body?.caption || "").slice(0, 2200),
+            caption,
             media: [saved]
         });
 
@@ -989,10 +1039,13 @@ exports.getCommunityPosts = async (req, res) => {
         }
 
         const community = await Community.findById(communityId)
-            .select("privacy members")
+            .select("privacy members isHidden")
             .lean();
 
         if (!community) {
+            return res.status(404).json({ success: false, message: "Community not found." });
+        }
+        if (community.isHidden) {
             return res.status(404).json({ success: false, message: "Community not found." });
         }
 
@@ -1267,7 +1320,9 @@ exports.deleteComment = async (req, res) => {
 
         const comment = post.comments[commentIndex];
         const commentOwner = String(comment.user?._id || comment.user || "");
-        if (commentOwner !== String(req.user.id) && req.user.role !== "admin") {
+        const canModerateComments = req.user.role === "admin" &&
+            ["super_admin", "moderator"].includes(req.user.adminRole || "super_admin");
+        if (commentOwner !== String(req.user.id) && !canModerateComments) {
             return res.status(403).json({ success: false, message: "Not allowed." });
         }
 
@@ -1336,7 +1391,9 @@ exports.deletePost = async (req, res) => {
             }));
         }
 
-        if (!isOwner && !isCommunityAdmin && req.user.role !== "admin") {
+        const isSuperAdmin = req.user.role === "admin" &&
+            (req.user.adminRole || "super_admin") === "super_admin";
+        if (!isOwner && !isCommunityAdmin && !isSuperAdmin) {
             return res.status(403).json({ success: false, message: "Not allowed." });
         }
 

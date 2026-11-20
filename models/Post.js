@@ -157,6 +157,36 @@ const postSchema = new mongoose.Schema(
         views: {
             type: Number,
             default: 0
+        },
+
+        moderationStatus: {
+            type: String,
+            enum: ["visible", "hidden", "deleted"],
+            default: "visible",
+            index: true
+        },
+
+        moderationReason: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+
+        moderatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        },
+
+        hiddenAt: {
+            type: Date,
+            default: null
+        },
+
+        deletedAt: {
+            type: Date,
+            default: null
         }
     },
     { timestamps: true }

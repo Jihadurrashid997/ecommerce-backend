@@ -35,7 +35,7 @@ const getAccountState = async id => {
 
     const found =
         await User.findById(key)
-            .select("role isSuspended suspendedReason")
+            .select("role adminRole isSuspended suspendedReason isBanned bannedReason")
             .lean();
 
     const state =
@@ -43,8 +43,10 @@ const getAccountState = async id => {
             ? {
                 exists: true,
                 role: found.role,
+                adminRole: found.adminRole || "super_admin",
                 isSuspended: Boolean(found.isSuspended),
-                reason: found.suspendedReason || ""
+                isBanned: Boolean(found.isBanned),
+                reason: found.bannedReason || found.suspendedReason || ""
             }
             : { exists: false };
 
@@ -148,17 +150,18 @@ const auth = (roles = []) => {
 
             }
 
-            if (state.isSuspended) {
+            if (state.isSuspended || state.isBanned) {
 
                 return res.status(403).json({
                     message:
-                        "Your account has been suspended." +
+                        `Your account has been ${state.isBanned ? "banned" : "suspended"}.` +
                         (state.reason ? ` Reason: ${state.reason}` : "")
                 });
 
             }
 
             req.user.role = state.role;
+            req.user.adminRole = state.adminRole;
 
         } catch (err) {
             console.error("Auth account lookup failed:", err);

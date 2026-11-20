@@ -260,10 +260,10 @@ export const loginUser = async (
     return response;
 };
 
-export const googleAuthUser = async credential => {
+export const googleAuthUser = async (credential, legalConsent = {}) => {
     const response = await api.post(
         "/auth/google",
-        getDeviceLoginPayload({ credential })
+        getDeviceLoginPayload({ credential, ...legalConsent })
     );
     const data = response?.data || {};
     const token = data.token || data.accessToken;

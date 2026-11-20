@@ -6,8 +6,30 @@ const User = require("../models/User");
 const Post = require("../models/Post");
 const Message = require("../models/Message");
 const Product = require("../models/Product");
+const Community = require("../models/Community");
+const ContentReport = require("../models/ContentReport");
+const UserReport = require("../models/UserReport");
 const auth = require("../middleware/auth");
+const fs = require("fs").promises;
+const path = require("path");
 const { deleteFile, isCloudinaryConfigured } = require("../services/mediaStorage");
+const { writeAuditLog } = require("../services/adminAudit");
+
+const getLocalUploadBytes = async directory => {
+    try {
+        const entries = await fs.readdir(directory, { withFileTypes: true });
+        const sizes = await Promise.all(entries.map(async entry => {
+            const filePath = path.join(directory, entry.name);
+            if (entry.isDirectory()) return getLocalUploadBytes(filePath);
+            const metadata = await fs.stat(filePath);
+            return metadata.size;
+        }));
+        return sizes.reduce((total, size) => total + size, 0);
+    } catch (error) {
+        if (error.code === "ENOENT") return 0;
+        throw error;
+    }
+};
 
 /*
 =========================================================
@@ -31,10 +53,16 @@ exports.getOverview = async (req, res) => {
     try {
 
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const storageUsedBytes = isCloudinaryConfigured()
+            ? null
+            : await getLocalUploadBytes(path.join(__dirname, "..", "uploads"));
 
         const [
-            totalUsers, customers, sellers, admins, suspended, newUsers7d,
-            posts, reels, commentsAgg, messages, products
+            totalUsers, customers, sellers, admins, suspended, newUsers7d, newUsersToday,
+            posts, reels, commentsAgg, messages, products, communities,
+            contentReports, messageReports
         ] = await Promise.all([
             User.countDocuments(),
             User.countDocuments({ role: "customer" }),
@@ -42,21 +70,36 @@ exports.getOverview = async (req, res) => {
             User.countDocuments({ role: "admin" }),
             User.countDocuments({ isSuspended: true }),
             User.countDocuments({ createdAt: { $gte: weekAgo } }),
+            User.countDocuments({ createdAt: { $gte: todayStart } }),
             Post.countDocuments({ kind: "post" }),
             Post.countDocuments({ kind: "reel" }),
             Post.aggregate([{ $group: { _id: null, n: { $sum: { $size: "$comments" } } } }]),
             Message.estimatedDocumentCount(),
-            Product.estimatedDocumentCount()
+            Product.estimatedDocumentCount(),
+            Community.countDocuments(),
+            ContentReport.countDocuments({ status: "pending" }),
+            UserReport.countDocuments({ status: "open" })
         ]);
 
         return res.json({
             success: true,
             overview: {
-                users: { total: totalUsers, customers, sellers, admins, suspended, newThisWeek: newUsers7d },
+                users: {
+                    total: totalUsers,
+                    customers,
+                    sellers,
+                    admins,
+                    suspended,
+                    newThisWeek: newUsers7d,
+                    newToday: newUsersToday
+                },
                 content: { posts, reels, comments: commentsAgg[0]?.n || 0 },
                 messages,
                 products,
-                mediaStorage: isCloudinaryConfigured() ? "cloudinary" : "server-disk (temporary)"
+                communities,
+                pendingReports: contentReports + messageReports,
+                mediaStorage: isCloudinaryConfigured() ? "cloudinary" : "server-disk (temporary)",
+                storageUsedBytes
             }
         });
 
@@ -88,11 +131,15 @@ exports.listUsers = async (req, res) => {
         }
 
         if (req.query.status === "suspended") filter.isSuspended = true;
-        if (req.query.status === "active") filter.isSuspended = { $ne: true };
+        if (req.query.status === "banned") filter.isBanned = true;
+        if (req.query.status === "active") {
+            filter.isSuspended = { $ne: true };
+            filter.isBanned = { $ne: true };
+        }
 
         const [items, total] = await Promise.all([
             User.find(filter)
-                .select("name email role profileImage location createdAt lastSeen isSuspended isVerified")
+                .select("name email role adminRole profileImage location createdAt lastSeen isSuspended isBanned isVerified")
                 .sort({ createdAt: -1 })
                 .skip((page - 1) * limit)
                 .limit(limit)
@@ -160,7 +207,7 @@ exports.getUserDetail = async (req, res) => {
                 Post.find({ author: user._id })
                     .sort({ createdAt: -1 })
                     .limit(12)
-                    .select("kind caption media createdAt")
+                    .select("kind caption media createdAt moderationStatus moderationReason")
                     .lean()
             ]);
 
@@ -212,6 +259,10 @@ exports.setSuspended = async (req, res) => {
         }
 
         const suspend = Boolean(req.body?.suspend);
+        const reason = String(req.body?.reason || "").trim();
+        if (suspend && !reason) {
+            return res.status(400).json({ success: false, message: "A reason is required to suspend an account." });
+        }
 
         await User.updateOne(
             { _id: id },
@@ -219,7 +270,7 @@ exports.setSuspended = async (req, res) => {
                 ? {
                     $set: {
                         isSuspended: true,
-                        suspendedReason: String(req.body?.reason || "").slice(0, 300),
+                        suspendedReason: reason.slice(0, 500),
                         suspendedAt: new Date()
                     }
                 }
@@ -230,6 +281,12 @@ exports.setSuspended = async (req, res) => {
         );
 
         auth.invalidate(id);
+        await writeAuditLog(req, {
+            action: suspend ? "user.suspend" : "user.unsuspend",
+            targetType: "user",
+            targetId: id,
+            reason
+        });
 
         return res.json({ success: true, isSuspended: suspend });
 
@@ -238,6 +295,52 @@ exports.setSuspended = async (req, res) => {
         return res.status(500).json({ success: false, message: "Could not update this account." });
     }
 
+};
+
+exports.setAccountStatus = async (req, res) => {
+    const { id } = req.params;
+    const status = req.body?.status;
+    const reason = String(req.body?.reason || "").trim();
+    if (!isId(id) || !["active", "suspended", "banned"].includes(status)) {
+        return res.status(400).json({ success: false, message: "Choose a valid account status." });
+    }
+    if (status !== "active" && !reason) {
+        return res.status(400).json({ success: false, message: "A reason is required." });
+    }
+    if (String(id) === String(req.user.id)) {
+        return res.status(400).json({ success: false, message: "You cannot change your own account status." });
+    }
+    try {
+        const target = await User.findById(id).select("role");
+        if (!target) return res.status(404).json({ success: false, message: "User not found." });
+        if (target.role === "admin") {
+            return res.status(400).json({ success: false, message: "Remove the admin role before changing this account status." });
+        }
+        await User.updateOne(
+            { _id: id },
+            {
+                $set: {
+                    isSuspended: status === "suspended",
+                    suspendedReason: status === "suspended" ? reason : "",
+                    suspendedAt: status === "suspended" ? new Date() : null,
+                    isBanned: status === "banned",
+                    bannedReason: status === "banned" ? reason : "",
+                    bannedAt: status === "banned" ? new Date() : null
+                }
+            }
+        );
+        auth.invalidate(id);
+        await writeAuditLog(req, {
+            action: `user.${status}`,
+            targetType: "user",
+            targetId: id,
+            reason
+        });
+        return res.json({ success: true, status });
+    } catch (error) {
+        console.error("ADMIN ACCOUNT STATUS ERROR:", error);
+        return res.status(500).json({ success: false, message: "Could not update this account." });
+    }
 };
 
 exports.setRole = async (req, res) => {
@@ -263,10 +366,12 @@ exports.setRole = async (req, res) => {
         const update = {
             $set: {
                 role,
+                ...(role === "admin" ? { adminRole: "super_admin" } : {}),
                 ...(role === "seller"
                     ? { "sellerApplication.status": "approved" }
                     : {})
-            }
+            },
+            ...(role === "admin" ? {} : { $unset: { adminRole: "" } })
         };
         const result = await User.updateOne({ _id: id }, update);
 
@@ -275,6 +380,12 @@ exports.setRole = async (req, res) => {
         }
 
         auth.invalidate(id);
+        await writeAuditLog(req, {
+            action: "user.role_changed",
+            targetType: "user",
+            targetId: id,
+            details: { role }
+        });
 
         return res.json({ success: true, role });
 
@@ -283,6 +394,34 @@ exports.setRole = async (req, res) => {
         return res.status(500).json({ success: false, message: "Could not change the role." });
     }
 
+};
+
+exports.setAdminRole = async (req, res) => {
+    const { id } = req.params;
+    const adminRole = req.body?.adminRole;
+    if (!isId(id) || !["super_admin", "moderator", "support"].includes(adminRole)) {
+        return res.status(400).json({ success: false, message: "Choose a valid admin role." });
+    }
+    if (String(id) === String(req.user.id)) {
+        return res.status(400).json({ success: false, message: "You cannot change your own admin role." });
+    }
+    try {
+        const result = await User.updateOne({ _id: id, role: "admin" }, { $set: { adminRole } });
+        if (!result.matchedCount) {
+            return res.status(404).json({ success: false, message: "Admin user not found." });
+        }
+        auth.invalidate(id);
+        await writeAuditLog(req, {
+            action: "admin.role_changed",
+            targetType: "user",
+            targetId: id,
+            details: { adminRole }
+        });
+        return res.json({ success: true, adminRole });
+    } catch (error) {
+        console.error("ADMIN ROLE UPDATE ERROR:", error);
+        return res.status(500).json({ success: false, message: "Could not change the admin role." });
+    }
 };
 
 exports.setVerification = async (req, res) => {
@@ -331,6 +470,12 @@ exports.setVerification = async (req, res) => {
             });
         }
 
+        await writeAuditLog(req, {
+            action: `user.verification_${isVerified ? "granted" : "revoked"}`,
+            targetType: "user",
+            targetId: id
+        });
+
         return res.json({
             success: true,
             isVerified
@@ -368,6 +513,11 @@ exports.resetPassword = async (req, res) => {
             { _id: id },
             { $set: { password: await bcrypt.hash(tempPassword, 12) } }
         );
+        await writeAuditLog(req, {
+            action: "user.password_reset",
+            targetType: "user",
+            targetId: id
+        });
 
         // shown to the admin exactly once - never stored in plain text
         return res.json({ success: true, tempPassword });
@@ -419,6 +569,12 @@ exports.deleteUser = async (req, res) => {
         await User.deleteOne({ _id: id });
 
         auth.invalidate(id);
+        await writeAuditLog(req, {
+            action: "user.deleted",
+            targetType: "user",
+            targetId: id,
+            reason: String(req.body?.reason || "").slice(0, 500)
+        });
 
         return res.json({ success: true });
 
@@ -465,6 +621,8 @@ exports.listContent = async (req, res) => {
                 caption: p.caption,
                 media: p.media,
                 createdAt: p.createdAt,
+                moderationStatus: p.moderationStatus || "visible",
+                moderationReason: p.moderationReason || "",
                 views: p.views || 0,
                 likeCount: (p.likes || []).length,
                 commentCount: (p.comments || []).length,

@@ -198,6 +198,10 @@ app.use(
     "/api/admin",
     require("./routes/adminRoutes")
 );
+app.use(
+    "/api/moderation",
+    require("./routes/moderationRoutes")
+);
 
 app.use(
     "/api/platform",

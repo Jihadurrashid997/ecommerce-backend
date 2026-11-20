@@ -8,6 +8,13 @@ import "../styles/AdminControl.css";
 import "../styles/VerifiedBadge.css";
 
 const fmtDate = v => (v ? new Date(v).toLocaleString() : "-");
+const formatBytes = value => {
+    if (value === null || value === undefined) return "Not available from the current storage provider";
+    if (!value) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const level = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+    return `${(value / (1024 ** level)).toFixed(1)} ${units[level]}`;
+};
 
 const Avatar = ({ u }) => (
     <div className="ac-avatar">
@@ -35,6 +42,7 @@ const Overview = () => {
 
     const cards = [
         ["Total users", data.users.total],
+        ["New users today", data.users.newToday],
         ["New this week", data.users.newThisWeek],
         ["Customers", data.users.customers],
         ["Sellers", data.users.sellers],
@@ -42,6 +50,8 @@ const Overview = () => {
         ["Suspended", data.users.suspended],
         ["Photo posts", data.content.posts],
         ["Reels", data.content.reels],
+        ["Communities", data.communities],
+        ["Pending reports", data.pendingReports],
         ["Comments", data.content.comments],
         ["Messages", data.messages],
         ["Products", data.products]
@@ -63,6 +73,7 @@ const Overview = () => {
                 {!data.mediaStorage.startsWith("cloudinary") &&
                     " - uploaded photos/videos will be lost on the next deploy. Set up Cloudinary."}
             </p>
+            <p className="ac-note small">Storage used: <b>{formatBytes(data.storageUsedBytes)}</b></p>
         </>
     );
 
@@ -70,11 +81,12 @@ const Overview = () => {
 
 /* ------------------------------------------------ user detail */
 
-const UserDetail = ({ id, myId, onClose, onChanged }) => {
+const UserDetail = ({ id, myId, myAdminRole, onClose, onChanged }) => {
 
     const [data, setData] = useState(null);
     const [busy, setBusy] = useState(false);
     const [role, setRole] = useState("");
+    const [selectedAdminRole, setSelectedAdminRole] = useState("super_admin");
     const [tempPassword, setTempPassword] = useState("");
 
     const load = useCallback(async () => {
@@ -82,6 +94,7 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
             const r = await api.get(`/admin/control/users/${id}`);
             setData(r.data);
             setRole(r.data.user.role);
+            setSelectedAdminRole(r.data.user.adminRole || "super_admin");
         } catch (e) {
             alert(e.response?.data?.message || "Could not load this user.");
             onClose();
@@ -114,21 +127,34 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
 
     const isSelf = String(user._id) === String(myId);
 
-    const toggleSuspend = () => {
-
-        if (user.isSuspended) {
-            return run(() => api.patch(`/admin/control/users/${id}/suspend`, { suspend: false }), "Account re-activated.");
+    const setAccountStatus = status => {
+        const reason = status === "active"
+            ? ""
+            : window.prompt(`Reason for ${status} (shown to the user):`, "");
+        if (status !== "active" && reason === null) return null;
+        if (status !== "active" && !reason.trim()) {
+            alert("A reason is required.");
+            return null;
         }
-
-        const reason = window.prompt("Reason for suspension (shown to the user):", "");
-
-        if (reason === null) return null;
-
-        return run(() => api.patch(`/admin/control/users/${id}/suspend`, { suspend: true, reason }), "Account suspended.");
-
+        return run(
+            () => api.patch(`/admin/control/users/${id}/status`, { status, reason }),
+            status === "active" ? "Account re-activated." : `Account ${status}.`
+        );
     };
 
     const saveRole = () => run(() => api.patch(`/admin/control/users/${id}/role`, { role }), "Role updated.");
+    const saveAdminRole = () => run(
+        () => api.patch(`/admin/control/users/${id}/admin-role`, { adminRole: selectedAdminRole }),
+        "Admin role updated."
+    );
+
+    const forceLogout = () => {
+        if (!window.confirm(`Sign ${user.name} out of all devices?`)) return;
+        return run(
+            () => api.post(`/admin/control/users/${id}/force-logout`, { reason: "Admin force logout" }),
+            "All active sessions were revoked."
+        );
+    };
 
     const resetPassword = async () => {
 
@@ -176,7 +202,7 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
                             )}
                         </h3>
                         <span className={`ac-badge ${user.role}`}>{user.role}</span>
-                        {user.isSuspended && <span className="ac-badge suspended">suspended</span>}
+                        {(user.isSuspended || user.isBanned) && <span className="ac-badge suspended">{user.isBanned ? "banned" : "suspended"}</span>}
                     </div>
                 </div>
 
@@ -186,7 +212,7 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
                     <dt>Bio</dt><dd>{user.bio || "-"}</dd>
                     <dt>Joined</dt><dd>{fmtDate(user.createdAt)}</dd>
                     <dt>Last seen</dt><dd>{fmtDate(user.lastSeen)}</dd>
-                    {user.isSuspended && (<><dt>Suspended</dt><dd>{user.suspendedReason || "no reason given"}</dd></>)}
+                    {(user.isSuspended || user.isBanned) && (<><dt>{user.isBanned ? "Banned" : "Suspended"}</dt><dd>{user.bannedReason || user.suspendedReason || "no reason given"}</dd></>)}
                 </dl>
 
                 <div className="ac-stats">
@@ -216,18 +242,33 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
 
                     {!isSelf && (
                         <>
-                            <div className="ac-row">
-                                <select value={role} onChange={e => setRole(e.target.value)} disabled={busy}>
-                                    <option value="customer">customer</option>
-                                    <option value="seller">seller</option>
-                                    <option value="admin">admin</option>
-                                </select>
-                                <button type="button" onClick={saveRole} disabled={busy || role === user.role}>
-                                    Change role
-                                </button>
-                            </div>
+                            {myAdminRole === "super_admin" && (
+                                <div className="ac-row">
+                                    <select value={role} onChange={e => setRole(e.target.value)} disabled={busy}>
+                                        <option value="customer">customer</option>
+                                        <option value="seller">seller</option>
+                                        <option value="admin">admin</option>
+                                    </select>
+                                    <button type="button" onClick={saveRole} disabled={busy || role === user.role}>
+                                        Change role
+                                    </button>
+                                </div>
+                            )}
 
-                            <button
+                            {role === "admin" && myAdminRole === "super_admin" && (
+                                <div className="ac-row">
+                                    <select value={selectedAdminRole} onChange={e => setSelectedAdminRole(e.target.value)} disabled={busy}>
+                                        <option value="super_admin">Super Admin</option>
+                                        <option value="moderator">Moderator</option>
+                                        <option value="support">Support</option>
+                                    </select>
+                                    <button type="button" onClick={saveAdminRole} disabled={busy || selectedAdminRole === (user.adminRole || "super_admin")}>
+                                        Set admin role
+                                    </button>
+                                </div>
+                            )}
+
+                            {myAdminRole === "super_admin" && <button
                                 type="button"
                                 className={user.isVerified ? "warn" : "ok"}
                                 onClick={() =>
@@ -247,21 +288,30 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
                                 {user.isVerified
                                     ? "Remove verification badge"
                                     : "Grant verification badge"}
-                            </button>
+                            </button>}
 
-                            {user.role !== "admin" && (
-                                <button type="button" className={user.isSuspended ? "ok" : "warn"} onClick={toggleSuspend} disabled={busy}>
-                                    {user.isSuspended ? "Re-activate account" : "Suspend account"}
-                                </button>
+                            {user.role !== "admin" && myAdminRole === "super_admin" && (
+                                <>
+                                    {(user.isSuspended || user.isBanned) ? (
+                                        <button type="button" className="ok" onClick={() => setAccountStatus("active")} disabled={busy}>Unban / reactivate account</button>
+                                    ) : (
+                                        <>
+                                            <button type="button" className="warn" onClick={() => setAccountStatus("suspended")} disabled={busy}>Suspend account</button>
+                                            <button type="button" className="danger" onClick={() => setAccountStatus("banned")} disabled={busy}>Ban account</button>
+                                        </>
+                                    )}
+                                </>
                             )}
 
-                            <button type="button" onClick={resetPassword} disabled={busy}>
-                                Reset password
-                            </button>
+                            {myAdminRole === "super_admin" && <button type="button" onClick={forceLogout} disabled={busy}>Force logout all devices</button>}
 
-                            <button type="button" className="danger" onClick={removeUser} disabled={busy}>
+                            {(myAdminRole === "super_admin" || myAdminRole === "support") && <button type="button" onClick={resetPassword} disabled={busy}>
+                                Reset password
+                            </button>}
+
+                            {myAdminRole === "super_admin" && <button type="button" className="danger" onClick={removeUser} disabled={busy}>
                                 Delete user
-                            </button>
+                            </button>}
                         </>
                     )}
 
@@ -289,7 +339,7 @@ const UserDetail = ({ id, myId, onClose, onChanged }) => {
 
 /* ------------------------------------------------ users */
 
-const Users = ({ myId }) => {
+const Users = ({ myId, adminRole }) => {
 
     const [items, setItems] = useState([]);
     const [page, setPage] = useState(1);
@@ -336,6 +386,7 @@ const Users = ({ myId }) => {
                     <option value="">All status</option>
                     <option value="active">active</option>
                     <option value="suspended">suspended</option>
+                    <option value="banned">banned</option>
                 </select>
                 <button type="submit">Search</button>
             </form>
@@ -359,7 +410,7 @@ const Users = ({ myId }) => {
                         </div>
                         <div className="ac-item-side">
                             <span className={`ac-badge ${u.role}`}>{u.role}</span>
-                            {u.isSuspended && <span className="ac-badge suspended">suspended</span>}
+                            {(u.isSuspended || u.isBanned) && <span className="ac-badge suspended">{u.isBanned ? "banned" : "suspended"}</span>}
                             <small>{u.postsCount} photos - {u.reelsCount} reels</small>
                         </div>
                     </button>
@@ -376,6 +427,7 @@ const Users = ({ myId }) => {
                 <UserDetail
                     id={openId}
                     myId={myId}
+                    myAdminRole={adminRole}
                     onClose={() => setOpenId(null)}
                     onChanged={load}
                 />
@@ -410,17 +462,21 @@ const Content = () => {
 
     useEffect(() => { load(); }, [load]);
 
-    const remove = async item => {
-
-        if (!window.confirm(`Delete this ${item.kind}${item.author?.name ? ` by ${item.author.name}` : ""}?`)) return;
-
-        try {
-            await api.delete(`/posts/${item._id}`);
-            setItems(prev => prev.filter(p => p._id !== item._id));
-        } catch (e) {
-            alert(e.response?.data?.message || "Could not delete.");
+    const moderate = async (item, action) => {
+        const reason = action === "restore"
+            ? ""
+            : window.prompt(`Reason to ${action} this ${item.kind}:`, "");
+        if (action !== "restore" && reason === null) return;
+        if (action !== "restore" && !reason.trim()) {
+            alert("A reason is required.");
+            return;
         }
-
+        try {
+            await api.patch(`/admin/control/content/${item._id}/moderation`, { action, reason });
+            await load();
+        } catch (e) {
+            alert(e.response?.data?.message || "Could not update content.");
+        }
     };
 
     return (
@@ -452,7 +508,16 @@ const Content = () => {
                             <small>{item.kind} - {fmtDate(item.createdAt)}</small>
                             {item.caption && <p>{item.caption}</p>}
                             <small>{item.likeCount} likes - {item.commentCount} comments{item.kind === "reel" ? ` - ${item.views} views` : ""}</small>
-                            <button type="button" className="danger" onClick={() => remove(item)}>Delete</button>
+                            <small>Status: {item.moderationStatus || "visible"}</small>
+                            {(item.moderationStatus || "visible") === "visible" && (
+                                <button type="button" className="warn" onClick={() => moderate(item, "hide")}>Hide</button>
+                            )}
+                            {(item.moderationStatus || "visible") !== "visible" && (
+                                <button type="button" onClick={() => moderate(item, "restore")}>Restore</button>
+                            )}
+                            {item.moderationStatus !== "deleted" && (
+                                <button type="button" className="danger" onClick={() => moderate(item, "delete")}>Delete</button>
+                            )}
                         </div>
 
                     </div>
@@ -1426,12 +1491,281 @@ const Announcements = () => {
     );
 };
 
+const Reports = () => {
+    const [items, setItems] = useState([]);
+    const [repeatedUsers, setRepeatedUsers] = useState([]);
+    const [status, setStatus] = useState("pending");
+    const [type, setType] = useState("");
+    const [loading, setLoading] = useState(true);
+
+    const load = useCallback(async () => {
+        try {
+            setLoading(true);
+            const response = await api.get("/admin/control/reports", { params: { status, type } });
+            setItems(response.data.items || []);
+            if (status === "pending") {
+                const repeated = await api.get("/admin/control/repeated-reports");
+                setRepeatedUsers(repeated.data.items || []);
+            }
+        } catch (error) {
+            alert(error.response?.data?.message || "Could not load reports.");
+        } finally {
+            setLoading(false);
+        }
+    }, [status, type]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const review = async (report, nextStatus) => {
+        const resolution = window.prompt(
+            nextStatus === "resolved" ? "Resolution / action taken:" : "Reason for dismissing this report:",
+            ""
+        );
+        if (resolution === null) return;
+        try {
+            const url = report.legacy
+                ? `/admin/control/message-reports/${report._id}`
+                : `/admin/control/reports/${report._id}`;
+            await api.patch(url, { status: nextStatus, resolution });
+            await load();
+        } catch (error) {
+            alert(error.response?.data?.message || "Could not update this report.");
+        }
+    };
+
+    return (
+        <section>
+            <div className="ac-filters">
+                <select value={status} onChange={event => setStatus(event.target.value)}>
+                    <option value="pending">Pending</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="dismissed">Dismissed</option>
+                </select>
+                <select value={type} onChange={event => setType(event.target.value)}>
+                    <option value="">All report types</option>
+                    <option value="post">Home posts</option>
+                    <option value="reel">Reels</option>
+                    <option value="community">Communities</option>
+                    <option value="profile">Profiles</option>
+                    <option value="message">Messages</option>
+                </select>
+                <button type="button" onClick={load}>Refresh</button>
+            </div>
+            {loading && <p className="ac-note">Loading reports...</p>}
+            {!loading && items.length === 0 && <p className="ac-note">No reports in this queue.</p>}
+            {status === "pending" && repeatedUsers.length > 0 && (
+                <section className="ac-repeat-reports">
+                    <h3>Repeatedly reported users</h3>
+                    {repeatedUsers.map(item => (
+                        <p key={item.user._id}>
+                            <b>{item.user.name}</b> · {item.pendingReports} pending reports
+                        </p>
+                    ))}
+                </section>
+            )}
+            <div className="ac-list">
+                {items.map(report => (
+                    <article className="ac-report" key={`${report.legacy ? "legacy-" : ""}${report._id}`}>
+                        <div>
+                            <b>{report.targetType} report</b>
+                            <small>Submitted {fmtDate(report.createdAt)} · Reporter {report.reporter?.name || "user"}</small>
+                            <p>{report.reason || "No reason provided"}</p>
+                            {report.target?.caption && <p>{report.target.caption}</p>}
+                            {report.target?.name && <p>Community/profile: {report.target.name}</p>}
+                            {report.target?.isEncrypted && <small>Encrypted message; message content is not visible to admins.</small>}
+                            {report.target?.moderationStatus && <small>Content status: {report.target.moderationStatus}</small>}
+                        </div>
+                        {status === "pending" && (
+                            <div className="ac-row">
+                                <button type="button" className="ok" onClick={() => review(report, "resolved")}>Resolve</button>
+                                <button type="button" className="danger" onClick={() => review(report, "dismissed")}>Dismiss</button>
+                            </div>
+                        )}
+                    </article>
+                ))}
+            </div>
+        </section>
+    );
+};
+
+const CommunitiesAdmin = () => {
+    const [items, setItems] = useState([]);
+    const [search, setSearch] = useState("");
+    const [query, setQuery] = useState("");
+
+    const load = useCallback(async () => {
+        try {
+            const response = await api.get("/admin/control/communities", { params: { search: query } });
+            setItems(response.data.items || []);
+        } catch (error) {
+            alert(error.response?.data?.message || "Could not load communities.");
+        }
+    }, [query]);
+
+    useEffect(() => { load(); }, [load]);
+
+    const moderate = async (community, action) => {
+        const reason = action === "restore" || action === "open"
+            ? ""
+            : window.prompt(`Reason to ${action} community ${community.name}:`, "");
+        if (action !== "restore" && action !== "open" && reason === null) return;
+        if (action !== "restore" && action !== "open" && !reason.trim()) {
+            alert("A reason is required.");
+            return;
+        }
+        try {
+            await api.patch(`/admin/control/communities/${community._id}`, { action, reason });
+            await load();
+        } catch (error) {
+            alert(error.response?.data?.message || "Could not update community.");
+        }
+    };
+
+    const transfer = async community => {
+        const ownerId = window.prompt(`Enter the new owner's user ID for ${community.name}:`);
+        if (!ownerId) return;
+        const reason = window.prompt("Reason for transferring ownership:", "");
+        if (reason === null) return;
+        try {
+            await api.patch(`/admin/control/communities/${community._id}`, {
+                action: "transfer",
+                ownerId,
+                reason
+            });
+            await load();
+        } catch (error) {
+            alert(error.response?.data?.message || "Could not transfer ownership.");
+        }
+    };
+
+    return (
+        <section>
+            <form className="ac-filters" onSubmit={event => { event.preventDefault(); setQuery(search.trim()); }}>
+                <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search communities" />
+                <button type="submit">Search</button>
+            </form>
+            <div className="ac-list">
+                {items.map(community => (
+                    <article className="ac-community" key={community._id}>
+                        <div>
+                            <b>{community.name}</b>
+                            <small>Owner: {community.createdBy?.name || "Unknown"} · {community.members?.length || 0} members · {community.privacy}</small>
+                            {community.description && <p>{community.description}</p>}
+                            {community.moderationReason && <small>Moderation reason: {community.moderationReason}</small>}
+                        </div>
+                        <div className="ac-row">
+                            {community.isHidden
+                                ? <button type="button" onClick={() => moderate(community, "restore")}>Unhide</button>
+                                : <button type="button" className="warn" onClick={() => moderate(community, "hide")}>Hide</button>}
+                            {community.isClosed
+                                ? <button type="button" onClick={() => moderate(community, "open")}>Reopen</button>
+                                : <button type="button" className="warn" onClick={() => moderate(community, "close")}>Close</button>}
+                            <button type="button" onClick={() => transfer(community)}>Transfer owner</button>
+                        </div>
+                    </article>
+                ))}
+            </div>
+        </section>
+    );
+};
+
+const AuditLogs = () => {
+    const [items, setItems] = useState([]);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        api.get("/admin/control/audit-logs")
+            .then(response => setItems(response.data.items || []))
+            .catch(requestError => setError(requestError.response?.data?.message || "Could not load audit logs."));
+    }, []);
+
+    if (error) return <p className="ac-note error">{error}</p>;
+    return (
+        <div className="ac-list">
+            {items.map(log => (
+                <article className="ac-audit" key={log._id}>
+                    <b>{log.action}</b>
+                    <span>{log.admin?.name || "Admin"} ({log.adminRole}) · {fmtDate(log.createdAt)}</span>
+                    <small>{log.targetType}{log.targetId ? ` · ${log.targetId}` : ""}{log.reason ? ` · ${log.reason}` : ""}</small>
+                </article>
+            ))}
+            {!items.length && <p className="ac-note">No audit events recorded.</p>}
+        </div>
+    );
+};
+
+const PlatformControls = () => {
+    const [settings, setSettings] = useState(null);
+    const [words, setWords] = useState("");
+    const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        api.get("/admin/control/platform-settings")
+            .then(response => {
+                setSettings(response.data.settings);
+                setWords((response.data.settings.prohibitedWords || []).join(", "));
+            })
+            .catch(requestError => setError(requestError.response?.data?.message || "Could not load platform controls."));
+    }, []);
+
+    const save = async event => {
+        event.preventDefault();
+        if (!settings) return;
+        try {
+            setBusy(true);
+            setError("");
+            setNotice("");
+            const response = await api.put("/admin/control/platform-settings", {
+                ...settings,
+                reelMaxDurationSeconds: Number(settings.reelMaxDurationSeconds),
+                reelMaxSizeBytes: Number(settings.reelMaxSizeBytes),
+                prohibitedWords: words.split(",").map(word => word.trim()).filter(Boolean)
+            });
+            setSettings(response.data.settings);
+            setWords((response.data.settings.prohibitedWords || []).join(", "));
+            setNotice("Platform settings saved.");
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not save platform controls.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    if (!settings) return <p className={`ac-note ${error ? "error" : ""}`}>{error || "Loading platform controls..."}</p>;
+    return (
+        <form className="ac-platform-controls" onSubmit={save}>
+            {error && <p className="ac-note error" role="alert">{error}</p>}
+            {notice && <p className="ac-note" role="status">{notice}</p>}
+            <label className="ac-setting-row">
+                <span><b>New registrations</b><small>Allow users to create accounts.</small></span>
+                <input type="checkbox" checked={settings.registrationEnabled} onChange={event => setSettings({ ...settings, registrationEnabled: event.target.checked })} />
+            </label>
+            <label>
+                Maximum reel length (seconds; 15-300)
+                <input type="number" min="15" max="300" value={settings.reelMaxDurationSeconds} onChange={event => setSettings({ ...settings, reelMaxDurationSeconds: event.target.value })} required />
+            </label>
+            <label>
+                Maximum reel size (MB; 1-80)
+                <input type="number" min="1" max="80" value={Math.round(settings.reelMaxSizeBytes / (1024 * 1024))} onChange={event => setSettings({ ...settings, reelMaxSizeBytes: Number(event.target.value) * 1024 * 1024 })} required />
+            </label>
+            <label>
+                Prohibited words (comma-separated)
+                <textarea rows={4} maxLength={14000} value={words} onChange={event => setWords(event.target.value)} />
+            </label>
+            <button type="submit" disabled={busy}>{busy ? "Saving..." : "Save platform settings"}</button>
+        </form>
+    );
+};
+
 /* ------------------------------------------------ page */
 
 const AdminControl = () => {
 
     const { user } = useApp();
 
+    const adminRole = user?.adminRole || "super_admin";
     const [tab, setTab] = useState("overview");
 
     if (user?.role !== "admin") {
@@ -1447,7 +1781,18 @@ const AdminControl = () => {
             </div>
 
             <div className="ac-tabs">
-                {[["overview", "Overview"], ["users", "Users"], ["content", "Content"], ["shop", "Shop"], ["updates", "App updates"], ["announcements", "Announcements"]].map(([key, label]) => (
+                {[
+                    ["overview", "Overview", ["super_admin", "moderator", "support"]],
+                    ["users", "Users", ["super_admin", "support"]],
+                    ["content", "Content", ["super_admin", "moderator"]],
+                    ["reports", "Reports", ["super_admin", "moderator"]],
+                    ["communities", "Communities", ["super_admin", "moderator"]],
+                    ["audit", "Audit log", ["super_admin"]],
+                    ["platform", "Platform settings", ["super_admin"]],
+                    ["shop", "Shop", ["super_admin"]],
+                    ["updates", "App updates", ["super_admin"]],
+                    ["announcements", "Announcements", ["super_admin"]]
+                ].filter(([, , roles]) => roles.includes(adminRole)).map(([key, label]) => (
                     <button type="button" key={key} className={tab === key ? "on" : ""} onClick={() => setTab(key)}>
                         {label}
                     </button>
@@ -1455,8 +1800,12 @@ const AdminControl = () => {
             </div>
 
             {tab === "overview" && <Overview />}
-            {tab === "users" && <Users myId={user._id || user.id} />}
+            {tab === "users" && <Users myId={user._id || user.id} adminRole={adminRole} />}
             {tab === "content" && <Content />}
+            {tab === "reports" && <Reports />}
+            {tab === "communities" && <CommunitiesAdmin />}
+            {tab === "audit" && <AuditLogs />}
+            {tab === "platform" && <PlatformControls />}
             {tab === "shop" && <ShopSettings />}
             {tab === "updates" && <PlatformUpdates />}
             {tab === "announcements" && <Announcements />}

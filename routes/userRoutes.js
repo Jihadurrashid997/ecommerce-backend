@@ -14,6 +14,7 @@ const {
     searchUsers,
     getPublicProfile,
     deleteUser,
+    deleteOwnAccount,
     blockUser,
     unblockUser,
     getBlockedUsers,
@@ -32,6 +33,7 @@ const {
 
 const auth =
     require("../middleware/auth");
+const { requirePermission } = require("../middleware/adminPermissions");
 
 const {
     profileUpload,
@@ -49,6 +51,7 @@ const {
 router.get("/settings", auth(), getSettings);
 router.patch("/settings", auth(), updateSettings);
 router.patch("/change-password", auth(), changePassword);
+router.delete("/account", auth(), deleteOwnAccount);
 router.get("/blocked", auth(), getBlockedUsers);
 
 router.get(
@@ -165,6 +168,7 @@ router.get(
 router.get(
     "/",
     auth(["admin"]),
+    requirePermission("users_read"),
     getUsers
 );
 
@@ -174,6 +178,7 @@ router.get(
 router.delete(
     "/:id",
     auth(["admin"]),
+    requirePermission("user_moderate"),
     deleteUser
 );
 

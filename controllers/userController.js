@@ -4,6 +4,13 @@ const User = require("../models/User");
 const Message = require("../models/Message");
 const MessageRequest = require("../models/MessageRequest");
 const Post = require("../models/Post");
+const Story = require("../models/Story");
+const Community = require("../models/Community");
+const SavedPost = require("../models/SavedPost");
+const ContentReport = require("../models/ContentReport");
+const UserReport = require("../models/UserReport");
+const DeviceSession = require("../models/DeviceSession");
+const auth = require("../middleware/auth");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
 const { notifyUser } = require("../services/platformNotifications");
 const {
@@ -1356,6 +1363,75 @@ exports.deleteUser = async (req, res) => {
 
     }
 
+};
+
+exports.deleteOwnAccount = async (req, res) => {
+    if (String(req.body?.confirmation || "") !== "DELETE") {
+        return res.status(400).json({
+            success: false,
+            message: 'Type "DELETE" to confirm account deletion.'
+        });
+    }
+
+    const userId = req.user.id;
+    try {
+        const [posts, stories, messageRequests] = await Promise.all([
+            Post.find({ author: userId }).select("media").lean(),
+            Story.find({ owner: userId }).select("media").lean(),
+            MessageRequest.find({
+                $or: [{ sender: userId }, { recipient: userId }]
+            }).select("fileUrl filePublicId fileStorageType fileType fileDeliveryType fileName").lean()
+        ]);
+        for (const post of posts) {
+            for (const media of post.media || []) await deleteFile(media);
+        }
+        for (const story of stories) {
+            if (story.media?.url) await deleteFile(story.media);
+        }
+        for (const request of messageRequests) {
+            if (request.fileUrl || request.filePublicId) {
+                await deleteFile({
+                    url: request.fileUrl,
+                    publicId: request.filePublicId,
+                    type: request.fileStorageType,
+                    mimeType: request.fileType,
+                    deliveryType: request.fileDeliveryType,
+                    fileName: request.fileName
+                });
+            }
+        }
+
+        await Promise.all([
+            Post.deleteMany({ author: userId }),
+            Post.updateMany({}, { $pull: { likes: userId, comments: { user: userId }, taggedUsers: userId } }),
+            Story.deleteMany({ owner: userId }),
+            Message.deleteMany({ $or: [{ sender: userId }, { receiver: userId }] }),
+            MessageRequest.deleteMany({ $or: [{ sender: userId }, { recipient: userId }] }),
+            SavedPost.deleteMany({ user: userId }),
+            Community.deleteMany({ createdBy: userId }),
+            Community.updateMany(
+                { createdBy: { $ne: userId } },
+                { $pull: { members: userId, admins: userId, pendingRequests: userId } }
+            ),
+            UserReport.deleteMany({ $or: [{ reporter: userId }, { reportedUser: userId }] }),
+            ContentReport.deleteMany({ $or: [{ reporter: userId }, { targetOwner: userId }] }),
+            DeviceSession.deleteMany({ user: userId }),
+            User.updateMany(
+                { _id: { $ne: userId } },
+                { $pull: { following: userId, blockedUsers: userId } }
+            )
+        ]);
+        await User.deleteOne({ _id: userId });
+        auth.invalidate(userId);
+        refreshMessengerPresence(req);
+        return res.json({ success: true, message: "Your account has been deleted." });
+    } catch (error) {
+        console.error("DELETE OWN ACCOUNT ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not delete the account. Please try again."
+        });
+    }
 };
 
 

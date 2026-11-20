@@ -113,8 +113,27 @@ button:disabled { opacity: .5; cursor: default; }
 .ac-content-media img, .ac-content-media video { width: 100%; height: 100%; object-fit: contain; }
 .ac-content-body { padding: 10px; display: flex; flex-direction: column; gap: 4px; }
 .ac-content-body p { margin: 0; font-size: 13px; }
+.ac-report, .ac-community, .ac-audit { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid rgba(127,127,127,.28); border-radius: 14px; background: rgba(127,127,127,.1); }
+.ac-report > div:first-child, .ac-community > div:first-child, .ac-audit { min-width: 0; }
+.ac-report small, .ac-community small, .ac-audit span, .ac-audit small { display: block; opacity: .7; overflow-wrap: anywhere; }
+.ac-report p, .ac-community p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.ac-community .ac-row { flex-wrap: wrap; justify-content: flex-end; }
+.ac-community .ac-row button, .ac-report .ac-row button { padding: 8px 11px; border: 1px solid rgba(127,127,127,.35); border-radius: 9px; color: inherit; background: rgba(127,127,127,.12); font-weight: 700; cursor: pointer; }
+.ac-report .ac-row .danger { color: white; background: #dc2626; border-color: #dc2626; }
+.ac-report .ac-row .ok { color: white; background: #16a34a; border-color: #16a34a; }
+.ac-audit { display: block; }
+.ac-repeat-reports { margin: 12px 0; padding: 14px; border: 1px solid rgba(245, 158, 11, .38); border-radius: 14px; background: rgba(245, 158, 11, .08); }
+.ac-repeat-reports h3 { margin: 0 0 8px; }
+.ac-repeat-reports p { margin: 6px 0; }
+.ac-platform-controls { display: grid; gap: 12px; max-width: 700px; padding: 16px; border: 1px solid rgba(127,127,127,.28); border-radius: 14px; background: rgba(127,127,127,.08); }
+.ac-platform-controls > label:not(.ac-setting-row) { display: grid; gap: 6px; font-weight: 650; }
+.ac-platform-controls input[type="number"], .ac-platform-controls textarea { width: 100%; padding: 10px 12px; border: 1px solid rgba(127,127,127,.4); border-radius: 10px; background: #fff; color: #111; font: inherit; }
+.ac-platform-controls > button { justify-self: start; padding: 10px 14px; border: 0; border-radius: 10px; background: #1159ff; color: white; font-weight: 700; }
+.ac-audit b { display: block; }
 
 @media (max-width: 680px) {
     .ac-payout-actions, .ac-refund-actions { grid-template-columns: 1fr; }
+    .ac-report, .ac-community { flex-direction: column; }
+    .ac-community .ac-row { justify-content: flex-start; }
 }
 .ac-content-body small { opacity: .7; }

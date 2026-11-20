@@ -52,6 +52,10 @@
 .settings-password-form button { justify-self: start; }
 .settings-password-form a { align-self: center; color: #a5b4fc; font-size: 13px; }
 .settings-security-note { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: #9aa8bc; font-size: 12px; }
+.settings-danger-zone { border-color: rgba(248, 113, 113, .45); }
+.settings-danger-zone button { padding: 10px 14px; border: 0; border-radius: 10px; background: #dc2626; color: white; font: inherit; font-weight: 700; }
+.settings-danger-zone > p { margin: 14px 0 0; font-size: 13px; }
+.settings-danger-zone a { color: #a5b4fc; }
 
 html[data-theme="light"] body { background: #f1f5f9; color: #172033; }
 html[data-theme="light"] .App { background: linear-gradient(135deg, #f8fafc, #e2e8f0); color: #172033; }
