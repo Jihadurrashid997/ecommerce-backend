@@ -26,17 +26,11 @@ import {
     startOutgoingCall
 } from "expo-callkit-telecom";
 import type {
-    AudioRoute,
     CallAnsweredEvent,
     CallEndedEvent,
     CallSession,
     IncomingCallEvent
 } from "expo-callkit-telecom";
-import {
-    addProximityChangeListener,
-    startProximityMonitoring,
-    stopProximityMonitoring
-} from "./proximitySensor";
 
 const API_BASE_URL =
     process.env.EXPO_PUBLIC_API_URL ||
@@ -139,12 +133,7 @@ export class DirectCallService {
     private pendingCandidates: RTCIceCandidate[] = [];
     private hasReportedConnected = false;
     private appStateSubscription: { remove: () => void } | null = null;
-    private proximitySubscription: { remove: () => void } | null = null;
     private audioRouteSubscription: { remove: () => void } | null = null;
-    private proximityGeneration = 0;
-    private proximityNear: boolean | null = null;
-    private speakerOverride: boolean | null = null;
-    private manualSpeakerOverride: boolean | null = null;
     private pendingNativeAnswer: CallAnsweredEvent | null = null;
     private pendingNativeEnd: CallEndedEvent | null = null;
     private ignoredNativeEnds = new Set<string>();
@@ -438,8 +427,6 @@ export class DirectCallService {
             setRTCAudioSessionConfiguration(configureForVideo);
             prepareAudioSessionForCall(configureForVideo);
             setAudioSessionPortOverride(speakerEnabled);
-            this.manualSpeakerOverride = speakerEnabled;
-            this.speakerOverride = speakerEnabled;
             this.update({ speakerEnabled, error: "" });
         } catch (error) {
             this.reportError(error, "Could not switch the call audio output.");
@@ -845,9 +832,6 @@ export class DirectCallService {
         this.call = { ...this.call, mode: "connected", status: "connected" };
         this.update({ call: this.call });
         this.startAudioRouteObservation();
-        if (this.call.type === "audio") {
-            void this.startProximityAudioRouting();
-        }
         if (this.call.nativeRequestId) {
             const requestId = this.call.nativeRequestId;
             this.call = { ...this.call, nativeRequestId: undefined };
@@ -1030,101 +1014,6 @@ export class DirectCallService {
         });
     }
 
-    private async startProximityAudioRouting() {
-        if (!this.call || this.proximitySubscription) {
-            return;
-        }
-
-        const generation = ++this.proximityGeneration;
-        this.proximityNear = null;
-        this.speakerOverride = null;
-        this.proximitySubscription = addProximityChangeListener(event => {
-            const proximityChanged =
-                this.proximityNear !== null &&
-                this.proximityNear !== event.near;
-            this.proximityNear = event.near;
-            if (proximityChanged) {
-                this.manualSpeakerOverride = null;
-            }
-            this.applyProximityAudioRoute();
-        });
-
-        try {
-            const available = await startProximityMonitoring();
-            if (generation !== this.proximityGeneration || !this.call) {
-                await stopProximityMonitoring();
-                return;
-            }
-            if (!available) {
-                this.stopProximityAudioRouting(false);
-                this.reportError(
-                    new Error(
-                        "This phone has no proximity sensor. Call audio will stay on its default route."
-                    ),
-                    "Automatic call audio routing is unavailable."
-                );
-            }
-        } catch (error) {
-            if (generation === this.proximityGeneration) {
-                this.stopProximityAudioRouting(false);
-                this.reportError(
-                    error,
-                    "Could not start proximity-based audio routing."
-                );
-            }
-        }
-    }
-
-    private applyProximityAudioRoute(route?: AudioRoute) {
-        if (this.proximityNear === null || !this.call) {
-            return;
-        }
-
-        let currentRoute = route;
-        try {
-            currentRoute ||= getAudioSession().currentRoute;
-        } catch (error) {
-            this.reportError(error, "Could not read the active audio route.");
-            return;
-        }
-
-        const outputs = currentRoute.outputs || [];
-        if (outputs.length === 0) {
-            return;
-        }
-
-        const hasExternalOutput = outputs.some(
-            output =>
-                output.portType !== "builtInReceiver" &&
-                output.portType !== "builtInSpeaker"
-        );
-        if (hasExternalOutput) {
-            if (this.speakerOverride === true) {
-                setAudioSessionPortOverride(false);
-            }
-            this.speakerOverride = null;
-            this.manualSpeakerOverride = null;
-            this.update({ speakerEnabled: false });
-            return;
-        }
-
-        const shouldUseSpeaker =
-            this.manualSpeakerOverride ?? !this.proximityNear;
-        if (this.speakerOverride === shouldUseSpeaker) {
-            return;
-        }
-        try {
-            setAudioSessionPortOverride(shouldUseSpeaker);
-            this.speakerOverride = shouldUseSpeaker;
-            this.update({ speakerEnabled: shouldUseSpeaker });
-        } catch (error) {
-            this.reportError(
-                error,
-                "Could not switch between earpiece and speaker."
-            );
-        }
-    }
-
     private startAudioRouteObservation() {
         if (this.audioRouteSubscription) {
             return;
@@ -1134,18 +1023,7 @@ export class DirectCallService {
             const speakerEnabled = outputs.some(
                 output => output.portType === "builtInSpeaker"
             );
-            const hasExternalOutput = outputs.some(
-                output =>
-                    output.portType !== "builtInReceiver" &&
-                    output.portType !== "builtInSpeaker"
-            );
             this.update({ speakerEnabled });
-            if (hasExternalOutput) {
-                this.speakerOverride = null;
-                this.manualSpeakerOverride = null;
-                return;
-            }
-            this.applyProximityAudioRoute(event.currentRoute);
         });
         try {
             const currentRoute = getAudioSession().currentRoute;
@@ -1159,23 +1037,9 @@ export class DirectCallService {
         }
     }
 
-    private stopProximityAudioRouting(stopRouteObservation = true) {
-        const wasMonitoring = Boolean(this.proximitySubscription);
-        this.proximityGeneration += 1;
-        this.proximitySubscription?.remove();
-        this.proximitySubscription = null;
-        if (stopRouteObservation) {
-            this.audioRouteSubscription?.remove();
-            this.audioRouteSubscription = null;
-        }
-        this.proximityNear = null;
-        this.speakerOverride = null;
-        this.manualSpeakerOverride = null;
-        if (wasMonitoring) {
-            void stopProximityMonitoring().catch(error => {
-                console.error("Could not stop proximity monitoring:", error);
-            });
-        }
+    private stopAudioRouteObservation() {
+        this.audioRouteSubscription?.remove();
+        this.audioRouteSubscription = null;
     }
 
     private finishCall(message: string) {
@@ -1194,7 +1058,7 @@ export class DirectCallService {
     }
 
     private clearMedia() {
-        this.stopProximityAudioRouting();
+        this.stopAudioRouteObservation();
         this.peer?.close();
         this.peer = null;
         this.localStream?.getTracks().forEach(track => track.stop());
