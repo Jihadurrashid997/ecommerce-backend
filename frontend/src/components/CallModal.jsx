@@ -35,7 +35,6 @@ const CallModal = ({
     peerConnection = null,
     callRole = "unknown",
     callDuration = 0,
-    cameraFacing = "user",
     cameraEnabled = false,
     cameraZoom = 1,
     cameraZoomRange = null,
@@ -930,10 +929,7 @@ const CallModal = ({
                             background: "#000",
                             border:
                                 "2px solid rgba(255,255,255,.35)",
-                            transform:
-                                cameraFacing === "user"
-                                    ? "scaleX(-1)"
-                                    : "none"
+                            transform: "none"
                         }}
                     />
 

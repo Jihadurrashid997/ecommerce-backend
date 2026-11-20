@@ -523,7 +523,6 @@ const GroupCallModal = ({
                                 key={participant.identity}
                                 participant={participant}
                                 isLocal={participant === room?.localParticipant}
-                                cameraFacing={cameraFacing}
                                 revision={revision}
                             />
                         ))}
@@ -589,7 +588,6 @@ const GroupCallModal = ({
 const ParticipantTile = ({
     participant,
     isLocal,
-    cameraFacing = "user",
     revision
 }) => {
     const mediaRef = useRef(null);
@@ -621,10 +619,7 @@ const ParticipantTile = ({
                 element.autoplay = true;
                 element.playsInline = true;
                 element.muted = isLocal;
-                element.style.transform =
-                    isLocal && cameraFacing === "user"
-                        ? "scaleX(-1)"
-                        : "none";
+                element.style.transform = "none";
             } else {
                 element.className = "group-call-audio";
                 element.autoplay = true;
@@ -638,7 +633,7 @@ const ParticipantTile = ({
                 publication.track?.detach().forEach(element => element.remove());
             });
         };
-    }, [participant, isLocal, cameraFacing, revision]);
+    }, [participant, isLocal, revision]);
 
     return (
         <article className="group-call-tile">

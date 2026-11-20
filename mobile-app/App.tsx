@@ -642,7 +642,7 @@ export default function App() {
                             <RTCView
                                 streamURL={localPreview.toURL()}
                                 objectFit="cover"
-                                mirror={!callState.sharingScreen}
+                                mirror={false}
                                 style={styles.localVideo}
                             />
                         )}
