@@ -61,7 +61,6 @@ const MessengerAttachmentViewer = ({
                         <iframe
                             src={url}
                             title={`PDF preview: ${fileName}`}
-                            sandbox="allow-scripts"
                             referrerPolicy="no-referrer"
                         />
                     ) : (

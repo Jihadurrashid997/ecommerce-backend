@@ -9344,8 +9344,28 @@ const onCallMissed =
             }
             const previewQuery = shouldDownload ? "" : "?disposition=inline";
             const response = await api.get(
-                `/messages/${encodeURIComponent(messageId)}/attachment-download${previewQuery}`
+                `/messages/${encodeURIComponent(messageId)}/attachment-download${previewQuery}`,
+                shouldDownload
+                    ? undefined
+                    : { responseType: "blob" }
             );
+            if (!shouldDownload) {
+                const pdfBlob =
+                    response.data instanceof Blob
+                        ? response.data
+                        : new Blob([response.data], {
+                            type: "application/pdf"
+                        });
+                const previewUrl =
+                    window.URL.createObjectURL(pdfBlob);
+                openAttachmentViewer(
+                    previewUrl,
+                    "application/pdf",
+                    filename || "attachment.pdf",
+                    messageId
+                );
+                return;
+            }
             const downloadUrl = getUploadUrl(response.data?.downloadUrl || "");
             if (!downloadUrl) {
                 throw new Error("The server did not provide a PDF download URL.");

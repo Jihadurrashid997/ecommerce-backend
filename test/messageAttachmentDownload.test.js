@@ -13,6 +13,11 @@ const createResponse = () => {
             this.statusCode = code;
             return this;
         },
+        send(body) {
+            this.body = body;
+            return this;
+        },
+        setHeader() {},
         json(body) {
             this.body = body;
             return this;
@@ -54,6 +59,7 @@ test("PDF previews are inline while explicit PDF downloads remain attachments", 
     const originals = {
         findById: Message.findById,
         privateDownloadUrl: cloudinary.utils.private_download_url,
+        fetch: global.fetch,
         cloudName: process.env.CLOUDINARY_CLOUD_NAME,
         apiKey: process.env.CLOUDINARY_API_KEY,
         apiSecret: process.env.CLOUDINARY_API_SECRET
@@ -66,6 +72,11 @@ test("PDF previews are inline while explicit PDF downloads remain attachments", 
         downloadOptions.push({ publicId, format, ...options });
         return "https://api.cloudinary.example/temporary-pdf";
     };
+    global.fetch = async () =>
+        new Response("%PDF-1.7 test", {
+            status: 200,
+            headers: { "Content-Type": "application/pdf" }
+        });
     Message.findById = () => ({
         select: () => ({
             lean: async () => ({
@@ -104,11 +115,12 @@ test("PDF previews are inline while explicit PDF downloads remain attachments", 
 
         assert.equal(previewResponse.statusCode, 200);
         assert.equal(downloadResponse.statusCode, 200);
-        assert.equal(downloadOptions[0].attachment, false);
-        assert.equal(downloadOptions[1].attachment, true);
+        assert.ok(downloadOptions.some(options => options.attachment === false));
+        assert.ok(downloadOptions.some(options => options.attachment === true));
     } finally {
         Message.findById = originals.findById;
         cloudinary.utils.private_download_url = originals.privateDownloadUrl;
+        global.fetch = originals.fetch;
         if (originals.cloudName === undefined) {
             delete process.env.CLOUDINARY_CLOUD_NAME;
         } else {

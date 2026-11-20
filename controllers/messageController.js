@@ -1044,21 +1044,89 @@ exports.getAttachmentDownload = async (req, res) => {
             });
         }
 
-        const downloadUrl =
-            isCloudinaryConfigured() && message.filePublicId
-                ? getPrivateDownloadUrl(
-                    message.filePublicId,
+        const inlinePdf =
+            message.fileType === "application/pdf" &&
+            req.query?.disposition === "inline";
+        const downloadUrls = [];
+        if (isCloudinaryConfigured() && message.filePublicId) {
+            downloadUrls.push(getPrivateDownloadUrl(
+                message.filePublicId,
+                message.fileName,
+                {
+                    mediaType: message.fileStorageType,
+                    mimeType: message.fileType,
+                    deliveryType: message.fileDeliveryType,
+                    attachment:
+                        message.fileType === "application/pdf" &&
+                        req.query?.disposition !== "inline"
+                }
+            ));
+            downloadUrls.push(getPrivateDownloadUrl(
+                message.filePublicId,
+                message.fileName,
+                {
+                    mediaType: message.fileStorageType,
+                    mimeType: message.fileType,
+                    deliveryType: message.fileDeliveryType,
+                    attachment:
+                        message.fileType === "application/pdf" &&
+                        req.query?.disposition !== "inline",
+                    preserveExtension: true
+                }
+            ));
+            if (
+                message.fileType === "application/pdf" &&
+                !/\.(pdf)$/i.test(message.filePublicId)
+            ) {
+                downloadUrls.push(getPrivateDownloadUrl(
+                    `${message.filePublicId}.pdf`,
                     message.fileName,
                     {
                         mediaType: message.fileStorageType,
                         mimeType: message.fileType,
                         deliveryType: message.fileDeliveryType,
                         attachment:
-                            message.fileType === "application/pdf" &&
-                            req.query?.disposition !== "inline"
+                            req.query?.disposition !== "inline",
+                        preserveExtension: true
                     }
-                )
-                : message.fileUrl;
+                ));
+            }
+        }
+        if (message.fileUrl) {
+            downloadUrls.push(message.fileUrl);
+        }
+        const downloadUrl = downloadUrls[0] || message.fileUrl;
+
+        if (inlinePdf) {
+            for (const candidateUrl of downloadUrls) {
+                try {
+                    const candidate = await fetch(candidateUrl);
+                    if (!candidate.ok) {
+                        continue;
+                    }
+                    const contentType =
+                        candidate.headers.get("content-type") || "";
+                    const bytes = Buffer.from(await candidate.arrayBuffer());
+                    if (
+                        contentType.includes("application/pdf") ||
+                        bytes.subarray(0, 5).toString("ascii") === "%PDF-"
+                    ) {
+                        res.setHeader("Content-Type", "application/pdf");
+                        res.setHeader(
+                            "Content-Disposition",
+                            "inline; filename*=UTF-8''" +
+                                encodeURIComponent(message.fileName || "attachment.pdf")
+                        );
+                        res.setHeader("Cache-Control", "private, max-age=300");
+                        return res.status(200).send(bytes);
+                    }
+                } catch (_) {}
+            }
+            return res.status(404).json({
+                success: false,
+                message: "PDF preview is unavailable."
+            });
+        }
 
         return res.status(200).json({
             success: true,
