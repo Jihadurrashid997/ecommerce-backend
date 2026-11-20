@@ -704,8 +704,23 @@ const Messenger = ({ isActive = true }) => {
     const [liveLocations, setLiveLocations] =
         useState([]);
 
-    const [showLiveLocationOptions, setShowLiveLocationOptions] =
+    const [showLocationChooser, setShowLocationChooser] =
         useState(false);
+
+    const [locationPickerPosition, setLocationPickerPosition] =
+        useState(null);
+
+    const [locationPickerLoading, setLocationPickerLoading] =
+        useState(false);
+
+    const [locationPickerError, setLocationPickerError] =
+        useState("");
+
+    const [locationComment, setLocationComment] =
+        useState("");
+
+    const [liveLocationDuration, setLiveLocationDuration] =
+        useState(60);
 
     const [liveLocationBusy, setLiveLocationBusy] =
         useState(false);
@@ -7091,7 +7106,12 @@ const onCallMissed =
     ===================================================== */
 
     const sendMessage =
-        async (event, messageOverride = message) => {
+        async (
+            event,
+            messageOverride = message,
+            messageType = "message",
+            preserveDraft = false
+        ) => {
 
             event?.preventDefault?.();
 
@@ -7216,6 +7236,7 @@ const onCallMissed =
                         : undefined,
                 message:
                     text,
+                type: messageType,
                 isEncrypted: encryptedChat,
                 createdAt:
                     createdAt,
@@ -7238,7 +7259,9 @@ const onCallMissed =
 
             scrollToBottom();
 
-            setMessage("");
+            if (!preserveDraft) {
+                setMessage("");
+            }
 
             setShowEmoji(false);
 
@@ -7268,6 +7291,7 @@ const onCallMissed =
                             ? {
                                   groupId: receiver,
                                   message: storedText,
+                                  type: messageType,
                                   isEncrypted: encryptedChat,
                                   clientMessageId,
                                   replyTo:
@@ -7277,6 +7301,7 @@ const onCallMissed =
                             : {
                                   receiver,
                                   message: storedText,
+                                  type: messageType,
                                   isEncrypted: encryptedChat,
                                   clientMessageId,
                                   replyTo:
@@ -7340,6 +7365,7 @@ const onCallMissed =
                         message:
                             saved.message ||
                             storedText,
+                        type: saved.type || messageType,
                         isEncrypted: encryptedChat,
                         replyTo:
                             saved.replyTo ||
@@ -7376,7 +7402,9 @@ const onCallMissed =
                             "This account is Private. Send your message as a Message Request?"
                         )
                     ) {
-                        setMessage(text);
+                        if (!preserveDraft) {
+                            setMessage(text);
+                        }
                         return;
                     }
 
@@ -7384,6 +7412,7 @@ const onCallMissed =
                         await api.post("/messages/requests", {
                             receiver,
                             message: storedText,
+                            type: messageType,
                             isEncrypted: encryptedChat
                         });
                         showMessengerToast(
@@ -7395,7 +7424,9 @@ const onCallMissed =
                             "Send Message Request error:",
                             requestError
                         );
-                        setMessage(text);
+                        if (!preserveDraft) {
+                            setMessage(text);
+                        }
                         alert(
                             requestError.response?.data?.message ||
                                 requestError.message ||
@@ -7419,6 +7450,7 @@ const onCallMissed =
                             roomId,
                             senderId: sender,
                             text: storedText,
+                            type: messageType,
                             isEncrypted: encryptedChat,
                             replyTo:
                                 getMessageId(replySnapshot) || undefined,
@@ -7493,6 +7525,7 @@ const onCallMissed =
                             ? { groupId: queued.targetId }
                             : { receiver: queued.targetId }),
                         message: queued.text,
+                        type: queued.type,
                         isEncrypted: queued.isEncrypted,
                         clientMessageId: queued.clientMessageId,
                         replyTo: queued.replyTo
@@ -7542,6 +7575,7 @@ const onCallMissed =
                               }
                             : { receiver: queued.targetId }),
                         message: saved.message || queued.text,
+                        type: saved.type || queued.type,
                         isEncrypted: queued.isEncrypted,
                         replyTo: saved.replyTo || undefined,
                         _id: saved._id || saved.id,
@@ -7618,54 +7652,82 @@ const onCallMissed =
         };
     }, [flushMessageOutbox]);
 
-    const shareCurrentLocation =
-        async () => {
-            if (!selectedUser || isConversationBlocked) {
-                return;
-            }
+    const refreshLocationPickerPosition = async () => {
+        setLocationPickerError("");
+        setLocationPickerPosition(null);
+        if (!navigator.geolocation) {
+            setLocationPickerError(
+                "This browser does not support location sharing."
+            );
+            return;
+        }
 
-            if (!navigator.geolocation) {
-                alert("This browser does not support location sharing.");
-                return;
-            }
+        setLocationPickerLoading(true);
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    resolve,
+                    reject,
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: 15000
+                    }
+                );
+            });
+            setLocationPickerPosition({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy
+            });
+        } catch (error) {
+            const messageByCode = {
+                1: "Location permission was denied. Allow location access to share your location.",
+                2: "Your current location is unavailable. Try again when your device can determine it.",
+                3: "Location lookup timed out. Please try again."
+            };
+            setLocationPickerError(
+                messageByCode[error.code] ||
+                    error.message ||
+                    "Unable to get your current location."
+            );
+        } finally {
+            setLocationPickerLoading(false);
+        }
+    };
 
-            const audience = selectedUser.isGroup
-                ? `all ${selectedUser.participants?.length || "group"} members`
-                : getUserName(selectedUser);
+    const openLocationChooser = () => {
+        if (!selectedUser || isConversationBlocked) {
+            return;
+        }
+        setLocationComment("");
+        setLocationPickerPosition(null);
+        setShowLocationChooser(true);
+        void refreshLocationPickerPosition();
+    };
 
-            if (!window.confirm(
-                `Share your approximate current location with ${audience}? This sends a one-time pin in the chat; it does not track you.`
-            )) {
-                return;
-            }
+    const closeLocationChooser = () => {
+        if (liveLocationBusy) {
+            return;
+        }
+        setShowLocationChooser(false);
+        setLocationPickerError("");
+    };
 
-            try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(
-                        resolve,
-                        reject,
-                        {
-                            enableHighAccuracy: false,
-                            maximumAge: 0,
-                            timeout: 12000
-                        }
-                    );
-                });
-                await sendMessage(null, createLocationMessage(
-                    position.coords.latitude,
-                    position.coords.longitude
-                ));
-            } catch (error) {
-                const messageByCode = {
-                    1: "Location permission was denied. Allow location access in your browser to share a pin.",
-                    2: "Your current location is unavailable. Try again when your device can determine its location.",
-                    3: "Location lookup timed out. Please try again."
-                };
-
-                console.error("Messenger location sharing error:", error);
-                alert(messageByCode[error.code] || error.message || "Unable to share your location.");
-            }
-        };
+    const shareCurrentLocation = async () => {
+        if (!locationPickerPosition) {
+            return;
+        }
+        const { latitude, longitude } = locationPickerPosition;
+        await sendMessage(
+            null,
+            createLocationMessage(latitude, longitude, locationComment),
+            "location",
+            true
+        );
+        setShowLocationChooser(false);
+        setLocationComment("");
+    };
 
     const clearLiveLocationTracking = shareId => {
         if (
@@ -7732,17 +7794,10 @@ const onCallMissed =
             return;
         }
 
-        const audience = selectedUser.isGroup
-            ? `all ${selectedUser.participants?.length || "group"} members`
-            : getUserName(selectedUser);
-        const durationLabel = {
-            15: "15 minutes",
-            60: "1 hour",
-            480: "8 hours"
-        }[durationMinutes];
-        if (!window.confirm(
-            `Share your live location with ${audience} for ${durationLabel}? It stops automatically at expiry or when you stop it. Only the latest location is kept.`
-        )) {
+        if (!locationPickerPosition) {
+            setLocationPickerError(
+                "Wait for your current location before sharing it."
+            );
             return;
         }
 
@@ -7756,17 +7811,6 @@ const onCallMissed =
                 return;
             }
 
-            const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(
-                    resolve,
-                    reject,
-                    {
-                        enableHighAccuracy: false,
-                        maximumAge: 0,
-                        timeout: 12000
-                    }
-                );
-            });
             const response = await api.post(
                 "/messages/live-locations",
                 {
@@ -7774,8 +7818,8 @@ const onCallMissed =
                         ? { groupId: getId(selectedUser) }
                         : { recipientId: getId(selectedUser) }),
                     durationMinutes,
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
+                    latitude: locationPickerPosition.latitude,
+                    longitude: locationPickerPosition.longitude
                 }
             );
             const share = response.data?.data;
@@ -7789,7 +7833,17 @@ const onCallMissed =
                 ...previous.filter(item => item._id !== share._id),
                 share
             ]);
-            setShowLiveLocationOptions(false);
+            setShowLocationChooser(false);
+            setLocationPickerError("");
+            if (locationComment.trim()) {
+                await sendMessage(
+                    null,
+                    locationComment.trim(),
+                    "location",
+                    true
+                );
+            }
+            setLocationComment("");
             let lastUpdateAt = Date.now();
             const watchId = navigator.geolocation.watchPosition(
                 nextPosition => {
@@ -8691,6 +8745,15 @@ const onCallMissed =
 
     const handleEditSave =
         async () => {
+
+            if (
+                editingMessage?.type === "location" ||
+                parseLocationMessage(getMessageText(editingMessage))
+            ) {
+                showMessengerToast("Location messages cannot be edited.");
+                setEditingMessage(null);
+                return;
+            }
 
             const messageId =
                 getMessageId(editingMessage);
@@ -11359,12 +11422,17 @@ const onCallMissed =
 
                                         const messageCreatedAt =
                                             new Date(time).getTime();
+                                        const isLocationMessage =
+                                            item.type === "location" ||
+                                            (Boolean(location) &&
+                                                !item.isEncrypted);
                                         const canDeleteForEveryone =
                                             own &&
-                                            Number.isFinite(messageCreatedAt) &&
-                                            Date.now() >= messageCreatedAt &&
-                                            Date.now() - messageCreatedAt <=
-                                                15 * 60 * 1000;
+                                            (isLocationMessage ||
+                                                (Number.isFinite(messageCreatedAt) &&
+                                                    Date.now() >= messageCreatedAt &&
+                                                    Date.now() - messageCreatedAt <=
+                                                        15 * 60 * 1000));
 
 
                                         const seen =
@@ -11794,6 +11862,11 @@ const onCallMissed =
                                                                             {location.latitude.toFixed(4)},{" "}
                                                                             {location.longitude.toFixed(4)}
                                                                         </span>
+                                                                        {location.comment && (
+                                                                            <span className="message-location-comment">
+                                                                                {location.comment}
+                                                                            </span>
+                                                                        )}
                                                                         <a
                                                                             href={location.mapUrl}
                                                                             target="_blank"
@@ -11900,7 +11973,9 @@ const onCallMissed =
                                                                 </button>
                                                                 {own &&
                                                                     !item.isDeleted &&
-                                                                    item.type !== "call-log" && (
+                                                                    item.type !== "call-log" &&
+                                                                    item.type !== "location" &&
+                                                                    !location && (
                                                                         <button
                                                                             type="button"
                                                                             role="menuitem"
@@ -12319,63 +12394,16 @@ const onCallMissed =
 
                                 <button
                                     type="button"
-                                    title="Share approximate location"
-                                    aria-label="Share approximate location"
+                                    title="Share location"
+                                    aria-label="Share location"
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked
                                     }
-                                    onClick={shareCurrentLocation}
+                                    onClick={openLocationChooser}
                                 >
                                     <FaMapMarkerAlt />
                                 </button>
-
-                                <div className="live-location-menu-wrap">
-                                    <button
-                                        type="button"
-                                        title="Share live location"
-                                        aria-label="Share live location"
-                                        aria-expanded={showLiveLocationOptions}
-                                        disabled={
-                                            !selectedUser ||
-                                            isConversationBlocked ||
-                                            liveLocationBusy
-                                        }
-                                        onClick={() =>
-                                            setShowLiveLocationOptions(value => !value)
-                                        }
-                                    >
-                                        <FaClock />
-                                    </button>
-                                    {showLiveLocationOptions && (
-                                        <div
-                                            className="live-location-options"
-                                            role="group"
-                                            aria-label="Live location duration"
-                                        >
-                                            <strong>Share live location</strong>
-                                            <small>
-                                                Web sharing needs this page open. Use the JR Messenger mobile app for background updates.
-                                            </small>
-                                            {[15, 60, 480].map(duration => (
-                                                <button
-                                                    key={duration}
-                                                    type="button"
-                                                    disabled={liveLocationBusy}
-                                                    onClick={() =>
-                                                        startLiveLocation(duration)
-                                                    }
-                                                >
-                                                    {duration === 15
-                                                        ? "15 minutes"
-                                                        : duration === 60
-                                                        ? "1 hour"
-                                                        : "8 hours"}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
 
 
                                 <input
@@ -12932,6 +12960,227 @@ const onCallMissed =
                     onConnected={announceGroupCall}
                     onClose={closeGroupCall}
                 />
+            )}
+
+            {showLocationChooser && (
+                <div
+                    className="location-picker-overlay"
+                    onMouseDown={event => {
+                        if (event.target === event.currentTarget) {
+                            closeLocationChooser();
+                        }
+                    }}
+                    onKeyDown={event => {
+                        if (event.key === "Escape") {
+                            closeLocationChooser();
+                        }
+                    }}
+                >
+                    <section
+                        className="location-picker-dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="location-picker-title"
+                    >
+                        <header className="location-picker-header">
+                            <button
+                                type="button"
+                                aria-label="Close location sharing"
+                                disabled={liveLocationBusy}
+                                onClick={closeLocationChooser}
+                            >
+                                <FaArrowLeft />
+                            </button>
+                            <h2 id="location-picker-title">Send location</h2>
+                            <button
+                                type="button"
+                                aria-label="Refresh current location"
+                                disabled={locationPickerLoading}
+                                onClick={() =>
+                                    void refreshLocationPickerPosition()
+                                }
+                            >
+                                <FaMapMarkerAlt />
+                            </button>
+                        </header>
+
+                        <div className="location-picker-map">
+                            {locationPickerPosition ? (
+                                <iframe
+                                    src={`https://maps.google.com/maps?q=${locationPickerPosition.latitude},${locationPickerPosition.longitude}&z=16&output=embed`}
+                                    title="Map centered on your current location"
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer-when-downgrade"
+                                />
+                            ) : (
+                                <div className="location-picker-map-placeholder">
+                                    {locationPickerLoading
+                                        ? "Finding your location…"
+                                        : "Your location map will appear here"}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="location-picker-content">
+                            {locationPickerError && (
+                                <div
+                                    className="location-picker-error"
+                                    role="alert"
+                                >
+                                    {locationPickerError}
+                                    <button
+                                        type="button"
+                                        disabled={locationPickerLoading}
+                                        onClick={() =>
+                                            void refreshLocationPickerPosition()
+                                        }
+                                    >
+                                        Try again
+                                    </button>
+                                </div>
+                            )}
+
+                            {locationPickerPosition && (
+                                <>
+                                    <div className="location-picker-current">
+                                        <span className="location-picker-pin">
+                                            <FaMapMarkerAlt />
+                                        </span>
+                                        <div>
+                                            <strong>Send your current location</strong>
+                                            <span>
+                                                Accurate to{" "}
+                                                {Math.max(
+                                                    1,
+                                                    Math.round(
+                                                        locationPickerPosition.accuracy
+                                                    )
+                                                )}{" "}
+                                                meters
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={locationPickerLoading}
+                                            onClick={() =>
+                                                void refreshLocationPickerPosition()
+                                            }
+                                        >
+                                            Refresh
+                                        </button>
+                                    </div>
+
+                                    <a
+                                        className="location-picker-nearby-link"
+                                        href={`https://www.google.com/maps/search/?api=1&query=${locationPickerPosition.latitude},${locationPickerPosition.longitude}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        Explore nearby places in Maps
+                                    </a>
+
+                                    <div className="location-picker-live">
+                                        <strong>Share live location</strong>
+                                        <span>
+                                            Sharing stops automatically when time runs out. You can stop it any time.
+                                        </span>
+                                        <div
+                                            className="location-picker-durations"
+                                            role="group"
+                                            aria-label="Live location duration"
+                                        >
+                                            {[
+                                                { minutes: 15, label: "15 minutes" },
+                                                { minutes: 60, label: "1 hour" },
+                                                { minutes: 480, label: "8 hours" }
+                                            ].map(option => (
+                                                <button
+                                                    key={option.minutes}
+                                                    type="button"
+                                                    aria-pressed={
+                                                        liveLocationDuration ===
+                                                        option.minutes
+                                                    }
+                                                    className={
+                                                        liveLocationDuration ===
+                                                        option.minutes
+                                                            ? "selected"
+                                                            : ""
+                                                    }
+                                                    onClick={() =>
+                                                        setLiveLocationDuration(
+                                                            option.minutes
+                                                        )
+                                                    }
+                                                >
+                                                    {option.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <label className="location-picker-comment">
+                                        <span>Add a comment</span>
+                                        <textarea
+                                            value={locationComment}
+                                            maxLength={500}
+                                            onChange={event =>
+                                                setLocationComment(
+                                                    event.target.value
+                                                )
+                                            }
+                                            placeholder="Add a comment"
+                                        />
+                                    </label>
+
+                                    <div className="location-picker-actions">
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                !locationPickerPosition ||
+                                                locationPickerLoading ||
+                                                liveLocationBusy
+                                            }
+                                            onClick={() =>
+                                                void shareCurrentLocation()
+                                            }
+                                        >
+                                            Send current location
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="location-picker-live-action"
+                                            disabled={
+                                                !locationPickerPosition ||
+                                                locationPickerLoading ||
+                                                liveLocationBusy
+                                            }
+                                            onClick={() =>
+                                                void startLiveLocation(
+                                                    liveLocationDuration
+                                                )
+                                            }
+                                        >
+                                            {liveLocationBusy
+                                                ? "Starting…"
+                                                : `Share live location · ${
+                                                    liveLocationDuration === 15
+                                                        ? "15 minutes"
+                                                        : liveLocationDuration === 60
+                                                        ? "1 hour"
+                                                        : "8 hours"
+                                                }`}
+                                            <FaPaperPlane />
+                                        </button>
+                                    </div>
+                                    <small className="location-picker-web-note">
+                                        Keep Messenger open while sharing live location on the web.
+                                    </small>
+                                </>
+                            )}
+                        </div>
+                    </section>
+                </div>
             )}
 
            <CallModal

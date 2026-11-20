@@ -2715,56 +2715,278 @@
     overflow-wrap: anywhere;
 }
 
-.live-location-menu-wrap {
-    position: relative;
+.location-picker-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 11000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(3, 8, 12, 0.72);
 }
 
-.live-location-options {
-    position: absolute;
-    z-index: 20;
-    right: 0;
-    bottom: calc(100% + 8px);
+.location-picker-dialog {
+    display: flex;
+    width: min(100%, 520px);
+    height: min(860px, calc(100vh - 36px));
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 18px;
+    background: #0c1116;
+    color: #f7f9fa;
+    box-shadow: 0 24px 80px #0008;
+}
+
+.location-picker-header {
+    display: flex;
+    min-height: 64px;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px;
+    border-bottom: 1px solid #252b31;
+}
+
+.location-picker-header h2 {
+    flex: 1;
+    margin: 0;
+    font-size: 19px;
+    font-weight: 600;
+}
+
+.location-picker-header button {
     display: grid;
-    min-width: 190px;
-    gap: 5px;
-    padding: 10px;
-    border: 1px solid #dfe3ec;
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 8px 24px #17203324;
-}
-
-.live-location-options strong {
-    padding: 3px 6px 6px;
-    color: #343a4a;
-    font-size: 12px;
-}
-
-.live-location-options small {
-    max-width: 220px;
-    padding: 0 6px 5px;
-    color: #62718a;
-    font-size: 11px;
-    line-height: 1.4;
-}
-
-.live-location-options button {
-    padding: 8px 10px;
+    width: 40px;
+    height: 40px;
+    place-items: center;
     border: 0;
-    border-radius: 8px;
-    color: #374151;
-    background: #f3f5f9;
-    text-align: left;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
     cursor: pointer;
 }
 
-.live-location-options button:hover:not(:disabled) {
-    background: #e8edff;
+.location-picker-header button:hover:not(:disabled) {
+    background: #20272e;
 }
 
-.live-location-options button:disabled {
-    opacity: 0.6;
+.location-picker-header button:disabled {
+    opacity: 0.55;
     cursor: not-allowed;
+}
+
+.location-picker-map {
+    flex: 0 0 34%;
+    min-height: 210px;
+    background: #172331;
+}
+
+.location-picker-map iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: inherit;
+    border: 0;
+}
+
+.location-picker-map-placeholder {
+    display: grid;
+    height: 100%;
+    min-height: inherit;
+    place-items: center;
+    color: #c3ccd5;
+    font-size: 14px;
+}
+
+.location-picker-content {
+    display: grid;
+    min-height: 0;
+    flex: 1;
+    gap: 16px;
+    overflow: auto;
+    padding: 18px;
+}
+
+.location-picker-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: #ffb4ab;
+    font-size: 13px;
+}
+
+.location-picker-error button,
+.location-picker-current > button {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: #44d17c;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.location-picker-current {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 76px;
+}
+
+.location-picker-pin {
+    display: grid;
+    width: 54px;
+    height: 54px;
+    flex: 0 0 54px;
+    place-items: center;
+    border: 1px solid #28bd68;
+    border-radius: 50%;
+    color: #28d071;
+    font-size: 21px;
+}
+
+.location-picker-current > div {
+    display: grid;
+    flex: 1;
+    gap: 4px;
+    min-width: 0;
+}
+
+.location-picker-current strong,
+.location-picker-live > strong {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.location-picker-current > div > span,
+.location-picker-live > span,
+.location-picker-web-note {
+    color: #a4adb6;
+    font-size: 13px;
+}
+
+.location-picker-nearby-link {
+    color: #49d380;
+    font-size: 13px;
+    text-decoration: none;
+}
+
+.location-picker-live {
+    display: grid;
+    gap: 10px;
+    padding-top: 15px;
+    border-top: 1px solid #252b31;
+}
+
+.location-picker-live > span {
+    line-height: 1.4;
+}
+
+.location-picker-durations {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.location-picker-durations button {
+    min-height: 44px;
+    padding: 8px;
+    border: 1px solid #2b333b;
+    border-radius: 8px;
+    background: #1b2229;
+    color: #d7dce1;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.location-picker-durations button.selected {
+    border-color: #22c568;
+    background: #20bd63;
+    color: #06140b;
+}
+
+.location-picker-comment {
+    display: grid;
+    gap: 7px;
+    color: #d6dbe0;
+    font-size: 13px;
+}
+
+.location-picker-comment textarea {
+    min-height: 58px;
+    resize: vertical;
+    padding: 11px 12px;
+    border: 0;
+    border-bottom: 1px solid #59616a;
+    outline: none;
+    background: transparent;
+    color: #f7f9fa;
+    font: inherit;
+}
+
+.location-picker-comment textarea:focus {
+    border-bottom-color: #28c96d;
+}
+
+.location-picker-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.location-picker-actions button {
+    display: flex;
+    min-height: 46px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px;
+    border: 1px solid #303840;
+    border-radius: 9px;
+    background: #1a2127;
+    color: #f1f3f5;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.location-picker-actions button.location-picker-live-action {
+    border-color: #20bd63;
+    background: #20bd63;
+    color: #06140b;
+}
+
+.location-picker-actions button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.location-picker-web-note {
+    text-align: center;
+    font-size: 11px;
+}
+
+@media (max-width: 600px) {
+    .location-picker-overlay {
+        padding: 0;
+    }
+
+    .location-picker-dialog {
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
+    }
+
+    .location-picker-map {
+        flex-basis: 39%;
+        min-height: 220px;
+    }
+
+    .location-picker-content {
+        gap: 13px;
+        padding: 14px;
+    }
 }
 
 .live-location-cards {
@@ -4066,6 +4288,11 @@
     .messenger-sidebar-header > div {
         flex: 1 1 auto;
         min-width: 0;
+    }
+
+    .message-location-comment {
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
     }
 
     .messenger-sidebar-header h2 {

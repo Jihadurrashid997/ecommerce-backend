@@ -42,6 +42,11 @@ const messageRequestSchema = new mongoose.Schema(
             maxlength: 5000,
             default: ""
         },
+        type: {
+            type: String,
+            enum: ["message", "location"],
+            default: "message"
+        },
         isEncrypted: {
             type: Boolean,
             default: false
