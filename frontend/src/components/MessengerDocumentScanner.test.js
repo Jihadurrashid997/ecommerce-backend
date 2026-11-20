@@ -226,6 +226,16 @@ describe("MessengerDocumentScanner", () => {
 
         await waitFor(() => {
             expect(processDocumentImage).toHaveBeenCalledTimes(100);
+            expect(screen.getByRole("heading", { name: "Review PDF" }))
+                .toBeInTheDocument();
+            expect(screen.getByText("100 pages are ready. Reorder or remove pages before creating your PDF."))
+                .toBeInTheDocument();
+        });
+        expect(createScannedPdf).not.toHaveBeenCalled();
+        expect(onSend).not.toHaveBeenCalled();
+
+        fireEvent.click(screen.getByRole("button", { name: "Create & send PDF" }));
+        await waitFor(() => {
             expect(createScannedPdf).toHaveBeenCalledTimes(1);
             expect(createScannedPdf.mock.calls[0][0]).toHaveLength(100);
             expect(onSend).toHaveBeenCalledWith(

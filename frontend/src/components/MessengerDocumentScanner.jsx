@@ -304,23 +304,22 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                         analysisCanvas.height
                     );
                     const corners = detectDocumentCorners(imageData);
-                    processedPages.push(
-                        await processDocumentImage(image, corners, "enhanced", 0)
-                    );
+                    const processedFile =
+                        await processDocumentImage(image, corners, "enhanced", 0);
+                    processedPages.push({
+                        id: `${Date.now()}-${pages.length + processedPages.length}-${index}`,
+                        file: processedFile,
+                        url: URL.createObjectURL(processedFile)
+                    });
                 } finally {
                     URL.revokeObjectURL(objectUrl);
                 }
             }
 
-            setBatchProgress("Creating PDF…");
-            const pdfFile = await createScannedPdf([
-                ...pages.map(page => page.file),
-                ...processedPages
-            ]);
+            setPages(previous => [...previous, ...processedPages]);
             setCreatingPdf(false);
-            setSending(true);
-            await onSend(pdfFile);
-            onClose();
+            setStage("pages");
+            setBatchProgress(`${processedPages.length} pages scanned and ready.`);
         } catch (photoError) {
             setError(photoError.message || "Could not scan the selected photos.");
             setCreatingPdf(false);
