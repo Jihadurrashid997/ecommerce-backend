@@ -11,6 +11,13 @@ including while the app is backgrounded or terminated. Native calls require
 iOS 16.4 or later and Android 8 (API 26) or later, plus a custom development or
 production build; Expo Go is not supported.
 
+Direct voice calls automatically route to the earpiece when the phone is held
+near the ear and to the loudspeaker when moved away. This uses the device's
+proximity sensor; phones without one keep the system's default audio route.
+The in-call **Speaker** button manually switches audio output during voice and
+video calls. Video calls start on speaker. Front-camera video is mirrored only
+in the local preview; remote video is rendered without mirroring.
+
 Direct-contact live-location sharing also runs as a native background location
 task while the operating system allows it. Starting a share requests foreground
 and background ("Always" / "Allow all the time") location permission. Android

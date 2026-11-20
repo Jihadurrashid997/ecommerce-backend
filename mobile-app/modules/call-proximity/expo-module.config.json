@@ -1,0 +1,10 @@
+{
+  "platforms": ["android", "ios"],
+  "android": {
+    "modules": ["expo.modules.callproximity.CallProximityModule"]
+  },
+  "ios": {
+    "modules": ["CallProximityModule"],
+    "podspecPath": "ios/CallProximity.podspec"
+  }
+}

@@ -95,6 +95,7 @@ export default function App() {
         remoteStream: null,
         screenStream: null,
         muted: false,
+        speakerEnabled: false,
         sharingScreen: false,
         error: ""
     });
@@ -618,6 +619,7 @@ export default function App() {
                             <RTCView
                                 streamURL={callState.remoteStream.toURL()}
                                 objectFit="cover"
+                                mirror={false}
                                 style={styles.remoteVideo}
                             />
                         ) : (
@@ -653,6 +655,14 @@ export default function App() {
                         )}
                     </View>
 
+                    {callState.call.type === "audio" &&
+                        callState.call.status === "connected" && (
+                            <Text style={styles.shareHint}>
+                                Hold the phone near your ear for earpiece audio;
+                                move it away to switch to speaker.
+                            </Text>
+                        )}
+
                     {callState.call.mode === "incoming" ? (
                         <View style={styles.incomingActions}>
                             <Pressable
@@ -670,6 +680,30 @@ export default function App() {
                         </View>
                     ) : (
                         <View style={styles.callActions}>
+                            {callState.call.status === "connected" && (
+                                <Pressable
+                                    accessibilityLabel={
+                                        callState.speakerEnabled
+                                            ? "Use earpiece"
+                                            : "Use loudspeaker"
+                                    }
+                                    accessibilityState={{
+                                        selected: callState.speakerEnabled
+                                    }}
+                                    onPress={() => callService.toggleSpeaker()}
+                                    style={[
+                                        styles.actionButton,
+                                        callState.speakerEnabled &&
+                                            styles.selectedAction
+                                    ]}
+                                >
+                                    <Text style={styles.actionButtonText}>
+                                        {callState.speakerEnabled
+                                            ? "Speaker on"
+                                            : "Speaker"}
+                                    </Text>
+                                </Pressable>
+                            )}
                             <Pressable
                                 accessibilityLabel={
                                     callState.muted ? "Unmute microphone" : "Mute microphone"
