@@ -52,6 +52,18 @@ module.exports = ({ config }) => ({
         ],
         "expo-secure-store",
         [
+            "expo-location",
+            {
+                locationWhenInUsePermission:
+                    "JR Messenger uses your location to share a map pin and live location.",
+                locationAlwaysAndWhenInUsePermission:
+                    "JR Messenger needs background location access to keep your live location updated while you use other apps.",
+                isIosBackgroundLocationEnabled: true,
+                isAndroidBackgroundLocationEnabled: true,
+                isAndroidForegroundServiceEnabled: true
+            }
+        ],
+        [
             "expo-build-properties",
             {
                 android: { minSdkVersion: 26 },
