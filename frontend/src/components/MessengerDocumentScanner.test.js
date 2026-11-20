@@ -220,7 +220,7 @@ describe("MessengerDocumentScanner", () => {
         );
         render(<MessengerDocumentScanner onClose={onClose} onSend={onSend} />);
 
-        fireEvent.change(screen.getByLabelText("Choose up to 100 photos"), {
+        fireEvent.change(screen.getByLabelText("Auto scan up to 100 photos"), {
             target: { files: photos }
         });
 

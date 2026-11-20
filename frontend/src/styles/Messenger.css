@@ -5218,6 +5218,16 @@
     font-size: 12px;
 }
 
+.document-scanner--camera .document-scanner-gallery-button span {
+    display: grid;
+    gap: 2px;
+}
+
+.document-scanner--camera .document-scanner-gallery-button small {
+    color: #92a69a;
+    font-size: 10px;
+}
+
 .document-scanner-pages-link {
     display: inline-flex;
     align-items: center;
