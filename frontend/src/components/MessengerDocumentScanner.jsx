@@ -723,6 +723,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                             type="file"
                                             accept="image/*"
                                             multiple
+                                            aria-label="Auto scan up to 100 photos"
                                             disabled={
                                                 pages.length >= MAX_PAGES ||
                                                 creatingPdf ||
@@ -730,7 +731,10 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
                                             }
                                             onChange={choosePhotos}
                                         />
-                                        Choose up to 100 photos
+                                        <span>
+                                            Auto scan
+                                            <small>Up to 100 photos → PDF</small>
+                                        </span>
                                     </label>
                                 </div>
                             )}
