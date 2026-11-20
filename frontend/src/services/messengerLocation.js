@@ -42,6 +42,8 @@ export const parseLocationMessage = message => {
     return {
         latitude,
         longitude,
-        mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}`
+        mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}`,
+        mapEmbedUrl:
+            `https://maps.google.com/maps?q=${latitude},${longitude}&z=15&output=embed`
     };
 };
