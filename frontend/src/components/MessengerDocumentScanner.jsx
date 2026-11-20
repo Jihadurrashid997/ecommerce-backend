@@ -44,6 +44,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
     const pagesRef = useRef([]);
     const processingIdRef = useRef(0);
     const dragIndexRef = useRef(null);
+    const batchQueueRef = useRef([]);
     const [stage, setStage] = useState("camera");
     const [cameraRetry, setCameraRetry] = useState(0);
     const [cameraError, setCameraError] = useState("");
@@ -154,6 +155,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
 
     useEffect(() => () => {
         processingIdRef.current += 1;
+        batchQueueRef.current = [];
         if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
         if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
         pagesRef.current.forEach(page => URL.revokeObjectURL(page.url));
@@ -262,7 +264,47 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
 
     useEffect(() => {
         if (stage === "preview") processScan();
-    }, [stage, processScan]);
+    }, [stage, sourceFile, processScan]);
+
+    const prepareBatchPhoto = async file => {
+        const { image, objectUrl } = await loadImage(file);
+        stopCamera();
+        if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current);
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        sourceUrlRef.current = objectUrl;
+        previewUrlRef.current = "";
+        imageRef.current = image;
+        setSourceFile(file);
+        setSourceDimensions({
+            width: image.naturalWidth,
+            height: image.naturalHeight
+        });
+        const analysisCanvas = document.createElement("canvas");
+        const scale = Math.min(
+            1,
+            640 / Math.max(image.naturalWidth, image.naturalHeight)
+        );
+        analysisCanvas.width = Math.round(image.naturalWidth * scale);
+        analysisCanvas.height = Math.round(image.naturalHeight * scale);
+        const context = analysisCanvas.getContext("2d", {
+            willReadFrequently: true
+        });
+        context.drawImage(image, 0, 0, analysisCanvas.width, analysisCanvas.height);
+        const imageData = context.getImageData(
+            0,
+            0,
+            analysisCanvas.width,
+            analysisCanvas.height
+        );
+        setQuality(analyzeDocumentImage(imageData));
+        setCorners(detectDocumentCorners(imageData));
+        setFilter("enhanced");
+        setRotation(0);
+        setScanFile(null);
+        setScanUrl("");
+        setStage("preview");
+        setError("");
+    };
 
     const choosePhotos = async event => {
         const files = Array.from(event.target.files || []);
@@ -281,45 +323,10 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
         setCreatingPdf(true);
         setBatchProgress("");
         try {
-            const processedPages = [];
-            for (let index = 0; index < files.length; index += 1) {
-                setBatchProgress(`Scanning photo ${index + 1} of ${files.length}…`);
-                const { image, objectUrl } = await loadImage(files[index]);
-                try {
-                    const analysisCanvas = document.createElement("canvas");
-                    const scale = Math.min(
-                        1,
-                        640 / Math.max(image.naturalWidth, image.naturalHeight)
-                    );
-                    analysisCanvas.width = Math.round(image.naturalWidth * scale);
-                    analysisCanvas.height = Math.round(image.naturalHeight * scale);
-                    const context = analysisCanvas.getContext("2d", {
-                        willReadFrequently: true
-                    });
-                    context.drawImage(image, 0, 0, analysisCanvas.width, analysisCanvas.height);
-                    const imageData = context.getImageData(
-                        0,
-                        0,
-                        analysisCanvas.width,
-                        analysisCanvas.height
-                    );
-                    const corners = detectDocumentCorners(imageData);
-                    const processedFile =
-                        await processDocumentImage(image, corners, "enhanced", 0);
-                    processedPages.push({
-                        id: `${Date.now()}-${pages.length + processedPages.length}-${index}`,
-                        file: processedFile,
-                        url: URL.createObjectURL(processedFile)
-                    });
-                } finally {
-                    URL.revokeObjectURL(objectUrl);
-                }
-            }
-
-            setPages(previous => [...previous, ...processedPages]);
+            batchQueueRef.current = files.slice(1);
+            setBatchProgress(`Page 1 of ${files.length} is ready.`);
+            await prepareBatchPhoto(files[0]);
             setCreatingPdf(false);
-            setStage("pages");
-            setBatchProgress(`${processedPages.length} pages scanned and ready.`);
         } catch (photoError) {
             setError(photoError.message || "Could not scan the selected photos.");
             setCreatingPdf(false);
@@ -393,7 +400,7 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
         setError("");
     };
 
-    const addCurrentPage = nextStage => {
+    const addCurrentPage = async nextStage => {
         if (!scanFile || processing || pages.length >= MAX_PAGES) return;
         const page = {
             id: `${Date.now()}-${pages.length}`,
@@ -403,9 +410,81 @@ const MessengerDocumentScanner = ({ onClose, onSend }) => {
         setPages(previous => [...previous, page]);
         clearCurrentPage();
         if (nextStage === "camera") {
-            setStage("camera");
-            setCameraRetry(value => value + 1);
+            if (batchQueueRef.current.length > 0) {
+                const nextFile = batchQueueRef.current.shift();
+                setBatchProgress(
+                    `Page ${pages.length + 1} of ${pages.length + batchQueueRef.current.length + 1} is ready.`
+                );
+                try {
+                    await prepareBatchPhoto(nextFile);
+                } finally {
+                    setBatchProgress("");
+                }
+            } else {
+                setStage("camera");
+                setCameraRetry(value => value + 1);
+            }
         } else {
+            if (batchQueueRef.current.length > 0) {
+                setCreatingPdf(true);
+                setBatchProgress("Scanning remaining pages…");
+                const remainingPages = [];
+                try {
+                    for (let index = 0; index < batchQueueRef.current.length; index += 1) {
+                        const file = batchQueueRef.current[index];
+                        const { image, objectUrl } = await loadImage(file);
+                        try {
+                            const analysisCanvas = document.createElement("canvas");
+                            const scale = Math.min(
+                                1,
+                                640 / Math.max(image.naturalWidth, image.naturalHeight)
+                            );
+                            analysisCanvas.width =
+                                Math.round(image.naturalWidth * scale);
+                            analysisCanvas.height =
+                                Math.round(image.naturalHeight * scale);
+                            const context = analysisCanvas.getContext("2d", {
+                                willReadFrequently: true
+                            });
+                            context.drawImage(
+                                image,
+                                0,
+                                0,
+                                analysisCanvas.width,
+                                analysisCanvas.height
+                            );
+                            const imageData = context.getImageData(
+                                0,
+                                0,
+                                analysisCanvas.width,
+                                analysisCanvas.height
+                            );
+                            const corners = detectDocumentCorners(imageData);
+                            const processedFile = await processDocumentImage(
+                                image,
+                                corners,
+                                "enhanced",
+                                0
+                            );
+                            remainingPages.push({
+                                id: `${Date.now()}-${pages.length + remainingPages.length}-${index}`,
+                                file: processedFile,
+                                url: URL.createObjectURL(processedFile)
+                            });
+                            setBatchProgress(
+                                `Scanned ${index + 1} of ${batchQueueRef.current.length} remaining pages…`
+                            );
+                        } finally {
+                            URL.revokeObjectURL(objectUrl);
+                        }
+                    }
+                    batchQueueRef.current = [];
+                    setPages(previous => [...previous, ...remainingPages]);
+                } finally {
+                    setCreatingPdf(false);
+                    setBatchProgress("");
+                }
+            }
             setStage("pages");
         }
     };
