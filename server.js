@@ -36,6 +36,10 @@ const ShopNotification = require("./models/ShopNotification");
 const GroupConversation = require("./models/GroupConversation");
 const DeviceSession = require("./models/DeviceSession");
 const { sendPushToUsers } = require("./services/pushNotifications");
+const {
+    sendIncomingCallPush,
+    sendCallEndedPush
+} = require("./services/callPushNotifications");
 const { purgeExpiredStories } = require("./services/storyCleanup");
 const { startOrderReservationCleanup } = require("./services/orderReservationCleanup");
 
@@ -486,6 +490,27 @@ const getOnlineUsers =
 
     };
 
+const isUserForeground =
+    userId => {
+        const sockets = onlineUsers.get(normalizeId(userId));
+        if (!sockets) {
+            return false;
+        }
+        return Array.from(sockets).some(socketId =>
+            io.sockets.sockets.get(socketId)?.data?.appState === "active"
+        );
+    };
+
+const notifyBackgroundCallEnded =
+    (userId, callId, reason) => {
+        if (!userId || !callId || isUserForeground(userId)) {
+            return;
+        }
+        void sendCallEndedPush(userId, callId, reason).catch(error => {
+            console.error("SEND NATIVE CALL END PUSH ERROR:", error);
+        });
+    };
+
 io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
 
@@ -829,6 +854,9 @@ io.on(
                     id,
                     socket.id
                 );
+                if (!socket.data.appState) {
+                    socket.data.appState = "active";
+                }
 
                 for (const [roomId, call] of activeCalls.entries()) {
                     if (
@@ -860,6 +888,12 @@ io.on(
 
             }
         );
+
+        socket.on("app-state", state => {
+            if (["active", "background", "inactive"].includes(state)) {
+                socket.data.appState = state;
+            }
+        });
 
         /* =================================================
            JOIN ROOM
@@ -1810,6 +1844,10 @@ socket.on(
                 payload.callerAvatar ||
                 "",
 
+            receiverName:
+                payload.receiverName ||
+                "Messenger contact",
+
             type:
                 callType,
 
@@ -1850,6 +1888,12 @@ socket.on(
                 "incoming-call",
                 callData
             );
+
+        if (!isUserForeground(receiverId)) {
+            void sendIncomingCallPush(receiverId, callData).catch(error => {
+                console.error("SEND NATIVE CALL PUSH ERROR:", error);
+            });
+        }
 
 
         /* -----------------------------------------
@@ -1919,6 +1963,16 @@ socket.on(
                     currentCall
                 );
 
+                notifyBackgroundCallEnded(
+                    callerId,
+                    callId,
+                    "unanswered"
+                );
+                notifyBackgroundCallEnded(
+                    receiverId,
+                    callId,
+                    "unanswered"
+                );
 
                 clearCall(
                     roomId
@@ -2097,6 +2151,11 @@ socket.on(
             }
         );
 
+        notifyBackgroundCallEnded(
+            callerId,
+            call.callId,
+            "declinedElsewhere"
+        );
 
         /* -----------------------------------------
            CLEAR CALL
@@ -2312,6 +2371,11 @@ socket.on(
             endedPayload
         );
 
+        notifyBackgroundCallEnded(
+            otherUserId,
+            call.callId,
+            "remoteEnded"
+        );
 
         /* -----------------------------------------
            CLEAR CALL

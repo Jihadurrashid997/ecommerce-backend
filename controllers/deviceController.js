@@ -193,6 +193,72 @@ exports.removePushSubscription = async (req, res) => {
     }
 };
 
+exports.saveCallPushToken = async (req, res) => {
+    try {
+        const token = req.body?.token;
+        const type = req.body?.type;
+        if (
+            typeof token !== "string" ||
+            token.length < 16 ||
+            token.length > 4096 ||
+            !["APNS_VOIP", "FCM"].includes(type)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "The mobile call push token is invalid."
+            });
+        }
+
+        const saved = await DeviceSession.findOneAndUpdate(
+            {
+                user: getUserId(req),
+                sessionId: getSessionId(req)
+            },
+            { $set: { callPushToken: { token, type } } },
+            { new: true }
+        );
+        if (!saved) {
+            return res.status(401).json({
+                success: false,
+                message: "This device session is no longer active."
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: "Incoming call notifications are enabled on this device."
+        });
+    } catch (error) {
+        console.error("SAVE CALL PUSH TOKEN ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not enable incoming call notifications."
+        });
+    }
+};
+
+exports.removeCallPushToken = async (req, res) => {
+    try {
+        await DeviceSession.updateOne(
+            {
+                user: getUserId(req),
+                sessionId: getSessionId(req)
+            },
+            { $unset: { callPushToken: 1 } }
+        );
+        return res.json({
+            success: true,
+            message: "Incoming call notifications are disabled on this device."
+        });
+    } catch (error) {
+        console.error("REMOVE CALL PUSH TOKEN ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not disable incoming call notifications."
+        });
+    }
+};
+
 exports.logoutDevice = async (req, res) => {
     try {
         if (getSessionId(req)) {
