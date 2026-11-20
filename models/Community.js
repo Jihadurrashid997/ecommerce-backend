@@ -37,7 +37,28 @@ const communitySchema = new mongoose.Schema(
         pendingRequests: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: "User"
-        }]
+        }],
+        isHidden: {
+            type: Boolean,
+            default: false,
+            index: true
+        },
+        isClosed: {
+            type: Boolean,
+            default: false,
+            index: true
+        },
+        moderationReason: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        moderatedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null
+        }
     },
     { timestamps: true }
 );

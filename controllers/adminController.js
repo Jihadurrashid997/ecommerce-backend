@@ -16,6 +16,7 @@ const {
     getMarketplaceSettings
 } = require("../services/marketplaceSettings");
 const { notifyShopUsers } = require("../services/shopNotifications");
+const { writeAuditLog } = require("../services/adminAudit");
 
 
 // ======================================================
@@ -308,6 +309,12 @@ exports.updateMarketplaceSettings =
                     setDefaultsOnInsert: true
                 }
             ).lean();
+            await writeAuditLog(req, {
+                action: "shop.settings_changed",
+                targetType: "marketplace_settings",
+                targetId: "global",
+                details: updates
+            });
 
             return res.json({
                 success: true,

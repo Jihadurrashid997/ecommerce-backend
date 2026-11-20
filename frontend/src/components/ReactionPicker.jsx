@@ -11,7 +11,14 @@ const REACTIONS = [
     { value: "angry", label: "Angry", emoji: "😡" }
 ];
 
-const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect }) => {
+const ReactionPicker = ({
+    reaction,
+    reactionCounts = {},
+    likeCount = 0,
+    onSelect,
+    className = "",
+    triggerClassName = ""
+}) => {
     const [open, setOpen] = useState(false);
     const [position, setPosition] = useState(null);
     const pickerRef = useRef(null);
@@ -69,7 +76,7 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect
     return (
         <div
             ref={pickerRef}
-            className="reaction-picker facebook-reaction-picker"
+            className={`reaction-picker facebook-reaction-picker ${className}`.trim()}
             onPointerEnter={event => {
                 if (event.pointerType === "mouse") setOpen(true);
             }}
@@ -102,7 +109,7 @@ const ReactionPicker = ({ reaction, reactionCounts = {}, likeCount = 0, onSelect
         >
             <button
                 type="button"
-                className={`reaction-picker-trigger facebook-reaction-trigger${selected ? " selected" : ""}`}
+                className={`reaction-picker-trigger facebook-reaction-trigger ${triggerClassName}${selected ? " selected" : ""}`.trim()}
                 aria-label={selected ? `${selected.label} reaction selected; activate to remove` : "Like"}
                 aria-expanded={open}
                 onClick={() => {

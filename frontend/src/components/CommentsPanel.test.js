@@ -63,3 +63,23 @@ test("comment authors do not get a delete action for other users' comments", asy
     expect(await screen.findByText("A useful comment")).toBeVisible();
     expect(screen.queryByRole("button", { name: /Delete comment/ })).not.toBeInTheDocument();
 });
+
+test("keeps long comment text inside its flexible row", async () => {
+    const longComment = "a".repeat(240);
+    api.get.mockResolvedValue({
+        data: {
+            data: [{
+                ...comment,
+                text: longComment,
+                user: { _id: "comment-owner", name: "A very long member name" }
+            }]
+        }
+    });
+
+    render(<CommentsPanel postId="post-1" />);
+
+    const text = await screen.findByText(longComment);
+    expect(text).toHaveClass("comment-text");
+    expect(text.closest(".comment-row")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "A very long member name" })).toBeVisible();
+});

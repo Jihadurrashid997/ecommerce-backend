@@ -129,7 +129,7 @@ const MessageSchema =
 
             type: {
                 type: String,
-                enum: ["message", "call-log"],
+                enum: ["message", "call-log", "location"],
                 default: "message"
             },
 

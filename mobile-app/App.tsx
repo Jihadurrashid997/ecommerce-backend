@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
+    Alert,
     ActivityIndicator,
     FlatList,
     KeyboardAvoidingView,
+    Linking,
     NativeModules,
     Platform,
     Pressable,
@@ -18,19 +20,41 @@ import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
     MediaStream,
+    RTCAudioSession,
     RTCView,
     ScreenCapturePickerView
 } from "react-native-webrtc";
+import {
+    addAudioSessionActivatedListener,
+    addAudioSessionDeactivatedListener,
+    addCallAnsweredListener,
+    addCallEndedListener,
+    addCallSessionAddedListener,
+    addSetMutedActionListener,
+    registerVoIPPush,
+    useVoIPPushToken
+} from "expo-callkit-telecom";
 import { api, getErrorMessage } from "./src/api";
 import {
     CallUser,
     DirectCallService,
     DirectCallSnapshot
 } from "./src/calls/DirectCallService";
+import {
+    LiveLocationShare,
+    SESSION_TOKEN_KEY,
+    startBackgroundLiveLocation,
+    stopAllBackgroundLiveLocations,
+    stopBackgroundLiveLocation
+} from "./src/location/backgroundLiveLocation";
 
-const TOKEN_KEY = "jr-mobile-token";
 const USER_KEY = "jr-mobile-user";
 const DEVICE_ID_KEY = "jr-mobile-device-id";
+const LIVE_LOCATION_DURATIONS = [
+    { minutes: 15 as const, label: "15 minutes" },
+    { minutes: 60 as const, label: "1 hour" },
+    { minutes: 480 as const, label: "8 hours" }
+];
 
 const createDeviceId = () =>
     Array.from({ length: 32 }, () =>
@@ -71,6 +95,7 @@ export default function App() {
         remoteStream: null,
         screenStream: null,
         muted: false,
+        speakerEnabled: false,
         sharingScreen: false,
         error: ""
     });
@@ -80,15 +105,47 @@ export default function App() {
     const [contacts, setContacts] = useState<CallUser[]>([]);
     const [busy, setBusy] = useState(false);
     const [screenError, setScreenError] = useState("");
+    const [locationContactId, setLocationContactId] = useState("");
+    const [contactLiveLocations, setContactLiveLocations] =
+        useState<LiveLocationShare[]>([]);
+    const [locationBusy, setLocationBusy] = useState(false);
+    const voipPushToken = useVoIPPushToken();
+    const voipToken = voipPushToken?.token;
+    const voipTokenType = voipPushToken?.type;
     const pickerRef =
         useRef<React.ComponentRef<typeof ScreenCapturePickerView>>(null);
+
+    useEffect(() => {
+        registerVoIPPush();
+        const subscriptions = [
+            addCallSessionAddedListener(({ session }) =>
+                callService.handleNativeCallSession(session)
+            ),
+            addCallAnsweredListener(event => {
+                void callService.handleNativeCallAnswered(event);
+            }),
+            addCallEndedListener(event =>
+                callService.handleNativeCallEnded(event)
+            ),
+            addSetMutedActionListener(({ isMuted }) =>
+                callService.setMuted(isMuted, false)
+            ),
+            addAudioSessionActivatedListener(() =>
+                RTCAudioSession.audioSessionDidActivate()
+            ),
+            addAudioSessionDeactivatedListener(() =>
+                RTCAudioSession.audioSessionDidDeactivate()
+            )
+        ];
+        return () => subscriptions.forEach(subscription => subscription.remove());
+    }, []);
 
     useEffect(() => {
         let mounted = true;
         const restoreSession = async () => {
             try {
                 const [savedToken, savedUser] = await Promise.all([
-                    SecureStore.getItemAsync(TOKEN_KEY),
+                    SecureStore.getItemAsync(SESSION_TOKEN_KEY),
                     SecureStore.getItemAsync(USER_KEY)
                 ]);
                 if (!mounted || !savedToken || !savedUser) {
@@ -123,6 +180,27 @@ export default function App() {
     }, [user, token]);
 
     useEffect(() => {
+        if (!user || !token || !voipToken || !voipTokenType) {
+            return undefined;
+        }
+        let cancelled = false;
+        void api.put(
+            "/auth/devices/call-push-token",
+            { token: voipToken, type: voipTokenType },
+            { headers: { Authorization: `Bearer ${token}` } }
+        ).catch(error => {
+            if (!cancelled) {
+                setScreenError(
+                    getErrorMessage(error, "Could not enable background call notifications.")
+                );
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [token, user, voipToken, voipTokenType]);
+
+    useEffect(() => {
         if (!user || !token) {
             return undefined;
         }
@@ -151,6 +229,39 @@ export default function App() {
             clearTimeout(timer);
         };
     }, [search, token, user]);
+
+    useEffect(() => {
+        if (!locationContactId || !token) {
+            return undefined;
+        }
+
+        let cancelled = false;
+        const refreshLiveLocations = async () => {
+            try {
+                const response = await api.get("/messages/live-locations", {
+                    params: { peerId: locationContactId },
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (!cancelled) {
+                    setContactLiveLocations(response.data?.data || []);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setScreenError(
+                        getErrorMessage(error, "Could not load live locations.")
+                    );
+                }
+            }
+        };
+        void refreshLiveLocations();
+        const timer = setInterval(() => {
+            void refreshLiveLocations();
+        }, 15000);
+        return () => {
+            cancelled = true;
+            clearInterval(timer);
+        };
+    }, [locationContactId, token]);
 
     const localPreview = useMemo<MediaStream | null>(
         () => callState.screenStream || callState.localStream,
@@ -184,7 +295,7 @@ export default function App() {
                 throw new Error("The server returned an invalid sign-in response.");
             }
             await Promise.all([
-                SecureStore.setItemAsync(TOKEN_KEY, authToken),
+                SecureStore.setItemAsync(SESSION_TOKEN_KEY, authToken),
                 SecureStore.setItemAsync(
                     USER_KEY,
                     JSON.stringify(authenticatedUser)
@@ -202,13 +313,38 @@ export default function App() {
 
     const handleLogout = async () => {
         callService.disconnect();
+        if (token) {
+            try {
+                await stopAllBackgroundLiveLocations(token);
+            } catch (error) {
+                console.error("Stop live locations on sign out error:", error);
+                setScreenError(
+                    getErrorMessage(error, "Could not stop live location sharing.")
+                );
+            }
+        }
+        if (token) {
+            try {
+                await api.post(
+                    "/auth/logout",
+                    {},
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+            } catch (error) {
+                setScreenError(
+                    getErrorMessage(error, "Could not remove this device session.")
+                );
+            }
+        }
         await Promise.all([
-            SecureStore.deleteItemAsync(TOKEN_KEY),
+            SecureStore.deleteItemAsync(SESSION_TOKEN_KEY),
             SecureStore.deleteItemAsync(USER_KEY)
         ]);
         setToken("");
         setUser(null);
         setContacts([]);
+        setLocationContactId("");
+        setContactLiveLocations([]);
     };
 
     const runCallAction = async (action: () => Promise<void>) => {
@@ -239,53 +375,221 @@ export default function App() {
         );
 
     const handleAcceptCall = () =>
-        runCallAction(() => callService.acceptCall());
+        runCallAction(() => callService.requestAcceptCall());
 
     const handleStartCall = (contact: CallUser, type: "audio" | "video") =>
         runCallAction(() => callService.startCall(contact, type));
 
-    const renderContact = ({ item }: { item: CallUser }) => (
-        <View style={styles.contactRow}>
-            <View style={styles.contactIdentity}>
-                <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                        {getDisplayName(item).slice(0, 1).toUpperCase()}
-                    </Text>
+    const handleToggleContactLocation = (contact: CallUser) => {
+        const contactId = getUserId(contact);
+        setScreenError("");
+        setContactLiveLocations([]);
+        setLocationContactId(current =>
+            current === contactId ? "" : contactId
+        );
+    };
+
+    const handleStartLiveLocation = (
+        contact: CallUser,
+        durationMinutes: 15 | 60 | 480,
+        durationLabel: string
+    ) => {
+        const contactId = getUserId(contact);
+        Alert.alert(
+            "Share live location",
+            `Share your live location with ${getDisplayName(contact)} for ${durationLabel}? Allow background location so it can keep updating while you use other apps. You can stop sharing at any time.`,
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Continue",
+                    onPress: () => {
+                        setLocationBusy(true);
+                        setScreenError("");
+                        void startBackgroundLiveLocation(
+                            contactId,
+                            durationMinutes,
+                            token
+                        )
+                            .then(share => {
+                                setContactLiveLocations(previous => [
+                                    ...previous.filter(
+                                        item => item._id !== share._id
+                                    ),
+                                    share
+                                ]);
+                            })
+                            .catch(error => {
+                                setScreenError(
+                                    getErrorMessage(
+                                        error,
+                                        "Could not start background live location."
+                                    )
+                                );
+                            })
+                            .finally(() => setLocationBusy(false));
+                    }
+                }
+            ]
+        );
+    };
+
+    const handleStopLiveLocation = async (shareId: string) => {
+        setLocationBusy(true);
+        setScreenError("");
+        try {
+            await stopBackgroundLiveLocation(shareId, token);
+            setContactLiveLocations(previous =>
+                previous.filter(share => share._id !== shareId)
+            );
+        } catch (error) {
+            setScreenError(
+                getErrorMessage(error, "Could not stop live location sharing.")
+            );
+        } finally {
+            setLocationBusy(false);
+        }
+    };
+
+    const openLiveLocationMap = (share: LiveLocationShare) => {
+        const url =
+            `https://www.google.com/maps?q=${share.latitude},${share.longitude}`;
+        void Linking.openURL(url).catch(error => {
+            setScreenError(
+                getErrorMessage(error, "Could not open the map.")
+            );
+        });
+    };
+
+    const renderContact = ({ item }: { item: CallUser }) => {
+        const contactId = getUserId(item);
+        const isLocationPanelOpen = locationContactId === contactId;
+        return (
+            <Fragment>
+                <View style={styles.contactRow}>
+                    <View style={styles.contactIdentity}>
+                        <View style={styles.avatar}>
+                            <Text style={styles.avatarText}>
+                                {getDisplayName(item).slice(0, 1).toUpperCase()}
+                            </Text>
+                        </View>
+                        <View style={styles.contactCopy}>
+                            <Text style={styles.contactName}>{getDisplayName(item)}</Text>
+                            <Text style={styles.contactHandle}>
+                                {item.username ? `@${item.username}` : "Messenger contact"}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.contactActions}>
+                        <Pressable
+                            accessibilityLabel={`Voice call ${getDisplayName(item)}`}
+                            disabled={!callState.connected}
+                            onPress={() => handleStartCall(item, "audio")}
+                            style={[
+                                styles.smallAction,
+                                !callState.connected && styles.disabledAction
+                            ]}
+                        >
+                            <Text style={styles.smallActionText}>Call</Text>
+                        </Pressable>
+                        <Pressable
+                            accessibilityLabel={`Video call ${getDisplayName(item)}`}
+                            disabled={!callState.connected}
+                            onPress={() => handleStartCall(item, "video")}
+                            style={[
+                                styles.smallAction,
+                                styles.videoAction,
+                                !callState.connected && styles.disabledAction
+                            ]}
+                        >
+                            <Text style={styles.smallActionText}>Video</Text>
+                        </Pressable>
+                        <Pressable
+                            accessibilityLabel={`Share live location with ${getDisplayName(item)}`}
+                            accessibilityState={{ expanded: isLocationPanelOpen }}
+                            disabled={locationBusy}
+                            onPress={() => handleToggleContactLocation(item)}
+                            style={[
+                                styles.smallAction,
+                                styles.locationAction,
+                                locationBusy && styles.disabledAction
+                            ]}
+                        >
+                            <Text style={styles.smallActionText}>Location</Text>
+                        </Pressable>
+                    </View>
                 </View>
-                <View style={styles.contactCopy}>
-                    <Text style={styles.contactName}>{getDisplayName(item)}</Text>
-                    <Text style={styles.contactHandle}>
-                        {item.username ? `@${item.username}` : "Messenger contact"}
-                    </Text>
-                </View>
-            </View>
-            <View style={styles.contactActions}>
-                <Pressable
-                    accessibilityLabel={`Voice call ${getDisplayName(item)}`}
-                    disabled={!callState.connected}
-                    onPress={() => handleStartCall(item, "audio")}
-                    style={[
-                        styles.smallAction,
-                        !callState.connected && styles.disabledAction
-                    ]}
-                >
-                    <Text style={styles.smallActionText}>Call</Text>
-                </Pressable>
-                <Pressable
-                    accessibilityLabel={`Video call ${getDisplayName(item)}`}
-                    disabled={!callState.connected}
-                    onPress={() => handleStartCall(item, "video")}
-                    style={[
-                        styles.smallAction,
-                        styles.videoAction,
-                        !callState.connected && styles.disabledAction
-                    ]}
-                >
-                    <Text style={styles.smallActionText}>Video</Text>
-                </Pressable>
-            </View>
-        </View>
-    );
+                {isLocationPanelOpen && (
+                    <View style={styles.locationPanel}>
+                        <Text style={styles.locationPanelTitle}>
+                            Live location · {getDisplayName(item)}
+                        </Text>
+                        <Text style={styles.locationPanelHint}>
+                            Share continues in the background until you stop it or it expires.
+                        </Text>
+                        <View style={styles.locationDurations}>
+                            {LIVE_LOCATION_DURATIONS.map(duration => (
+                                <Pressable
+                                    key={duration.minutes}
+                                    disabled={locationBusy}
+                                    onPress={() =>
+                                        handleStartLiveLocation(
+                                            item,
+                                            duration.minutes,
+                                            duration.label
+                                        )
+                                    }
+                                    style={[
+                                        styles.locationDuration,
+                                        locationBusy && styles.disabledAction
+                                    ]}
+                                >
+                                    <Text style={styles.locationDurationText}>
+                                        {duration.label}
+                                    </Text>
+                                </Pressable>
+                            ))}
+                        </View>
+                        {contactLiveLocations.map(share => {
+                            const ownShare =
+                                share.sender === getUserId(user);
+                            return (
+                                <View
+                                    key={share._id}
+                                    style={styles.locationShareRow}
+                                >
+                                    <View style={styles.locationShareCopy}>
+                                        <Text style={styles.locationPanelTitle}>
+                                            {ownShare
+                                                ? "Your live location"
+                                                : "Live location shared with you"}
+                                        </Text>
+                                        <Text style={styles.locationPanelHint}>
+                                            Updated {new Date(share.updatedAt).toLocaleTimeString()}
+                                            {" · "}
+                                            Expires {new Date(share.expiresAt).toLocaleTimeString()}
+                                        </Text>
+                                    </View>
+                                    <Pressable onPress={() => openLiveLocationMap(share)}>
+                                        <Text style={styles.locationLink}>Open map</Text>
+                                    </Pressable>
+                                    {ownShare && (
+                                        <Pressable
+                                            disabled={locationBusy}
+                                            onPress={() =>
+                                                void handleStopLiveLocation(share._id)
+                                            }
+                                        >
+                                            <Text style={styles.locationStop}>Stop</Text>
+                                        </Pressable>
+                                    )}
+                                </View>
+                            );
+                        })}
+                    </View>
+                )}
+            </Fragment>
+        );
+    };
 
     return (
         <SafeAreaView style={styles.safeArea}>
@@ -315,6 +619,7 @@ export default function App() {
                             <RTCView
                                 streamURL={callState.remoteStream.toURL()}
                                 objectFit="cover"
+                                mirror={false}
                                 style={styles.remoteVideo}
                             />
                         ) : (
@@ -337,7 +642,7 @@ export default function App() {
                             <RTCView
                                 streamURL={localPreview.toURL()}
                                 objectFit="cover"
-                                mirror={!callState.sharingScreen}
+                                mirror={false}
                                 style={styles.localVideo}
                             />
                         )}
@@ -367,6 +672,30 @@ export default function App() {
                         </View>
                     ) : (
                         <View style={styles.callActions}>
+                            {callState.call.status === "connected" && (
+                                <Pressable
+                                    accessibilityLabel={
+                                        callState.speakerEnabled
+                                            ? "Switch to earpiece"
+                                            : "Switch to loudspeaker"
+                                    }
+                                    accessibilityState={{
+                                        selected: callState.speakerEnabled
+                                    }}
+                                    onPress={() => callService.toggleSpeaker()}
+                                    style={[
+                                        styles.actionButton,
+                                        callState.speakerEnabled &&
+                                            styles.selectedAction
+                                    ]}
+                                >
+                                    <Text style={styles.actionButtonText}>
+                                        {callState.speakerEnabled
+                                            ? "Loudspeaker"
+                                            : "Earpiece"}
+                                    </Text>
+                                </Pressable>
+                            )}
                             <Pressable
                                 accessibilityLabel={
                                     callState.muted ? "Unmute microphone" : "Mute microphone"
@@ -727,6 +1056,64 @@ const styles = StyleSheet.create({
     },
     videoAction: {
         backgroundColor: "#34434c"
+    },
+    locationAction: {
+        backgroundColor: "#285b52"
+    },
+    locationPanel: {
+        gap: 10,
+        padding: 14,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: "#293941",
+        backgroundColor: "#101e25"
+    },
+    locationPanelTitle: {
+        color: "#eaf0f2",
+        fontWeight: "700",
+        fontSize: 13
+    },
+    locationPanelHint: {
+        color: "#93a5ac",
+        fontSize: 11,
+        lineHeight: 16
+    },
+    locationDurations: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 8
+    },
+    locationDuration: {
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        borderRadius: 9,
+        backgroundColor: "#1d3d3b"
+    },
+    locationDurationText: {
+        color: "#b7f5e3",
+        fontSize: 12,
+        fontWeight: "700"
+    },
+    locationShareRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingTop: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: "#293941"
+    },
+    locationShareCopy: {
+        flex: 1,
+        gap: 4
+    },
+    locationLink: {
+        color: "#53d4b8",
+        fontSize: 12,
+        fontWeight: "700"
+    },
+    locationStop: {
+        color: "#ff9e9e",
+        fontSize: 12,
+        fontWeight: "700"
     },
     smallActionText: {
         color: "#fff",

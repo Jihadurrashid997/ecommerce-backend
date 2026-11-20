@@ -1,0 +1,6 @@
+{
+  "appId": "com.etop.app",
+  "appName": "E Top",
+  "webDir": "build",
+  "bundledWebRuntime": false
+}

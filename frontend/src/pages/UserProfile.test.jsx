@@ -17,6 +17,10 @@ jest.mock("../services/api", () => ({
     }
 }));
 
+jest.mock("../context/AppContext", () => ({
+    useApp: () => ({ user: null })
+}));
+
 jest.mock("../components/ProfileSocial", () => () => <div>Profile social</div>);
 jest.mock("../components/VerifiedBadge", () => () => <span>Verified</span>);
 

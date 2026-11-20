@@ -13,6 +13,8 @@ const GroupConversation = require("../models/GroupConversation");
 const GroupCallKey = require("../models/GroupCallKey");
 const groupController = require("../controllers/groupController");
 const User = require("../models/User");
+const PlatformSettings = require("../models/PlatformSettings");
+const AdminAuditLog = require("../models/AdminAuditLog");
 const adminControlController = require("../controllers/adminControlController");
 const mediaStorage = require("../services/mediaStorage");
 const { forgotPassword } = require("../controllers/authController");
@@ -120,9 +122,13 @@ test("reel uploads reject missing or over-five-minute duration metadata", async 
 test("reel uploads delete media when the stored video exceeds five minutes", async () => {
     const originalSaveFile = mediaStorage.saveFile;
     const originalDeleteFile = mediaStorage.deleteFile;
+    const originalPlatformSettingsFindById = PlatformSettings.findById;
     let deletedMedia = null;
     mediaStorage.saveFile = async () => ({ url: "/uploads/too-long.mp4", duration: 300.01 });
     mediaStorage.deleteFile = async media => { deletedMedia = media; };
+    PlatformSettings.findById = () => ({
+        select: async () => null
+    });
 
     try {
         const response = makeResponse();
@@ -137,6 +143,7 @@ test("reel uploads delete media when the stored video exceeds five minutes", asy
     } finally {
         mediaStorage.saveFile = originalSaveFile;
         mediaStorage.deleteFile = originalDeleteFile;
+        PlatformSettings.findById = originalPlatformSettingsFindById;
     }
 });
 
@@ -2896,6 +2903,7 @@ test("non-admin group members cannot remove other members", async () => {
 
 test("admin verification grants a badge with audit metadata", async () => {
     const originalUpdateOne = User.updateOne;
+    const originalAuditCreate = AdminAuditLog.create;
     const response = makeResponse();
     let update;
 
@@ -2904,6 +2912,7 @@ test("admin verification grants a badge with audit metadata", async () => {
         update = value;
         return { matchedCount: 1 };
     };
+    AdminAuditLog.create = async () => ({});
 
     try {
         await adminControlController.setVerification(
@@ -2922,6 +2931,7 @@ test("admin verification grants a badge with audit metadata", async () => {
         assert.ok(update.$set.verifiedAt instanceof Date);
     } finally {
         User.updateOne = originalUpdateOne;
+        AdminAuditLog.create = originalAuditCreate;
     }
 });
 

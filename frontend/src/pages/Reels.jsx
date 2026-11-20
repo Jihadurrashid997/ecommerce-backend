@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-    FaArrowLeft, FaRegComment, FaPlus, FaTimes,
-    FaVolumeMute, FaVolumeUp, FaTrash, FaBookmark, FaRegBookmark
+    FaArrowLeft, FaBackward, FaForward, FaPause, FaPlay, FaRegComment, FaPlus, FaTimes,
+    FaVolumeMute, FaVolumeUp, FaTrash, FaBookmark, FaRegBookmark,
+    FaShare, FaEye
 } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
@@ -16,11 +17,19 @@ const MAX_SECONDS = MAX_MINUTES * 60;
 
 /* ---------------- one reel ---------------- */
 
-const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowChange }) => {
+const ReelItem = ({ reel, muted, setMuted, myId, onDeleted, onFollowChange }) => {
 
     const videoRef = useRef(null);
     const viewed = useRef(false);
+    const playbackControlsTimer = useRef(null);
 
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [showPlaybackControls, setShowPlaybackControls] = useState(false);
+    const [mediaAspectRatio, setMediaAspectRatio] = useState(9 / 16);
+    const [viewport, setViewport] = useState(() => ({
+        width: window.innerWidth,
+        height: window.innerHeight
+    }));
     const [reaction, setReaction] = useState(reel.reactionByMe || (reel.likedByMe ? "like" : null));
     const [likeCount, setLikeCount] = useState(reel.likeCount);
     const [reactionCounts, setReactionCounts] = useState(reel.reactionCounts || {});
@@ -28,6 +37,29 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
     const [commentCount, setCommentCount] = useState(reel.commentCount);
     const [showComments, setShowComments] = useState(false);
     const [actionMessage, setActionMessage] = useState("");
+
+    useEffect(() => () => clearTimeout(playbackControlsTimer.current), []);
+
+    useEffect(() => {
+        const updateViewport = () => setViewport({
+            width: window.visualViewport?.width || window.innerWidth,
+            height: window.visualViewport?.height || window.innerHeight
+        });
+        const visualViewport = window.visualViewport;
+        window.addEventListener("resize", updateViewport);
+        visualViewport?.addEventListener("resize", updateViewport);
+        return () => {
+            window.removeEventListener("resize", updateViewport);
+            visualViewport?.removeEventListener("resize", updateViewport);
+        };
+    }, []);
+
+    const stageMaxWidth = mediaAspectRatio > 1 ? 900 : 480;
+    const stageWidth = Math.max(0, Math.min(
+        viewport.width,
+        stageMaxWidth,
+        viewport.height * mediaAspectRatio
+    ));
     // play only the reel that's actually on screen
     useEffect(() => {
 
@@ -61,6 +93,35 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
 
     }, [reel._id]);
 
+    const showControlsTemporarily = () => {
+        setShowPlaybackControls(true);
+        clearTimeout(playbackControlsTimer.current);
+        playbackControlsTimer.current = setTimeout(() => {
+            setShowPlaybackControls(false);
+        }, 2000);
+    };
+
+    const togglePlayback = () => {
+        const video = videoRef.current;
+        if (!video) return;
+        showControlsTemporarily();
+        if (video.paused) {
+            video.play().catch(() => setActionMessage("Could not play this reel."));
+        } else {
+            video.pause();
+        }
+    };
+
+    const seek = seconds => {
+        const video = videoRef.current;
+        if (!video) return;
+        const targetTime = video.currentTime + seconds;
+        video.currentTime = Number.isFinite(video.duration)
+            ? Math.min(video.duration, Math.max(0, targetTime))
+            : Math.max(0, targetTime);
+        showControlsTemporarily();
+    };
+
     const updateReaction = async nextReaction => {
         const previousReaction = reaction;
         const nextCounts = { ...reactionCounts };
@@ -91,6 +152,29 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
         }
     };
 
+    const shareReel = async () => {
+        const url = new URL(`/post/${reel._id}`, window.location.origin).toString();
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: `${author.name || "Someone"} shared a reel on E Top`,
+                    text: reel.caption || "Watch this reel on E Top.",
+                    url
+                });
+                setActionMessage("Reel shared.");
+            } else if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+                setActionMessage("Reel link copied.");
+            } else {
+                throw new Error("Sharing and clipboard are unavailable.");
+            }
+        } catch (error) {
+            if (error.name === "AbortError") return;
+            console.error("SHARE REEL ERROR:", error);
+            setActionMessage("Could not share this reel.");
+        }
+    };
+
     const remove = async () => {
 
         if (!window.confirm("Delete this reel?")) return;
@@ -106,10 +190,11 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
 
     const author = reel.author || {};
 
-    const canDelete = String(author._id) === myId || isAdmin;
+    const canDelete = Boolean(myId) && String(author._id) === myId;
+    const canFollow = Boolean(author._id) && String(author._id) !== myId;
 
     return (
-        <section className="reel-item">
+        <section className="reel-item" style={{ width: `${stageWidth}px` }}>
 
             <video
                 ref={videoRef}
@@ -118,25 +203,75 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
                 playsInline
                 muted={muted}
                 preload="metadata"
-                onClick={() => setMuted(m => !m)}
+                tabIndex={0}
+                aria-label={isPlaying ? "Pause reel" : "Play reel"}
+                onClick={togglePlayback}
+                onKeyDown={event => {
+                    if (event.key === " " || event.key === "Enter") {
+                        event.preventDefault();
+                        togglePlayback();
+                    }
+                }}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onLoadedMetadata={event => {
+                    const { videoWidth, videoHeight } = event.currentTarget;
+                    if (videoWidth > 0 && videoHeight > 0) {
+                        setMediaAspectRatio(videoWidth / videoHeight);
+                    }
+                }}
             />
+
+            {showPlaybackControls && (
+                <div className="reel-playback-controls" aria-label="Video controls">
+                    <button
+                        type="button"
+                        onClick={() => seek(-10)}
+                        aria-label="Rewind 10 seconds"
+                    >
+                        <FaBackward aria-hidden="true" />
+                        <span>10s</span>
+                    </button>
+                    <button
+                        type="button"
+                        className="reel-playback-toggle"
+                        onClick={togglePlayback}
+                        aria-label={isPlaying ? "Pause reel" : "Play reel"}
+                    >
+                        {isPlaying
+                            ? <FaPause aria-hidden="true" />
+                            : <FaPlay aria-hidden="true" />}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => seek(10)}
+                        aria-label="Forward 10 seconds"
+                    >
+                        <FaForward aria-hidden="true" />
+                        <span>10s</span>
+                    </button>
+                </div>
+            )}
 
             <div className="reel-overlay">
 
-                <Link to={String(author._id) === myId ? "/profile" : `/user/${author._id}`} className="reel-author">
-                    <div className="avatar-sm">
-                        {author.profileImage || author.avatar
-                            ? <img src={getUploadUrl(author.profileImage || author.avatar)} alt="" />
-                            : (author.name || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <b>{author.name || "User"}</b>
-                </Link>
-                {reel.isFollowedByMe === false && String(author._id) !== myId && (
-                    <SocialFollowButton
-                        userId={author._id}
-                        onFollowChange={result => onFollowChange(author, result)}
-                    />
-                )}
+                <div className="reel-author-row">
+                    <Link to={String(author._id) === myId ? "/profile" : `/user/${author._id}`} className="reel-author">
+                        <div className="avatar-sm">
+                            {author.profileImage || author.avatar
+                                ? <img src={getUploadUrl(author.profileImage || author.avatar)} alt="" />
+                                : (author.name || "U").charAt(0).toUpperCase()}
+                        </div>
+                        <b>{author.name || "User"}</b>
+                    </Link>
+                    {canFollow && (
+                        <SocialFollowButton
+                            userId={author._id}
+                            isFollowing={reel.isFollowedByMe === true}
+                            onFollowChange={result => onFollowChange(author, result)}
+                        />
+                    )}
+                </div>
 
                 {reel.caption && <p>{reel.caption}</p>}
                 {actionMessage && <p className="reel-action-status" role="status">{actionMessage}</p>}
@@ -146,6 +281,8 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
             <div className="reel-side">
 
                 <ReactionPicker
+                    className="reel-reaction-picker"
+                    triggerClassName="reel-reaction-trigger"
                     reaction={reaction}
                     reactionCounts={reactionCounts}
                     likeCount={likeCount}
@@ -161,18 +298,37 @@ const ReelItem = ({ reel, muted, setMuted, myId, isAdmin, onDeleted, onFollowCha
                     {saved ? <FaBookmark /> : <FaRegBookmark />}
                 </button>
 
-                <button type="button" onClick={() => setShowComments(true)}>
-                    <FaRegComment />
+                <button
+                    type="button"
+                    onClick={() => setShowComments(true)}
+                    aria-label={`Comments, ${commentCount}`}
+                    aria-expanded={showComments}
+                >
+                    <FaRegComment aria-hidden="true" />
                     <span>{commentCount}</span>
                 </button>
 
-                <button type="button" onClick={() => setMuted(m => !m)}>
-                    {muted ? <FaVolumeMute /> : <FaVolumeUp />}
+                <button
+                    type="button"
+                    onClick={() => setMuted(m => !m)}
+                    aria-label={muted ? "Unmute reel" : "Mute reel"}
+                    aria-pressed={!muted}
+                >
+                    {muted ? <FaVolumeMute aria-hidden="true" /> : <FaVolumeUp aria-hidden="true" />}
                 </button>
 
+                <button type="button" onClick={shareReel} aria-label="Share reel">
+                    <FaShare aria-hidden="true" />
+                </button>
+
+                <span className="reel-view-count" aria-label={`${Number(reel.views) || 0} views`}>
+                    <FaEye aria-hidden="true" />
+                    <span>{Number(reel.views) || 0}</span>
+                </span>
+
                 {canDelete && (
-                    <button type="button" onClick={remove}>
-                        <FaTrash />
+                    <button type="button" onClick={remove} aria-label="Delete reel">
+                        <FaTrash aria-hidden="true" />
                     </button>
                 )}
 
@@ -290,11 +446,13 @@ const UploadSheet = ({ onClose, onUploaded }) => {
 
     return (
         <div className="sheet-overlay">
-            <div className="sheet">
+            <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="new-reel-title">
 
                 <div className="comments-head">
-                    <strong>New reel</strong>
-                    <button type="button" onClick={onClose} disabled={uploading}><FaTimes /></button>
+                    <strong id="new-reel-title">New reel</strong>
+                    <button type="button" onClick={onClose} disabled={uploading} aria-label="Close reel upload">
+                        <FaTimes />
+                    </button>
                 </div>
 
                 {!file ? (
@@ -323,7 +481,7 @@ const UploadSheet = ({ onClose, onUploaded }) => {
                     />
                 )}
 
-                {error && <p className="social-note error">{error}</p>}
+                {error && <p className="social-note error" role="alert">{error}</p>}
 
                 {uploading && (
                     <div className="progress-track"><div style={{ width: `${progress}%` }} /></div>
@@ -411,7 +569,12 @@ const Reels = () => {
 
             {loading && <p className="social-note">Loading reels...</p>}
 
-            {error && <p className="social-note error">{error}</p>}
+            {error && (
+                <div className="reels-load-error" role="alert">
+                    <p>{error}</p>
+                    <button type="button" onClick={() => load()}>Try again</button>
+                </div>
+            )}
 
             {!loading && !error && reels.length === 0 && (
                 <p className="social-note">No reels yet. Tap “+ Reel” to share a video up to 5 minutes.</p>
@@ -424,7 +587,6 @@ const Reels = () => {
                     muted={muted}
                     setMuted={setMuted}
                     myId={myId}
-                    isAdmin={user?.role === "admin"}
                     onDeleted={id => setReels(prev => prev.filter(r => r._id !== id))}
                     onFollowChange={(author, result) => setReels(previous => previous.map(item =>
                        String(item.author?._id || item.author) === String(author._id)

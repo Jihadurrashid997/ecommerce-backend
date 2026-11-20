@@ -16,6 +16,7 @@ import {
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import PostCard from "../components/PostCard";
+import ReportItemButton from "../components/ReportItemButton";
 import "../styles/Communities.css";
 
 const CommunityCard = ({ community, onJoin }) => (
@@ -298,6 +299,9 @@ const Communities = () => {
                                 <h1>{community.name}</h1>
                                 <p>{community.description || "A place to share ideas and meet people."}</p>
                                 <small>{community.membersCount} members · Created by {community.createdBy?.name || "a community member"}</small>
+                                {String(user?._id || user?.id || "") !== String(community.createdBy?._id || "") && (
+                                    <ReportItemButton targetType="community" targetId={community._id} compact />
+                                )}
                             </div>
                             <div className="community-detail-actions">
                                 {community.isMember ? (

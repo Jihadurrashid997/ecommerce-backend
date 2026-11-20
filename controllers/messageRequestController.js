@@ -66,6 +66,10 @@ exports.createMessageRequest = async (req, res) => {
         const recipientId = req.body?.receiver;
         const text = String(req.body?.message ?? req.body?.text ?? "").trim();
         const file = req.file;
+        const messageType =
+            req.body?.type === "location" && !file
+                ? "location"
+                : "message";
         const isEncrypted =
             req.body?.isEncrypted === true ||
             req.body?.isEncrypted === "true";
@@ -284,6 +288,7 @@ exports.createMessageRequest = async (req, res) => {
                     sender: senderId,
                     recipient: recipientId,
                     message: text,
+                    type: messageType,
                     isEncrypted,
                     ...(uploadedMedia
                         ? {
@@ -504,6 +509,7 @@ exports.acceptMessageRequest = async (req, res) => {
                 sender: request.sender,
                 receiver: recipientId,
                 message: request.message,
+                type: request.type || "message",
                 isEncrypted: request.isEncrypted,
                 isSeen: false,
                 isDelivered: true,

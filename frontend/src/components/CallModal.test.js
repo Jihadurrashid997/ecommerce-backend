@@ -50,7 +50,7 @@ test("shows the caller name on an incoming call", () => {
     expect(screen.getByRole("button", { name: "Reject call" })).toBeInTheDocument();
 });
 
-test("mirrors only the local front-camera preview", () => {
+test("keeps the local front-camera preview unmirrored", () => {
     const localStream = {
         getVideoTracks: () => [{ readyState: "live" }],
         getAudioTracks: () => [],
@@ -60,29 +60,16 @@ test("mirrors only the local front-camera preview", () => {
     jest.spyOn(HTMLMediaElement.prototype, "play")
         .mockResolvedValue(undefined);
 
-    const { rerender } = render(
+    render(
         <CallModal
             visible
             type="video"
             mode="connected"
             localStream={localStream}
-            cameraFacing="user"
         />
     );
 
     const localVideo = document.querySelector("video");
-    expect(localVideo.style.transform).toBe("scaleX(-1)");
-
-    rerender(
-        <CallModal
-            visible
-            type="video"
-            mode="connected"
-            localStream={localStream}
-            cameraFacing="environment"
-        />
-    );
-
     expect(localVideo.style.transform).toBe("none");
 });
 
@@ -118,6 +105,9 @@ test("shows the full local and remote camera frames without cropping", () => {
     expect(
         document.querySelector(".messenger-call-remote-video").style.objectFit
     ).toBe("contain");
+    expect(
+        document.querySelector(".messenger-call-remote-video").style.transform
+    ).toBe("none");
 });
 
 test("keeps the caller name and connected timer visible over remote video", () => {
@@ -204,7 +194,7 @@ test("sends camera zoom changes to the outgoing camera instead of zooming remote
         expect(onCameraZoom).toHaveBeenNthCalledWith(1, 0.5);
         expect(onCameraZoom).toHaveBeenNthCalledWith(2, 10);
         expect(screen.getByText("10x")).toBeInTheDocument();
-        expect(remoteVideo.style.transform).toBe("");
+        expect(remoteVideo.style.transform).toBe("none");
     });
 });
 

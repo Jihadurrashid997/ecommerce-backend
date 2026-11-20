@@ -124,6 +124,14 @@ const userSchema = new mongoose.Schema(
             ],
             default: "customer"
         },
+        adminRole: {
+            type: String,
+            enum: ["super_admin", "moderator", "support"],
+            default: undefined,
+            required: function () {
+                return this.role === "admin";
+            }
+        },
 
         // ==========================
         // PROFILE INFORMATION
@@ -204,6 +212,18 @@ const userSchema = new mongoose.Schema(
         },
 
         emailVerifiedAt: {
+            type: Date,
+            default: null
+        },
+        ageConfirmedAt: {
+            type: Date,
+            default: null
+        },
+        termsAcceptedAt: {
+            type: Date,
+            default: null
+        },
+        privacyAcceptedAt: {
             type: Date,
             default: null
         },
@@ -296,6 +316,21 @@ const userSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
             index: true
+        },
+        isBanned: {
+            type: Boolean,
+            default: false,
+            index: true
+        },
+        bannedReason: {
+            type: String,
+            trim: true,
+            maxlength: 500,
+            default: ""
+        },
+        bannedAt: {
+            type: Date,
+            default: null
         },
 
         suspendedReason: {

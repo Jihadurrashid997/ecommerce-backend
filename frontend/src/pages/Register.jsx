@@ -50,6 +50,7 @@ const Register = () => {
     const [registrationComplete, setRegistrationComplete] = useState(false);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
+    const [legalConsent, setLegalConsent] = useState(false);
     const authBusy = loading || googleLoading;
 
     // ==========================
@@ -76,6 +77,10 @@ const Register = () => {
         setNotice("");
 
         if (authBusy) {
+            return;
+        }
+        if (!legalConsent) {
+            setError("Confirm that you are at least 13 and accept the Terms of Use and Privacy Policy.");
             return;
         }
 
@@ -137,7 +142,9 @@ const Register = () => {
                             form.email.trim(),
 
                         password:
-                            form.password
+                            form.password,
+                        ageConfirmed: true,
+                        policiesAccepted: true
                     }
                 );
 
@@ -178,12 +185,19 @@ const Register = () => {
         if (authBusy) {
             return;
         }
+        if (!legalConsent) {
+            setError("Confirm that you are at least 13 and accept the Terms of Use and Privacy Policy.");
+            return;
+        }
 
         setError("");
         setNotice("");
         setGoogleLoading(true);
         try {
-            const response = await googleAuthUser(credential);
+            const response = await googleAuthUser(credential, {
+                ageConfirmed: true,
+                policiesAccepted: true
+            });
             setUser(response.data.user);
             navigate("/", { replace: true });
         } catch (err) {
@@ -316,9 +330,22 @@ const Register = () => {
 
                 {!registrationComplete && (
                     <>
+                        <label className="register-legal-consent">
+                            <input
+                                type="checkbox"
+                                checked={legalConsent}
+                                onChange={event => setLegalConsent(event.target.checked)}
+                                disabled={authBusy}
+                            />
+                            <span>
+                                I confirm I am at least 13 years old and agree to the{" "}
+                                <Link to="/terms">Terms of Use</Link> and{" "}
+                                <Link to="/privacy">Privacy Policy</Link>.
+                            </span>
+                        </label>
                         <GoogleAuthButton
                             onCredential={handleGoogleCredential}
-                            disabled={authBusy}
+                            disabled={authBusy || !legalConsent}
                             text="signup_with"
                         />
                         {googleLoading && (

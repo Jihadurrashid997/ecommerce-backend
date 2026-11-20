@@ -45,7 +45,8 @@ import {
     FaUserPlus,
     FaMapMarkerAlt,
     FaClock,
-    FaRegFileAlt
+    FaRegFileAlt,
+    FaDownload
 } from "react-icons/fa";
 
 import api, {
@@ -125,6 +126,7 @@ import GroupCallModal from "./GroupCallModal";
 import MessengerStories from "./MessengerStories";
 import MessengerDeviceSettings from "./MessengerDeviceSettings";
 import MessengerDocumentScanner from "./MessengerDocumentScanner";
+import MessengerAttachmentViewer from "./MessengerAttachmentViewer";
 import CallLogMessage from "./CallLogMessage";
 import VerifiedBadge from "./VerifiedBadge";
 import VoiceMessagePlayer, {
@@ -350,7 +352,25 @@ const getMessageId = (item) => {
 };
 
 
-const EncryptedMediaAttachment = ({ url, media, own }) => {
+const AttachmentDownloadButton = ({ fileName, onClick }) => (
+    <button
+        type="button"
+        className="message-attachment-download"
+        aria-label={`Download ${fileName || "attachment"}`}
+        onClick={onClick}
+    >
+        <FaDownload aria-hidden="true" />
+        <span>Download</span>
+    </button>
+);
+
+const EncryptedMediaAttachment = ({
+    url,
+    media,
+    own,
+    onDownload,
+    onOpen
+}) => {
     const [objectUrl, setObjectUrl] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -407,52 +427,87 @@ const EncryptedMediaAttachment = ({ url, media, own }) => {
     }
 
     if (media.fileType.startsWith("audio/")) {
-        return <VoiceMessagePlayer url={objectUrl} own={own} />;
+        return (
+            <div className="message-attachment-item">
+                <VoiceMessagePlayer url={objectUrl} own={own} />
+                <AttachmentDownloadButton
+                    fileName={media.fileName}
+                    onClick={event =>
+                        onDownload(event, objectUrl, media.fileName)
+                    }
+                />
+            </div>
+        );
     }
 
     if (media.fileType.startsWith("image/")) {
         return (
-            <a
-                href={objectUrl}
-                target="_blank"
-                rel="noreferrer"
-                title="Open decrypted image"
-            >
-                <img
-                    src={objectUrl}
-                    alt={media.fileName}
-                    className="message-attachment-image"
+            <div className="message-attachment-item">
+                <button
+                    type="button"
+                    className="message-attachment-preview"
+                    aria-label={`Open ${media.fileName}`}
+                    onClick={() =>
+                        onOpen(objectUrl, media.fileType, media.fileName)
+                    }
+                >
+                    <img
+                        src={objectUrl}
+                        alt={media.fileName}
+                        className="message-attachment-image"
+                    />
+                </button>
+                <AttachmentDownloadButton
+                    fileName={media.fileName}
+                    onClick={event =>
+                        onDownload(event, objectUrl, media.fileName)
+                    }
                 />
-            </a>
+            </div>
         );
     }
 
     if (media.fileType.startsWith("video/")) {
         return (
-            <video
-                src={objectUrl}
-                controls
-                playsInline
-                preload="metadata"
-                className="message-attachment-video"
-                aria-label={media.fileName}
-            />
+            <div className="message-attachment-item">
+                <video
+                    src={objectUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="message-attachment-video"
+                    aria-label={media.fileName}
+                />
+                <AttachmentDownloadButton
+                    fileName={media.fileName}
+                    onClick={event =>
+                        onDownload(event, objectUrl, media.fileName)
+                    }
+                />
+            </div>
         );
     }
 
-    const isPdf = media.fileType === "application/pdf";
     return (
-        <a
-            href={objectUrl}
-            target={isPdf ? "_blank" : undefined}
-            rel={isPdf ? "noopener noreferrer" : undefined}
-            download={isPdf ? undefined : media.fileName}
-            className="message-attachment-file"
-            title={isPdf ? "Open PDF" : "Download attachment"}
-        >
-            <FaPaperclip />
-            <span>{media.fileName}</span>
-        </a>
+        <div className="message-file-attachment">
+            <button
+                type="button"
+                className="message-attachment-file"
+                title="Open attachment preview"
+                onClick={() =>
+                    onOpen(objectUrl, media.fileType, media.fileName)
+                }
+            >
+                <FaPaperclip />
+                <span>{media.fileName}</span>
+            </button>
+            <AttachmentDownloadButton
+                fileName={media.fileName}
+                onClick={event =>
+                    onDownload(event, objectUrl, media.fileName)
+                }
+            />
+        </div>
     );
 };
 
@@ -657,8 +712,23 @@ const Messenger = ({ isActive = true }) => {
     const [liveLocations, setLiveLocations] =
         useState([]);
 
-    const [showLiveLocationOptions, setShowLiveLocationOptions] =
+    const [showLocationChooser, setShowLocationChooser] =
         useState(false);
+
+    const [locationPickerPosition, setLocationPickerPosition] =
+        useState(null);
+
+    const [locationPickerLoading, setLocationPickerLoading] =
+        useState(false);
+
+    const [locationPickerError, setLocationPickerError] =
+        useState("");
+
+    const [locationComment, setLocationComment] =
+        useState("");
+
+    const [liveLocationDuration, setLiveLocationDuration] =
+        useState(60);
 
     const [liveLocationBusy, setLiveLocationBusy] =
         useState(false);
@@ -1865,15 +1935,17 @@ const Messenger = ({ isActive = true }) => {
     }, [searchOpen]);
 
     /*
-     * When settings.autoDownloadMedia is off, images show
-     * a "Tap to load" placeholder first (saves data on a
-     * slow/metered connection) - this tracks which ones
-     * the person has explicitly chosen to load.
+     * When settings.autoDownloadMedia is off, image and
+     * video previews load only after an explicit tap.
+     * This tracks the videos opened inline in the chat.
      */
     const [revealedMedia, setRevealedMedia] =
         useState(
             () => new Set()
         );
+
+    const [attachmentViewer, setAttachmentViewer] =
+        useState(null);
 
     const settingsRef =
         useRef(DEFAULT_SETTINGS);
@@ -7044,7 +7116,12 @@ const onCallMissed =
     ===================================================== */
 
     const sendMessage =
-        async (event, messageOverride = message) => {
+        async (
+            event,
+            messageOverride = message,
+            messageType = "message",
+            preserveDraft = false
+        ) => {
 
             event?.preventDefault?.();
 
@@ -7169,6 +7246,7 @@ const onCallMissed =
                         : undefined,
                 message:
                     text,
+                type: messageType,
                 isEncrypted: encryptedChat,
                 createdAt:
                     createdAt,
@@ -7191,7 +7269,9 @@ const onCallMissed =
 
             scrollToBottom();
 
-            setMessage("");
+            if (!preserveDraft) {
+                setMessage("");
+            }
 
             setShowEmoji(false);
 
@@ -7221,6 +7301,7 @@ const onCallMissed =
                             ? {
                                   groupId: receiver,
                                   message: storedText,
+                                  type: messageType,
                                   isEncrypted: encryptedChat,
                                   clientMessageId,
                                   replyTo:
@@ -7230,6 +7311,7 @@ const onCallMissed =
                             : {
                                   receiver,
                                   message: storedText,
+                                  type: messageType,
                                   isEncrypted: encryptedChat,
                                   clientMessageId,
                                   replyTo:
@@ -7293,6 +7375,7 @@ const onCallMissed =
                         message:
                             saved.message ||
                             storedText,
+                        type: saved.type || messageType,
                         isEncrypted: encryptedChat,
                         replyTo:
                             saved.replyTo ||
@@ -7329,7 +7412,9 @@ const onCallMissed =
                             "This account is Private. Send your message as a Message Request?"
                         )
                     ) {
-                        setMessage(text);
+                        if (!preserveDraft) {
+                            setMessage(text);
+                        }
                         return;
                     }
 
@@ -7337,6 +7422,7 @@ const onCallMissed =
                         await api.post("/messages/requests", {
                             receiver,
                             message: storedText,
+                            type: messageType,
                             isEncrypted: encryptedChat
                         });
                         showMessengerToast(
@@ -7348,7 +7434,9 @@ const onCallMissed =
                             "Send Message Request error:",
                             requestError
                         );
-                        setMessage(text);
+                        if (!preserveDraft) {
+                            setMessage(text);
+                        }
                         alert(
                             requestError.response?.data?.message ||
                                 requestError.message ||
@@ -7372,6 +7460,7 @@ const onCallMissed =
                             roomId,
                             senderId: sender,
                             text: storedText,
+                            type: messageType,
                             isEncrypted: encryptedChat,
                             replyTo:
                                 getMessageId(replySnapshot) || undefined,
@@ -7446,6 +7535,7 @@ const onCallMissed =
                             ? { groupId: queued.targetId }
                             : { receiver: queued.targetId }),
                         message: queued.text,
+                        type: queued.type,
                         isEncrypted: queued.isEncrypted,
                         clientMessageId: queued.clientMessageId,
                         replyTo: queued.replyTo
@@ -7495,6 +7585,7 @@ const onCallMissed =
                               }
                             : { receiver: queued.targetId }),
                         message: saved.message || queued.text,
+                        type: saved.type || queued.type,
                         isEncrypted: queued.isEncrypted,
                         replyTo: saved.replyTo || undefined,
                         _id: saved._id || saved.id,
@@ -7571,54 +7662,82 @@ const onCallMissed =
         };
     }, [flushMessageOutbox]);
 
-    const shareCurrentLocation =
-        async () => {
-            if (!selectedUser || isConversationBlocked) {
-                return;
-            }
+    const refreshLocationPickerPosition = async () => {
+        setLocationPickerError("");
+        setLocationPickerPosition(null);
+        if (!navigator.geolocation) {
+            setLocationPickerError(
+                "This browser does not support location sharing."
+            );
+            return;
+        }
 
-            if (!navigator.geolocation) {
-                alert("This browser does not support location sharing.");
-                return;
-            }
+        setLocationPickerLoading(true);
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    resolve,
+                    reject,
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: 15000
+                    }
+                );
+            });
+            setLocationPickerPosition({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy
+            });
+        } catch (error) {
+            const messageByCode = {
+                1: "Location permission was denied. Allow location access to share your location.",
+                2: "Your current location is unavailable. Try again when your device can determine it.",
+                3: "Location lookup timed out. Please try again."
+            };
+            setLocationPickerError(
+                messageByCode[error.code] ||
+                    error.message ||
+                    "Unable to get your current location."
+            );
+        } finally {
+            setLocationPickerLoading(false);
+        }
+    };
 
-            const audience = selectedUser.isGroup
-                ? `all ${selectedUser.participants?.length || "group"} members`
-                : getUserName(selectedUser);
+    const openLocationChooser = () => {
+        if (!selectedUser || isConversationBlocked) {
+            return;
+        }
+        setLocationComment("");
+        setLocationPickerPosition(null);
+        setShowLocationChooser(true);
+        void refreshLocationPickerPosition();
+    };
 
-            if (!window.confirm(
-                `Share your approximate current location with ${audience}? This sends a one-time pin in the chat; it does not track you.`
-            )) {
-                return;
-            }
+    const closeLocationChooser = () => {
+        if (liveLocationBusy) {
+            return;
+        }
+        setShowLocationChooser(false);
+        setLocationPickerError("");
+    };
 
-            try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(
-                        resolve,
-                        reject,
-                        {
-                            enableHighAccuracy: false,
-                            maximumAge: 0,
-                            timeout: 12000
-                        }
-                    );
-                });
-                await sendMessage(null, createLocationMessage(
-                    position.coords.latitude,
-                    position.coords.longitude
-                ));
-            } catch (error) {
-                const messageByCode = {
-                    1: "Location permission was denied. Allow location access in your browser to share a pin.",
-                    2: "Your current location is unavailable. Try again when your device can determine its location.",
-                    3: "Location lookup timed out. Please try again."
-                };
-
-                console.error("Messenger location sharing error:", error);
-                alert(messageByCode[error.code] || error.message || "Unable to share your location.");
-            }
-        };
+    const shareCurrentLocation = async () => {
+        if (!locationPickerPosition) {
+            return;
+        }
+        const { latitude, longitude } = locationPickerPosition;
+        await sendMessage(
+            null,
+            createLocationMessage(latitude, longitude, locationComment),
+            "location",
+            true
+        );
+        setShowLocationChooser(false);
+        setLocationComment("");
+    };
 
     const clearLiveLocationTracking = shareId => {
         if (
@@ -7685,17 +7804,10 @@ const onCallMissed =
             return;
         }
 
-        const audience = selectedUser.isGroup
-            ? `all ${selectedUser.participants?.length || "group"} members`
-            : getUserName(selectedUser);
-        const durationLabel = {
-            15: "15 minutes",
-            60: "1 hour",
-            480: "8 hours"
-        }[durationMinutes];
-        if (!window.confirm(
-            `Share your live location with ${audience} for ${durationLabel}? It stops automatically at expiry or when you stop it. Only the latest location is kept.`
-        )) {
+        if (!locationPickerPosition) {
+            setLocationPickerError(
+                "Wait for your current location before sharing it."
+            );
             return;
         }
 
@@ -7709,17 +7821,6 @@ const onCallMissed =
                 return;
             }
 
-            const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(
-                    resolve,
-                    reject,
-                    {
-                        enableHighAccuracy: false,
-                        maximumAge: 0,
-                        timeout: 12000
-                    }
-                );
-            });
             const response = await api.post(
                 "/messages/live-locations",
                 {
@@ -7727,8 +7828,8 @@ const onCallMissed =
                         ? { groupId: getId(selectedUser) }
                         : { recipientId: getId(selectedUser) }),
                     durationMinutes,
-                    latitude: position.coords.latitude,
-                    longitude: position.coords.longitude
+                    latitude: locationPickerPosition.latitude,
+                    longitude: locationPickerPosition.longitude
                 }
             );
             const share = response.data?.data;
@@ -7742,7 +7843,18 @@ const onCallMissed =
                 ...previous.filter(item => item._id !== share._id),
                 share
             ]);
-            setShowLiveLocationOptions(false);
+            scrollToBottom();
+            setShowLocationChooser(false);
+            setLocationPickerError("");
+            if (locationComment.trim()) {
+                await sendMessage(
+                    null,
+                    locationComment.trim(),
+                    "location",
+                    true
+                );
+            }
+            setLocationComment("");
             let lastUpdateAt = Date.now();
             const watchId = navigator.geolocation.watchPosition(
                 nextPosition => {
@@ -8645,6 +8757,15 @@ const onCallMissed =
     const handleEditSave =
         async () => {
 
+            if (
+                editingMessage?.type === "location" ||
+                parseLocationMessage(getMessageText(editingMessage))
+            ) {
+                showMessengerToast("Location messages cannot be edited.");
+                setEditingMessage(null);
+                return;
+            }
+
             const messageId =
                 getMessageId(editingMessage);
 
@@ -9131,6 +9252,15 @@ const onCallMissed =
             "";
 
 
+    const openAttachmentViewer = (url, fileType, fileName, messageId = null) => {
+        setAttachmentViewer({
+            url,
+            fileType: fileType || "",
+            fileName: fileName || "Attachment",
+            messageId
+        });
+    };
+
     const handleAttachmentDownload =
         async (event, url, filename) => {
 
@@ -9200,29 +9330,43 @@ const onCallMissed =
 
         };
 
-    const handlePdfAttachmentOpen = async (event, messageId, filename) => {
+    const handlePdfAttachmentOpen = async (
+        event,
+        messageId,
+        filename,
+        shouldDownload = false
+    ) => {
         event.preventDefault();
-        const pdfWindow = window.open("about:blank", "_blank");
-        if (pdfWindow) pdfWindow.opener = null;
 
         try {
             if (!messageId) {
                 throw new Error("This PDF message is missing its download ID.");
             }
+            const previewQuery = shouldDownload ? "" : "?disposition=inline";
             const response = await api.get(
-                `/messages/${encodeURIComponent(messageId)}/attachment-download`
+                `/messages/${encodeURIComponent(messageId)}/attachment-download${previewQuery}`
             );
             const downloadUrl = getUploadUrl(response.data?.downloadUrl || "");
             if (!downloadUrl) {
                 throw new Error("The server did not provide a PDF download URL.");
             }
-            if (pdfWindow && !pdfWindow.closed) {
-                pdfWindow.location.replace(downloadUrl);
+            if (shouldDownload) {
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = filename || "attachment.pdf";
+                link.rel = "noopener noreferrer";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
             } else {
-                window.location.assign(downloadUrl);
+                openAttachmentViewer(
+                    downloadUrl,
+                    "application/pdf",
+                    filename || "attachment.pdf",
+                    messageId
+                );
             }
         } catch (error) {
-            pdfWindow?.close();
             console.error("PDF attachment open error:", error);
             showMessengerToast(
                 error.response?.data?.message ||
@@ -11059,67 +11203,6 @@ const onCallMissed =
                                     </div>
                                 )}
 
-                            {liveLocations.length > 0 && (
-                                <section
-                                    className="live-location-cards"
-                                    aria-label="Active live locations"
-                                >
-                                    {liveLocations.map(share => {
-                                        const ownShare =
-                                            String(share.sender) === currentUserId;
-                                        const mapUrl =
-                                            `https://www.google.com/maps?q=${share.latitude},${share.longitude}`;
-                                        return (
-                                            <article
-                                                className="live-location-card"
-                                                key={share._id}
-                                            >
-                                                <div>
-                                                    <strong>
-                                                        {ownShare
-                                                            ? "Your live location"
-                                                            : "Live location shared with you"}
-                                                    </strong>
-                                                    <span>
-                                                        Expires{" "}
-                                                        {new Date(
-                                                            share.expiresAt
-                                                        ).toLocaleTimeString()}
-                                                    </span>
-                                                    {share.updatedAt && (
-                                                        <small>
-                                                            Updated{" "}
-                                                            {new Date(
-                                                                share.updatedAt
-                                                            ).toLocaleTimeString()}
-                                                        </small>
-                                                    )}
-                                                </div>
-                                                <a
-                                                    href={mapUrl}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                >
-                                                    Open map
-                                                </a>
-                                                {ownShare && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            stopLiveLocation(
-                                                                share._id
-                                                            )
-                                                        }
-                                                    >
-                                                        Stop sharing
-                                                    </button>
-                                                )}
-                                            </article>
-                                        );
-                                    })}
-                                </section>
-                            )}
-
                             {chatLoading ? (
 
                                 <div className="chat-loading">
@@ -11285,12 +11368,17 @@ const onCallMissed =
 
                                         const messageCreatedAt =
                                             new Date(time).getTime();
+                                        const isLocationMessage =
+                                            item.type === "location" ||
+                                            (Boolean(location) &&
+                                                !item.isEncrypted);
                                         const canDeleteForEveryone =
                                             own &&
-                                            Number.isFinite(messageCreatedAt) &&
-                                            Date.now() >= messageCreatedAt &&
-                                            Date.now() - messageCreatedAt <=
-                                                15 * 60 * 1000;
+                                            (isLocationMessage ||
+                                                (Number.isFinite(messageCreatedAt) &&
+                                                    Date.now() >= messageCreatedAt &&
+                                                    Date.now() - messageCreatedAt <=
+                                                        15 * 60 * 1000));
 
 
                                         const seen =
@@ -11447,57 +11535,80 @@ const onCallMissed =
                                                             url={fileUrl}
                                                             media={item.encryptedMedia}
                                                             own={own}
+                                                            onOpen={
+                                                                openAttachmentViewer
+                                                            }
+                                                            onDownload={
+                                                                handleAttachmentDownload
+                                                            }
                                                         />
                                                     ) : fileUrl && (
 
                                                         isAudioFile ? (
 
-                                                            <VoiceMessagePlayer
-                                                                url={fileUrl}
-                                                                own={own}
-                                                                canRecoverLegacy={
-                                                                    !item.filePublicId &&
-                                                                    String(item.fileUrl || "")
-                                                                        .startsWith("/uploads/")
-                                                                }
-                                                                onRecover={() =>
-                                                                    recoverLegacyVoiceMessage(
-                                                                        getMessageId(item)
-                                                                    )
-                                                                }
-                                                            />
+                                                            <div className="message-attachment-item">
+                                                                <VoiceMessagePlayer
+                                                                    url={fileUrl}
+                                                                    own={own}
+                                                                    canRecoverLegacy={
+                                                                        !item.filePublicId &&
+                                                                        String(item.fileUrl || "")
+                                                                            .startsWith("/uploads/")
+                                                                    }
+                                                                    onRecover={() =>
+                                                                        recoverLegacyVoiceMessage(
+                                                                            getMessageId(item)
+                                                                        )
+                                                                    }
+                                                                />
+                                                                <AttachmentDownloadButton
+                                                                    fileName={fileName}
+                                                                    onClick={event =>
+                                                                        handleAttachmentDownload(
+                                                                            event,
+                                                                            fileUrl,
+                                                                            fileName
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </div>
 
                                                         ) : isImageFile ? (
 
                                                             mediaRevealed ? (
 
-                                                                <a
-                                                                    href={
-                                                                        fileUrl
-                                                                    }
-                                                                    download={
-                                                                        fileName
-                                                                    }
-                                                                    onClick={
-                                                                        event =>
+                                                                <div className="message-attachment-item">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="message-attachment-preview"
+                                                                        aria-label={`Open ${fileName}`}
+                                                                        onClick={() =>
+                                                                            openAttachmentViewer(
+                                                                                fileUrl,
+                                                                                fileType ||
+                                                                                    "image/*",
+                                                                                fileName,
+                                                                                getMessageId(item)
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <img
+                                                                            src={fileUrl}
+                                                                            alt={fileName}
+                                                                            className="message-attachment-image"
+                                                                        />
+                                                                    </button>
+                                                                    <AttachmentDownloadButton
+                                                                        fileName={fileName}
+                                                                        onClick={event =>
                                                                             handleAttachmentDownload(
                                                                                 event,
                                                                                 fileUrl,
                                                                                 fileName
                                                                             )
-                                                                    }
-                                                                    title="Click to download"
-                                                                >
-                                                                    <img
-                                                                        src={
-                                                                            fileUrl
                                                                         }
-                                                                        alt={
-                                                                            fileName
-                                                                        }
-                                                                        className="message-attachment-image"
                                                                     />
-                                                                </a>
+                                                                </div>
 
                                                             ) : (
 
@@ -11505,29 +11616,18 @@ const onCallMissed =
                                                                     type="button"
                                                                     className="message-attachment-file"
                                                                     onClick={() =>
-
-                                                                        setRevealedMedia(
-                                                                            previous => {
-
-                                                                                const next =
-                                                                                    new Set(
-                                                                                        previous
-                                                                                    );
-
-                                                                                next.add(
-                                                                                    attachmentKey
-                                                                                );
-
-                                                                                return next;
-
-                                                                            }
+                                                                        openAttachmentViewer(
+                                                                            fileUrl,
+                                                                            fileType ||
+                                                                                "image/*",
+                                                                            fileName,
+                                                                            getMessageId(item)
                                                                         )
-
                                                                     }
                                                                 >
                                                                     <FaImage />
                                                                     <span>
-                                                                        Tap to load image
+                                                                        Open image preview
                                                                     </span>
                                                                 </button>
 
@@ -11536,14 +11636,26 @@ const onCallMissed =
                                                         ) : isVideoFile ? (
 
                                                             mediaRevealed ? (
-                                                                <video
-                                                                    src={fileUrl}
-                                                                    controls
-                                                                    playsInline
-                                                                    preload="metadata"
-                                                                    className="message-attachment-video"
-                                                                    aria-label={fileName}
-                                                                />
+                                                                <div className="message-attachment-item">
+                                                                    <video
+                                                                        src={fileUrl}
+                                                                        controls
+                                                                        playsInline
+                                                                        preload="metadata"
+                                                                        className="message-attachment-video"
+                                                                        aria-label={fileName}
+                                                                    />
+                                                                    <AttachmentDownloadButton
+                                                                        fileName={fileName}
+                                                                        onClick={event =>
+                                                                            handleAttachmentDownload(
+                                                                                event,
+                                                                                fileUrl,
+                                                                                fileName
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
                                                             ) : (
                                                                 <button
                                                                     type="button"
@@ -11563,31 +11675,47 @@ const onCallMissed =
 
                                                         ) : (
 
-                                                            <a
-                                                                href={
-                                                                    fileUrl
-                                                                }
-                                                                onClick={isPdfFile
-                                                                    ? event =>
-                                                                        handlePdfAttachmentOpen(
-                                                                            event,
-                                                                            getMessageId(item),
-                                                                            fileName
-                                                                        )
-                                                                    : event =>
-                                                                        handleAttachmentDownload(
-                                                                            event,
-                                                                            fileUrl,
-                                                                            fileName
-                                                                        )}
-                                                                className="message-attachment-file"
-                                                                title={isPdfFile ? "Open PDF" : "Click to download"}
-                                                            >
-                                                                <FaPaperclip />
-                                                                <span>
-                                                                    {fileName}
-                                                                </span>
-                                                            </a>
+                                                            <div className="message-file-attachment">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={isPdfFile
+                                                                        ? event =>
+                                                                            handlePdfAttachmentOpen(
+                                                                                event,
+                                                                                getMessageId(item),
+                                                                                fileName
+                                                                            )
+                                                                        : () =>
+                                                                            openAttachmentViewer(
+                                                                                fileUrl,
+                                                                                fileType,
+                                                                                fileName,
+                                                                                getMessageId(item)
+                                                                            )}
+                                                                    className="message-attachment-file"
+                                                                    title="Open attachment preview"
+                                                                >
+                                                                    <FaPaperclip />
+                                                                    <span>{fileName}</span>
+                                                                </button>
+                                                                <AttachmentDownloadButton
+                                                                    fileName={fileName}
+                                                                    onClick={isPdfFile
+                                                                        ? event =>
+                                                                            handlePdfAttachmentOpen(
+                                                                                event,
+                                                                                getMessageId(item),
+                                                                                fileName,
+                                                                                true
+                                                                            )
+                                                                        : event =>
+                                                                            handleAttachmentDownload(
+                                                                                event,
+                                                                                fileUrl,
+                                                                                fileName
+                                                                            )}
+                                                                />
+                                                            </div>
 
                                                         )
 
@@ -11658,22 +11786,36 @@ const onCallMissed =
                                                             />
                                                         ) : location ? (
                                                             <div className="message-location-card">
-                                                                <span className="message-location-icon">
-                                                                    <FaMapMarkerAlt />
-                                                                </span>
-                                                                <div>
-                                                                    <strong>Approximate location</strong>
-                                                                    <span>
-                                                                        {location.latitude.toFixed(4)},{" "}
-                                                                        {location.longitude.toFixed(4)}
+                                                                <iframe
+                                                                    className="message-location-map"
+                                                                    src={location.mapEmbedUrl}
+                                                                    title={`Map showing approximate location at ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
+                                                                    loading="lazy"
+                                                                    allowFullScreen
+                                                                />
+                                                                <div className="message-location-details">
+                                                                    <span className="message-location-icon">
+                                                                        <FaMapMarkerAlt />
                                                                     </span>
-                                                                    <a
-                                                                        href={location.mapUrl}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                    >
-                                                                        Open in Google Maps
-                                                                    </a>
+                                                                    <div>
+                                                                        <strong>Approximate location</strong>
+                                                                        <span>
+                                                                            {location.latitude.toFixed(4)},{" "}
+                                                                            {location.longitude.toFixed(4)}
+                                                                        </span>
+                                                                        {location.comment && (
+                                                                            <span className="message-location-comment">
+                                                                                {location.comment}
+                                                                            </span>
+                                                                        )}
+                                                                        <a
+                                                                            href={location.mapUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                        >
+                                                                            Open in Google Maps
+                                                                        </a>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         ) : (
@@ -11772,7 +11914,9 @@ const onCallMissed =
                                                                 </button>
                                                                 {own &&
                                                                     !item.isDeleted &&
-                                                                    item.type !== "call-log" && (
+                                                                    item.type !== "call-log" &&
+                                                                    item.type !== "location" &&
+                                                                    !location && (
                                                                         <button
                                                                             type="button"
                                                                             role="menuitem"
@@ -11980,6 +12124,81 @@ const onCallMissed =
 
                             )}
 
+                            {liveLocations.length > 0 && (
+                                <section
+                                    className="live-location-cards"
+                                    aria-label="Live location messages"
+                                >
+                                    {liveLocations.map(share => {
+                                        const ownShare =
+                                            String(share.sender) === currentUserId;
+                                        const mapUrl =
+                                            `https://www.google.com/maps?q=${share.latitude},${share.longitude}`;
+                                        const mapEmbedUrl =
+                                            `https://maps.google.com/maps?q=${share.latitude},${share.longitude}&z=15&output=embed`;
+                                        return (
+                                            <article
+                                                className={`live-location-card ${
+                                                    ownShare ? "own" : "remote"
+                                                }`}
+                                                key={share._id}
+                                            >
+                                                <iframe
+                                                    className="live-location-map"
+                                                    src={mapEmbedUrl}
+                                                    title={`Map showing live location at ${share.latitude.toFixed(4)}, ${share.longitude.toFixed(4)}`}
+                                                    loading="lazy"
+                                                    referrerPolicy="no-referrer-when-downgrade"
+                                                />
+                                                <div className="live-location-details">
+                                                    <div>
+                                                        <strong>
+                                                            {ownShare
+                                                                ? "Your live location"
+                                                                : "Live location"}
+                                                        </strong>
+                                                        <span>
+                                                            Live until{" "}
+                                                            {new Date(
+                                                                share.expiresAt
+                                                            ).toLocaleTimeString()}
+                                                        </span>
+                                                        {share.updatedAt && (
+                                                            <small>
+                                                                Updated{" "}
+                                                                {new Date(
+                                                                    share.updatedAt
+                                                                ).toLocaleTimeString()}
+                                                            </small>
+                                                        )}
+                                                    </div>
+                                                    <div className="live-location-actions">
+                                                        <a
+                                                            href={mapUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                        >
+                                                            Open map
+                                                        </a>
+                                                        {ownShare && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    stopLiveLocation(
+                                                                        share._id
+                                                                    )
+                                                                }
+                                                            >
+                                                                Stop sharing
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
+                                </section>
+                            )}
 
                             {typing && (
                                 <div className="typing-row">
@@ -12191,60 +12410,16 @@ const onCallMissed =
 
                                 <button
                                     type="button"
-                                    title="Share approximate location"
-                                    aria-label="Share approximate location"
+                                    title="Share location"
+                                    aria-label="Share location"
                                     disabled={
                                         !selectedUser ||
                                         isConversationBlocked
                                     }
-                                    onClick={shareCurrentLocation}
+                                    onClick={openLocationChooser}
                                 >
                                     <FaMapMarkerAlt />
                                 </button>
-
-                                <div className="live-location-menu-wrap">
-                                    <button
-                                        type="button"
-                                        title="Share live location"
-                                        aria-label="Share live location"
-                                        aria-expanded={showLiveLocationOptions}
-                                        disabled={
-                                            !selectedUser ||
-                                            isConversationBlocked ||
-                                            liveLocationBusy
-                                        }
-                                        onClick={() =>
-                                            setShowLiveLocationOptions(value => !value)
-                                        }
-                                    >
-                                        <FaClock />
-                                    </button>
-                                    {showLiveLocationOptions && (
-                                        <div
-                                            className="live-location-options"
-                                            role="group"
-                                            aria-label="Live location duration"
-                                        >
-                                            <strong>Share live location</strong>
-                                            {[15, 60, 480].map(duration => (
-                                                <button
-                                                    key={duration}
-                                                    type="button"
-                                                    disabled={liveLocationBusy}
-                                                    onClick={() =>
-                                                        startLiveLocation(duration)
-                                                    }
-                                                >
-                                                    {duration === 15
-                                                        ? "15 minutes"
-                                                        : duration === 60
-                                                        ? "1 hour"
-                                                        : "8 hours"}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
 
 
                                 <input
@@ -12803,6 +12978,227 @@ const onCallMissed =
                 />
             )}
 
+            {showLocationChooser && (
+                <div
+                    className="location-picker-overlay"
+                    onMouseDown={event => {
+                        if (event.target === event.currentTarget) {
+                            closeLocationChooser();
+                        }
+                    }}
+                    onKeyDown={event => {
+                        if (event.key === "Escape") {
+                            closeLocationChooser();
+                        }
+                    }}
+                >
+                    <section
+                        className="location-picker-dialog"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="location-picker-title"
+                    >
+                        <header className="location-picker-header">
+                            <button
+                                type="button"
+                                aria-label="Close location sharing"
+                                disabled={liveLocationBusy}
+                                onClick={closeLocationChooser}
+                            >
+                                <FaArrowLeft />
+                            </button>
+                            <h2 id="location-picker-title">Send location</h2>
+                            <button
+                                type="button"
+                                aria-label="Refresh current location"
+                                disabled={locationPickerLoading}
+                                onClick={() =>
+                                    void refreshLocationPickerPosition()
+                                }
+                            >
+                                <FaMapMarkerAlt />
+                            </button>
+                        </header>
+
+                        <div className="location-picker-map">
+                            {locationPickerPosition ? (
+                                <iframe
+                                    src={`https://maps.google.com/maps?q=${locationPickerPosition.latitude},${locationPickerPosition.longitude}&z=16&output=embed`}
+                                    title="Map centered on your current location"
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer-when-downgrade"
+                                />
+                            ) : (
+                                <div className="location-picker-map-placeholder">
+                                    {locationPickerLoading
+                                        ? "Finding your location…"
+                                        : "Your location map will appear here"}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="location-picker-content">
+                            {locationPickerError && (
+                                <div
+                                    className="location-picker-error"
+                                    role="alert"
+                                >
+                                    {locationPickerError}
+                                    <button
+                                        type="button"
+                                        disabled={locationPickerLoading}
+                                        onClick={() =>
+                                            void refreshLocationPickerPosition()
+                                        }
+                                    >
+                                        Try again
+                                    </button>
+                                </div>
+                            )}
+
+                            {locationPickerPosition && (
+                                <>
+                                    <div className="location-picker-current">
+                                        <span className="location-picker-pin">
+                                            <FaMapMarkerAlt />
+                                        </span>
+                                        <div>
+                                            <strong>Send your current location</strong>
+                                            <span>
+                                                Accurate to{" "}
+                                                {Math.max(
+                                                    1,
+                                                    Math.round(
+                                                        locationPickerPosition.accuracy
+                                                    )
+                                                )}{" "}
+                                                meters
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={locationPickerLoading}
+                                            onClick={() =>
+                                                void refreshLocationPickerPosition()
+                                            }
+                                        >
+                                            Refresh
+                                        </button>
+                                    </div>
+
+                                    <a
+                                        className="location-picker-nearby-link"
+                                        href={`https://www.google.com/maps/search/?api=1&query=${locationPickerPosition.latitude},${locationPickerPosition.longitude}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        Explore nearby places in Maps
+                                    </a>
+
+                                    <div className="location-picker-live">
+                                        <strong>Share live location</strong>
+                                        <span>
+                                            Sharing stops automatically when time runs out. You can stop it any time.
+                                        </span>
+                                        <div
+                                            className="location-picker-durations"
+                                            role="group"
+                                            aria-label="Live location duration"
+                                        >
+                                            {[
+                                                { minutes: 15, label: "15 minutes" },
+                                                { minutes: 60, label: "1 hour" },
+                                                { minutes: 480, label: "8 hours" }
+                                            ].map(option => (
+                                                <button
+                                                    key={option.minutes}
+                                                    type="button"
+                                                    aria-pressed={
+                                                        liveLocationDuration ===
+                                                        option.minutes
+                                                    }
+                                                    className={
+                                                        liveLocationDuration ===
+                                                        option.minutes
+                                                            ? "selected"
+                                                            : ""
+                                                    }
+                                                    onClick={() =>
+                                                        setLiveLocationDuration(
+                                                            option.minutes
+                                                        )
+                                                    }
+                                                >
+                                                    {option.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <label className="location-picker-comment">
+                                        <span>Add a comment</span>
+                                        <textarea
+                                            value={locationComment}
+                                            maxLength={500}
+                                            onChange={event =>
+                                                setLocationComment(
+                                                    event.target.value
+                                                )
+                                            }
+                                            placeholder="Add a comment"
+                                        />
+                                    </label>
+
+                                    <div className="location-picker-actions">
+                                        <button
+                                            type="button"
+                                            disabled={
+                                                !locationPickerPosition ||
+                                                locationPickerLoading ||
+                                                liveLocationBusy
+                                            }
+                                            onClick={() =>
+                                                void shareCurrentLocation()
+                                            }
+                                        >
+                                            Send current location
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="location-picker-live-action"
+                                            disabled={
+                                                !locationPickerPosition ||
+                                                locationPickerLoading ||
+                                                liveLocationBusy
+                                            }
+                                            onClick={() =>
+                                                void startLiveLocation(
+                                                    liveLocationDuration
+                                                )
+                                            }
+                                        >
+                                            {liveLocationBusy
+                                                ? "Starting…"
+                                                : `Share live location · ${
+                                                    liveLocationDuration === 15
+                                                        ? "15 minutes"
+                                                        : liveLocationDuration === 60
+                                                        ? "1 hour"
+                                                        : "8 hours"
+                                                }`}
+                                            <FaPaperPlane />
+                                        </button>
+                                    </div>
+                                    <small className="location-picker-web-note">
+                                        Keep Messenger open while sharing live location on the web.
+                                    </small>
+                                </>
+                            )}
+                        </div>
+                    </section>
+                </div>
+            )}
+
            <CallModal
     visible={Boolean(callState)}
 
@@ -13083,6 +13479,33 @@ const onCallMissed =
     <MessengerDocumentScanner
         onClose={() => setShowDocumentScanner(false)}
         onSend={sendAttachmentFile}
+    />
+)}
+
+{attachmentViewer && (
+    <MessengerAttachmentViewer
+        attachment={attachmentViewer}
+        onClose={() => setAttachmentViewer(null)}
+        onDownload={event => {
+            if (
+                attachmentViewer.messageId &&
+                (attachmentViewer.fileType === "application/pdf" ||
+                    /\.pdf$/i.test(attachmentViewer.fileName))
+            ) {
+                void handlePdfAttachmentOpen(
+                    event,
+                    attachmentViewer.messageId,
+                    attachmentViewer.fileName,
+                    true
+                );
+                return;
+            }
+            void handleAttachmentDownload(
+                event,
+                attachmentViewer.url,
+                attachmentViewer.fileName
+            );
+        }}
     />
 )}
 

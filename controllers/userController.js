@@ -5,7 +5,10 @@ const Message = require("../models/Message");
 const MessageRequest = require("../models/MessageRequest");
 const Post = require("../models/Post");
 const Story = require("../models/Story");
+const Community = require("../models/Community");
 const SavedPost = require("../models/SavedPost");
+const ContentReport = require("../models/ContentReport");
+const UserReport = require("../models/UserReport");
 const DeviceSession = require("../models/DeviceSession");
 const Product = require("../models/Product");
 const auth = require("../middleware/auth");
@@ -900,9 +903,15 @@ exports.deleteOwnAccount = async (req, res) => {
             });
         }
 
-        const [posts, stories] = await Promise.all([
+        const [posts, stories, messages, messageRequests] = await Promise.all([
             Post.find({ author: user._id }).select("media audio").lean(),
-            Story.find({ owner: user._id }).select("media audio").lean()
+            Story.find({ owner: user._id }).select("media audio").lean(),
+            Message.find({
+                $or: [{ sender: user._id }, { receiver: user._id }]
+            }).select("fileUrl filePublicId fileStorageType fileType fileDeliveryType fileName").lean(),
+            MessageRequest.find({
+                $or: [{ sender: user._id }, { recipient: user._id }]
+            }).select("fileUrl filePublicId fileStorageType fileType fileDeliveryType fileName").lean()
         ]);
 
         const mediaToDelete = [
@@ -914,7 +923,15 @@ exports.deleteOwnAccount = async (req, res) => {
                 }
                 : null,
             ...posts.flatMap(post => [...(post.media || []), post.audio]),
-            ...stories.flatMap(story => [story.media, story.audio])
+            ...stories.flatMap(story => [story.media, story.audio]),
+            ...[...messages, ...messageRequests].map(message => ({
+                url: message.fileUrl,
+                publicId: message.filePublicId,
+                type: message.fileStorageType,
+                mimeType: message.fileType,
+                deliveryType: message.fileDeliveryType,
+                fileName: message.fileName
+            }))
         ].filter(media => media && (media.url || media.publicId));
 
         await Promise.all(mediaToDelete.map(media => deleteFile(media)));
@@ -922,6 +939,12 @@ exports.deleteOwnAccount = async (req, res) => {
         await Promise.all([
             Post.deleteMany({ author: user._id }),
             Story.deleteMany({ owner: user._id }),
+            Message.deleteMany({
+                $or: [{ sender: user._id }, { receiver: user._id }]
+            }),
+            MessageRequest.deleteMany({
+                $or: [{ sender: user._id }, { recipient: user._id }]
+            }),
             SavedPost.deleteMany({ user: user._id }),
             Post.updateMany(
                 {},
@@ -934,8 +957,26 @@ exports.deleteOwnAccount = async (req, res) => {
                     }
                 }
             ),
+            Community.deleteMany({ createdBy: user._id }),
+            Community.updateMany(
+                { createdBy: { $ne: user._id } },
+                {
+                    $pull: {
+                        members: user._id,
+                        admins: user._id,
+                        pendingRequests: user._id
+                    }
+                }
+            ),
+            UserReport.deleteMany({
+                $or: [{ reporter: user._id }, { reportedUser: user._id }]
+            }),
+            ContentReport.deleteMany({
+                $or: [{ reporter: user._id }, { targetOwner: user._id }]
+            }),
             User.updateMany(
                 {
+                    _id: { $ne: user._id },
                     $or: [
                         { following: user._id },
                         { blockedUsers: user._id },
@@ -965,6 +1006,7 @@ exports.deleteOwnAccount = async (req, res) => {
 
         await User.deleteOne({ _id: user._id });
         auth.invalidate(user._id);
+        refreshMessengerPresence(req);
 
         return res.json({
             success: true,
@@ -1478,7 +1520,6 @@ exports.deleteUser = async (req, res) => {
     }
 
 };
-
 
 // ======================================================
 // SOCIAL: follow / unfollow + profile stats

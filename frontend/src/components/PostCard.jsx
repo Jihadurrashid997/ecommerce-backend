@@ -11,6 +11,7 @@ import CommentsPanel from "./CommentsPanel";
 import MediaViewer from "./MediaViewer";
 import ReactionPicker from "./ReactionPicker";
 import SocialFollowButton from "./SocialFollowButton";
+import ReportItemButton from "./ReportItemButton";
 
 const timeAgo = value => {
 
@@ -74,6 +75,7 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange })
 
     const canDelete =
         String(author._id) === myId || user?.role === "admin";
+    const canFollow = Boolean(author._id) && String(author._id) !== myId;
     const canEdit = String(author._id) === myId &&
         post.kind === "post" && !post.community && !post.originalPost;
 
@@ -210,31 +212,35 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange })
 
             <header className="post-head">
 
-                <Link to={String(author._id) === myId ? "/profile" : `/user/${author._id}`} className="post-author">
-                    <div className="avatar-sm">
-                        {author.profileImage || author.avatar
-                            ? <img src={getUploadUrl(author.profileImage || author.avatar)} alt="" />
-                            : (author.name || "U").charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                        <b>{author.name || "User"}</b>
-                        <small>{timeAgo(post.createdAt)}</small>
-                        {postContent.visibility && postContent.visibility !== "public" && (
-                            <small className="post-audience-label">
-                                {postContent.visibility === "followers" ? "Followers only" : "Only me"}
-                            </small>
-                        )}
-                    </div>
-                </Link>
+                <div className="post-author-group">
+                    <Link to={String(author._id) === myId ? "/profile" : `/user/${author._id}`} className="post-author">
+                        <div className="avatar-sm">
+                            {author.profileImage || author.avatar
+                                ? <img src={getUploadUrl(author.profileImage || author.avatar)} alt="" />
+                                : (author.name || "U").charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <b>{author.name || "User"}</b>
+                            <small>{timeAgo(post.createdAt)}</small>
+                            {postContent.visibility && postContent.visibility !== "public" && (
+                                <small className="post-audience-label">
+                                    {postContent.visibility === "followers" ? "Followers only" : "Only me"}
+                                </small>
+                            )}
+                        </div>
+                    </Link>
 
-                {post.isFollowedByMe === false && String(author._id) !== myId && (
-                    <SocialFollowButton
-                        userId={author._id}
-                        onFollowChange={result => {
-                            if (onFollowChange) onFollowChange(author, result);
-                        }}
-                    />
-                )}
+                    {canFollow && (
+                        <SocialFollowButton
+                            userId={author._id}
+                            isFollowing={post.isFollowedByMe === true}
+                            className="post-author-follow"
+                            onFollowChange={result => {
+                                if (onFollowChange) onFollowChange(author, result);
+                            }}
+                        />
+                    )}
+                </div>
 
                 {(canEdit || canDelete) && (
                     <div className="post-menu-wrap">
@@ -417,7 +423,7 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange })
                 </button>
 
                 <button type="button" onClick={sharePost} aria-label="Share post">
-                    <FaShare /> Share
+                    <FaShare /> <span className="post-action-label">Share</span>
                 </button>
 
                 <button
@@ -433,9 +439,18 @@ const PostCard = ({ post, onDeleted, onSavedChange, onUpdated, onFollowChange })
                 {post.kind === "post" && !post.originalPost && !post.community &&
                     (!post.visibility || post.visibility === "public") && (
                         <button type="button" onClick={reposted ? undoRepost : repost} aria-label={reposted ? "Undo repost" : "Repost"}>
-                            <FaRetweet /> {reposted ? "Undo repost" : "Repost"}
+                            <FaRetweet />
+                            <span className="post-action-label">{reposted ? "Undo repost" : "Repost"}</span>
                         </button>
                     )}
+
+                {String(author._id) !== myId && (
+                    <ReportItemButton
+                        targetType={post.kind === "reel" ? "reel" : "post"}
+                        targetId={post._id}
+                        compact
+                    />
+                )}
 
             </div>
 

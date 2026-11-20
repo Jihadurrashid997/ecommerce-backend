@@ -23,6 +23,7 @@ const Settings = () => {
     const [blockedUsers, setBlockedUsers] = useState([]);
     const [followRequests, setFollowRequests] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loaded, setLoaded] = useState(false);
     const [busy, setBusy] = useState("");
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
@@ -45,6 +46,7 @@ const Settings = () => {
             setTheme(nextSettings.theme);
             setBlockedUsers(blockedResponse.data.users || []);
             setFollowRequests(followRequestsResponse.data.requests || []);
+            setLoaded(true);
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not load your settings.");
         } finally {
@@ -156,6 +158,20 @@ const Settings = () => {
 
     if (loading) {
         return <main className="settings-page"><p role="status">Loading your settings...</p></main>;
+    }
+
+    if (!loaded) {
+        return (
+            <main className="settings-page">
+                <Link className="settings-back" to="/"><FaArrowLeft /> Back to E Top</Link>
+                <p className="settings-feedback is-error" role="alert">
+                    {error || "Could not load your settings."}
+                </p>
+                <button className="settings-retry" type="button" onClick={load}>
+                    Try again
+                </button>
+            </main>
+        );
     }
 
     return (
@@ -322,13 +338,12 @@ const Settings = () => {
                 </form>
                 <div className="settings-security-note"><FaLock /> Your current password is required to make this change.</div>
             </section>
-
             <section className="settings-card settings-danger-card">
                 <div className="settings-section-heading">
                     <FaExclamationTriangle />
                     <div>
                         <h2>Delete account permanently</h2>
-                        <p>This cannot be undone. Your profile, posts, reels, and social connections will be deleted, and your shop listings will be hidden. Your order and transaction records will remain unchanged.</p>
+                        <p>This cannot be undone. Your profile, posts, stories, messages, communities you created, and social connections will be deleted; your shop listings will be hidden. Your order and transaction records will remain unchanged.</p>
                     </div>
                 </div>
                 <form className="settings-delete-form" onSubmit={deleteAccount}>
@@ -357,6 +372,9 @@ const Settings = () => {
                         {busy === "delete-account" ? "Deleting account..." : "Permanently delete account"}
                     </button>
                 </form>
+                <p className="settings-policy-links">
+                    <Link to="/privacy">Privacy Policy</Link> · <Link to="/terms">Terms of Use</Link>
+                </p>
             </section>
         </main>
     );

@@ -306,6 +306,19 @@
 
 }
 
+.register-legal-consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 14px 0;
+    color: rgba(255,255,255,.75);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.register-legal-consent input { margin-top: 3px; accent-color: #7c6cff; }
+.register-legal-consent a { color: #a5b4fc; }
+
 
 .register-field label {
 

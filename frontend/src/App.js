@@ -12,6 +12,10 @@ import {
     Link
 } from "react-router-dom";
 import { useApp } from "./context/AppContext";
+import {
+    PlatformStatusProvider,
+    usePlatformStatus
+} from "./context/PlatformStatusContext";
 import api from "./services/api";
 
 
@@ -35,6 +39,7 @@ import "./styles/Shop.css";
 
 import Navbar from "./components/Navbar";
 import Messenger from "./components/Messenger";
+import AndroidUpdatePrompt from "./components/AndroidUpdatePrompt";
 import Dashboard from "./components/Dashboard";
 import PrivateRoute from "./components/PrivateRoute";
 import LoadingScreen from "./components/LoadingScreen";
@@ -76,6 +81,7 @@ import SearchResults from "./pages/SearchResults";
 import UserProfile from "./pages/UserProfile";
 import Communities from "./pages/Communities";
 import Settings from "./pages/Settings";
+import LegalPage from "./pages/LegalPage";
 
 
 // ======================================================
@@ -100,6 +106,9 @@ function Footer() {
 
                 <p>
                     © 2026 E Top. All Rights Reserved.
+                </p>
+                <p>
+                    <Link to="/privacy">Privacy Policy</Link> · <Link to="/terms">Terms of Use</Link>
                 </p>
 
             </div>
@@ -274,9 +283,49 @@ function ShopAvailability({ children }) {
 
 function ShopRoute({ children, allowedRoles }) {
     return (
-        <ShopAvailability>
-            <PrivateRoute allowedRoles={allowedRoles}>{children}</PrivateRoute>
-        </ShopAvailability>
+        <MaintenanceGate section="shop">
+            <ShopAvailability>
+                <PrivateRoute allowedRoles={allowedRoles}>{children}</PrivateRoute>
+            </ShopAvailability>
+        </MaintenanceGate>
+    );
+}
+
+function MaintenanceGate({ section, children }) {
+    const { user } = useApp();
+    const { maintenance, loading, error, refresh } = usePlatformStatus();
+
+    if (user?.role === "admin") return children;
+    if (loading) {
+        return <main className="platform-maintenance" role="status">Checking app availability...</main>;
+    }
+    if (error) {
+        return (
+            <main className="platform-maintenance" role="alert">
+                <h1>App status unavailable</h1>
+                <p>{error}</p>
+                <button type="button" onClick={refresh}>Try again</button>
+            </main>
+        );
+    }
+
+    const unavailable = maintenance?.app?.enabled
+        ? maintenance.app
+        : maintenance?.[section]?.enabled
+            ? maintenance[section]
+            : null;
+
+    if (!unavailable) return children;
+
+    return (
+        <main className="platform-maintenance">
+            <span className="platform-maintenance-label">E TOP UPDATE IN PROGRESS</span>
+            <h1>{section === "app" || maintenance.app.enabled
+                ? "E Top is being updated."
+                : `${section.charAt(0).toUpperCase()}${section.slice(1)} is being updated.`}</h1>
+            <p>{unavailable.message}</p>
+            <span className="platform-maintenance-note">Please check back soon.</span>
+        </main>
     );
 }
 
@@ -287,6 +336,9 @@ function AppLayout() {
     const prefersReducedMotion =
         useReducedMotion();
     const { user } = useApp();
+    const { maintenance } = usePlatformStatus();
+    const messengerUnavailable = user?.role !== "admin" &&
+        (maintenance?.app?.enabled || maintenance?.messenger?.enabled);
     const shopSection =
         location.pathname === "/shop" ||
         location.pathname.startsWith("/shop/");
@@ -301,6 +353,12 @@ function AppLayout() {
         location.pathname === "/login" ||
         location.pathname === "/register" ||
         location.pathname === "/verify-email";
+    const appUnavailable = user?.role !== "admin" &&
+        !authPage &&
+        !location.pathname.startsWith("/admin") &&
+        location.pathname !== "/forgot-password" &&
+        !location.pathname.startsWith("/reset-password") &&
+        maintenance?.app?.enabled;
     const messengerPage =
         location.pathname === "/messenger";
     const reelsPage =
@@ -315,15 +373,15 @@ function AppLayout() {
             NAVBAR
         ================================================== */}
 
-        {!authPage && !reelsPage && (
+        {!appUnavailable && !authPage && !reelsPage && (
             <Navbar />
         )}
 
-        {!authPage && !reelsPage && location.pathname !== "/forgot-password" && (
+        {!appUnavailable && !authPage && !reelsPage && location.pathname !== "/forgot-password" && (
             <TopTabs />
         )}
 
-        {!authPage && shopSection && (
+        {!appUnavailable && !authPage && shopSection && (
             <ShopSectionNavigation user={user} />
         )}
 
@@ -355,7 +413,9 @@ function AppLayout() {
                 backfaceVisibility: "hidden"
             }}
         >
-        <Routes location={location}>
+        {user?.role !== "admin" && maintenance?.app?.enabled
+            ? <MaintenanceGate section="app" />
+            : <Routes location={location}>
 
 
                 {/* =================================================
@@ -398,6 +458,8 @@ function AppLayout() {
                         <Register />
                     }
                 />
+                <Route path="/privacy" element={<LegalPage type="privacy" />} />
+                <Route path="/terms" element={<LegalPage type="terms" />} />
 
                 <Route
                     path="/verify-email"
@@ -418,58 +480,54 @@ function AppLayout() {
                 <Route
                     path="/"
                     element={
-
-                        <PrivateRoute>
-
-                            <Home />
-
-                        </PrivateRoute>
-
+                        <MaintenanceGate section="home">
+                            <PrivateRoute><Home /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
                 <Route
                     path="/reels"
                     element={
-                        <PrivateRoute>
-                            <Reels />
-                        </PrivateRoute>
+                        <MaintenanceGate section="reels">
+                            <PrivateRoute><Reels /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
                 <Route
                     path="/post/:id"
                     element={
-                        <PrivateRoute>
-                            <SharedPost />
-                        </PrivateRoute>
+                        <MaintenanceGate section="home">
+                            <PrivateRoute><SharedPost /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
                 <Route
                     path="/saved"
                     element={
-                        <PrivateRoute>
-                            <SavedPosts />
-                        </PrivateRoute>
+                        <MaintenanceGate section="home">
+                            <PrivateRoute><SavedPosts /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
                 <Route
                     path="/communities"
                     element={
-                        <PrivateRoute>
-                            <Communities />
-                        </PrivateRoute>
+                        <MaintenanceGate section="community">
+                            <PrivateRoute><Communities /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
                 <Route
                     path="/communities/:id"
                     element={
-                        <PrivateRoute>
-                            <Communities />
-                        </PrivateRoute>
+                        <MaintenanceGate section="community">
+                            <PrivateRoute><Communities /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
@@ -524,13 +582,9 @@ function AppLayout() {
                 <Route
                     path="/search"
                     element={
-
-                        <PrivateRoute>
-
-                            <SearchResults />
-
-                        </PrivateRoute>
-
+                        <MaintenanceGate section="home">
+                            <PrivateRoute><SearchResults /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
@@ -542,12 +596,9 @@ function AppLayout() {
                 <Route
                     path="/user/:id"
                     element={
-
-                        <PrivateRoute>
-
-                            <UserProfile />
-
-                        </PrivateRoute>
+                        <MaintenanceGate section="profile">
+                            <PrivateRoute><UserProfile /></PrivateRoute>
+                        </MaintenanceGate>
 
                     }
                 />
@@ -590,12 +641,9 @@ function AppLayout() {
                 <Route
                     path="/profile"
                     element={
-
-                        <PrivateRoute>
-
-                            <Profile />
-
-                        </PrivateRoute>
+                        <MaintenanceGate section="profile">
+                            <PrivateRoute><Profile /></PrivateRoute>
+                        </MaintenanceGate>
 
                     }
                 />
@@ -608,12 +656,9 @@ function AppLayout() {
                 <Route
                     path="/edit-profile"
                     element={
-
-                        <PrivateRoute>
-
-                            <EditProfile />
-
-                        </PrivateRoute>
+                        <MaintenanceGate section="profile">
+                            <PrivateRoute><EditProfile /></PrivateRoute>
+                        </MaintenanceGate>
 
                     }
                 />
@@ -621,9 +666,9 @@ function AppLayout() {
                 <Route
                     path="/settings"
                     element={
-                        <PrivateRoute>
-                            <Settings />
-                        </PrivateRoute>
+                        <MaintenanceGate section="profile">
+                            <PrivateRoute><Settings /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
@@ -671,11 +716,9 @@ function AppLayout() {
                 <Route
                     path="/messenger"
                     element={
-
-                        <PrivateRoute>
-                            <div />
-                        </PrivateRoute>
-
+                        <MaintenanceGate section="messenger">
+                            <PrivateRoute><div /></PrivateRoute>
+                        </MaintenanceGate>
                     }
                 />
 
@@ -739,13 +782,15 @@ function AppLayout() {
                     }
                 />
 
-            </Routes>
+            </Routes>}
         </motion.div>
         </AnimatePresence>
 
-            {user && (
+            {user && !messengerUnavailable && (
                 <Messenger isActive={location.pathname === "/messenger"} />
             )}
+
+            <AndroidUpdatePrompt />
 
             {/* ==================================================
                 FOOTER
@@ -800,9 +845,9 @@ function App() {
     return (
 
         <BrowserRouter>
-
-            <AppLayout />
-
+            <PlatformStatusProvider>
+                <AppLayout />
+            </PlatformStatusProvider>
         </BrowserRouter>
 
     );

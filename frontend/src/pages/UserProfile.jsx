@@ -19,6 +19,8 @@ import api from "../services/api";
 
 import ProfileSocial from "../components/ProfileSocial";
 import VerifiedBadge from "../components/VerifiedBadge";
+import ReportItemButton from "../components/ReportItemButton";
+import { useApp } from "../context/AppContext";
 
 import "../styles/Profile.css";
 import "../styles/UserProfile.css";
@@ -32,6 +34,7 @@ const UserProfile = () => {
 
     const navigate =
         useNavigate();
+    const { user: currentUser } = useApp();
 
 
     const [user, setUser] =
@@ -383,9 +386,11 @@ const UserProfile = () => {
                     <FaComments />
 
                     Message
-
                 </button>
 
+                {String(currentUser?._id || currentUser?.id || "") !== String(user._id) && (
+                    <ReportItemButton targetType="profile" targetId={user._id} />
+                )}
 
             </div>
 

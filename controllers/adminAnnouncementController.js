@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const { notifyUsers } = require("../services/platformNotifications");
+const { writeAuditLog } = require("../services/adminAudit");
 
 const sendAnnouncement = async (req, res) => {
     const title = String(req.body?.title || "").trim();
@@ -50,6 +51,12 @@ const sendAnnouncement = async (req, res) => {
                 message: "Could not send the announcement."
             });
         }
+        await writeAuditLog(req, {
+            action: "announcement.sent",
+            targetType: "announcement",
+            reason: title,
+            details: { audience, recipientCount }
+        });
 
         return res.status(201).json({
             success: true,

@@ -14,13 +14,13 @@ const {
     searchUsers,
     getPublicProfile,
     deleteUser,
+    deleteOwnAccount,
     blockUser,
     unblockUser,
     getBlockedUsers,
     getSettings,
     updateSettings,
     changePassword,
-    deleteOwnAccount,
     getSocialStats,
     toggleFollow,
     getFollowing,
@@ -33,6 +33,7 @@ const {
 
 const auth =
     require("../middleware/auth");
+const { requirePermission } = require("../middleware/adminPermissions");
 
 const {
     profileUpload,
@@ -167,6 +168,7 @@ router.get(
 router.get(
     "/",
     auth(["admin"]),
+    requirePermission("users_read"),
     getUsers
 );
 
@@ -176,6 +178,7 @@ router.get(
 router.delete(
     "/:id",
     auth(["admin"]),
+    requirePermission("user_moderate"),
     deleteUser
 );
 

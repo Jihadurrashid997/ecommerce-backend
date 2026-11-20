@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const DeviceSession = require("../models/DeviceSession");
+const PlatformSettings = require("../models/PlatformSettings");
 const emailService = require("../services/emailService");
 const googleAuthService = require("../services/googleAuthService");
 const authController = require("../controllers/authController");
@@ -16,6 +17,7 @@ const ORIGINALS = {
     updateOne: User.updateOne,
     create: User.create,
     findById: User.findById,
+    findPlatformSettingsById: PlatformSettings.findById,
     findOneAndUpdateSession: DeviceSession.findOneAndUpdate,
     deleteMany: DeviceSession.deleteMany,
     isEmailConfigured: emailService.isEmailConfigured,
@@ -37,6 +39,7 @@ const makeResponse = () => ({
         return this;
     }
 });
+PlatformSettings.findById = ORIGINALS.findPlatformSettingsById;
 
 const queryResult = value => ({
     select: async () => value
@@ -48,6 +51,7 @@ test.beforeEach(() => {
     emailService.sendVerificationEmail = async () => ({ sent: true });
     emailService.sendPasswordResetEmail = async () => ({ sent: true });
     process.env.GOOGLE_CLIENT_ID = "test-google-client-id";
+    PlatformSettings.findById = () => queryResult(null);
 });
 
 test.afterEach(() => {
@@ -91,6 +95,8 @@ test("registration creates a social account without requiring email verification
                 name: "  E Top User ",
                 email: "USER@example.com",
                 password: "correct horse battery",
+                ageConfirmed: true,
+                policiesAccepted: true,
                 role: "seller"
             }
         },
@@ -174,7 +180,7 @@ test("Google registration verifies the identity and creates a default customer a
 
     const response = makeResponse();
     await authController.googleAuth(
-        { body: { credential: "google-id-token" } },
+        { body: { credential: "google-id-token", ageConfirmed: true, policiesAccepted: true } },
         response
     );
 

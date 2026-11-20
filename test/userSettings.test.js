@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const Message = require("../models/Message");
 const MessageRequest = require("../models/MessageRequest");
 const Post = require("../models/Post");
 const Story = require("../models/Story");
@@ -9,6 +10,9 @@ const SavedPost = require("../models/SavedPost");
 const DeviceSession = require("../models/DeviceSession");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
+const Community = require("../models/Community");
+const ContentReport = require("../models/ContentReport");
+const UserReport = require("../models/UserReport");
 const auth = require("../middleware/auth");
 const userController = require("../controllers/userController");
 
@@ -281,7 +285,26 @@ test("password changes reject an incorrect current password", async () => {
         }
     });
 
-    test("account deletion requires the correct password before removing account data", async () => {
+    try {
+        const response = makeResponse();
+        await userController.changePassword(
+            {
+                user: { id: USER_ID },
+                body: {
+                    currentPassword: "wrong-password",
+                    newPassword: "replacement-pass-123"
+                }
+            },
+            response
+        );
+        assert.equal(response.statusCode, 400);
+        assert.equal(saved, false);
+    } finally {
+        User.findById = originalFindById;
+    }
+});
+
+test("account deletion requires the correct password before removing account data", async () => {
         const originalFindById = User.findById;
         const originalPostDeleteMany = Post.deleteMany;
         const passwordHash = await bcrypt.hash("correct-password", 4);
@@ -319,6 +342,10 @@ test("password changes reject an incorrect current password", async () => {
             userFindById: User.findById,
             userUpdateMany: User.updateMany,
             userDeleteOne: User.deleteOne,
+            messageFind: Message.find,
+            messageDeleteMany: Message.deleteMany,
+            messageRequestFind: MessageRequest.find,
+            messageRequestDeleteMany: MessageRequest.deleteMany,
             postFind: Post.find,
             postDeleteMany: Post.deleteMany,
             postUpdateMany: Post.updateMany,
@@ -327,6 +354,10 @@ test("password changes reject an incorrect current password", async () => {
             savedPostDeleteMany: SavedPost.deleteMany,
             deviceSessionDeleteMany: DeviceSession.deleteMany,
             productUpdateMany: Product.updateMany,
+            communityDeleteMany: Community.deleteMany,
+            communityUpdateMany: Community.updateMany,
+            contentReportDeleteMany: ContentReport.deleteMany,
+            userReportDeleteMany: UserReport.deleteMany,
             orderUpdateMany: Order.updateMany,
             orderDeleteMany: Order.deleteMany,
             invalidate: auth.invalidate
@@ -344,6 +375,12 @@ test("password changes reject an incorrect current password", async () => {
         });
         User.updateMany = async filter => calls.push(["userReferences", filter]);
         User.deleteOne = async filter => calls.push(["user", filter]);
+        Message.find = MessageRequest.find = () => ({
+            select() { return this; },
+            lean: async () => []
+        });
+        Message.deleteMany = async filter => calls.push(["messages", filter]);
+        MessageRequest.deleteMany = async filter => calls.push(["messageRequests", filter]);
         Post.find = () => ({ select() { return this; }, lean: async () => [] });
         Post.deleteMany = async filter => calls.push(["posts", filter]);
         Post.updateMany = async () => calls.push(["postReferences"]);
@@ -357,6 +394,10 @@ test("password changes reject an incorrect current password", async () => {
                 update.$set.isApproved === false &&
                 update.$set.approvalStatus === "rejected";
         };
+        Community.deleteMany = async filter => calls.push(["communities", filter]);
+        Community.updateMany = async filter => calls.push(["communityMembers", filter]);
+        ContentReport.deleteMany = async filter => calls.push(["contentReports", filter]);
+        UserReport.deleteMany = async filter => calls.push(["userReports", filter]);
         Order.deleteMany = Order.updateMany = async () => {
             orderDataChanged = true;
         };
@@ -384,6 +425,10 @@ test("password changes reject an incorrect current password", async () => {
             User.findById = originals.userFindById;
             User.updateMany = originals.userUpdateMany;
             User.deleteOne = originals.userDeleteOne;
+            Message.find = originals.messageFind;
+            Message.deleteMany = originals.messageDeleteMany;
+            MessageRequest.find = originals.messageRequestFind;
+            MessageRequest.deleteMany = originals.messageRequestDeleteMany;
             Post.find = originals.postFind;
             Post.deleteMany = originals.postDeleteMany;
             Post.updateMany = originals.postUpdateMany;
@@ -392,27 +437,12 @@ test("password changes reject an incorrect current password", async () => {
             SavedPost.deleteMany = originals.savedPostDeleteMany;
             DeviceSession.deleteMany = originals.deviceSessionDeleteMany;
             Product.updateMany = originals.productUpdateMany;
+            Community.deleteMany = originals.communityDeleteMany;
+            Community.updateMany = originals.communityUpdateMany;
+            ContentReport.deleteMany = originals.contentReportDeleteMany;
+            UserReport.deleteMany = originals.userReportDeleteMany;
             Order.updateMany = originals.orderUpdateMany;
             Order.deleteMany = originals.orderDeleteMany;
             auth.invalidate = originals.invalidate;
         }
     });
-
-    try {
-        const response = makeResponse();
-        await userController.changePassword(
-            {
-                user: { id: USER_ID },
-                body: {
-                    currentPassword: "wrong-password",
-                    newPassword: "replacement-pass-123"
-                }
-            },
-            response
-        );
-        assert.equal(response.statusCode, 400);
-        assert.equal(saved, false);
-    } finally {
-        User.findById = originalFindById;
-    }
-});
