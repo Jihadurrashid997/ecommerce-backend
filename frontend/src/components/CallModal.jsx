@@ -718,7 +718,8 @@ const CallModal = ({
                                 height: "100%",
                                 objectFit: "contain",
                                 background: "#000",
-                                visibility: hasRemoteVideo ? "visible" : "hidden"
+                                visibility: hasRemoteVideo ? "visible" : "hidden",
+                                transform: "none"
                             }}
                         />
                 )}

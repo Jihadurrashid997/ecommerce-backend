@@ -118,6 +118,9 @@ test("shows the full local and remote camera frames without cropping", () => {
     expect(
         document.querySelector(".messenger-call-remote-video").style.objectFit
     ).toBe("contain");
+    expect(
+        document.querySelector(".messenger-call-remote-video").style.transform
+    ).toBe("none");
 });
 
 test("keeps the caller name and connected timer visible over remote video", () => {
@@ -204,7 +207,7 @@ test("sends camera zoom changes to the outgoing camera instead of zooming remote
         expect(onCameraZoom).toHaveBeenNthCalledWith(1, 0.5);
         expect(onCameraZoom).toHaveBeenNthCalledWith(2, 10);
         expect(screen.getByText("10x")).toBeInTheDocument();
-        expect(remoteVideo.style.transform).toBe("");
+        expect(remoteVideo.style.transform).toBe("none");
     });
 });
 
