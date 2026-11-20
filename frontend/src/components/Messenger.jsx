@@ -45,7 +45,8 @@ import {
     FaUserPlus,
     FaMapMarkerAlt,
     FaClock,
-    FaRegFileAlt
+    FaRegFileAlt,
+    FaDownload
 } from "react-icons/fa";
 
 import api, {
@@ -350,7 +351,19 @@ const getMessageId = (item) => {
 };
 
 
-const EncryptedMediaAttachment = ({ url, media, own }) => {
+const AttachmentDownloadButton = ({ fileName, onClick }) => (
+    <button
+        type="button"
+        className="message-attachment-download"
+        aria-label={`Download ${fileName || "attachment"}`}
+        onClick={onClick}
+    >
+        <FaDownload aria-hidden="true" />
+        <span>Download</span>
+    </button>
+);
+
+const EncryptedMediaAttachment = ({ url, media, own, onDownload }) => {
     const [objectUrl, setObjectUrl] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -407,52 +420,86 @@ const EncryptedMediaAttachment = ({ url, media, own }) => {
     }
 
     if (media.fileType.startsWith("audio/")) {
-        return <VoiceMessagePlayer url={objectUrl} own={own} />;
+        return (
+            <div className="message-attachment-item">
+                <VoiceMessagePlayer url={objectUrl} own={own} />
+                <AttachmentDownloadButton
+                    fileName={media.fileName}
+                    onClick={event =>
+                        onDownload(event, objectUrl, media.fileName)
+                    }
+                />
+            </div>
+        );
     }
 
     if (media.fileType.startsWith("image/")) {
         return (
-            <a
-                href={objectUrl}
-                target="_blank"
-                rel="noreferrer"
-                title="Open decrypted image"
-            >
-                <img
-                    src={objectUrl}
-                    alt={media.fileName}
-                    className="message-attachment-image"
+            <div className="message-attachment-item">
+                <a
+                    href={objectUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open decrypted image"
+                >
+                    <img
+                        src={objectUrl}
+                        alt={media.fileName}
+                        className="message-attachment-image"
+                    />
+                </a>
+                <AttachmentDownloadButton
+                    fileName={media.fileName}
+                    onClick={event =>
+                        onDownload(event, objectUrl, media.fileName)
+                    }
                 />
-            </a>
+            </div>
         );
     }
 
     if (media.fileType.startsWith("video/")) {
         return (
-            <video
-                src={objectUrl}
-                controls
-                playsInline
-                preload="metadata"
-                className="message-attachment-video"
-                aria-label={media.fileName}
-            />
+            <div className="message-attachment-item">
+                <video
+                    src={objectUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="message-attachment-video"
+                    aria-label={media.fileName}
+                />
+                <AttachmentDownloadButton
+                    fileName={media.fileName}
+                    onClick={event =>
+                        onDownload(event, objectUrl, media.fileName)
+                    }
+                />
+            </div>
         );
     }
 
     const isPdf = media.fileType === "application/pdf";
     return (
-        <a
-            href={objectUrl}
-            target={isPdf ? "_blank" : undefined}
-            rel={isPdf ? "noopener noreferrer" : undefined}
-            download={isPdf ? undefined : media.fileName}
-            className="message-attachment-file"
-            title={isPdf ? "Open PDF" : "Download attachment"}
-        >
-            <FaPaperclip />
-            <span>{media.fileName}</span>
-        </a>
+        <div className="message-file-attachment">
+            <a
+                href={objectUrl}
+                target={isPdf ? "_blank" : undefined}
+                rel={isPdf ? "noopener noreferrer" : undefined}
+                download={isPdf ? undefined : media.fileName}
+                className="message-attachment-file"
+                title={isPdf ? "Open PDF" : "Download attachment"}
+            >
+                <FaPaperclip />
+                <span>{media.fileName}</span>
+            </a>
+            <AttachmentDownloadButton
+                fileName={media.fileName}
+                onClick={event =>
+                    onDownload(event, objectUrl, media.fileName)
+                }
+            />
+        </div>
     );
 };
 
@@ -9200,7 +9247,12 @@ const onCallMissed =
 
         };
 
-    const handlePdfAttachmentOpen = async (event, messageId, filename) => {
+    const handlePdfAttachmentOpen = async (
+        event,
+        messageId,
+        filename,
+        shouldDownload = false
+    ) => {
         event.preventDefault();
         const pdfWindow = window.open("about:blank", "_blank");
         if (pdfWindow) pdfWindow.opener = null;
@@ -9216,7 +9268,16 @@ const onCallMissed =
             if (!downloadUrl) {
                 throw new Error("The server did not provide a PDF download URL.");
             }
-            if (pdfWindow && !pdfWindow.closed) {
+            if (shouldDownload) {
+                pdfWindow?.close();
+                const link = document.createElement("a");
+                link.href = downloadUrl;
+                link.download = filename || "attachment.pdf";
+                link.rel = "noopener noreferrer";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+            } else if (pdfWindow && !pdfWindow.closed) {
                 pdfWindow.location.replace(downloadUrl);
             } else {
                 window.location.assign(downloadUrl);
@@ -11447,57 +11508,75 @@ const onCallMissed =
                                                             url={fileUrl}
                                                             media={item.encryptedMedia}
                                                             own={own}
+                                                            onDownload={
+                                                                handleAttachmentDownload
+                                                            }
                                                         />
                                                     ) : fileUrl && (
 
                                                         isAudioFile ? (
 
-                                                            <VoiceMessagePlayer
-                                                                url={fileUrl}
-                                                                own={own}
-                                                                canRecoverLegacy={
-                                                                    !item.filePublicId &&
-                                                                    String(item.fileUrl || "")
-                                                                        .startsWith("/uploads/")
-                                                                }
-                                                                onRecover={() =>
-                                                                    recoverLegacyVoiceMessage(
-                                                                        getMessageId(item)
-                                                                    )
-                                                                }
-                                                            />
+                                                            <div className="message-attachment-item">
+                                                                <VoiceMessagePlayer
+                                                                    url={fileUrl}
+                                                                    own={own}
+                                                                    canRecoverLegacy={
+                                                                        !item.filePublicId &&
+                                                                        String(item.fileUrl || "")
+                                                                            .startsWith("/uploads/")
+                                                                    }
+                                                                    onRecover={() =>
+                                                                        recoverLegacyVoiceMessage(
+                                                                            getMessageId(item)
+                                                                        )
+                                                                    }
+                                                                />
+                                                                <AttachmentDownloadButton
+                                                                    fileName={fileName}
+                                                                    onClick={event =>
+                                                                        handleAttachmentDownload(
+                                                                            event,
+                                                                            fileUrl,
+                                                                            fileName
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </div>
 
                                                         ) : isImageFile ? (
 
                                                             mediaRevealed ? (
 
-                                                                <a
-                                                                    href={
-                                                                        fileUrl
-                                                                    }
-                                                                    download={
-                                                                        fileName
-                                                                    }
-                                                                    onClick={
-                                                                        event =>
+                                                                <div className="message-attachment-item">
+                                                                    <a
+                                                                        href={fileUrl}
+                                                                        download={fileName}
+                                                                        onClick={event =>
                                                                             handleAttachmentDownload(
                                                                                 event,
                                                                                 fileUrl,
                                                                                 fileName
                                                                             )
-                                                                    }
-                                                                    title="Click to download"
-                                                                >
-                                                                    <img
-                                                                        src={
-                                                                            fileUrl
                                                                         }
-                                                                        alt={
-                                                                            fileName
+                                                                        title="Click to download"
+                                                                    >
+                                                                        <img
+                                                                            src={fileUrl}
+                                                                            alt={fileName}
+                                                                            className="message-attachment-image"
+                                                                        />
+                                                                    </a>
+                                                                    <AttachmentDownloadButton
+                                                                        fileName={fileName}
+                                                                        onClick={event =>
+                                                                            handleAttachmentDownload(
+                                                                                event,
+                                                                                fileUrl,
+                                                                                fileName
+                                                                            )
                                                                         }
-                                                                        className="message-attachment-image"
                                                                     />
-                                                                </a>
+                                                                </div>
 
                                                             ) : (
 
@@ -11536,14 +11615,26 @@ const onCallMissed =
                                                         ) : isVideoFile ? (
 
                                                             mediaRevealed ? (
-                                                                <video
-                                                                    src={fileUrl}
-                                                                    controls
-                                                                    playsInline
-                                                                    preload="metadata"
-                                                                    className="message-attachment-video"
-                                                                    aria-label={fileName}
-                                                                />
+                                                                <div className="message-attachment-item">
+                                                                    <video
+                                                                        src={fileUrl}
+                                                                        controls
+                                                                        playsInline
+                                                                        preload="metadata"
+                                                                        className="message-attachment-video"
+                                                                        aria-label={fileName}
+                                                                    />
+                                                                    <AttachmentDownloadButton
+                                                                        fileName={fileName}
+                                                                        onClick={event =>
+                                                                            handleAttachmentDownload(
+                                                                                event,
+                                                                                fileUrl,
+                                                                                fileName
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
                                                             ) : (
                                                                 <button
                                                                     type="button"
@@ -11563,31 +11654,46 @@ const onCallMissed =
 
                                                         ) : (
 
-                                                            <a
-                                                                href={
-                                                                    fileUrl
-                                                                }
-                                                                onClick={isPdfFile
-                                                                    ? event =>
-                                                                        handlePdfAttachmentOpen(
-                                                                            event,
-                                                                            getMessageId(item),
-                                                                            fileName
-                                                                        )
-                                                                    : event =>
-                                                                        handleAttachmentDownload(
-                                                                            event,
-                                                                            fileUrl,
-                                                                            fileName
-                                                                        )}
-                                                                className="message-attachment-file"
-                                                                title={isPdfFile ? "Open PDF" : "Click to download"}
-                                                            >
-                                                                <FaPaperclip />
-                                                                <span>
-                                                                    {fileName}
-                                                                </span>
-                                                            </a>
+                                                            <div className="message-file-attachment">
+                                                                <a
+                                                                    href={fileUrl}
+                                                                    onClick={isPdfFile
+                                                                        ? event =>
+                                                                            handlePdfAttachmentOpen(
+                                                                                event,
+                                                                                getMessageId(item),
+                                                                                fileName
+                                                                            )
+                                                                        : event =>
+                                                                            handleAttachmentDownload(
+                                                                                event,
+                                                                                fileUrl,
+                                                                                fileName
+                                                                            )}
+                                                                    className="message-attachment-file"
+                                                                    title={isPdfFile ? "Open PDF" : "Click to download"}
+                                                                >
+                                                                    <FaPaperclip />
+                                                                    <span>{fileName}</span>
+                                                                </a>
+                                                                <AttachmentDownloadButton
+                                                                    fileName={fileName}
+                                                                    onClick={isPdfFile
+                                                                        ? event =>
+                                                                            handlePdfAttachmentOpen(
+                                                                                event,
+                                                                                getMessageId(item),
+                                                                                fileName,
+                                                                                true
+                                                                            )
+                                                                        : event =>
+                                                                            handleAttachmentDownload(
+                                                                                event,
+                                                                                fileUrl,
+                                                                                fileName
+                                                                            )}
+                                                                />
+                                                            </div>
 
                                                         )
 
@@ -11658,22 +11764,31 @@ const onCallMissed =
                                                             />
                                                         ) : location ? (
                                                             <div className="message-location-card">
-                                                                <span className="message-location-icon">
-                                                                    <FaMapMarkerAlt />
-                                                                </span>
-                                                                <div>
-                                                                    <strong>Approximate location</strong>
-                                                                    <span>
-                                                                        {location.latitude.toFixed(4)},{" "}
-                                                                        {location.longitude.toFixed(4)}
+                                                                <iframe
+                                                                    className="message-location-map"
+                                                                    src={location.mapEmbedUrl}
+                                                                    title={`Map showing approximate location at ${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`}
+                                                                    loading="lazy"
+                                                                    allowFullScreen
+                                                                />
+                                                                <div className="message-location-details">
+                                                                    <span className="message-location-icon">
+                                                                        <FaMapMarkerAlt />
                                                                     </span>
-                                                                    <a
-                                                                        href={location.mapUrl}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                    >
-                                                                        Open in Google Maps
-                                                                    </a>
+                                                                    <div>
+                                                                        <strong>Approximate location</strong>
+                                                                        <span>
+                                                                            {location.latitude.toFixed(4)},{" "}
+                                                                            {location.longitude.toFixed(4)}
+                                                                        </span>
+                                                                        <a
+                                                                            href={location.mapUrl}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                        >
+                                                                            Open in Google Maps
+                                                                        </a>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         ) : (
