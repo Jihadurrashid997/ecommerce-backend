@@ -2990,44 +2990,55 @@
 }
 
 .live-location-cards {
-    display: grid;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
     padding: 8px 14px;
 }
 
 .live-location-card {
     display: grid;
-    gap: 10px;
-    padding: 10px;
-    border: 1px solid #cfe2ff;
-    border-radius: 12px;
+    width: min(86%, 390px);
+    overflow: hidden;
+    border: 1px solid #d5dbe4;
+    border-radius: 14px;
     background: #f4f8ff;
+}
+
+.live-location-card.own {
+    align-self: flex-end;
+    border-color: #075e54;
+    background: #075e54;
+}
+
+.live-location-card.remote {
+    align-self: flex-start;
 }
 
 .live-location-map {
     display: block;
     width: 100%;
-    height: 190px;
+    height: 210px;
     border: 0;
-    border-radius: 8px;
     background: #e8edf5;
 }
 
 .live-location-details {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+    display: grid;
+    gap: 9px;
+    padding: 10px 12px;
 }
 
 .live-location-details > div:first-child {
     display: grid;
-    flex: 1;
     gap: 3px;
 }
 
 .live-location-actions {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
 }
 
@@ -3055,6 +3066,20 @@
 
 .live-location-card button {
     color: #b42318;
+}
+
+.live-location-card.own strong,
+.live-location-card.own span,
+.live-location-card.own small {
+    color: #e9fff8;
+}
+
+.live-location-card.own a {
+    color: #d7fff1;
+}
+
+.live-location-card.own button {
+    color: #ffb4ab;
 }
 
 .group-encryption-panel {
