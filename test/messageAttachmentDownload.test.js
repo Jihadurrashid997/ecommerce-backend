@@ -50,6 +50,83 @@ test("authorized conversation participants can resolve a PDF download URL", asyn
     }
 });
 
+test("PDF previews are inline while explicit PDF downloads remain attachments", async () => {
+    const originals = {
+        findById: Message.findById,
+        privateDownloadUrl: cloudinary.utils.private_download_url,
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        apiSecret: process.env.CLOUDINARY_API_SECRET
+    };
+    const downloadOptions = [];
+    process.env.CLOUDINARY_CLOUD_NAME = "test-cloud";
+    process.env.CLOUDINARY_API_KEY = "test-key";
+    process.env.CLOUDINARY_API_SECRET = "test-secret";
+    cloudinary.utils.private_download_url = (publicId, format, options) => {
+        downloadOptions.push({ publicId, format, ...options });
+        return "https://api.cloudinary.example/temporary-pdf";
+    };
+    Message.findById = () => ({
+        select: () => ({
+            lean: async () => ({
+                sender: "user-1",
+                receiver: "user-2",
+                fileUrl: "https://media.example/scan.pdf",
+                fileName: "scan.pdf",
+                fileType: "application/pdf",
+                filePublicId: "etop/messenger/scan",
+                fileStorageType: "raw",
+                fileDeliveryType: "authenticated"
+            })
+        })
+    });
+
+    try {
+        const previewResponse = createResponse();
+        await getAttachmentDownload(
+            {
+                params: { id: "message-1" },
+                query: { disposition: "inline" },
+                user: { id: "user-2" }
+            },
+            previewResponse
+        );
+
+        const downloadResponse = createResponse();
+        await getAttachmentDownload(
+            {
+                params: { id: "message-1" },
+                query: {},
+                user: { id: "user-2" }
+            },
+            downloadResponse
+        );
+
+        assert.equal(previewResponse.statusCode, 200);
+        assert.equal(downloadResponse.statusCode, 200);
+        assert.equal(downloadOptions[0].attachment, false);
+        assert.equal(downloadOptions[1].attachment, true);
+    } finally {
+        Message.findById = originals.findById;
+        cloudinary.utils.private_download_url = originals.privateDownloadUrl;
+        if (originals.cloudName === undefined) {
+            delete process.env.CLOUDINARY_CLOUD_NAME;
+        } else {
+            process.env.CLOUDINARY_CLOUD_NAME = originals.cloudName;
+        }
+        if (originals.apiKey === undefined) {
+            delete process.env.CLOUDINARY_API_KEY;
+        } else {
+            process.env.CLOUDINARY_API_KEY = originals.apiKey;
+        }
+        if (originals.apiSecret === undefined) {
+            delete process.env.CLOUDINARY_API_SECRET;
+        } else {
+            process.env.CLOUDINARY_API_SECRET = originals.apiSecret;
+        }
+    }
+});
+
 test("users outside the conversation cannot resolve a PDF download URL", async () => {
     const originalFindById = Message.findById;
     Message.findById = () => ({
