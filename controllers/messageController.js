@@ -439,6 +439,10 @@ exports.sendMessage = async (req, res) => {
         // puts the uploaded file here when the request came
         // from the chat's attach/image buttons.
         const file = req.file;
+        const messageType =
+            req.body?.type === "location" && !file
+                ? "location"
+                : "message";
         const isEncrypted =
             req.body?.isEncrypted === true ||
             req.body?.isEncrypted === "true";
@@ -574,6 +578,7 @@ exports.sendMessage = async (req, res) => {
                 sender,
                 groupId,
                 message: text,
+                type: messageType,
                 isEncrypted,
                 readBy: [sender],
                 ...(clientMessageId ? { clientMessageId } : {})
@@ -810,6 +815,7 @@ exports.sendMessage = async (req, res) => {
             sender,
             receiver,
             message: text,
+            type: messageType,
             isEncrypted,
             isForwarded:
                 Boolean(forwardSource) ||
@@ -1487,6 +1493,17 @@ exports.editMessage = async (req, res) => {
             return res.status(400).json({ success: false, message: "Cannot edit a deleted message" });
         }
 
+        if (
+            message.type === "location" ||
+            (!message.isEncrypted &&
+                message.message?.startsWith("📍 Approximate location\n"))
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Location messages cannot be edited."
+            });
+        }
+
         const isEncryptedPayload =
             text.startsWith("e2ee:v1:") &&
             /^e2ee:v1:[A-Za-z0-9+/]+=*$/.test(text);
@@ -1617,12 +1634,19 @@ exports.deleteMessage = async (req, res) => {
             });
         }
 
+        const isLocationMessage =
+            message.type === "location" ||
+            (!message.isEncrypted &&
+                message.message?.startsWith("📍 Approximate location\n"));
         const createdAt = new Date(message.createdAt).getTime();
         const messageAge = Date.now() - createdAt;
         if (
-            !Number.isFinite(createdAt) ||
-            messageAge < 0 ||
-            messageAge > MESSAGE_DELETE_FOR_EVERYONE_WINDOW_MS
+            !isLocationMessage &&
+            (
+                !Number.isFinite(createdAt) ||
+                messageAge < 0 ||
+                messageAge > MESSAGE_DELETE_FOR_EVERYONE_WINDOW_MS
+            )
         ) {
             return res.status(409).json({
                 success: false,

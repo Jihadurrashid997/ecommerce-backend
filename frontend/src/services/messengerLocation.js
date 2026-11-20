@@ -8,7 +8,7 @@ const isValidCoordinates = (latitude, longitude) =>
     longitude >= -180 &&
     longitude <= 180;
 
-export const createLocationMessage = (latitude, longitude) => {
+export const createLocationMessage = (latitude, longitude, comment = "") => {
     const lat = Number(latitude);
     const lon = Number(longitude);
 
@@ -16,7 +16,10 @@ export const createLocationMessage = (latitude, longitude) => {
         throw new Error("A valid location is required.");
     }
 
-    return `${LOCATION_MESSAGE_PREFIX}${lat.toFixed(4)},${lon.toFixed(4)}`;
+    const trimmedComment = String(comment).trim();
+    return `${LOCATION_MESSAGE_PREFIX}${lat.toFixed(4)},${lon.toFixed(4)}${
+        trimmedComment ? `\n${trimmedComment}` : ""
+    }`;
 };
 
 export const parseLocationMessage = message => {
@@ -26,7 +29,7 @@ export const parseLocationMessage = message => {
 
     const match = message
         .slice(LOCATION_MESSAGE_PREFIX.length)
-        .match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+        .match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:\n([\s\S]*))?$/);
 
     if (!match) {
         return null;
@@ -42,6 +45,7 @@ export const parseLocationMessage = message => {
     return {
         latitude,
         longitude,
+        comment: match[3] || "",
         mapUrl: `https://www.google.com/maps?q=${latitude},${longitude}`,
         mapEmbedUrl:
             `https://maps.google.com/maps?q=${latitude},${longitude}&z=15&output=embed`
