@@ -655,14 +655,6 @@ export default function App() {
                         )}
                     </View>
 
-                    {callState.call.type === "audio" &&
-                        callState.call.status === "connected" && (
-                            <Text style={styles.shareHint}>
-                                Hold the phone near your ear for earpiece audio;
-                                move it away to switch to speaker.
-                            </Text>
-                        )}
-
                     {callState.call.mode === "incoming" ? (
                         <View style={styles.incomingActions}>
                             <Pressable
@@ -684,8 +676,8 @@ export default function App() {
                                 <Pressable
                                     accessibilityLabel={
                                         callState.speakerEnabled
-                                            ? "Use earpiece"
-                                            : "Use loudspeaker"
+                                            ? "Switch to earpiece"
+                                            : "Switch to loudspeaker"
                                     }
                                     accessibilityState={{
                                         selected: callState.speakerEnabled
@@ -699,8 +691,8 @@ export default function App() {
                                 >
                                     <Text style={styles.actionButtonText}>
                                         {callState.speakerEnabled
-                                            ? "Speaker on"
-                                            : "Speaker"}
+                                            ? "Loudspeaker"
+                                            : "Earpiece"}
                                     </Text>
                                 </Pressable>
                             )}
