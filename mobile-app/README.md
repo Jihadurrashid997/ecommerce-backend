@@ -13,8 +13,9 @@ production build; Expo Go is not supported.
 
 The in-call **Speaker** button manually switches between the earpiece and
 loudspeaker during voice and video calls; this does not depend on a proximity
-sensor. Video calls start on speaker. Front-camera video is mirrored only in
-the local preview; remote video is rendered without mirroring.
+sensor. Voice calls route to the earpiece when connected, and video calls start
+on speaker. Front-camera video is rendered without mirroring in both the local
+preview and the remote view.
 
 Direct-contact live-location sharing also runs as a native background location
 task while the operating system allows it. Starting a share requests foreground

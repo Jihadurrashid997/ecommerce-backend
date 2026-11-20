@@ -420,7 +420,14 @@ export class DirectCallService {
             return;
         }
 
-        const speakerEnabled = !this.snapshot.speakerEnabled;
+        this.setSpeakerEnabled(!this.snapshot.speakerEnabled);
+    }
+
+    private setSpeakerEnabled(speakerEnabled: boolean) {
+        if (!this.call || this.call.status !== "connected") {
+            return;
+        }
+
         try {
             const configureForVideo =
                 this.call.type === "video" && speakerEnabled;
@@ -832,6 +839,9 @@ export class DirectCallService {
         this.call = { ...this.call, mode: "connected", status: "connected" };
         this.update({ call: this.call });
         this.startAudioRouteObservation();
+        if (this.call.type === "audio") {
+            this.setSpeakerEnabled(false);
+        }
         if (this.call.nativeRequestId) {
             const requestId = this.call.nativeRequestId;
             this.call = { ...this.call, nativeRequestId: undefined };
