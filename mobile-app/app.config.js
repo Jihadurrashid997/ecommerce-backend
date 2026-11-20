@@ -12,7 +12,6 @@ module.exports = ({ config }) => ({
         bundleIdentifier:
             process.env.IOS_BUNDLE_ID ||
             "com.ecommercebackend.messenger",
-        deploymentTarget: "14.0",
         infoPlist: {
             ...config.ios?.infoPlist,
             RTCAppGroupIdentifier: appGroup,
@@ -29,6 +28,9 @@ module.exports = ({ config }) => ({
         package:
             process.env.ANDROID_PACKAGE ||
             "com.ecommercebackend.messenger",
+        ...(process.env.ANDROID_GOOGLE_SERVICES_FILE
+            ? { googleServicesFile: process.env.ANDROID_GOOGLE_SERVICES_FILE }
+            : {}),
         permissions: [
             ...(config.android?.permissions || []),
             "android.permission.CAMERA",
@@ -49,6 +51,22 @@ module.exports = ({ config }) => ({
             }
         ],
         "expo-secure-store",
+        [
+            "expo-build-properties",
+            {
+                android: { minSdkVersion: 26 },
+                ios: { deploymentTarget: "16.4" }
+            }
+        ],
+        [
+            "expo-callkit-telecom",
+            {
+                incomingCallTimeout: 45,
+                fulfillAnswerCallTimeout: 45,
+                supportsVideo: true
+            }
+        ],
+        "expo-notifications",
         [
             "./plugins/withFullScreenCapture",
             {

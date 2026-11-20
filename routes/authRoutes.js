@@ -26,6 +26,8 @@ const {
     revokeDevice,
     savePushSubscription,
     removePushSubscription,
+    saveCallPushToken,
+    removeCallPushToken,
     logoutDevice
 } = require("../controllers/deviceController");
 
@@ -82,6 +84,8 @@ router.get("/devices", auth(), listDevices);
 router.delete("/devices/:deviceId", auth(), revokeDevice);
 router.put("/devices/push-subscription", auth(), savePushSubscription);
 router.delete("/devices/push-subscription", auth(), removePushSubscription);
+router.put("/devices/call-push-token", auth(), saveCallPushToken);
+router.delete("/devices/call-push-token", auth(), removeCallPushToken);
 router.post("/logout", auth(), logoutDevice);
 
 

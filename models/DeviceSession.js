@@ -12,6 +12,18 @@ const pushSubscriptionSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const callPushTokenSchema = new mongoose.Schema(
+    {
+        token: { type: String, required: true, maxlength: 4096 },
+        type: {
+            type: String,
+            required: true,
+            enum: ["APNS_VOIP", "FCM"]
+        }
+    },
+    { _id: false }
+);
+
 const deviceSessionSchema = new mongoose.Schema(
     {
         user: {
@@ -44,6 +56,10 @@ const deviceSessionSchema = new mongoose.Schema(
         },
         pushSubscription: {
             type: pushSubscriptionSchema,
+            default: undefined
+        },
+        callPushToken: {
+            type: callPushTokenSchema,
             default: undefined
         }
     },

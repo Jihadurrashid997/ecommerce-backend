@@ -69,6 +69,23 @@ test("device sessions require account, device, active session and complete push 
     assert.ok(session.validateSync());
 });
 
+test("device sessions accept native call push tokens for supported transports", () => {
+    const session = new DeviceSession({
+        user: USER_ID,
+        deviceId: DEVICE_ID,
+        sessionId: SESSION_ID,
+        name: "JR Messenger (ios)",
+        callPushToken: {
+            token: "a".repeat(64),
+            type: "APNS_VOIP"
+        }
+    });
+
+    assert.equal(session.validateSync(), undefined);
+    session.callPushToken.type = "web-push";
+    assert.ok(session.validateSync());
+});
+
 test("linked device revocation removes its session and disconnects its socket", async () => {
     const deleted = { deleteOne: async () => {} };
     let connectedDeviceRoom;
@@ -166,6 +183,44 @@ test("push subscription endpoints reject non-HTTPS targets", async () => {
                     keys: { p256dh: "public-key", auth: "auth-key" }
                 }
             }
+        },
+        res
+    );
+
+    assert.equal(res.statusCode, 400);
+});
+
+test("native call push tokens are saved to the authenticated device session", async () => {
+    let filter;
+    let update;
+    DeviceSession.findOneAndUpdate = async (query, change) => {
+        filter = query;
+        update = change;
+        return { _id: new mongoose.Types.ObjectId() };
+    };
+    const res = makeResponse();
+    await deviceController.saveCallPushToken(
+        {
+            user: { id: USER_ID, sid: SESSION_ID },
+            body: { token: "a".repeat(64), type: "APNS_VOIP" }
+        },
+        res
+    );
+
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(filter, { user: USER_ID, sessionId: SESSION_ID });
+    assert.deepEqual(update.$set.callPushToken, {
+        token: "a".repeat(64),
+        type: "APNS_VOIP"
+    });
+});
+
+test("native call push tokens reject unsupported transports", async () => {
+    const res = makeResponse();
+    await deviceController.saveCallPushToken(
+        {
+            user: { id: USER_ID, sid: SESSION_ID },
+            body: { token: "a".repeat(64), type: "web-push" }
         },
         res
     );

@@ -18,9 +18,20 @@ import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
     MediaStream,
+    RTCAudioSession,
     RTCView,
     ScreenCapturePickerView
 } from "react-native-webrtc";
+import {
+    addAudioSessionActivatedListener,
+    addAudioSessionDeactivatedListener,
+    addCallAnsweredListener,
+    addCallEndedListener,
+    addCallSessionAddedListener,
+    addSetMutedActionListener,
+    registerVoIPPush,
+    useVoIPPushToken
+} from "expo-callkit-telecom";
 import { api, getErrorMessage } from "./src/api";
 import {
     CallUser,
@@ -80,8 +91,36 @@ export default function App() {
     const [contacts, setContacts] = useState<CallUser[]>([]);
     const [busy, setBusy] = useState(false);
     const [screenError, setScreenError] = useState("");
+    const voipPushToken = useVoIPPushToken();
+    const voipToken = voipPushToken?.token;
+    const voipTokenType = voipPushToken?.type;
     const pickerRef =
         useRef<React.ComponentRef<typeof ScreenCapturePickerView>>(null);
+
+    useEffect(() => {
+        registerVoIPPush();
+        const subscriptions = [
+            addCallSessionAddedListener(({ session }) =>
+                callService.handleNativeCallSession(session)
+            ),
+            addCallAnsweredListener(event => {
+                void callService.handleNativeCallAnswered(event);
+            }),
+            addCallEndedListener(event =>
+                callService.handleNativeCallEnded(event)
+            ),
+            addSetMutedActionListener(({ isMuted }) =>
+                callService.setMuted(isMuted, false)
+            ),
+            addAudioSessionActivatedListener(() =>
+                RTCAudioSession.audioSessionDidActivate()
+            ),
+            addAudioSessionDeactivatedListener(() =>
+                RTCAudioSession.audioSessionDidDeactivate()
+            )
+        ];
+        return () => subscriptions.forEach(subscription => subscription.remove());
+    }, []);
 
     useEffect(() => {
         let mounted = true;
@@ -121,6 +160,27 @@ export default function App() {
             callService.disconnect();
         };
     }, [user, token]);
+
+    useEffect(() => {
+        if (!user || !token || !voipToken || !voipTokenType) {
+            return undefined;
+        }
+        let cancelled = false;
+        void api.put(
+            "/auth/devices/call-push-token",
+            { token: voipToken, type: voipTokenType },
+            { headers: { Authorization: `Bearer ${token}` } }
+        ).catch(error => {
+            if (!cancelled) {
+                setScreenError(
+                    getErrorMessage(error, "Could not enable background call notifications.")
+                );
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [token, user, voipToken, voipTokenType]);
 
     useEffect(() => {
         if (!user || !token) {
@@ -202,6 +262,19 @@ export default function App() {
 
     const handleLogout = async () => {
         callService.disconnect();
+        if (token) {
+            try {
+                await api.post(
+                    "/auth/logout",
+                    {},
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+            } catch (error) {
+                setScreenError(
+                    getErrorMessage(error, "Could not remove this device session.")
+                );
+            }
+        }
         await Promise.all([
             SecureStore.deleteItemAsync(TOKEN_KEY),
             SecureStore.deleteItemAsync(USER_KEY)
@@ -239,7 +312,7 @@ export default function App() {
         );
 
     const handleAcceptCall = () =>
-        runCallAction(() => callService.acceptCall());
+        runCallAction(() => callService.requestAcceptCall());
 
     const handleStartCall = (contact: CallUser, type: "audio" | "video") =>
         runCallAction(() => callService.startCall(contact, type));
