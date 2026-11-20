@@ -225,14 +225,29 @@ describe("MessengerDocumentScanner", () => {
         });
 
         await waitFor(() => {
-            expect(processDocumentImage).toHaveBeenCalledTimes(100);
-            expect(screen.getByRole("heading", { name: "Review PDF" }))
-                .toBeInTheDocument();
-            expect(screen.getByText("100 pages are ready. Reorder or remove pages before creating your PDF."))
+            expect(processDocumentImage).toHaveBeenCalledTimes(1);
+            expect(screen.getByRole("heading", { name: "Review page" }))
                 .toBeInTheDocument();
         });
         expect(createScannedPdf).not.toHaveBeenCalled();
         expect(onSend).not.toHaveBeenCalled();
+
+        await waitFor(() => {
+            expect(screen.getByRole("button", { name: "Add page" }))
+                .toBeEnabled();
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Add page" }));
+        await waitFor(() => {
+            expect(processDocumentImage).toHaveBeenCalledTimes(2);
+            expect(screen.getByRole("heading", { name: "Review page" }))
+                .toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByRole("button", { name: "Review PDF" }));
+        await screen.findByRole("heading", { name: "Review PDF" });
+        await waitFor(() => {
+            expect(processDocumentImage).toHaveBeenCalledTimes(100);
+        });
 
         fireEvent.click(screen.getByRole("button", { name: "Create & send PDF" }));
         await waitFor(() => {
