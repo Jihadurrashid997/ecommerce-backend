@@ -1,14 +1,23 @@
 # JR Messenger mobile
 
 This React Native companion app uses the ecommerce backend's existing account
-login, Messenger contacts, direct-call signaling, and WebRTC calls. It supports
-voice/video calls and full-device screen sharing on Android and iOS; it is not
-a mobile port of the ecommerce storefront.
+login, Messenger contacts, direct-call signaling, WebRTC calls, and live-location
+sharing. It supports background location updates, voice/video calls, and
+full-device screen sharing on Android and iOS; it is not a mobile port of the
+ecommerce storefront.
 
 Incoming calls use the native CallKit (iOS) and Core-Telecom (Android) screens,
 including while the app is backgrounded or terminated. Native calls require
 iOS 16.4 or later and Android 8 (API 26) or later, plus a custom development or
 production build; Expo Go is not supported.
+
+Direct-contact live-location sharing also runs as a native background location
+task while the operating system allows it. Starting a share requests foreground
+and background ("Always" / "Allow all the time") location permission. Android
+shows an ongoing location notification while sharing. The share stops when its
+selected duration expires or the user stops it. iOS and Android may stop
+continuous updates if the user force-quits/terminates the app; the server keeps
+only the last point until the share expires.
 
 ## Development
 
@@ -57,6 +66,8 @@ commit them:
   development/sandbox builds and `true` for TestFlight/App Store builds.
 
 After changing native configuration, run `npx expo prebuild` and rebuild both
-platforms. Validate incoming calls on physical devices with the app foregrounded,
-backgrounded, and terminated. Push delivery requires the matching Apple/Firebase
-credentials and is not available in Expo Go.
+platforms. Validate calls and live location on physical devices in foreground
+and background, with location permission set to Always / Allow all the time.
+Push delivery requires the matching Apple/Firebase credentials and is not
+available in Expo Go. Background location also requires a development or
+production build.

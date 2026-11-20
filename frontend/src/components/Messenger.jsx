@@ -11130,51 +11130,64 @@ const onCallMissed =
                                             String(share.sender) === currentUserId;
                                         const mapUrl =
                                             `https://www.google.com/maps?q=${share.latitude},${share.longitude}`;
+                                        const mapEmbedUrl =
+                                            `https://maps.google.com/maps?q=${share.latitude},${share.longitude}&z=15&output=embed`;
                                         return (
                                             <article
                                                 className="live-location-card"
                                                 key={share._id}
                                             >
-                                                <div>
-                                                    <strong>
-                                                        {ownShare
-                                                            ? "Your live location"
-                                                            : "Live location shared with you"}
-                                                    </strong>
-                                                    <span>
-                                                        Expires{" "}
-                                                        {new Date(
-                                                            share.expiresAt
-                                                        ).toLocaleTimeString()}
-                                                    </span>
-                                                    {share.updatedAt && (
-                                                        <small>
-                                                            Updated{" "}
+                                                <iframe
+                                                    className="live-location-map"
+                                                    src={mapEmbedUrl}
+                                                    title={`Map showing live location at ${share.latitude.toFixed(4)}, ${share.longitude.toFixed(4)}`}
+                                                    loading="lazy"
+                                                    referrerPolicy="no-referrer-when-downgrade"
+                                                />
+                                                <div className="live-location-details">
+                                                    <div>
+                                                        <strong>
+                                                            {ownShare
+                                                                ? "Your live location"
+                                                                : "Live location shared with you"}
+                                                        </strong>
+                                                        <span>
+                                                            Expires{" "}
                                                             {new Date(
-                                                                share.updatedAt
+                                                                share.expiresAt
                                                             ).toLocaleTimeString()}
-                                                        </small>
-                                                    )}
+                                                        </span>
+                                                        {share.updatedAt && (
+                                                            <small>
+                                                                Updated{" "}
+                                                                {new Date(
+                                                                    share.updatedAt
+                                                                ).toLocaleTimeString()}
+                                                            </small>
+                                                        )}
+                                                    </div>
+                                                    <div className="live-location-actions">
+                                                        <a
+                                                            href={mapUrl}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                        >
+                                                            Open map
+                                                        </a>
+                                                        {ownShare && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    stopLiveLocation(
+                                                                        share._id
+                                                                    )
+                                                                }
+                                                            >
+                                                                Stop sharing
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <a
-                                                    href={mapUrl}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                >
-                                                    Open map
-                                                </a>
-                                                {ownShare && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            stopLiveLocation(
-                                                                share._id
-                                                            )
-                                                        }
-                                                    >
-                                                        Stop sharing
-                                                    </button>
-                                                )}
                                             </article>
                                         );
                                     })}
@@ -12341,6 +12354,9 @@ const onCallMissed =
                                             aria-label="Live location duration"
                                         >
                                             <strong>Share live location</strong>
+                                            <small>
+                                                Web sharing needs this page open. Use the JR Messenger mobile app for background updates.
+                                            </small>
                                             {[15, 60, 480].map(duration => (
                                                 <button
                                                     key={duration}
