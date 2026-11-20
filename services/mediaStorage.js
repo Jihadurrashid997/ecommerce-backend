@@ -207,7 +207,8 @@ const getPrivateDownloadUrl = (
         mediaType = "",
         mimeType = "",
         deliveryType = "upload",
-        attachment = false
+        attachment = false,
+        preserveExtension = false
     } = {}
 ) => {
     const cld = getCloudinary();
@@ -239,7 +240,9 @@ const getPrivateDownloadUrl = (
         throw new Error("The attachment does not have a supported file extension.");
     }
 
-    const normalizedPublicId = publicId.replace(/\.[a-z0-9]{1,10}$/i, "");
+    const normalizedPublicId = preserveExtension
+        ? publicId
+        : publicId.replace(/\.[a-z0-9]{1,10}$/i, "");
     const resourceType =
         mediaType === "video" || mediaType === "audio"
             ? "video"
@@ -262,7 +265,7 @@ const getPrivateDownloadUrl = (
     ]);
     return cld.utils.private_download_url(
         normalizedPublicId,
-        extension,
+        preserveExtension ? "" : extension,
         {
             resource_type: resourceType,
             type: allowedDeliveryTypes.has(deliveryType)
