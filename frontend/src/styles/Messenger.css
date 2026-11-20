@@ -1317,6 +1317,16 @@
     cursor: pointer;
 }
 
+.message-attachment-preview {
+    display: block;
+    max-width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: zoom-in;
+}
+
 .message-attachment-video {
     display: block;
     width: min(420px, 100%);
@@ -1379,6 +1389,10 @@
     margin-bottom: 6px;
     font-size: 13px;
     max-width: 220px;
+    border: 0;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 
 .encrypted-media-load {
@@ -1403,6 +1417,124 @@
 
 .message-bubble.own .message-attachment-file {
     background: rgba(255, 255, 255, 0.18);
+}
+
+.attachment-viewer-backdrop {
+    position: fixed;
+    z-index: 11050;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    background: rgba(7, 11, 18, 0.86);
+}
+
+.attachment-viewer {
+    display: flex;
+    flex-direction: column;
+    width: min(1000px, 100%);
+    height: min(850px, calc(100dvh - 36px));
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 16px;
+    background: #111827;
+    color: #f9fafb;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+.attachment-viewer-header,
+.attachment-viewer-footer {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.attachment-viewer-header strong {
+    overflow: hidden;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.attachment-viewer-header button,
+.attachment-viewer-footer button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.1);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.attachment-viewer-content {
+    display: grid;
+    flex: 1 1 auto;
+    min-height: 0;
+    place-items: center;
+    overflow: auto;
+    padding: 16px;
+}
+
+.attachment-viewer-content > img,
+.attachment-viewer-content > video {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.attachment-viewer-content > audio {
+    width: min(600px, 100%);
+}
+
+.attachment-viewer-content > iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #fff;
+}
+
+.attachment-viewer-unavailable {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    padding: 30px;
+    color: #d1d5db;
+    text-align: center;
+}
+
+.attachment-viewer-unavailable > svg {
+    font-size: 32px;
+}
+
+.attachment-viewer-footer {
+    justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+    .attachment-viewer-backdrop {
+        padding: 8px;
+    }
+
+    .attachment-viewer {
+        height: calc(100vh - 16px);
+        height: calc(100dvh - 16px);
+        border-radius: 12px;
+    }
+
+    .attachment-viewer-content {
+        padding: 8px;
+    }
 }
 
 .voice-message-player {

@@ -126,6 +126,7 @@ import GroupCallModal from "./GroupCallModal";
 import MessengerStories from "./MessengerStories";
 import MessengerDeviceSettings from "./MessengerDeviceSettings";
 import MessengerDocumentScanner from "./MessengerDocumentScanner";
+import MessengerAttachmentViewer from "./MessengerAttachmentViewer";
 import CallLogMessage from "./CallLogMessage";
 import VerifiedBadge from "./VerifiedBadge";
 import VoiceMessagePlayer, {
@@ -363,7 +364,13 @@ const AttachmentDownloadButton = ({ fileName, onClick }) => (
     </button>
 );
 
-const EncryptedMediaAttachment = ({ url, media, own, onDownload }) => {
+const EncryptedMediaAttachment = ({
+    url,
+    media,
+    own,
+    onDownload,
+    onOpen
+}) => {
     const [objectUrl, setObjectUrl] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -436,18 +443,20 @@ const EncryptedMediaAttachment = ({ url, media, own, onDownload }) => {
     if (media.fileType.startsWith("image/")) {
         return (
             <div className="message-attachment-item">
-                <a
-                    href={objectUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Open decrypted image"
+                <button
+                    type="button"
+                    className="message-attachment-preview"
+                    aria-label={`Open ${media.fileName}`}
+                    onClick={() =>
+                        onOpen(objectUrl, media.fileType, media.fileName)
+                    }
                 >
                     <img
                         src={objectUrl}
                         alt={media.fileName}
                         className="message-attachment-image"
                     />
-                </a>
+                </button>
                 <AttachmentDownloadButton
                     fileName={media.fileName}
                     onClick={event =>
@@ -479,20 +488,19 @@ const EncryptedMediaAttachment = ({ url, media, own, onDownload }) => {
         );
     }
 
-    const isPdf = media.fileType === "application/pdf";
     return (
         <div className="message-file-attachment">
-            <a
-                href={objectUrl}
-                target={isPdf ? "_blank" : undefined}
-                rel={isPdf ? "noopener noreferrer" : undefined}
-                download={isPdf ? undefined : media.fileName}
+            <button
+                type="button"
                 className="message-attachment-file"
-                title={isPdf ? "Open PDF" : "Download attachment"}
+                title="Open attachment preview"
+                onClick={() =>
+                    onOpen(objectUrl, media.fileType, media.fileName)
+                }
             >
                 <FaPaperclip />
                 <span>{media.fileName}</span>
-            </a>
+            </button>
             <AttachmentDownloadButton
                 fileName={media.fileName}
                 onClick={event =>
@@ -1927,15 +1935,17 @@ const Messenger = ({ isActive = true }) => {
     }, [searchOpen]);
 
     /*
-     * When settings.autoDownloadMedia is off, images show
-     * a "Tap to load" placeholder first (saves data on a
-     * slow/metered connection) - this tracks which ones
-     * the person has explicitly chosen to load.
+     * When settings.autoDownloadMedia is off, image and
+     * video previews load only after an explicit tap.
+     * This tracks the videos opened inline in the chat.
      */
     const [revealedMedia, setRevealedMedia] =
         useState(
             () => new Set()
         );
+
+    const [attachmentViewer, setAttachmentViewer] =
+        useState(null);
 
     const settingsRef =
         useRef(DEFAULT_SETTINGS);
@@ -9242,6 +9252,15 @@ const onCallMissed =
             "";
 
 
+    const openAttachmentViewer = (url, fileType, fileName, messageId = null) => {
+        setAttachmentViewer({
+            url,
+            fileType: fileType || "",
+            fileName: fileName || "Attachment",
+            messageId
+        });
+    };
+
     const handleAttachmentDownload =
         async (event, url, filename) => {
 
@@ -9318,22 +9337,20 @@ const onCallMissed =
         shouldDownload = false
     ) => {
         event.preventDefault();
-        const pdfWindow = window.open("about:blank", "_blank");
-        if (pdfWindow) pdfWindow.opener = null;
 
         try {
             if (!messageId) {
                 throw new Error("This PDF message is missing its download ID.");
             }
+            const previewQuery = shouldDownload ? "" : "?disposition=inline";
             const response = await api.get(
-                `/messages/${encodeURIComponent(messageId)}/attachment-download`
+                `/messages/${encodeURIComponent(messageId)}/attachment-download${previewQuery}`
             );
             const downloadUrl = getUploadUrl(response.data?.downloadUrl || "");
             if (!downloadUrl) {
                 throw new Error("The server did not provide a PDF download URL.");
             }
             if (shouldDownload) {
-                pdfWindow?.close();
                 const link = document.createElement("a");
                 link.href = downloadUrl;
                 link.download = filename || "attachment.pdf";
@@ -9341,13 +9358,15 @@ const onCallMissed =
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
-            } else if (pdfWindow && !pdfWindow.closed) {
-                pdfWindow.location.replace(downloadUrl);
             } else {
-                window.location.assign(downloadUrl);
+                openAttachmentViewer(
+                    downloadUrl,
+                    "application/pdf",
+                    filename || "attachment.pdf",
+                    messageId
+                );
             }
         } catch (error) {
-            pdfWindow?.close();
             console.error("PDF attachment open error:", error);
             showMessengerToast(
                 error.response?.data?.message ||
@@ -11516,6 +11535,9 @@ const onCallMissed =
                                                             url={fileUrl}
                                                             media={item.encryptedMedia}
                                                             own={own}
+                                                            onOpen={
+                                                                openAttachmentViewer
+                                                            }
                                                             onDownload={
                                                                 handleAttachmentDownload
                                                             }
@@ -11556,24 +11578,26 @@ const onCallMissed =
                                                             mediaRevealed ? (
 
                                                                 <div className="message-attachment-item">
-                                                                    <a
-                                                                        href={fileUrl}
-                                                                        download={fileName}
-                                                                        onClick={event =>
-                                                                            handleAttachmentDownload(
-                                                                                event,
+                                                                    <button
+                                                                        type="button"
+                                                                        className="message-attachment-preview"
+                                                                        aria-label={`Open ${fileName}`}
+                                                                        onClick={() =>
+                                                                            openAttachmentViewer(
                                                                                 fileUrl,
-                                                                                fileName
+                                                                                fileType ||
+                                                                                    "image/*",
+                                                                                fileName,
+                                                                                getMessageId(item)
                                                                             )
                                                                         }
-                                                                        title="Click to download"
                                                                     >
                                                                         <img
                                                                             src={fileUrl}
                                                                             alt={fileName}
                                                                             className="message-attachment-image"
                                                                         />
-                                                                    </a>
+                                                                    </button>
                                                                     <AttachmentDownloadButton
                                                                         fileName={fileName}
                                                                         onClick={event =>
@@ -11592,29 +11616,18 @@ const onCallMissed =
                                                                     type="button"
                                                                     className="message-attachment-file"
                                                                     onClick={() =>
-
-                                                                        setRevealedMedia(
-                                                                            previous => {
-
-                                                                                const next =
-                                                                                    new Set(
-                                                                                        previous
-                                                                                    );
-
-                                                                                next.add(
-                                                                                    attachmentKey
-                                                                                );
-
-                                                                                return next;
-
-                                                                            }
+                                                                        openAttachmentViewer(
+                                                                            fileUrl,
+                                                                            fileType ||
+                                                                                "image/*",
+                                                                            fileName,
+                                                                            getMessageId(item)
                                                                         )
-
                                                                     }
                                                                 >
                                                                     <FaImage />
                                                                     <span>
-                                                                        Tap to load image
+                                                                        Open image preview
                                                                     </span>
                                                                 </button>
 
@@ -11663,8 +11676,8 @@ const onCallMissed =
                                                         ) : (
 
                                                             <div className="message-file-attachment">
-                                                                <a
-                                                                    href={fileUrl}
+                                                                <button
+                                                                    type="button"
                                                                     onClick={isPdfFile
                                                                         ? event =>
                                                                             handlePdfAttachmentOpen(
@@ -11672,18 +11685,19 @@ const onCallMissed =
                                                                                 getMessageId(item),
                                                                                 fileName
                                                                             )
-                                                                        : event =>
-                                                                            handleAttachmentDownload(
-                                                                                event,
+                                                                        : () =>
+                                                                            openAttachmentViewer(
                                                                                 fileUrl,
-                                                                                fileName
+                                                                                fileType,
+                                                                                fileName,
+                                                                                getMessageId(item)
                                                                             )}
                                                                     className="message-attachment-file"
-                                                                    title={isPdfFile ? "Open PDF" : "Click to download"}
+                                                                    title="Open attachment preview"
                                                                 >
                                                                     <FaPaperclip />
                                                                     <span>{fileName}</span>
-                                                                </a>
+                                                                </button>
                                                                 <AttachmentDownloadButton
                                                                     fileName={fileName}
                                                                     onClick={isPdfFile
@@ -13465,6 +13479,33 @@ const onCallMissed =
     <MessengerDocumentScanner
         onClose={() => setShowDocumentScanner(false)}
         onSend={sendAttachmentFile}
+    />
+)}
+
+{attachmentViewer && (
+    <MessengerAttachmentViewer
+        attachment={attachmentViewer}
+        onClose={() => setAttachmentViewer(null)}
+        onDownload={event => {
+            if (
+                attachmentViewer.messageId &&
+                (attachmentViewer.fileType === "application/pdf" ||
+                    /\.pdf$/i.test(attachmentViewer.fileName))
+            ) {
+                void handlePdfAttachmentOpen(
+                    event,
+                    attachmentViewer.messageId,
+                    attachmentViewer.fileName,
+                    true
+                );
+                return;
+            }
+            void handleAttachmentDownload(
+                event,
+                attachmentViewer.url,
+                attachmentViewer.fileName
+            );
+        }}
     />
 )}
 

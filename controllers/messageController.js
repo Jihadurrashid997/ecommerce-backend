@@ -1053,7 +1053,9 @@ exports.getAttachmentDownload = async (req, res) => {
                         mediaType: message.fileStorageType,
                         mimeType: message.fileType,
                         deliveryType: message.fileDeliveryType,
-                        attachment: message.fileType === "application/pdf"
+                        attachment:
+                            message.fileType === "application/pdf" &&
+                            req.query?.disposition !== "inline"
                     }
                 )
                 : message.fileUrl;
