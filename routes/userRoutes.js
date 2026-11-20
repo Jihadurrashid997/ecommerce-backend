@@ -20,6 +20,7 @@ const {
     getSettings,
     updateSettings,
     changePassword,
+    deleteOwnAccount,
     getSocialStats,
     toggleFollow,
     getFollowing,
@@ -49,6 +50,7 @@ const {
 router.get("/settings", auth(), getSettings);
 router.patch("/settings", auth(), updateSettings);
 router.patch("/change-password", auth(), changePassword);
+router.delete("/account", auth(), deleteOwnAccount);
 router.get("/blocked", auth(), getBlockedUsers);
 
 router.get(

@@ -4,6 +4,11 @@ const User = require("../models/User");
 const Message = require("../models/Message");
 const MessageRequest = require("../models/MessageRequest");
 const Post = require("../models/Post");
+const Story = require("../models/Story");
+const SavedPost = require("../models/SavedPost");
+const DeviceSession = require("../models/DeviceSession");
+const Product = require("../models/Product");
+const auth = require("../middleware/auth");
 const { saveFile, deleteFile } = require("../services/mediaStorage");
 const { notifyUser } = require("../services/platformNotifications");
 const {
@@ -854,6 +859,122 @@ exports.changePassword = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Could not update your password."
+        });
+    }
+};
+
+exports.deleteOwnAccount = async (req, res) => {
+    try {
+        const currentPassword = String(req.body?.currentPassword || "");
+        const confirmation = String(req.body?.confirmation || "");
+
+        if (!currentPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter your current password to delete your account."
+            });
+        }
+
+        if (confirmation !== "DELETE") {
+            return res.status(400).json({
+                success: false,
+                message: "Type DELETE to confirm permanent account deletion."
+            });
+        }
+
+        const user = await User.findById(req.user.id)
+            .select("+password +profileImagePublicId +profileImageType");
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const passwordMatches = await bcrypt.compare(currentPassword, user.password);
+        if (!passwordMatches) {
+            return res.status(400).json({
+                success: false,
+                message: "Your current password is incorrect."
+            });
+        }
+
+        const [posts, stories] = await Promise.all([
+            Post.find({ author: user._id }).select("media audio").lean(),
+            Story.find({ owner: user._id }).select("media audio").lean()
+        ]);
+
+        const mediaToDelete = [
+            user.profileImage
+                ? {
+                    url: user.profileImage,
+                    publicId: user.profileImagePublicId,
+                    type: user.profileImageType
+                }
+                : null,
+            ...posts.flatMap(post => [...(post.media || []), post.audio]),
+            ...stories.flatMap(story => [story.media, story.audio])
+        ].filter(media => media && (media.url || media.publicId));
+
+        await Promise.all(mediaToDelete.map(media => deleteFile(media)));
+
+        await Promise.all([
+            Post.deleteMany({ author: user._id }),
+            Story.deleteMany({ owner: user._id }),
+            SavedPost.deleteMany({ user: user._id }),
+            Post.updateMany(
+                {},
+                {
+                    $pull: {
+                        likes: user._id,
+                        reactions: { user: user._id },
+                        comments: { user: user._id },
+                        taggedUsers: user._id
+                    }
+                }
+            ),
+            User.updateMany(
+                {
+                    $or: [
+                        { following: user._id },
+                        { blockedUsers: user._id },
+                        { "pendingFollowRequests.user": user._id }
+                    ]
+                },
+                {
+                    $pull: {
+                        following: user._id,
+                        blockedUsers: user._id,
+                        pendingFollowRequests: { user: user._id }
+                    }
+                }
+            ),
+            Product.updateMany(
+                { seller: user._id },
+                {
+                    $set: {
+                        isApproved: false,
+                        approvalStatus: "rejected",
+                        approvalReviewNote: "Seller account permanently deleted."
+                    }
+                }
+            ),
+            DeviceSession.deleteMany({ user: user._id })
+        ]);
+
+        await User.deleteOne({ _id: user._id });
+        auth.invalidate(user._id);
+
+        return res.json({
+            success: true,
+            message: "Your account has been permanently deleted."
+        });
+    } catch (error) {
+        console.error("DELETE OWN ACCOUNT ERROR:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Could not delete your account. Please try again."
         });
     }
 };

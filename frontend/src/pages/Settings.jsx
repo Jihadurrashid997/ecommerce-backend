@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { FaArrowLeft, FaBell, FaLock, FaMoon, FaShieldAlt, FaUser, FaUserSlash } from "react-icons/fa";
+import { Link, useNavigate } from "react-router-dom";
+import { FaArrowLeft, FaBell, FaExclamationTriangle, FaLock, FaMoon, FaShieldAlt, FaUser, FaUserSlash } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
 import "../styles/Settings.css";
@@ -17,7 +17,8 @@ const DEFAULT_SETTINGS = {
 };
 
 const Settings = () => {
-    const { theme, setTheme, user } = useApp();
+    const { theme, setTheme, user, logout, setCart, setWishlist } = useApp();
+    const navigate = useNavigate();
     const [settings, setSettings] = useState(DEFAULT_SETTINGS);
     const [blockedUsers, setBlockedUsers] = useState([]);
     const [followRequests, setFollowRequests] = useState([]);
@@ -27,6 +28,8 @@ const Settings = () => {
     const [notice, setNotice] = useState("");
     const [currentPassword, setCurrentPassword] = useState("");
     const [newPassword, setNewPassword] = useState("");
+    const [deletePassword, setDeletePassword] = useState("");
+    const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
     const load = useCallback(async () => {
         try {
@@ -86,6 +89,31 @@ const Settings = () => {
             setNotice(response.data.message || "Password updated successfully.");
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not update your password.");
+        } finally {
+            setBusy("");
+        }
+    };
+
+    const deleteAccount = async event => {
+        event.preventDefault();
+        try {
+            setBusy("delete-account");
+            setError("");
+            setNotice("");
+            await api.delete("/users/account", {
+                data: {
+                    currentPassword: deletePassword,
+                    confirmation: deleteConfirmation
+                }
+            });
+            setCart([]);
+            setWishlist([]);
+            localStorage.removeItem("cart");
+            localStorage.removeItem("wishlist");
+            logout();
+            navigate("/login", { replace: true });
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not delete your account.");
         } finally {
             setBusy("");
         }
@@ -293,6 +321,42 @@ const Settings = () => {
                     <Link to="/forgot-password">Forgot your password?</Link>
                 </form>
                 <div className="settings-security-note"><FaLock /> Your current password is required to make this change.</div>
+            </section>
+
+            <section className="settings-card settings-danger-card">
+                <div className="settings-section-heading">
+                    <FaExclamationTriangle />
+                    <div>
+                        <h2>Delete account permanently</h2>
+                        <p>This cannot be undone. Your profile, posts, reels, and social connections will be deleted, and your shop listings will be hidden. Your order and transaction records will remain unchanged.</p>
+                    </div>
+                </div>
+                <form className="settings-delete-form" onSubmit={deleteAccount}>
+                    <label>
+                        Current password
+                        <input
+                            type="password"
+                            autoComplete="current-password"
+                            value={deletePassword}
+                            onChange={event => setDeletePassword(event.target.value)}
+                            required
+                        />
+                    </label>
+                    <Link to="/forgot-password">Forgot your password?</Link>
+                    <label>
+                        Type DELETE to confirm
+                        <input
+                            type="text"
+                            autoComplete="off"
+                            value={deleteConfirmation}
+                            onChange={event => setDeleteConfirmation(event.target.value)}
+                            required
+                        />
+                    </label>
+                    <button type="submit" disabled={Boolean(busy)}>
+                        {busy === "delete-account" ? "Deleting account..." : "Permanently delete account"}
+                    </button>
+                </form>
             </section>
         </main>
     );

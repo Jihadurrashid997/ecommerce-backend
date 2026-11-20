@@ -57,6 +57,9 @@ describe("Profile", () => {
         fireEvent.click(screen.getByRole("button", { name: /edit profile/i }));
         expect(mockNavigate).toHaveBeenCalledWith("/edit-profile");
 
+        fireEvent.click(screen.getByRole("button", { name: /profile settings/i }));
+        expect(mockNavigate).toHaveBeenCalledWith("/settings");
+
         fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
         expect(mockLogout).toHaveBeenCalledTimes(1);
         expect(mockNavigate).toHaveBeenLastCalledWith("/login");

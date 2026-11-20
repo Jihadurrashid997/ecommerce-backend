@@ -50,6 +50,15 @@
 .settings-password-form button { justify-self: start; }
 .settings-password-form a { align-self: center; color: #a5b4fc; font-size: 13px; }
 .settings-security-note { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: #9aa8bc; font-size: 12px; }
+.settings-danger-card { border-color: rgba(248, 113, 113, .32); }
+.settings-danger-card .settings-section-heading > svg { color: #fb7185; }
+.settings-delete-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.settings-delete-form label { display: flex; flex-direction: column; gap: 7px; color: #cbd5e1; font-size: 13px; }
+.settings-delete-form input { width: 100%; padding: 12px; border: 1px solid rgba(248, 113, 113, .28); border-radius: 10px; outline: none; background: rgba(2, 6, 23, .55); color: white; }
+.settings-delete-form a { align-self: center; color: #a5b4fc; font-size: 13px; }
+.settings-delete-form button { grid-column: 1 / -1; justify-self: start; padding: 11px 15px; border: 1px solid rgba(248, 113, 113, .4); border-radius: 10px; background: rgba(190, 24, 93, .2); color: #fecdd3; font-weight: 750; }
+.settings-delete-form button:hover:not(:disabled) { background: rgba(190, 24, 93, .35); }
+.settings-delete-form button:disabled { cursor: wait; opacity: .65; }
 
 html[data-theme="light"] body { background: #f1f5f9; color: #172033; }
 html[data-theme="light"] .App { background: linear-gradient(135deg, #f8fafc, #e2e8f0); color: #172033; }
@@ -60,9 +69,14 @@ html[data-theme="light"] .settings-link-card, html[data-theme="light"] .settings
 html[data-theme="light"] .settings-password-form label { color: #334155; }
 html[data-theme="light"] .settings-password-form input { color: #172033; background: #fff; border-color: #cbd5e1; }
 html[data-theme="light"] .settings-user { color: #475569; }
+html[data-theme="light"] .settings-delete-form label { color: #334155; }
+html[data-theme="light"] .settings-delete-form input { color: #172033; background: #fff; }
+html[data-theme="light"] .settings-delete-form button { color: #9f1239; }
 
 @media (max-width: 560px) {
     .settings-header { align-items: flex-start; flex-direction: column; }
     .settings-password-form { grid-template-columns: 1fr; }
+    .settings-delete-form { grid-template-columns: 1fr; }
+    .settings-delete-form button { grid-column: auto; width: 100%; }
     .settings-current-theme { width: 100%; margin-left: 0; }
 }
