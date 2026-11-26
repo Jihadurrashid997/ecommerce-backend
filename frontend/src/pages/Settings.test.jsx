@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import api from "../services/api";
 import Settings from "./Settings";
 
@@ -109,6 +109,29 @@ describe("Settings", () => {
             { notifications: { follows: false } }
         ));
         expect(await screen.findByRole("status")).toHaveTextContent("Your settings have been saved.");
+    });
+
+    test("shows 12 accessible theme choices and saves the selected theme", async () => {
+        api.patch.mockResolvedValue({
+            data: {
+                settings: {
+                    ...settings,
+                    theme: "ocean"
+                }
+            }
+        });
+
+        render(<Settings />);
+        expect(await screen.findByRole("radiogroup", { name: "App theme" })).toBeInTheDocument();
+        expect(within(screen.getByRole("radiogroup", { name: "App theme" })).getAllByRole("radio")).toHaveLength(12);
+        fireEvent.click(screen.getByRole("radio", { name: "Ocean" }));
+
+        await waitFor(() => expect(api.patch).toHaveBeenCalledWith(
+            "/users/settings",
+            { theme: "ocean" }
+        ));
+        expect(mockSetTheme).toHaveBeenCalledWith("ocean");
+        await waitFor(() => expect(screen.getByRole("radio", { name: "Ocean" })).toHaveAttribute("aria-checked", "true"));
     });
 
     test("requires password and typed confirmation, then clears the local account", async () => {

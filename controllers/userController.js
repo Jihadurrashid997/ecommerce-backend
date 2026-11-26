@@ -728,7 +728,7 @@ exports.updateSettings = async (req, res) => {
     try {
         const { theme, notifications, accountVisibility } = req.body || {};
 
-        if (theme !== undefined && !["dark", "light"].includes(theme)) {
+        if (theme !== undefined && !User.schema.path("theme").enumValues.includes(theme)) {
             return res.status(400).json({
                 success: false,
                 message: "Choose a valid theme."

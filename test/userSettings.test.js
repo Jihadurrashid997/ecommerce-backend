@@ -81,6 +81,43 @@ test("user settings update only accepted theme and notification preference field
     }
 });
 
+test("user settings accept a preset theme and reject unknown themes", async () => {
+    const originalFindByIdAndUpdate = User.findByIdAndUpdate;
+    let update;
+    User.findByIdAndUpdate = (_id, changes) => {
+        update = changes;
+        return {
+            select() { return this; },
+            async lean() {
+                return {
+                    theme: "ocean",
+                    notificationPreferences: {}
+                };
+            }
+        };
+    };
+
+    try {
+        const validResponse = makeResponse();
+        await userController.updateSettings(
+            { user: { id: USER_ID }, body: { theme: "ocean" } },
+            validResponse
+        );
+        assert.deepEqual(update, { $set: { theme: "ocean" } });
+        assert.equal(validResponse.statusCode, 200);
+        assert.equal(validResponse.body.settings.theme, "ocean");
+
+        const invalidResponse = makeResponse();
+        await userController.updateSettings(
+            { user: { id: USER_ID }, body: { theme: "made-up-theme" } },
+            invalidResponse
+        );
+        assert.equal(invalidResponse.statusCode, 400);
+    } finally {
+        User.findByIdAndUpdate = originalFindByIdAndUpdate;
+    }
+});
+
 test("user settings reject unsupported notification preference keys", async () => {
     const originalFindByIdAndUpdate = User.findByIdAndUpdate;
     User.findByIdAndUpdate = () => {
