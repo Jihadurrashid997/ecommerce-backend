@@ -1,0 +1,306 @@
+:root {
+    color-scheme: dark;
+    --glass-accent: #8b8cf8;
+    --glass-cyan: #67d8f5;
+    --glass-text: #eef3ff;
+    --glass-muted: #a4afc4;
+    --glass-surface: linear-gradient(145deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .035));
+    --glass-surface-soft: rgba(255, 255, 255, .055);
+    --glass-border: rgba(211, 224, 255, .14);
+    --glass-shadow: 0 18px 55px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+
+html[data-theme="light"] {
+    color-scheme: light;
+}
+
+html,
+body {
+    min-height: 100%;
+    background-color: #080d1a;
+}
+
+body {
+    color: var(--glass-text);
+    background:
+        radial-gradient(ellipse at 12% 8%, rgba(74, 105, 226, .2), transparent 34%),
+        radial-gradient(ellipse at 88% 18%, rgba(138, 72, 196, .16), transparent 32%),
+        radial-gradient(ellipse at 52% 100%, rgba(34, 128, 160, .12), transparent 42%),
+        linear-gradient(145deg, #080d1a 0%, #10172a 52%, #111225 100%);
+    background-attachment: fixed;
+}
+
+#root {
+    min-height: 100vh;
+}
+
+::selection {
+    background: rgba(119, 133, 255, .55);
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(13, 19, 34, .82);
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, var(--glass-accent), var(--glass-cyan));
+}
+
+.App {
+    background: transparent;
+}
+
+.home-page,
+.cart-page,
+.checkout-page,
+.communities-page,
+.edit-profile-page,
+.legal-page,
+.messenger-page,
+.order-history-page,
+.payment-page,
+.profile-page,
+.reels-page,
+.saved-posts-page,
+.search-results-page,
+.seller-orders-page,
+.settings-page,
+.shop-notifications-page,
+.shop-settings-page,
+.wishlist-page,
+.admin-container,
+.ac-page {
+    color: var(--glass-text);
+    background: transparent !important;
+}
+
+.jr-navbar {
+    color: var(--glass-text);
+    background: rgba(13, 19, 35, .76) !important;
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 12px 38px rgba(0, 0, 0, .22);
+    backdrop-filter: blur(26px) saturate(145%);
+    -webkit-backdrop-filter: blur(26px) saturate(145%);
+}
+
+.jr-navbar a,
+.jr-navbar button,
+.jr-logo-link {
+    color: var(--glass-text);
+}
+
+.top-tabs,
+.shop-section-nav {
+    color: var(--glass-text);
+    background: rgba(15, 22, 39, .72) !important;
+    border-color: var(--glass-border) !important;
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(22px) saturate(140%);
+    -webkit-backdrop-filter: blur(22px) saturate(140%);
+}
+
+.card,
+.glass,
+.dashboard-card,
+.product-card,
+.post-card,
+.settings-card,
+.settings-link-card,
+.settings-blocked-user,
+.profile-card,
+.profile-action-card,
+.user-search-card,
+.community-card,
+.community-detail-header,
+.community-management-card,
+.community-about-card,
+.order-history-card,
+.seller-order-card,
+.shop-settings-card,
+.analytics-card,
+.ac-card,
+.ac-content,
+.ac-report,
+.ac-community,
+.ac-audit,
+.ac-refund-card,
+.ac-payout-card,
+.ac-platform-controls,
+.ac-announcements form,
+.checkout-container,
+.payment-card,
+.wishlist-card,
+.comments-panel,
+.home-profile-panel,
+.home-side-card,
+.home-editorial-card,
+.home-suggestion-card,
+.search-section,
+.search-results-header,
+.edit-profile-card,
+.messenger-settings-panel,
+.messenger-notification-panel,
+.messenger-request-card,
+.chat-info-panel,
+.info-section,
+.group-modal,
+.forward-modal,
+.jr-notifications-panel,
+.ac-modal,
+.dashboard,
+.dashboard-payout {
+    color: var(--glass-text);
+    background: var(--glass-surface) !important;
+    border-color: var(--glass-border) !important;
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(20px) saturate(135%);
+    -webkit-backdrop-filter: blur(20px) saturate(135%);
+}
+
+.card:hover,
+.product-card:hover,
+.post-card:hover,
+.settings-link-card:hover,
+.profile-action-card:hover,
+.community-card:hover,
+.user-search-card:hover {
+    border-color: rgba(167, 180, 255, .27) !important;
+    box-shadow: 0 24px 65px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .09);
+}
+
+.messenger-page .messenger-sidebar,
+.messenger-page .messenger-sidebar-header,
+.messenger-page .chat-users,
+.messenger-page .chat-box,
+.messenger-page .chat-header,
+.messenger-page .chat-info-panel,
+.messenger-page .info-panel-header,
+.messenger-page .chat-input,
+.messenger-page .messenger-settings-panel,
+.messenger-page .messenger-notification-panel,
+.messenger-page .conversation-search-bar,
+.messenger-page .messages-container,
+.messenger-page .background-panel,
+.messenger-page .group-modal,
+.messenger-page .forward-modal,
+.messenger-page .forward-modal-header,
+.messenger-page .forward-modal-search,
+.messenger-page .forward-modal-list {
+    color: var(--glass-text);
+    background-color: rgba(15, 22, 39, .72) !important;
+    border-color: var(--glass-border) !important;
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(18px) saturate(135%);
+    -webkit-backdrop-filter: blur(18px) saturate(135%);
+}
+
+body input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]):not([type="range"]),
+body textarea,
+body select {
+    color: var(--glass-text) !important;
+    background-color: rgba(255, 255, 255, .055) !important;
+    border-color: var(--glass-border) !important;
+}
+
+body input::placeholder,
+body textarea::placeholder {
+    color: rgba(194, 205, 225, .55);
+}
+
+body input:focus,
+body textarea:focus,
+body select:focus {
+    border-color: rgba(139, 140, 248, .7) !important;
+    box-shadow: 0 0 0 3px rgba(117, 119, 244, .13);
+}
+
+.register-input input,
+.premium-search input,
+.home-search input {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+select option {
+    color: var(--glass-text);
+    background: #11182a;
+}
+
+.ac-filters input,
+.ac-filters select,
+.ac-row select,
+.ac-announcements input,
+.ac-announcements textarea,
+.ac-announcements select,
+.platform-maintenance-message textarea,
+.platform-release-form input:not([type="checkbox"]),
+.platform-release-form textarea,
+.ac-payout-actions input,
+.ac-refund-actions input,
+.ac-refund-actions textarea,
+.ac-platform-controls input[type="number"],
+.ac-platform-controls textarea {
+    color: var(--glass-text) !important;
+    background: rgba(255, 255, 255, .055) !important;
+}
+
+.ac-temp {
+    color: #fff2c2;
+    background: rgba(180, 125, 35, .17) !important;
+    border: 1px solid rgba(255, 210, 111, .2);
+}
+
+html[data-theme="light"] .settings-card {
+    background: rgba(255, 255, 255, .82) !important;
+    border-color: rgba(71, 85, 105, .2) !important;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, .08);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+html[data-theme="light"] .settings-link-card,
+html[data-theme="light"] .settings-blocked-user {
+    background: rgba(248, 250, 252, .75) !important;
+    border-color: #e2e8f0 !important;
+}
+
+html[data-theme="light"] .settings-password-form input,
+html[data-theme="light"] .settings-delete-form input {
+    color: #172033 !important;
+    background: rgba(255, 255, 255, .85) !important;
+    border-color: #cbd5e1 !important;
+}
+
+.footer {
+    color: var(--glass-text);
+    background: rgba(9, 14, 27, .7);
+    border-top-color: var(--glass-border);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
+
+.footer p,
+.subtitle {
+    color: var(--glass-muted);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+    outline: 2px solid rgba(134, 170, 255, .82);
+    outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-duration: .01ms !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+    }
+}
