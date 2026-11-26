@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { FaArrowLeft, FaBell, FaExclamationTriangle, FaLock, FaMoon, FaShieldAlt, FaUser, FaUserSlash } from "react-icons/fa";
 import api, { getUploadUrl } from "../services/api";
 import { useApp } from "../context/AppContext";
+import themes from "../constants/themes";
 import "../styles/Settings.css";
 
 const DEFAULT_SETTINGS = {
@@ -202,13 +203,41 @@ const Settings = () => {
             <section className="settings-card">
                 <div className="settings-section-heading">
                     <FaMoon />
-                    <div><h2>Appearance</h2><p>Your theme is saved to your account and follows you across devices.</p></div>
+                    <div><h2>Appearance</h2><p>Choose a color palette for the whole app. Your choice is saved to your account and follows you across devices.</p></div>
                 </div>
-                <div className="settings-choice-row">
-                    <label><input type="radio" name="theme" checked={settings.theme === "dark"} disabled={busy === "settings"} onChange={() => saveSettings({ theme: "dark" })} /> Dark</label>
-                    <label><input type="radio" name="theme" checked={settings.theme === "light"} disabled={busy === "settings"} onChange={() => saveSettings({ theme: "light" })} /> Light</label>
-                    <span className="settings-current-theme">Current: {theme}</span>
+                <div className="theme-picker" role="radiogroup" aria-label="App theme">
+                    {themes.map(option => (
+                        <button
+                            className={`theme-option${settings.theme === option.id ? " is-selected" : ""}`}
+                            type="button"
+                            role="radio"
+                            aria-checked={settings.theme === option.id}
+                            aria-label={option.name}
+                            key={option.id}
+                            disabled={busy === "settings"}
+                            onClick={() => saveSettings({ theme: option.id })}
+                        >
+                            <span
+                                aria-hidden="true"
+                                className="theme-swatch"
+                                style={{
+                                    "--swatch-background": option.background,
+                                    "--swatch-accent": option.accent,
+                                    "--swatch-secondary": option.secondary
+                                }}
+                            >
+                                <span />
+                                <span />
+                                <span />
+                            </span>
+                            <span className="theme-option-name">{option.name}</span>
+                            <span className="theme-option-check" aria-hidden="true">
+                                {settings.theme === option.id ? "Selected" : ""}
+                            </span>
+                        </button>
+                    ))}
                 </div>
+                <p className="settings-current-theme">Current theme: {themes.find(option => option.id === theme)?.name || "Midnight"}</p>
             </section>
 
             <section className="settings-card">

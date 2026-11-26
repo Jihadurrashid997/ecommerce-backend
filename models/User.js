@@ -146,7 +146,20 @@ const userSchema = new mongoose.Schema(
 
         theme: {
             type: String,
-            enum: ["dark", "light"],
+            enum: [
+                "dark",
+                "light",
+                "ocean",
+                "forest",
+                "sunset",
+                "rose",
+                "lavender",
+                "graphite",
+                "mint",
+                "amethyst",
+                "sand",
+                "aurora"
+            ],
             default: "dark"
         },
 
